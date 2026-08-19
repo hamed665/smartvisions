@@ -17,12 +17,51 @@ create table public.mailboxes (
   unique (organization_id, address)
 );
 
+create table public.outreach_policies (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  country_code text not null,
+  enabled boolean not null default true,
+  send_window_start time not null default '09:00',
+  send_window_end time not null default '19:00',
+  business_days integer[] not null default array[1,2,3,4,5],
+  max_emails_per_day integer not null default 50 check (max_emails_per_day > 0),
+  max_emails_per_mailbox integer not null default 20 check (max_emails_per_mailbox > 0),
+  max_followups integer not null default 2 check (max_followups between 0 and 10),
+  followup_delays_days integer[] not null default array[3,7],
+  manual_review_required boolean not null default true,
+  config jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now(),
+  unique (organization_id, country_code)
+);
+
+create table public.message_variants (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  country_code text not null,
+  industry text,
+  service_id text,
+  variant_key text not null,
+  strategy text not null,
+  enabled boolean not null default true,
+  sample_size integer not null default 0,
+  sent_count integer not null default 0,
+  reply_count integer not null default 0,
+  positive_count integer not null default 0,
+  hot_count integer not null default 0,
+  won_count integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (organization_id, country_code, industry, service_id, variant_key)
+);
+
 create table public.outreach_messages (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   lead_id uuid references public.leads(id) on delete cascade,
   campaign_id uuid references public.campaigns(id) on delete set null,
   mailbox_id uuid references public.mailboxes(id) on delete set null,
+  message_variant_id uuid references public.message_variants(id) on delete set null,
   channel text not null default 'EMAIL',
   direction text not null check (direction in ('OUTBOUND','INBOUND')),
   status text not null default 'DRAFT',
@@ -94,12 +133,18 @@ create table public.locale_profiles (
 );
 
 alter table public.mailboxes enable row level security;
+alter table public.outreach_policies enable row level security;
+alter table public.message_variants enable row level security;
 alter table public.outreach_messages enable row level security;
 alter table public.followup_jobs enable row level security;
 alter table public.reply_events enable row level security;
 alter table public.locale_profiles enable row level security;
 
 create policy org_member_mailboxes on public.mailboxes for all
+  using (public.is_org_member(organization_id)) with check (public.is_org_member(organization_id));
+create policy org_member_outreach_policies on public.outreach_policies for all
+  using (public.is_org_member(organization_id)) with check (public.is_org_member(organization_id));
+create policy org_member_message_variants on public.message_variants for all
   using (public.is_org_member(organization_id)) with check (public.is_org_member(organization_id));
 create policy org_member_outreach on public.outreach_messages for all
   using (public.is_org_member(organization_id)) with check (public.is_org_member(organization_id));
