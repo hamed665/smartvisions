@@ -1,0 +1,23 @@
+{
+  "hardRules": [
+    "Never invent a price",
+    "Never exceed configured discount ceilings",
+    "Never promise unsupported services",
+    "Never contact suppressed or DNC leads",
+    "Never send outside the configured local send window",
+    "Never continue automated replies after human takeover",
+    "Never fabricate portfolio items or case studies",
+    "Never guarantee business results",
+    "Escalate when critical evidence is missing",
+    "Respect market and channel policy configuration"
+  ],
+  "softRules": [
+    "Answer the prospect's actual question first",
+    "Keep first-touch messages concise",
+    "Avoid overusing dialect markers",
+    "Do not upsell irrelevant services",
+    "Use low-pressure calls to action",
+    "Prefer scope adjustment over irrational discounting",
+    "Be useful, not merely responsive"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "OM": {"name":"Oman","currency":"OMR","timezone":"Asia/Muscat","sendWindow":{"start":"09:00","end":"19:00"},"languages":["ar","en"],"dialect":"omani","englishTone":"friendly_professional","coldEmailEnabled":true,"whatsappColdEnabled":false,"instagramAutoColdEnabled":false},
+  "AE": {"name":"United Arab Emirates","currency":"AED","timezone":"Asia/Dubai","sendWindow":{"start":"09:00","end":"19:00"},"languages":["ar","en"],"dialect":"emirati","englishTone":"polished_premium","coldEmailEnabled":true,"whatsappColdEnabled":false,"instagramAutoColdEnabled":false},
+  "SA": {"name":"Saudi Arabia","currency":"SAR","timezone":"Asia/Riyadh","sendWindow":{"start":"09:00","end":"19:00"},"languages":["ar","en"],"dialect":"saudi","englishTone":"warm_direct","coldEmailEnabled":true,"whatsappColdEnabled":false,"instagramAutoColdEnabled":false},
+  "QA": {"name":"Qatar","currency":"QAR","timezone":"Asia/Qatar","sendWindow":{"start":"09:00","end":"19:00"},"languages":["ar","en"],"dialect":"qatari","englishTone":"professional_concise","coldEmailEnabled":true,"whatsappColdEnabled":false,"instagramAutoColdEnabled":false},
+  "GB": {"name":"United Kingdom","currency":"GBP","timezone":"Europe/London","sendWindow":{"start":"09:00","end":"19:00"},"languages":["en"],"dialect":"british","englishTone":"polite_understated","coldEmailEnabled":true,"whatsappColdEnabled":false,"instagramAutoColdEnabled":false},
+  "US": {"name":"United States","currency":"USD","timezone":"lead_specific","sendWindow":{"start":"09:00","end":"19:00"},"languages":["en"],"dialect":"american","englishTone":"direct_outcome_focused","coldEmailEnabled":true,"whatsappColdEnabled":false,"instagramAutoColdEnabled":false}
+}
