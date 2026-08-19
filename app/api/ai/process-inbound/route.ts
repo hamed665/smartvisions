@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { processInboundMessage } from '@/lib/agents/pipeline';
 import type { AgentContext } from '@/lib/agents/contracts';
+import { deterministicAgentRuntime } from '@/lib/agents/runtime';
+import { getConfiguredAgentRuntime } from '@/lib/agents/openai-runtime';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
 
 export async function POST(request: Request) {
@@ -12,6 +14,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'context.message is required' }, { status: 400 });
   }
 
-  const result = await processInboundMessage(body.context, { agentsPaused: body.agentsPaused });
-  return NextResponse.json(result);
+  const runtime = getConfiguredAgentRuntime() ?? deterministicAgentRuntime;
+  const result = await processInboundMessage(body.context, { agentsPaused: body.agentsPaused }, runtime);
+  return NextResponse.json({ ...result, runtime: getConfiguredAgentRuntime() ? 'openai_responses' : 'deterministic' });
 }
