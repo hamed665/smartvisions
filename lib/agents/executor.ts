@@ -25,7 +25,7 @@ export async function executeAgent(agent: AgentName, context: AgentContext): Pro
     case 'culture_locale': {
       const marketCode = (context.countryCode ?? 'OM') as Parameters<typeof getLocaleProfile>[0];
       const profile = getLocaleProfile(marketCode);
-      return { agent, confidence: 0.95, summary: 'Localized language, dialect and tone selected.', data: { locale: chooseLanguage({ marketCode, preferredLanguage: context.language }), dialect: profile.dialect, tone: profile.tone }, evidence: [], blockers: [] };
+      return { agent, confidence: 0.95, summary: 'Localized language, dialect and tone selected.', data: { locale: chooseLanguage({ marketCode, preferredLanguage: context.language }), dialect: profile.dialect, tone: profile.tone }, evidence, blockers: [] };
     }
     case 'sales_marketing': {
       const wantsExample = /(preview|sample|example|mockup|معاينة|نموذج|مثال)/i.test(text);
@@ -64,6 +64,14 @@ export function decideCommercialAction(context: AgentContext, results: AgentResu
 export function secretaryCompose(context: AgentContext, decision: CommercialDecision, results: AgentResult[]): ReplyDraft {
   const culture = results.find((result) => result.agent === 'culture_locale')?.data as { locale?: string } | undefined;
   const locale = culture?.locale ?? 'en-US';
+  const secretaryData = results.find((result) => result.agent === 'secretary')?.data as { customerText?: unknown; language?: unknown } | undefined;
+  const runtimeText = typeof secretaryData?.customerText === 'string' ? secretaryData.customerText.trim() : '';
+  const runtimeLanguage = typeof secretaryData?.language === 'string' ? secretaryData.language : locale;
+
+  if (runtimeText) {
+    return { text: runtimeText, language: runtimeLanguage, generatedBy: 'secretary' };
+  }
+
   const asksPrice = /(price|cost|how much|السعر|كم|تكلفة)/i.test(context.message);
   const asksPreview = /(preview|sample|example|mockup|معاينة|نموذج|مثال)/i.test(context.message);
 
