@@ -8,6 +8,10 @@
     "Never continue automated replies after human takeover",
     "Never fabricate portfolio items or case studies",
     "Never guarantee business results",
+    "Never alter configured delivery commitments without approval",
+    "Only the Secretary agent may compose customer-facing copy",
+    "Never send a Smart Preview that fails the Preview Quality Gate",
+    "Never send a Smart Preview before required human approval",
     "Escalate when critical evidence is missing",
     "Respect market and channel policy configuration"
   ],
@@ -18,6 +22,7 @@
     "Do not upsell irrelevant services",
     "Use low-pressure calls to action",
     "Prefer scope adjustment over irrational discounting",
+    "Use Smart Preview only when interest justifies the generation cost",
     "Be useful, not merely responsive"
   ]
 }
