@@ -20,7 +20,7 @@ const nav = [
   ["Preview Studio", "#"],
   ["Markets", "#"],
   ["AI Agents", "#"],
-  ["Outreach", "#"],
+  ["Outreach", "/outreach"],
   ["Reports", "#"],
   ["System", "#"],
 ] as const;
