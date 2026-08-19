@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateSendWindow } from '@/lib/outreach/scheduler';
-import { getQuote } from '@/lib/outreach/pricing';
-import { getLocaleProfile, chooseLanguage } from '@/lib/outreach/locale';
-import { buildFollowupSchedule } from '@/lib/outreach/followups';
-import { calculateIntentScore, classifyReply, extractReplySignals } from '@/lib/outreach/replies';
-import { buildMessagePlan } from '@/lib/outreach/message-plan';
-import { choosePreferredVariant } from '@/lib/outreach/variants';
-import { evaluateMailboxHealth } from '@/lib/outreach/mailbox-health';
+import { evaluateSendWindow } from '../lib/outreach/scheduler';
+import { getQuote } from '../lib/outreach/pricing';
+import { getLocaleProfile, chooseLanguage } from '../lib/outreach/locale';
+import { buildFollowupSchedule } from '../lib/outreach/followups';
+import { calculateIntentScore, classifyReply, extractReplySignals } from '../lib/outreach/replies';
+import { buildMessagePlan } from '../lib/outreach/message-plan';
+import { choosePreferredVariant } from '../lib/outreach/variants';
+import { evaluateMailboxHealth } from '../lib/outreach/mailbox-health';
 
 describe('outreach scheduler', () => {
   it('allows Oman messages during 09:00-19:00 local time', () => {
