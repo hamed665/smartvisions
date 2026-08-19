@@ -1,0 +1,7 @@
+{
+  "extra_page": {"name":"Extra Page","prices":{"OM":20,"AE":180,"SA":160,"QA":180,"GB":70,"US":85}},
+  "online_booking": {"name":"Online Booking","prices":{"OM":35,"AE":320,"SA":280,"QA":320,"GB":120,"US":150}},
+  "payment_gateway": {"name":"Payment Gateway","prices":{"OM":50,"AE":450,"SA":390,"QA":450,"GB":180,"US":220}},
+  "extra_language": {"name":"Extra Language","prices":{"OM":60,"AE":550,"SA":490,"QA":550,"GB":210,"US":250}},
+  "advanced_seo": {"name":"Advanced SEO","prices":{"OM":70,"AE":650,"SA":590,"QA":650,"GB":250,"US":300}}
+}
