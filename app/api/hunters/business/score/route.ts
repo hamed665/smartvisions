@@ -1,16 +1,11 @@
 import { NextResponse } from 'next/server';
-import { scoreOpportunity, type OpportunityInput } from '@/lib/scoring/opportunity';
-import { recommendOffer, type OfferInput } from '@/lib/scoring/offer';
+import { evaluateBusiness, type BusinessEvaluationInput } from '@/lib/hunters/business/evaluate';
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as { opportunity: OpportunityInput; offer: OfferInput };
-
-  if (!body?.opportunity || !body?.offer) {
-    return NextResponse.json({ error: 'opportunity and offer are required' }, { status: 400 });
+  const body = (await request.json()) as BusinessEvaluationInput;
+  if (typeof body?.hasWebsite !== 'boolean') {
+    return NextResponse.json({ error: 'hasWebsite is required' }, { status: 400 });
   }
 
-  return NextResponse.json({
-    opportunity: scoreOpportunity(body.opportunity),
-    recommendation: recommendOffer(body.offer),
-  });
+  return NextResponse.json(evaluateBusiness(body));
 }
