@@ -38,6 +38,13 @@ describe('country pricing guard', () => {
     expect(quote.basePrice).toBe(249);
   });
 
+  it('adds configured country-specific addons', () => {
+    const quote = getQuote({ serviceId: 'business_website', marketCode: 'OM', addons: ['online_booking', 'extra_page'] });
+    expect(quote.allowed).toBe(true);
+    expect(quote.addonsTotal).toBe(55);
+    expect(quote.basePrice).toBe(234);
+  });
+
   it('requires human approval above auto discount ceiling', () => {
     const quote = getQuote({ serviceId: 'premium_bilingual_website', marketCode: 'OM', requestedDiscountPct: 8 });
     expect(quote.allowed).toBe(true);
