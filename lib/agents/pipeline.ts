@@ -1,6 +1,7 @@
 import type { AgentContext, AgentResult, PipelineTrace } from './contracts';
 import { routeAgents } from './router';
-import { checkRelevance, decideCommercialAction, executeAgent, secretaryCompose } from './executor';
+import { checkRelevance, decideCommercialAction, secretaryCompose } from './executor';
+import { deterministicAgentRuntime, type AgentRuntime } from './runtime';
 import { canAutoSend, evaluateHandoff } from '@/lib/handoff/policy';
 
 const inferHandoffSignals = (message: string) => {
@@ -13,13 +14,17 @@ const inferHandoffSignals = (message: string) => {
   };
 };
 
-export async function processInboundMessage(context: AgentContext, controls?: { agentsPaused?: boolean }) {
+export async function processInboundMessage(
+  context: AgentContext,
+  controls?: { agentsPaused?: boolean },
+  runtime: AgentRuntime = deterministicAgentRuntime,
+) {
   const routedAgents = routeAgents(context);
   const specialists = routedAgents.filter((agent) => !['decision_orchestrator', 'secretary', 'relevance_checker'].includes(agent));
 
-  const specialistResults = await Promise.all(specialists.map((agent) => executeAgent(agent, context)));
+  const specialistResults = await Promise.all(specialists.map((agent) => runtime.run(agent, context)));
   const orchestratorResult = routedAgents.includes('decision_orchestrator')
-    ? await executeAgent('decision_orchestrator', context)
+    ? await runtime.run('decision_orchestrator', context)
     : null;
   const agentResults: AgentResult[] = orchestratorResult ? [...specialistResults, orchestratorResult] : specialistResults;
 
@@ -33,12 +38,12 @@ export async function processInboundMessage(context: AgentContext, controls?: { 
     confidence,
   });
 
-  const secretaryResult = routedAgents.includes('secretary') ? await executeAgent('secretary', context) : null;
+  const secretaryResult = routedAgents.includes('secretary') ? await runtime.run('secretary', context) : null;
   if (secretaryResult) agentResults.push(secretaryResult);
 
   const draft = secretaryCompose(context, decision, agentResults);
   const relevancePassed = checkRelevance(context, draft);
-  if (routedAgents.includes('relevance_checker')) agentResults.push(await executeAgent('relevance_checker', context));
+  if (routedAgents.includes('relevance_checker')) agentResults.push(await runtime.run('relevance_checker', context));
 
   const sendGate = canAutoSend({
     agentMode: handoff.handoff ? 'HUMAN' : context.agentMode,
