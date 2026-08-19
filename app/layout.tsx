@@ -17,11 +17,11 @@ const nav = [
   ["Services", "#"],
   ["Pricing", "#"],
   ["Portfolio", "#"],
-  ["Preview Studio", "#"],
+  ["Preview Studio", "/preview-studio"],
   ["Markets", "#"],
-  ["AI Agents", "#"],
+  ["AI Agents", "/agents"],
   ["Outreach", "/outreach"],
-  ["Reports", "#"],
+  ["Reports", "/reports"],
   ["System", "#"],
 ] as const;
 
