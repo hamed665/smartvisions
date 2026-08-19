@@ -20,14 +20,12 @@ export function resolveTimezone(marketCode: MarketCode, leadTimezone?: string) {
   return market.timezone;
 }
 
-export function evaluateSendWindow(input: {
+export function evaluateLocalWindow(input: {
   marketCode: MarketCode;
   nowUtc?: Date;
   leadTimezone?: string;
 }) {
   const market = marketsJson[input.marketCode] as MarketConfig;
-  if (!market.coldEmailEnabled) return { allowed: false, reason: 'market_disabled' as const };
-
   const zone = resolveTimezone(input.marketCode, input.leadTimezone);
   if (!zone) return { allowed: false, reason: 'timezone_unknown' as const };
 
@@ -51,4 +49,14 @@ export function evaluateSendWindow(input: {
     timezone: zone,
     nextAllowedAtUtc: nextLocal.toUTC().toISO(),
   };
+}
+
+export function evaluateSendWindow(input: {
+  marketCode: MarketCode;
+  nowUtc?: Date;
+  leadTimezone?: string;
+}) {
+  const market = marketsJson[input.marketCode] as MarketConfig;
+  if (!market.coldEmailEnabled) return { allowed: false, reason: 'market_disabled' as const };
+  return evaluateLocalWindow(input);
 }
