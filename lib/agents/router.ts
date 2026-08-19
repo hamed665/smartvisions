@@ -38,7 +38,13 @@ export function routeAgents(context: AgentContext): AgentName[] {
     agents.add('evidence_checker');
   }
 
-  if (previewIntent || asksPortfolio) agents.add('preview_director');
+  if (previewIntent || asksPortfolio) {
+    agents.add('preview_director');
+    agents.add('business_analyst');
+    agents.add('culture_locale');
+    agents.add('sales_marketing');
+    agents.add('evidence_checker');
+  }
 
   if (agents.size === 1) {
     agents.add('culture_locale');
