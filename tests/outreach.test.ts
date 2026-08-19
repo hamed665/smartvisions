@@ -5,6 +5,8 @@ import { getLocaleProfile, chooseLanguage } from '@/lib/outreach/locale';
 import { buildFollowupSchedule } from '@/lib/outreach/followups';
 import { calculateIntentScore, classifyReply, extractReplySignals } from '@/lib/outreach/replies';
 import { buildMessagePlan } from '@/lib/outreach/message-plan';
+import { choosePreferredVariant } from '@/lib/outreach/variants';
+import { evaluateMailboxHealth } from '@/lib/outreach/mailbox-health';
 
 describe('outreach scheduler', () => {
   it('allows Oman messages during 09:00-19:00 local time', () => {
@@ -120,5 +122,29 @@ describe('message planning', () => {
     expect(plan.language).toBe('ar-SA');
     expect(plan.dialect).toBe('saudi');
     expect(plan.evidence).toHaveLength(1);
+  });
+});
+
+describe('controlled A/B testing', () => {
+  it('does not choose a winner before minimum sample size', () => {
+    const result = choosePreferredVariant([
+      { variantKey: 'A', strategy: 'problem_first', sent: 20, replies: 5, positive: 3, hot: 1, won: 1 },
+      { variantKey: 'B', strategy: 'direct_idea', sent: 20, replies: 7, positive: 5, hot: 2, won: 1 },
+    ]);
+    expect(result.preferred).toBeNull();
+  });
+});
+
+describe('mailbox health', () => {
+  it('blocks sending after daily limit', () => {
+    const result = evaluateMailboxHealth({ enabled: true, dailyLimit: 20, sentToday: 20, bounceRate: 0.01, complaintRate: 0, providerHealthy: true });
+    expect(result.allowed).toBe(false);
+    expect(result.blocks).toContain('DAILY_LIMIT_REACHED');
+  });
+
+  it('blocks unhealthy bounce rate', () => {
+    const result = evaluateMailboxHealth({ enabled: true, dailyLimit: 20, sentToday: 5, bounceRate: 0.06, complaintRate: 0, providerHealthy: true });
+    expect(result.allowed).toBe(false);
+    expect(result.blocks).toContain('BOUNCE_RATE_TOO_HIGH');
   });
 });
