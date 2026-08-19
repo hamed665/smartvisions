@@ -1,0 +1,8 @@
+{
+  "business_website": {"name":"Business Website","prices":{"OM":179,"AE":1490,"SA":1290,"QA":1490,"GB":650,"US":750},"maxAutoDiscountPct":5,"maxDiscountWithApprovalPct":10},
+  "premium_bilingual_website": {"name":"Premium Bilingual Website","prices":{"OM":249,"AE":1990,"SA":1790,"QA":1990,"GB":950,"US":1100},"maxAutoDiscountPct":5,"maxDiscountWithApprovalPct":10},
+  "custom_website": {"name":"Advanced / Custom Website","prices":{"OM":399,"AE":2990,"SA":2790,"QA":2990,"GB":1450,"US":1700},"startingFrom":true,"requiresCustomQuote":true},
+  "ai_reels_4": {"name":"4 AI Reels","prices":{"OM":49,"AE":449,"SA":399,"QA":449,"GB":180,"US":220},"productionMode":"human_assisted"},
+  "ai_reels_8": {"name":"8 AI Reels","prices":{"OM":89,"AE":799,"SA":699,"QA":799,"GB":320,"US":390},"productionMode":"human_assisted"},
+  "whatsapp_ai_setup": {"name":"WhatsApp AI Setup","prices":{"OM":199,"AE":1790,"SA":1490,"QA":1790,"GB":650,"US":800},"startingFrom":true}
+}
