@@ -7,10 +7,23 @@ export const metadata = {
 };
 
 const nav = [
-  "Dashboard", "Leads", "Intent Leads", "Campaigns", "Conversations", "Hot Leads",
-  "Services", "Pricing", "Portfolio", "Preview Studio", "Markets", "AI Agents",
-  "Outreach", "Reports", "System",
-];
+  ["Dashboard", "/"],
+  ["Hunters", "/hunters"],
+  ["Leads", "#"],
+  ["Intent Leads", "#"],
+  ["Campaigns", "#"],
+  ["Conversations", "#"],
+  ["Hot Leads", "#"],
+  ["Services", "#"],
+  ["Pricing", "#"],
+  ["Portfolio", "#"],
+  ["Preview Studio", "#"],
+  ["Markets", "#"],
+  ["AI Agents", "#"],
+  ["Outreach", "#"],
+  ["Reports", "#"],
+  ["System", "#"],
+] as const;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
@@ -20,7 +33,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <aside className="sidebar">
             <div className="brand">Smart Visions</div>
             <div className="badge">Growth OS</div>
-            <nav>{nav.map((item) => <a href="#" key={item}>{item}</a>)}</nav>
+            <nav>{nav.map(([item, href]) => <a href={href} key={item}>{item}</a>)}</nav>
           </aside>
           <main className="content">{children}</main>
         </div>
