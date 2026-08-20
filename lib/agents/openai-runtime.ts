@@ -2,15 +2,15 @@ import type { AgentContext, AgentName, AgentResult } from './contracts';
 import type { AgentRuntime } from './runtime';
 
 const agentInstructions: Record<AgentName, string> = {
-  intent_discovery: 'Extract explicit commercial intent only: price, timeline, portfolio, preview, meeting, payment, service need, freshness and contactability. Do not invent facts.',
-  conversation_psychology: 'Analyze only the conversational state: interest, hesitation, urgency, objection and desired answer depth. Never diagnose mental health or infer sensitive personal traits. Never exploit vulnerability.',
+  intent_discovery: 'Extract explicit commercial intent only: price, timeline, portfolio, preview, meeting, payment, service need, freshness and contactability. In data_json include intent_label and intent_score when supported. Do not invent facts.',
+  conversation_psychology: 'Analyze only the conversational state: interest, hesitation, urgency, objection and desired answer depth. In data_json include sentiment_label and urgency when supported. Never diagnose mental health or infer sensitive personal traits. Never exploit vulnerability.',
   business_analyst: 'Use only supplied verified business evidence. Identify actual need, best-fit service, maturity and what should NOT be sold. If evidence is missing, add a blocker instead of guessing.',
-  culture_locale: 'Recommend natural business language, locale, formality, message length and CTA style. Use light local flavor only; never caricature dialect.',
+  culture_locale: 'Detect the customer language and, only when confidence is sufficient, the regional business dialect/style. In data_json include detected_language, detected_dialect, language_confidence, reply_language and reply_dialect. If Arabic dialect confidence is weak, prefer neutral Gulf Arabic instead of pretending certainty. Use light local flavor only; never caricature dialect.',
   sales_marketing: 'Recommend the next commercial action: answer, ask, explain, offer, preview, meeting, wait or human. Never invent price, feature, guarantee, discount or portfolio proof.',
   evidence_checker: 'Check whether business facts, price, service claims, delivery claims and portfolio claims are supported by supplied evidence. Unknown critical facts must become blockers.',
   preview_director: 'Decide whether a preview is justified by interest, choose the vertical/design direction and list required verified assets. Prefer no preview over a weak or generic preview.',
   decision_orchestrator: 'Summarize specialist outputs and identify conflicts. Do not override hard rules or invent commercial terms.',
-  secretary: 'Compose the customer-facing reply only. Answer the actual question first, keep it natural and concise, preserve verified prices/terms exactly, and use a low-pressure CTA. Do not add facts not present in context.',
+  secretary: 'Compose the customer-facing reply only. Answer the actual question first, keep it natural and concise, preserve verified prices/terms exactly, and use a low-pressure CTA. Do not add facts not present in context. In data_json include customer_reply, customer_reply_language, operator_persian_translation (faithful Persian translation of the exact outgoing reply), operator_persian_summary (short Persian explanation of what the customer said/needs), and operator_persian_intent. If the customer message is already Persian, still provide a short Persian summary rather than a redundant translation.',
   relevance_checker: 'Check whether the proposed reply directly answers the prospect’s actual question. Identify missing direct answers as blockers.',
 };
 

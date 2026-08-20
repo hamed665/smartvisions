@@ -17,6 +17,9 @@ export type NormalizedWhatsAppInbound = {
   type: string;
   text?: string;
   contactName?: string;
+  mediaId?: string;
+  mimeType?: string;
+  voice?: boolean;
 };
 
 export function extractWhatsAppInbound(payload: unknown): NormalizedWhatsAppInbound[] {
@@ -25,7 +28,14 @@ export function extractWhatsAppInbound(payload: unknown): NormalizedWhatsAppInbo
       changes?: Array<{
         value?: {
           contacts?: Array<{ profile?: { name?: string }; wa_id?: string }>;
-          messages?: Array<{ id?: string; from?: string; timestamp?: string; type?: string; text?: { body?: string } }>;
+          messages?: Array<{
+            id?: string;
+            from?: string;
+            timestamp?: string;
+            type?: string;
+            text?: { body?: string };
+            audio?: { id?: string; mime_type?: string; voice?: boolean };
+          }>;
         };
       }>;
     }>;
@@ -45,6 +55,9 @@ export function extractWhatsAppInbound(payload: unknown): NormalizedWhatsAppInbo
           type: message.type,
           text: message.text?.body,
           contactName,
+          mediaId: message.audio?.id,
+          mimeType: message.audio?.mime_type,
+          voice: message.audio?.voice,
         });
       }
     }

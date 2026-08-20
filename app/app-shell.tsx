@@ -9,7 +9,7 @@ const nav = [
   ['Leads', '#'],
   ['Intent Leads', '#'],
   ['Campaigns', '#'],
-  ['Conversations', '#'],
+  ['Conversations', '/conversations'],
   ['Hot Leads', '#'],
   ['Services', '#'],
   ['Pricing', '#'],
