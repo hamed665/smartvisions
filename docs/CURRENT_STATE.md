@@ -60,55 +60,64 @@ This file is the operational handoff for the next engineer/agent/chat. Update it
 - Cost-aware OpenAI runtime exists.
 - Low-cost/high-reasoning model routing exists in code/settings.
 - Token usage and estimated cost recording exists.
-- Owner-only production health-check page exists at:
-  - `/cost-usage/openai-health-check`
-- The first production health-check attempt reached OpenAI but failed with HTTP 429 `insufficient_quota` because the OpenAI API billing balance was zero.
-- OpenAI API billing was then activated with a **$5 prepaid balance** and **auto-reload disabled**.
-- The production health check was re-run once and **succeeded end to end** on 2026-08-21 (Oman time).
-- Verified production run:
-  - Agent: `AGENT_INTENT_DISCOVERY`
-  - Total tokens displayed: `394`
-  - Recorded estimated cost: `$0.000575`
-  - A usage row appeared in Recent OpenAI usage.
-- This confirms the controlled path `Cost Guard → OpenAI Responses API → intent-discovery agent → usage recording` works in production.
-- Do not repeatedly run the health check; it is a smoke test, not a workload.
+- Owner-only production health-check page exists at `/cost-usage/openai-health-check`.
+- OpenAI API billing is active with a **$5 prepaid balance** and **auto-reload disabled**.
+- The production health check succeeded end to end on 2026-08-21 (Oman time).
+- Verified production run: `AGENT_INTENT_DISCOVERY`, 394 displayed tokens, `$0.000575` recorded estimated cost.
+- This confirms `Cost Guard → OpenAI Responses API → intent-discovery agent → usage recording` works in production.
+
+## Google Places / Business Hunter — implementation in progress
+
+A controlled Google Places acquisition gate is now implemented on branch `feat/google-places-controlled-discovery` and must be production-verified before autonomous discovery is enabled.
+
+Implemented in the branch:
+
+- Owner-only `/hunters/google-places` controlled sample page.
+- Explicit `READY` vs `CONNECTED` integration semantics.
+- Cost Guard preflight before Google Places Text Search and Place Details.
+- Google Places provider-cap enforcement.
+- IDs-only Text Search (`places.id`) for the first sample.
+- Oman-only controlled sample, maximum 3 results.
+- Daily new-lead quota enforcement before the sample.
+- Place ID persistence into existing `discovery_records` with duplicate checks and provenance.
+- Google Places usage metering and audit logging.
+- No campaign, outreach, email or WhatsApp side effect from the sample.
+- Place Details is protected with a conservative `$0.02` internal provider-budget reserve per request.
+- Migration `0022_google_places_connected_status.sql` adds `CONNECTED` to integration health states.
+- Detailed gate procedure is documented in `docs/GOOGLE_PLACES_CONTROLLED_GATE.md`.
+
+This code is **not production-verified yet**. Do not call Google Places `CONNECTED` until the migration, secret and one controlled production sample are complete.
 
 ## Exact next action — DO THIS FIRST
 
-### 1. Start the controlled Business Hunter / Google Places milestone
+### 1. Finish and merge the controlled Google Places implementation
 
-The OpenAI production gate is now passed. Continue with the acquisition runtime in `docs/MASTER_PLAN.md` without enabling autonomous outreach.
+Before merge:
 
-Implement/verify in this order:
+1. CI lint/typecheck/tests/build must be green.
+2. Vercel Preview must be green.
+3. Review that all Google Places call paths go through Cost Guard.
+4. Do not add real Google credentials to GitHub.
 
-1. Provider/integration health must distinguish credential presence from a successful end-to-end connection.
-2. Configure `GOOGLE_PLACES_API_KEY` server-side only; never expose it to the browser or GitHub.
-3. Enforce Cost Guard and the Google Places provider budget/quota **before every paid Places request**.
-4. Use the existing Business Hunter primitives rather than creating a second CRM or discovery model.
-5. Start with a dry-run/query preview and a tiny Oman-only production sample.
-6. Persist Place ID/provenance and deduplicate before doing additional paid lookups.
-7. Record provider usage and exact operation metadata after the request.
-8. Do not start Crawl4AI, email sending, WhatsApp outreach or autonomous discovery loops until this controlled Places path is production-verified.
+### 2. Production setup after merge
 
-Expected first Google Places success criteria:
+1. Apply `supabase/migrations/0022_google_places_connected_status.sql` to production.
+2. Add `GOOGLE_PLACES_API_KEY` to Vercel Production and Preview only.
+3. Keep a small non-zero Google Places provider budget in Cost & Usage.
+4. Open `/hunters/google-places`.
+5. Review the dry-run preview.
+6. Run exactly one first sample: Muscat / dental clinic / max 3.
+7. Confirm provider health becomes `CONNECTED`, usage is recorded, Place IDs are persisted/deduplicated, and no outreach occurred.
 
-- Owner can see whether Google Places is NOT_CONFIGURED/READY/CONNECTED/ERROR rather than merely whether a credential string exists.
-- A tiny Oman discovery request passes Cost Guard.
-- Place IDs are returned and deduplicated.
-- Discovery/provenance is persisted in existing tables.
-- Google Places usage is recorded.
-- No lead is contacted and no campaign outreach is triggered.
-- Failure states are visible and fail closed.
+### 3. Only after the controlled Places sample is verified
 
-### 2. After the first controlled Places sample
-
-Proceed to website/public-source enrichment and audit only after confirming that duplicate discovery does not cause repeated paid enrichment and that Places spending remains within the configured provider cap.
+Proceed to selective Place Details and website/public-source enrichment. Do not start Crawl4AI, email sending, WhatsApp outreach or autonomous acquisition loops before this gate passes.
 
 ## External integrations not yet production-verified
 
 Do not describe these as connected until tested end-to-end:
 
-- Google Places API — key/runtime still to be configured/tested.
+- Google Places API — controlled runtime implemented but secret/migration/production smoke test still pending.
 - Crawl4AI — service/URL still to be provisioned and tested.
 - Redis/queue runtime — still to be provisioned/verified if retained by final architecture.
 - Email outbound provider — provider/domain/mailbox/reputation setup not production-verified.
@@ -128,7 +137,7 @@ Do not describe these as connected until tested end-to-end:
 - Price tables and service offers are market-specific and editable from panel.
 - The system should find both businesses that need agency services and public project/freelancer opportunities, but platform automation must stay within provider/platform policy.
 - For a website prospect, the system may offer to generate a modern personalized preview/demo after qualification. It must not deliberately create an ugly/old design merely to manipulate the prospect.
-- Google Places should be used as discovery/reference, with Place ID persistence and careful handling of Places content; business website/public sources should be used for durable enrichment where appropriate.
+- Google Places is used as discovery/reference with Place ID persistence and minimal fields; website/public sources are preferred for durable enrichment where appropriate.
 - Cold email sending infrastructure must be isolated from the primary corporate domain/reputation and implemented with provider-policy/reputation controls.
 
 ## Recent important PRs
@@ -145,15 +154,17 @@ The exact repository history is authoritative. Key milestones include:
 - PR #16 — owner-only low-cost OpenAI production health check.
 - PR #17 — restore least-privilege backend grants required by Cost Guard after a production 403.
 - PR #19 — canonical master plan and cross-chat handoff documentation.
+- PR #20 — record successful OpenAI production verification and advance next action to Google Places.
 
 ## Known caveats
 
 - Do not confuse credential presence or `READY` configuration status with a completed provider smoke test.
-- OpenAI API billing is prepaid with auto-reload disabled; requests will stop when the balance is exhausted unless the owner manually adds credit.
+- OpenAI API billing is prepaid with auto-reload disabled; requests stop when the balance is exhausted unless the owner manually adds credit.
+- Google Places IDs-only discovery is intentionally separated from richer Place Details to avoid paying for fields before a lead has value.
 - Do not switch Shadow Mode/autonomous outreach broadly until acquisition, response, DNC, budget, and handoff behavior are tested with controlled samples.
 - Do not increase API budgets simply to make errors disappear.
 - Supabase has previously surfaced a Leaked Password Protection auth advisory. Treat platform-level auth advisories separately from application migrations and enable recommended account protection where practical.
 
 ## Handoff sentence for a new chat
 
-> Read `AGENTS.md`, `docs/CURRENT_STATE.md`, `docs/MASTER_PLAN.md`, and `docs/EXECUTION_PLAYBOOK.md`. OpenAI production health check is verified end to end as of 2026-08-21. Continue with a controlled Google Places Business Hunter milestone: server-only key, provider health, Cost Guard before paid calls, tiny Oman sample, dedupe/provenance/usage recording, and no outreach until acquisition is production-verified.
+> Read `AGENTS.md`, `docs/CURRENT_STATE.md`, `docs/MASTER_PLAN.md`, `docs/EXECUTION_PLAYBOOK.md`, and `docs/GOOGLE_PLACES_CONTROLLED_GATE.md`. OpenAI is production-verified. Finish the controlled Google Places Business Hunter gate: green CI/Preview, merge, apply migration 0022, configure server-only key, run one Muscat dental-clinic sample of max 3 Place IDs, verify usage/dedupe/CONNECTED status, and keep outreach disabled.
