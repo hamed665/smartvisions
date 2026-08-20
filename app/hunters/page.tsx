@@ -1,33 +1,4 @@
-const businessFlow = ['Campaign', 'Places IDs', 'Place details', 'Official website', 'Crawl4AI audit', 'Opportunity score', 'Offer'];
-const intentFlow = ['Source signal', 'Freshness', 'Service match', 'Intent score', 'Contactability', 'Priority'];
-
-export default function HuntersPage() {
-  return (
-    <div>
-      <h1>Hunters</h1>
-      <p className="muted">Business discovery and explicit-intent opportunities</p>
-      <section className="grid">
-        <div className="panel">
-          <h2>Business Hunter</h2>
-          <ol>{businessFlow.map((step) => <li key={step}>{step}</li>)}</ol>
-          <p className="muted">Google Places is discovery. Long-lived evidence should come from official business-owned sources where possible.</p>
-        </div>
-        <div className="panel">
-          <h2>Intent Hunter</h2>
-          <ol>{intentFlow.map((step) => <li key={step}>{step}</li>)}</ol>
-          <p className="muted">Country is optional. Fresh, explicit requests outrank cold prospects.</p>
-        </div>
-      </section>
-      <section className="panel">
-        <h2>Priority order</h2>
-        <ol>
-          <li>Inbound</li>
-          <li>Fresh explicit freelancer/service request</li>
-          <li>Previously interested lead</li>
-          <li>High-score Business Hunter lead</li>
-          <li>Normal cold prospect</li>
-        </ol>
-      </section>
-    </div>
-  );
-}
+import Link from 'next/link';
+import { getCurrentOrganization } from '@/lib/supabase/org';
+export const dynamic='force-dynamic';
+export default async function HuntersPage(){const {supabase,organizationId}=await getCurrentOrganization();const [{data:campaigns},{count:discovered},{count:intents},{data:integrations}]=await Promise.all([supabase.from('campaigns').select('hunter_type,status,target_count').eq('organization_id',organizationId),supabase.from('discovery_records').select('id',{count:'exact',head:true}).eq('organization_id',organizationId),supabase.from('intent_opportunities').select('id',{count:'exact',head:true}).eq('organization_id',organizationId),supabase.from('integration_connections').select('provider,channel,status,enabled').eq('organization_id',organizationId)]);const c=campaigns??[],i=integrations??[];const ready=(provider:string)=>i.some(x=>x.provider===provider&&x.status==='READY'&&x.enabled);return <div><div className="headerRow"><div><h1>Hunters</h1><p className="muted">Business discovery plus explicit project/freelance demand, controlled through campaigns.</p></div><Link className="textLink" href="/campaigns">Create campaign →</Link></div><section className="grid"><div className="card"><span className="muted">Business campaigns</span><div className="value">{c.filter(x=>x.hunter_type==='BUSINESS').length}</div></div><div className="card"><span className="muted">Intent campaigns</span><div className="value">{c.filter(x=>x.hunter_type==='INTENT').length}</div></div><div className="card"><span className="muted">Discovery records</span><div className="value">{discovered??0}</div></div><div className="card"><span className="muted">Intent opportunities</span><div className="value">{intents??0}</div></div></section><section className="twoCol"><div className="panel"><h2>Business Hunter readiness</h2><div className="healthList"><span>Google Places <strong>{ready('GOOGLE_PLACES')?'READY':'NOT READY'}</strong></span><span>Crawl4AI <strong>{ready('CRAWL4AI')?'READY':'NOT READY'}</strong></span><span>Active campaigns <strong>{c.filter(x=>x.hunter_type==='BUSINESS'&&x.status==='ACTIVE').length}</strong></span><span>Target volume <strong>{c.filter(x=>x.hunter_type==='BUSINESS'&&x.status==='ACTIVE').reduce((n,x)=>n+(x.target_count??0),0)}</strong></span></div></div><div className="panel"><h2>Intent / Project Hunter readiness</h2><div className="healthList"><span>Active campaigns <strong>{c.filter(x=>x.hunter_type==='INTENT'&&x.status==='ACTIVE').length}</strong></span><span>Fresh opportunities <strong>{intents??0}</strong></span><span>Country restriction <strong>Optional</strong></span><span>Priority rule <strong>Fresh explicit demand first</strong></span></div></div></section></div>}
