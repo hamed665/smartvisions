@@ -1,6 +1,6 @@
 # Smart Visions Growth OS — Current Production State
 
-**Last updated:** 2026-08-20 (Oman, UTC+4)
+**Last updated:** 2026-08-21 (Oman, UTC+4)
 
 This file is the operational handoff for the next engineer/agent/chat. Update it after every meaningful production change.
 
@@ -53,7 +53,7 @@ This file is the operational handoff for the next engineer/agent/chat. Update it
   - `service_role`: SELECT + INSERT on `usage_events`
 - This least-privilege fix was shipped through PR #17 and applied to production.
 
-### OpenAI
+### OpenAI — production verified
 
 - `OPENAI_API_KEY` is configured in Vercel for Production and Preview.
 - `SUPABASE_SECRET_KEY` is configured in Vercel for Production and Preview.
@@ -62,40 +62,47 @@ This file is the operational handoff for the next engineer/agent/chat. Update it
 - Token usage and estimated cost recording exists.
 - Owner-only production health-check page exists at:
   - `/cost-usage/openai-health-check`
-- The first production health-check attempt failed **before reaching OpenAI** because Supabase backend grants returned 403.
-- Root cause was identified from Supabase API logs and fixed via PR #17.
+- The first production health-check attempt reached OpenAI but failed with HTTP 429 `insufficient_quota` because the OpenAI API billing balance was zero.
+- OpenAI API billing was then activated with a **$5 prepaid balance** and **auto-reload disabled**.
+- The production health check was re-run once and **succeeded end to end** on 2026-08-21 (Oman time).
+- Verified production run:
+  - Agent: `AGENT_INTENT_DISCOVERY`
+  - Total tokens displayed: `394`
+  - Recorded estimated cost: `$0.000575`
+  - A usage row appeared in Recent OpenAI usage.
+- This confirms the controlled path `Cost Guard → OpenAI Responses API → intent-discovery agent → usage recording` works in production.
+- Do not repeatedly run the health check; it is a smoke test, not a workload.
 
 ## Exact next action — DO THIS FIRST
 
-### 1. Re-run the OpenAI production health check after PR #17
+### 1. Start the controlled Business Hunter / Google Places milestone
 
-Open:
+The OpenAI production gate is now passed. Continue with the acquisition runtime in `docs/MASTER_PLAN.md` without enabling autonomous outreach.
 
-`https://smartvisions.vercel.app/cost-usage/openai-health-check`
+Implement/verify in this order:
 
-Run **Run low-cost OpenAI test** once.
+1. Provider/integration health must distinguish credential presence from a successful end-to-end connection.
+2. Configure `GOOGLE_PLACES_API_KEY` server-side only; never expose it to the browser or GitHub.
+3. Enforce Cost Guard and the Google Places provider budget/quota **before every paid Places request**.
+4. Use the existing Business Hunter primitives rather than creating a second CRM or discovery model.
+5. Start with a dry-run/query preview and a tiny Oman-only production sample.
+6. Persist Place ID/provenance and deduplicate before doing additional paid lookups.
+7. Record provider usage and exact operation metadata after the request.
+8. Do not start Crawl4AI, email sending, WhatsApp outreach or autonomous discovery loops until this controlled Places path is production-verified.
 
-Expected success criteria:
+Expected first Google Places success criteria:
 
-- Page does not crash.
-- OpenAI request succeeds.
-- Result is returned by the intent-discovery agent.
-- A new OPENAI row appears in `usage_events`.
-- Input/output tokens are non-zero/reasonable.
-- Estimated cost is very small and appears in Cost & Usage.
-- `OPENAI_HEALTH_CHECK` appears in audit logs.
+- Owner can see whether Google Places is NOT_CONFIGURED/READY/CONNECTED/ERROR rather than merely whether a credential string exists.
+- A tiny Oman discovery request passes Cost Guard.
+- Place IDs are returned and deduplicated.
+- Discovery/provenance is persisted in existing tables.
+- Google Places usage is recorded.
+- No lead is contacted and no campaign outreach is triggered.
+- Failure states are visible and fail closed.
 
-If it fails:
+### 2. After the first controlled Places sample
 
-1. Do not repeatedly click the button.
-2. Inspect Vercel function/server logs and Supabase API logs for the exact timestamp.
-3. Determine whether the failure is Cost Guard, OpenAI auth/billing/model access, response parsing, or usage insert.
-4. Fix using a PR, CI, and least-privilege approach.
-5. Update this file with the result.
-
-### 2. Only after OpenAI smoke test is production-verified
-
-Proceed to the first acquisition runtime milestone in `docs/MASTER_PLAN.md`: Google Places Business Hunter + crawl/audit pipeline, with paid-request Cost Guard enforced before enabling any autonomous discovery loop.
+Proceed to website/public-source enrichment and audit only after confirming that duplicate discovery does not cause repeated paid enrichment and that Places spending remains within the configured provider cap.
 
 ## External integrations not yet production-verified
 
@@ -137,14 +144,16 @@ The exact repository history is authoritative. Key milestones include:
 - PR #15 — cost-aware OpenAI runtime.
 - PR #16 — owner-only low-cost OpenAI production health check.
 - PR #17 — restore least-privilege backend grants required by Cost Guard after a production 403.
+- PR #19 — canonical master plan and cross-chat handoff documentation.
 
 ## Known caveats
 
-- Do not confuse `READY` configuration status with a completed provider smoke test.
+- Do not confuse credential presence or `READY` configuration status with a completed provider smoke test.
+- OpenAI API billing is prepaid with auto-reload disabled; requests will stop when the balance is exhausted unless the owner manually adds credit.
 - Do not switch Shadow Mode/autonomous outreach broadly until acquisition, response, DNC, budget, and handoff behavior are tested with controlled samples.
 - Do not increase API budgets simply to make errors disappear.
 - Supabase has previously surfaced a Leaked Password Protection auth advisory. Treat platform-level auth advisories separately from application migrations and enable recommended account protection where practical.
 
 ## Handoff sentence for a new chat
 
-> Read `AGENTS.md`, `docs/CURRENT_STATE.md`, `docs/MASTER_PLAN.md`, and `docs/EXECUTION_PLAYBOOK.md`. Verify production. The first pending task as of 2026-08-20 is to re-run and verify the owner-only OpenAI production health check after PR #17; do not jump to Google Places or outreach until that succeeds.
+> Read `AGENTS.md`, `docs/CURRENT_STATE.md`, `docs/MASTER_PLAN.md`, and `docs/EXECUTION_PLAYBOOK.md`. OpenAI production health check is verified end to end as of 2026-08-21. Continue with a controlled Google Places Business Hunter milestone: server-only key, provider health, Cost Guard before paid calls, tiny Oman sample, dedupe/provenance/usage recording, and no outreach until acquisition is production-verified.
