@@ -1,6 +1,8 @@
 import { createService, updateService } from '@/app/control-center-actions';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 
+export const dynamic = 'force-dynamic';
+
 export default async function ServicesPage() {
   const { supabase, organizationId, role } = await getCurrentOrganization();
   const { data } = await supabase.from('services').select('id,name,enabled').eq('organization_id', organizationId).order('name');
