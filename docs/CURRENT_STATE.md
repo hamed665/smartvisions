@@ -6,165 +6,135 @@ This file is the operational handoff for the next engineer/agent/chat. Update it
 
 ## Production endpoints and infrastructure
 
-- GitHub repository: `hamed665/smartvisions`
+- Repository: `hamed665/smartvisions`
 - Production branch: `main`
-- Frontend/control plane: Vercel project `smartvisions`
 - Production URL: `https://smartvisions.vercel.app`
-- Supabase project: `smart visions-growth-os`
-- Supabase project ref: `pkypexzpyfbikdnkrzvw`
-- Supabase region: `ap-south-1` (Mumbai)
-- Auth: Supabase email/password. First operator user exists and is OWNER.
-- Current panel login works in production.
+- Vercel project: `smartvisions`
+- Supabase project ref: `pkypexzpyfbikdnkrzvw` (`ap-south-1`, Mumbai)
+- Auth: Supabase email/password; first operator is OWNER.
+- Main panel login works in production.
 
-## What is implemented and production-deployed
+## Production-verified foundations
 
-### Foundation / control plane
+### Control plane
 
-- Next.js application and Vercel deployment.
-- Supabase Auth, organization membership, OWNER role and organization-scoped RLS.
-- English Control Center UI.
-- Dashboard, navigation and production login.
-- CRUD/control surfaces for Services, Pricing, Markets, AI Agents and System settings.
-- Expanded Control Center modules including CRM/Leads, Intent Leads, Campaigns, Conversations, Hot Leads, Growth/Outreach, Message Studio, Automations, Approvals, Knowledge, Integrations, DNC/Suppression, Audit, runtime safety, prompt versioning, locale/tone, reports and conversation detail.
-- Runtime safety controls and audit logging.
+- Next.js + Vercel production deployment.
+- Supabase Auth, organizations, OWNER role and organization-scoped RLS.
+- English Control Center with editable business/runtime settings.
+- CRM/Leads, Hunters, Intent Leads, Campaigns, Conversations, Hot Leads, Outreach, Message Studio, Automations, Approvals, Knowledge, Integrations, DNC/Suppression, Audit, Cost & Usage and System modules.
+- Runtime safety controls, audit logs and exception-based human handoff primitives.
 
 ### Conversation intelligence
 
-- Conversation/message storage model.
-- Persian operator brief contract.
-- Original-message preservation.
-- Intent/sentiment/stage metadata.
-- Conversation inbox stages/categories.
-- Approval vs auto/handoff decision framework.
-- Voice message metadata path is modeled.
-- Multilingual/dialect-aware contract is modeled.
-- Human takeover/handoff primitives exist.
+- Conversation/message storage, inbox stages, original content preservation, Persian operator brief contract, intent/sentiment metadata, approval framework, multilingual/voice metadata path and human takeover primitives.
 
 ### Cost Guard
 
-- `cost_guard_settings` and `usage_events` are in production.
-- Editable Cost & Usage panel.
-- Runtime-editable budgets, quotas, retry/cache limits and model routing settings.
-- Budget modes: NORMAL, WARNING, THROTTLED, CRITICAL, HARD_STOP.
-- Paid operations fail closed if the Cost Guard cannot be evaluated.
-- OpenAI runtime is wired to Cost Guard and usage metering.
-- Server-side Supabase backend access was corrected using least privilege:
-  - `service_role`: SELECT on `cost_guard_settings`
-  - `service_role`: SELECT + INSERT on `usage_events`
-- This least-privilege fix was shipped through PR #17 and applied to production.
+- `cost_guard_settings` and `usage_events` are live.
+- Runtime-editable total/provider budgets, daily quotas, retry/cache limits and model routing.
+- Modes: `NORMAL`, `WARNING`, `THROTTLED`, `CRITICAL`, `HARD_STOP`.
+- Paid operations fail closed when Cost Guard cannot be evaluated.
+- Least-privilege service-role access required by Cost Guard is applied in production.
 
 ### OpenAI — production verified
 
-- `OPENAI_API_KEY` is configured in Vercel for Production and Preview.
-- `SUPABASE_SECRET_KEY` is configured in Vercel for Production and Preview.
-- Cost-aware OpenAI runtime exists.
-- Low-cost/high-reasoning model routing exists in code/settings.
-- Token usage and estimated cost recording exists.
-- Owner-only production health-check page exists at `/cost-usage/openai-health-check`.
-- OpenAI API billing is active with a **$5 prepaid balance** and **auto-reload disabled**.
-- The production health check succeeded end to end on 2026-08-21 (Oman time).
-- Verified production run: `AGENT_INTENT_DISCOVERY`, 394 displayed tokens, `$0.000575` recorded estimated cost.
-- This confirms `Cost Guard → OpenAI Responses API → intent-discovery agent → usage recording` works in production.
+- OpenAI server runtime is connected and Cost Guard protected.
+- Production health check succeeded on 2026-08-21.
+- Verified run: `AGENT_INTENT_DISCOVERY`, 394 displayed tokens, `$0.000575` estimated cost recorded.
+- OpenAI API billing currently uses a **$5 prepaid balance** with **auto-reload disabled**.
 
-## Google Places / Business Hunter — implementation in progress
+## Google Places / Business Hunter — code deployed, production smoke test pending
 
-A controlled Google Places acquisition gate is now implemented on branch `feat/google-places-controlled-discovery` and must be production-verified before autonomous discovery is enabled.
+PR #21 (`feat: controlled Google Places discovery gate`) is merged to `main` and Vercel production deployment is green.
 
-Implemented in the branch:
+Implemented and deployed:
 
-- Owner-only `/hunters/google-places` controlled sample page.
-- Explicit `READY` vs `CONNECTED` integration semantics.
-- Cost Guard preflight before Google Places Text Search and Place Details.
-- Google Places provider-cap enforcement.
-- IDs-only Text Search (`places.id`) for the first sample.
-- Oman-only controlled sample, maximum 3 results.
-- Daily new-lead quota enforcement before the sample.
-- Place ID persistence into existing `discovery_records` with duplicate checks and provenance.
+- Owner-only `/hunters/google-places` controlled discovery page.
+- Dry-run preview before provider execution.
+- `READY` vs `CONNECTED` integration semantics.
+- Cost Guard before Google Places Text Search and Place Details.
+- Google Places provider-budget enforcement.
+- First-gate Text Search requests `places.id` only.
+- Oman-only controlled sample, hard limit 3 Place IDs.
+- Daily new-lead quota check before the sample.
+- Place ID dedupe and provenance persistence into existing `discovery_records`.
 - Google Places usage metering and audit logging.
-- No campaign, outreach, email or WhatsApp side effect from the sample.
-- Place Details is protected with a conservative `$0.02` internal provider-budget reserve per request.
-- Migration `0022_google_places_connected_status.sql` adds `CONNECTED` to integration health states.
-- Detailed gate procedure is documented in `docs/GOOGLE_PLACES_CONTROLLED_GATE.md`.
+- No campaign, email, WhatsApp, follow-up or outreach side effects from the controlled sample.
+- Place Details uses a conservative `$0.02` internal provider-budget reserve per request because the existing field mask includes Enterprise fields (`websiteUri`, `nationalPhoneNumber`).
+- `docs/GOOGLE_PLACES_CONTROLLED_GATE.md` documents the production verification sequence.
 
-This code is **not production-verified yet**. Do not call Google Places `CONNECTED` until the migration, secret and one controlled production sample are complete.
+Production database status:
+
+- Migration `0022_google_places_connected_status.sql` has been applied successfully to production Supabase.
+- Supabase security advisor after the migration reports no new schema/RLS issue; the existing account-level warning remains: Leaked Password Protection is disabled.
+- Performance advisor reports only existing `unused_index` informational notices; no new blocking performance issue was introduced by migration 0022.
+- Current Google Places integration database state: `NOT_CONFIGURED`, disabled, no successful health check yet.
+- Google Places provider budget is currently `$5.00`; daily new-lead quota is `50`.
+
+Therefore Google Places is **not production-verified yet**. Do not call it `CONNECTED` until the server key and one controlled sample succeed.
 
 ## Exact next action — DO THIS FIRST
 
-### 1. Finish and merge the controlled Google Places implementation
+1. Configure `GOOGLE_PLACES_API_KEY` in Vercel **Production and Preview** only. Never commit the key.
+2. Wait for/redeploy production if Vercel requires a deployment after the environment change.
+3. Open `https://smartvisions.vercel.app/hunters/google-places`.
+4. Confirm the page shows credential `PRESENT` and provider state `READY` rather than `NOT_CONFIGURED`.
+5. Review the dry-run settings and run exactly one first sample:
+   - Country: `OM`
+   - City: `Muscat`
+   - Industry: `dental clinic`
+   - Max results: `3`
+6. Verify after the run:
+   - integration state becomes `CONNECTED`;
+   - `GOOGLE_PLACES / TEXT_SEARCH_IDS_ONLY` appears in usage;
+   - returned Place IDs appear in `discovery_records`;
+   - repeated IDs are not inserted twice;
+   - audit log records `GOOGLE_PLACES_CONTROLLED_SAMPLE`;
+   - no outreach was triggered.
+7. Only after that gate passes, continue to selective Place Details and website/public-source enrichment.
 
-Before merge:
-
-1. CI lint/typecheck/tests/build must be green.
-2. Vercel Preview must be green.
-3. Review that all Google Places call paths go through Cost Guard.
-4. Do not add real Google credentials to GitHub.
-
-### 2. Production setup after merge
-
-1. Apply `supabase/migrations/0022_google_places_connected_status.sql` to production.
-2. Add `GOOGLE_PLACES_API_KEY` to Vercel Production and Preview only.
-3. Keep a small non-zero Google Places provider budget in Cost & Usage.
-4. Open `/hunters/google-places`.
-5. Review the dry-run preview.
-6. Run exactly one first sample: Muscat / dental clinic / max 3.
-7. Confirm provider health becomes `CONNECTED`, usage is recorded, Place IDs are persisted/deduplicated, and no outreach occurred.
-
-### 3. Only after the controlled Places sample is verified
-
-Proceed to selective Place Details and website/public-source enrichment. Do not start Crawl4AI, email sending, WhatsApp outreach or autonomous acquisition loops before this gate passes.
+Do **not** start Crawl4AI, email sending, WhatsApp outreach or autonomous discovery loops before the controlled Google Places production sample passes.
 
 ## External integrations not yet production-verified
 
-Do not describe these as connected until tested end-to-end:
+- Google Places — runtime deployed/migration applied; server key + controlled production sample still pending.
+- Crawl4AI — not provisioned/tested end to end.
+- Redis/queue runtime — not production-verified if retained.
+- Email outbound provider/domain/mailbox reputation stack — not production-verified.
+- WhatsApp Cloud API — not production-verified.
+- Voice transcription — not production-verified end to end.
+- Freelancer/project hunting sources — not production-verified.
+- Preview/demo generation pipeline — not production-verified end to end.
 
-- Google Places API — controlled runtime implemented but secret/migration/production smoke test still pending.
-- Crawl4AI — service/URL still to be provisioned and tested.
-- Redis/queue runtime — still to be provisioned/verified if retained by final architecture.
-- Email outbound provider — provider/domain/mailbox/reputation setup not production-verified.
-- WhatsApp Cloud API — token/phone-number-id/webhook/app-secret flow not production-verified.
-- Voice transcription — runtime provider integration and end-to-end voice note test still pending.
-- Freelancer/project hunting sources — discovery/runtime adapters not production-verified.
-- Preview/demo generation — full automated generation/deployment flow not production-verified.
+## Durable product decisions
 
-## Important production decisions already made
-
-- Smart Visions is a separate repository from DrKhaleej.
+- Smart Visions is separate from DrKhaleej.
 - Main UI is English; owner/operator summaries and reports are Persian.
-- Routine sales actions should become autonomous when confidence/policy allows; owner approval is exception-based.
-- Local outbound send window defaults to 09:00–19:00 recipient local time.
-- Dialect/tone localization is required for Oman/UAE/Saudi/Qatar and British/American English markets.
-- When Arabic dialect confidence is low, use Gulf-neutral Arabic.
-- Price tables and service offers are market-specific and editable from panel.
-- The system should find both businesses that need agency services and public project/freelancer opportunities, but platform automation must stay within provider/platform policy.
-- For a website prospect, the system may offer to generate a modern personalized preview/demo after qualification. It must not deliberately create an ugly/old design merely to manipulate the prospect.
-- Google Places is used as discovery/reference with Place ID persistence and minimal fields; website/public sources are preferred for durable enrichment where appropriate.
-- Cold email sending infrastructure must be isolated from the primary corporate domain/reputation and implemented with provider-policy/reputation controls.
+- Automation by default, human approval by exception.
+- Default outbound window is 09:00–19:00 recipient local time.
+- Localization is market-specific for Oman/UAE/Saudi/Qatar/UK/USA; Gulf-neutral Arabic is the fallback when dialect confidence is low.
+- Prices, provider budgets, quotas and safety controls remain editable in the panel.
+- Google Places is discovery/reference only; minimal fields first, then selective enrichment after dedupe/value checks.
+- Cold email infrastructure must remain isolated from the primary company-domain reputation.
 
 ## Recent important PRs
 
-The exact repository history is authoritative. Key milestones include:
-
-- PR #8 — public login/layout cleanup.
-- PR #9/#10 — conversation intelligence, Persian operator brief, voice metadata, approval automation and DB indexes.
-- PR #11 — real routes for previously dead navigation items.
-- PR #12 — editable Control Center settings.
-- PR #13 — professional Control Center v1 expansion.
-- PR #14 — Cost Guard, editable quotas, usage metering/model routing foundations.
+- PR #14 — Cost Guard and editable API quotas.
 - PR #15 — cost-aware OpenAI runtime.
-- PR #16 — owner-only low-cost OpenAI production health check.
-- PR #17 — restore least-privilege backend grants required by Cost Guard after a production 403.
-- PR #19 — canonical master plan and cross-chat handoff documentation.
-- PR #20 — record successful OpenAI production verification and advance next action to Google Places.
+- PR #16 — owner-only OpenAI production health check.
+- PR #17 — least-privilege Cost Guard backend grant fix.
+- PR #19 — canonical master plan / cross-chat handoff.
+- PR #20 — successful OpenAI production verification recorded.
+- PR #21 — controlled Google Places discovery gate, merged and deployed.
 
 ## Known caveats
 
-- Do not confuse credential presence or `READY` configuration status with a completed provider smoke test.
-- OpenAI API billing is prepaid with auto-reload disabled; requests stop when the balance is exhausted unless the owner manually adds credit.
-- Google Places IDs-only discovery is intentionally separated from richer Place Details to avoid paying for fields before a lead has value.
-- Do not switch Shadow Mode/autonomous outreach broadly until acquisition, response, DNC, budget, and handoff behavior are tested with controlled samples.
-- Do not increase API budgets simply to make errors disappear.
-- Supabase has previously surfaced a Leaked Password Protection auth advisory. Treat platform-level auth advisories separately from application migrations and enable recommended account protection where practical.
+- `READY` means credential present/not yet verified. `CONNECTED` requires a successful controlled production test.
+- OpenAI prepaid auto-reload remains disabled by design.
+- IDs-only Google Text Search is intentionally separated from richer Place Details to minimize spend.
+- Do not raise budgets to hide provider/configuration errors.
+- Existing Supabase Auth advisory: Leaked Password Protection disabled. Reference: https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
 
 ## Handoff sentence for a new chat
 
-> Read `AGENTS.md`, `docs/CURRENT_STATE.md`, `docs/MASTER_PLAN.md`, `docs/EXECUTION_PLAYBOOK.md`, and `docs/GOOGLE_PLACES_CONTROLLED_GATE.md`. OpenAI is production-verified. Finish the controlled Google Places Business Hunter gate: green CI/Preview, merge, apply migration 0022, configure server-only key, run one Muscat dental-clinic sample of max 3 Place IDs, verify usage/dedupe/CONNECTED status, and keep outreach disabled.
+> Read `AGENTS.md`, `docs/CURRENT_STATE.md`, `docs/MASTER_PLAN.md`, `docs/EXECUTION_PLAYBOOK.md`, and `docs/GOOGLE_PLACES_CONTROLLED_GATE.md`. PR #21 is merged, production Vercel is green, migration 0022 is applied, Google Places budget is $5, but the integration is still NOT_CONFIGURED. Next: add `GOOGLE_PLACES_API_KEY` to Vercel Production/Preview, run exactly one Muscat dental-clinic sample of max 3 Place IDs, verify CONNECTED/usage/dedupe/no-outreach, then continue to selective enrichment.
