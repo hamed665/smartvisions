@@ -25,7 +25,7 @@ type LeadRow = {
   agent_mode: string;
   recommended_offer: string | null;
   updated_at: string;
-  businesses: LeadBusiness | null;
+  businesses: LeadBusiness[];
 };
 
 export default async function LeadsPage() {
@@ -37,8 +37,8 @@ export default async function LeadsPage() {
     .order('opportunity_score', { ascending: false })
     .limit(250);
 
-  const rows = (data ?? []) as LeadRow[];
+  const rows: LeadRow[] = data ?? [];
   const editable = role === 'OWNER';
 
-  return <div><div className="headerRow"><div><h1>Leads</h1><p className="muted">Live CRM workspace with stage, agent mode, scores, contacts and recommended offer.</p></div><span className="status">{rows.length} loaded</span></div><section className="conversationFilters">{statuses.map(s=><span className="conversationFilter" key={s}>{s} {rows.filter(r=>r.status===s).length}</span>)}</section><div className="settingsList">{rows.map(r=><form action={updateLead} className="settingsRow leadRow" key={r.id}><input type="hidden" name="id" value={r.id}/><div><strong>{r.businesses?.name||'Unknown business'}</strong><span className="muted smallText">{[r.businesses?.country_code,r.businesses?.city,r.businesses?.category].filter(Boolean).join(' · ')}</span><span className="muted smallText">Opportunity {r.opportunity_score} · Intent {r.intent_score}</span></div><label>Status<select name="status" defaultValue={r.status} disabled={!editable}>{statuses.map(s=><option key={s}>{s}</option>)}</select></label><label>Agent mode<select name="agent_mode" defaultValue={r.agent_mode} disabled={!editable}><option>AUTO</option><option>PAUSED</option><option>HUMAN</option></select></label><label className="wideField">Recommended offer<input name="recommended_offer" defaultValue={r.recommended_offer??''} disabled={!editable}/></label><div className="contactStack">{r.businesses?.email?<span>✉ {r.businesses.email}</span>:null}{r.businesses?.phone?<span>☎ {r.businesses.phone}</span>:null}{r.businesses?.whatsapp?<span>WA {r.businesses.whatsapp}</span>:null}{r.businesses?.instagram?<span>IG {r.businesses.instagram}</span>:null}</div><button disabled={!editable}>Save</button></form>)}</div></div>;
+  return <div><div className="headerRow"><div><h1>Leads</h1><p className="muted">Live CRM workspace with stage, agent mode, scores, contacts and recommended offer.</p></div><span className="status">{rows.length} loaded</span></div><section className="conversationFilters">{statuses.map(s=><span className="conversationFilter" key={s}>{s} {rows.filter(r=>r.status===s).length}</span>)}</section><div className="settingsList">{rows.map(r=>{const business=r.businesses[0];return <form action={updateLead} className="settingsRow leadRow" key={r.id}><input type="hidden" name="id" value={r.id}/><div><strong>{business?.name||'Unknown business'}</strong><span className="muted smallText">{[business?.country_code,business?.city,business?.category].filter(Boolean).join(' · ')}</span><span className="muted smallText">Opportunity {r.opportunity_score} · Intent {r.intent_score}</span></div><label>Status<select name="status" defaultValue={r.status} disabled={!editable}>{statuses.map(s=><option key={s}>{s}</option>)}</select></label><label>Agent mode<select name="agent_mode" defaultValue={r.agent_mode} disabled={!editable}><option>AUTO</option><option>PAUSED</option><option>HUMAN</option></select></label><label className="wideField">Recommended offer<input name="recommended_offer" defaultValue={r.recommended_offer??''} disabled={!editable}/></label><div className="contactStack">{business?.email?<span>✉ {business.email}</span>:null}{business?.phone?<span>☎ {business.phone}</span>:null}{business?.whatsapp?<span>WA {business.whatsapp}</span>:null}{business?.instagram?<span>IG {business.instagram}</span>:null}</div><button disabled={!editable}>Save</button></form>})}</div></div>;
 }
