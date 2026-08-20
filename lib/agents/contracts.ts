@@ -23,6 +23,7 @@ export type ConversationStage =
   | 'LOST';
 
 export type AgentContext = {
+  organizationId?: string;
   leadId?: string;
   businessName?: string;
   countryCode?: string;
