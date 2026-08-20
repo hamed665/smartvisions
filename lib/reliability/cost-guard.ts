@@ -53,7 +53,7 @@ export function shouldAllowPaidOperation(mode: BudgetMode, priority: 'LOW'|'NORM
 }
 
 export function assertPaidOperationAllowed(state: CostGuardState | null, priority: 'LOW'|'NORMAL'|'HIGH'|'CRITICAL' = 'NORMAL') {
-  if (!state) return;
+  if (!state) throw new Error('Cost guard state is unavailable; paid operation blocked');
   if (!shouldAllowPaidOperation(state.mode, priority)) {
     throw new Error(`Paid operation blocked by cost guard (${state.mode})`);
   }
@@ -61,15 +61,14 @@ export function assertPaidOperationAllowed(state: CostGuardState | null, priorit
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) return null;
-  return createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const serverKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serverKey) throw new Error('Server Supabase secret is not configured; paid operation blocked');
+  return createClient(url, serverKey, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
 export async function getCostGuardState(organizationId?: string): Promise<CostGuardState | null> {
-  if (!organizationId) return null;
+  if (!organizationId) throw new Error('organizationId is required for paid operations');
   const supabase = serviceClient();
-  if (!supabase) return null;
 
   const start = new Date();
   start.setUTCDate(1);
@@ -81,7 +80,7 @@ export async function getCostGuardState(organizationId?: string): Promise<CostGu
   ]);
   if (settingsError) throw new Error(`cost guard settings unavailable: ${settingsError.message}`);
   if (usageError) throw new Error(`usage totals unavailable: ${usageError.message}`);
-  if (!settingsData) return null;
+  if (!settingsData) throw new Error('Cost guard settings are missing; paid operation blocked');
 
   const providerSpendUsd: Record<string, number> = {};
   let monthSpendUsd = 0;
@@ -108,7 +107,6 @@ export async function recordUsage(input: {
   metadata?: Record<string, unknown>;
 }) {
   const supabase = serviceClient();
-  if (!supabase) return;
   const { error } = await supabase.from('usage_events').insert({
     organization_id: input.organizationId,
     provider: input.provider.toUpperCase(),
