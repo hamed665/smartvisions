@@ -3,6 +3,7 @@ import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { evaluateLocalWindow, type MarketCode } from '@/lib/outreach/scheduler';
 import { MetaCloudWhatsAppProvider } from '@/lib/whatsapp/meta-cloud';
 import { assertChannelAllowed, getRuntimeControls } from '@/lib/reliability/runtime-controls';
+import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
 
 export async function POST(request: Request) {
   const authError = requireInternalApiKey(request);
@@ -17,6 +18,8 @@ export async function POST(request: Request) {
     agentMode?: 'AUTO' | 'PAUSED' | 'HUMAN';
     shadowMode?: boolean;
     replyToMessageId?: string;
+    priority?: 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
+    leadId?: string;
   };
 
   if (!body.to || !body.text || !body.marketCode) {
@@ -27,8 +30,12 @@ export async function POST(request: Request) {
   if (body.shadowMode) return NextResponse.json({ error: 'Shadow mode requires human review before send' }, { status: 409 });
 
   try {
-    const controls = await getRuntimeControls(body.organizationId);
+    const [controls, costState] = await Promise.all([
+      getRuntimeControls(body.organizationId),
+      getCostGuardState(body.organizationId),
+    ]);
     assertChannelAllowed(controls, 'WHATSAPP');
+    assertPaidOperationAllowed(costState, body.priority ?? 'NORMAL');
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Runtime safety block' }, { status: 409 });
   }
@@ -38,5 +45,16 @@ export async function POST(request: Request) {
 
   const provider = new MetaCloudWhatsAppProvider();
   const result = await provider.sendText({ to: body.to, text: body.text, replyToMessageId: body.replyToMessageId });
+  if (body.organizationId) {
+    await recordUsage({
+      organizationId: body.organizationId,
+      provider: 'WHATSAPP',
+      operation: 'SEND_TEXT',
+      costUsd: 0,
+      units: 1,
+      leadId: body.leadId,
+      metadata: { pricing_status: 'PENDING_RECONCILIATION' },
+    });
+  }
   return NextResponse.json(result);
 }
