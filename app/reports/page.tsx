@@ -1,24 +1,4 @@
-const metrics = [
-  'New Leads','Audited','Qualified','Contacted','Replies','Positive','HOT','Won','Lost','Revenue','API Cost','ROI','Cost / Reply','Cost / HOT','Cost / Sale','Preview View Rate','Preview → HOT','Preview → Won'
-];
+import { getCurrentOrganization } from '@/lib/supabase/org';
+export const dynamic='force-dynamic';
 
-export default function ReportsPage() {
-  return (
-    <div>
-      <div className="headerRow">
-        <div>
-          <h1>Reports</h1>
-          <p className="muted">Funnel, market, service, message-variant, AI-cost and preview conversion reporting.</p>
-        </div>
-        <span className="status">Outcome-driven</span>
-      </div>
-      <div className="grid">
-        {metrics.map((metric) => <div className="card" key={metric}><div className="muted">{metric}</div><div className="value">—</div></div>)}
-      </div>
-      <div className="twoCol">
-        <section className="panel"><h2>Why this reply?</h2><p className="muted">Every agent run stores routed agents, confidence, evidence, blockers, the commercial decision, relevance result and delivery gate.</p></section>
-        <section className="panel"><h2>Preview performance</h2><p className="muted">Track offered → accepted → generated → viewed → HOT → WON instead of congratulating ourselves because a mockup looked pretty.</p></section>
-      </div>
-    </div>
-  );
-}
+export default async function ReportsPage(){const {supabase,organizationId}=await getCurrentOrganization();const [{data:leads},{data:messages},{data:replies},{data:previews},{data:previewEvents},{data:variants},{data:runs}]=await Promise.all([supabase.from('leads').select('status').eq('organization_id',organizationId),supabase.from('outreach_messages').select('status,direction,channel').eq('organization_id',organizationId),supabase.from('reply_events').select('category,hot').eq('organization_id',organizationId),supabase.from('previews').select('status,quality_score').eq('organization_id',organizationId),supabase.from('preview_events').select('event_type').eq('organization_id',organizationId),supabase.from('message_variants').select('variant_key,sent_count,reply_count,positive_count,hot_count,won_count').eq('organization_id',organizationId),supabase.from('agent_runs').select('status').eq('organization_id',organizationId)]);const l=leads??[],m=messages??[],r=replies??[],p=previews??[],pe=previewEvents??[],v=variants??[],ar=runs??[];const won=l.filter(x=>x.status==='WON').length;const sent=m.filter(x=>x.direction==='OUTBOUND'&&x.status==='SENT').length;const replyCount=r.length;const hot=r.filter(x=>x.hot).length;const metrics=[['New Leads',l.filter(x=>x.status==='NEW').length],['Qualified',l.filter(x=>['QUALIFIED','READY_TO_CONTACT'].includes(x.status)).length],['Contacted',l.filter(x=>x.status==='CONTACTED').length],['Replies',replyCount],['HOT',hot],['Won',won],['Sent',sent],['Reply Rate',sent?`${Math.round(replyCount/sent*100)}%`:'—'],['HOT / Reply',replyCount?`${Math.round(hot/replyCount*100)}%`:'—'],['Win / HOT',hot?`${Math.round(won/hot*100)}%`:'—'],['Previews',p.length],['Preview Views',pe.filter(x=>x.event_type==='VIEWED').length],['Agent Runs',ar.length],['Agent Failures',ar.filter(x=>x.status==='FAILED').length]];return <div><div className="headerRow"><div><h1>Reports</h1><p className="muted">Live funnel, outreach, agent and preview performance.</p></div><span className="status">Production data</span></div><div className="grid">{metrics.map(([label,value])=><div className="card" key={String(label)}><div className="muted">{label}</div><div className="value">{value}</div></div>)}</div><section className="twoCol"><div className="panel"><h2>Message variants</h2>{v.length?<div className="tableWrap"><table className="dataTable"><thead><tr><th>Variant</th><th>Sent</th><th>Replies</th><th>Positive</th><th>HOT</th><th>Won</th></tr></thead><tbody>{v.map(x=><tr key={x.variant_key}><td>{x.variant_key}</td><td>{x.sent_count}</td><td>{x.reply_count}</td><td>{x.positive_count}</td><td>{x.hot_count}</td><td>{x.won_count}</td></tr>)}</tbody></table></div>:<p className="muted">No experiment data yet.</p>}</div><div className="panel"><h2>Preview quality</h2><div className="healthList"><span>Generated <strong>{p.length}</strong></span><span>Passed 80+ <strong>{p.filter(x=>(x.quality_score??0)>=80).length}</strong></span><span>Blocked / low quality <strong>{p.filter(x=>(x.quality_score??0)<80).length}</strong></span><span>Viewed <strong>{pe.filter(x=>x.event_type==='VIEWED').length}</strong></span></div></div></section></div>}
