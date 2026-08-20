@@ -3,7 +3,8 @@ import { getCurrentOrganization } from '@/lib/supabase/org';
 
 export default async function MarketsPage() {
   const { supabase, organizationId, role } = await getCurrentOrganization();
-  const { data: markets = [] } = await supabase.from('market_settings').select('id,country_code,enabled,currency,timezone,send_window_start,send_window_end').eq('organization_id', organizationId).order('country_code');
+  const { data } = await supabase.from('market_settings').select('id,country_code,enabled,currency,timezone,send_window_start,send_window_end').eq('organization_id', organizationId).order('country_code');
+  const markets = data ?? [];
   const editable = role === 'OWNER';
 
   return <div>
