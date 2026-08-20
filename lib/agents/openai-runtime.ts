@@ -74,6 +74,7 @@ export class OpenAIResponsesAgentRuntime implements AgentRuntime {
     if (!context.organizationId) throw new Error('organizationId is required for paid AI operations');
 
     const costState = await getCostGuardState(context.organizationId);
+    if (!costState) throw new Error('Cost guard state unavailable; paid AI operation blocked');
     assertPaidOperationAllowed(costState, priorityForAgent(agent, context));
 
     const providerSpend = costState.providerSpendUsd.OPENAI ?? 0;
