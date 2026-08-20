@@ -3,7 +3,8 @@ import { getCurrentOrganization } from '@/lib/supabase/org';
 
 export default async function SystemPage() {
   const { supabase, organizationId, role } = await getCurrentOrganization();
-  const { data: rules = [] } = await supabase.from('approval_rules').select('id,action_key,requires_approval,config').eq('organization_id', organizationId).order('action_key');
+  const { data } = await supabase.from('approval_rules').select('id,action_key,requires_approval,config').eq('organization_id', organizationId).order('action_key');
+  const rules = data ?? [];
   const editable = role === 'OWNER';
 
   return <div>
