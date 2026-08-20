@@ -15,5 +15,10 @@ export async function getCurrentOrganization(requireOwner = false) {
   if (error || !membership) throw new Error('Organization membership required');
   if (requireOwner && membership.role !== 'OWNER') throw new Error('Owner permission required');
 
-  return { supabase, organizationId: membership.organization_id as string, role: membership.role as string };
+  return {
+    supabase,
+    organizationId: membership.organization_id as string,
+    role: membership.role as string,
+    userId: userData.user.id,
+  };
 }

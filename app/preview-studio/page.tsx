@@ -1,31 +1,9 @@
 import { PreviewCanvas } from '@/components/preview/PreviewCanvas';
 import { generatePreview } from '@/lib/preview/engine';
 import { evaluatePreviewQuality } from '@/lib/preview/quality';
+import { updatePreviewTemplate } from '@/app/management-actions';
+import { createPreviewTemplate } from '@/app/extended-actions';
+import { getCurrentOrganization } from '@/lib/supabase/org';
+export const dynamic='force-dynamic';
 
-export default function PreviewStudioPage() {
-  const preview = generatePreview({
-    businessName: 'Northstar Dental',
-    vertical: 'dental',
-    countryCode: 'OM',
-    language: 'en',
-    city: 'Muscat',
-    services: ['Preventive Care', 'Cosmetic Dentistry', 'Smile Consultations'],
-    whatsapp: '+96800000000',
-    explicitRequest: true,
-    intentScore: 75,
-  });
-  const quality = evaluatePreviewQuality(preview);
-
-  return (
-    <div>
-      <div className="headerRow">
-        <div>
-          <h1>Preview Studio</h1>
-          <p className="muted">Curated vertical templates, approval-first sending and a hard quality gate.</p>
-        </div>
-        <span className="status">Quality {quality.score}/100 · {quality.passed ? 'PASS' : 'BLOCK'}</span>
-      </div>
-      <div style={{ marginTop: 24 }}><PreviewCanvas preview={preview} /></div>
-    </div>
-  );
-}
+export default async function PreviewStudioPage(){const {supabase,organizationId,role}=await getCurrentOrganization();const {data}=await supabase.from('preview_templates').select('*').eq('organization_id',organizationId).order('vertical');const templates=data??[];const editable=role==='OWNER';const preview=generatePreview({businessName:'Northstar Dental',vertical:'dental',countryCode:'OM',language:'en',city:'Muscat',services:['Preventive Care','Cosmetic Dentistry','Smile Consultations'],whatsapp:'+96800000000',explicitRequest:true,intentScore:75});const quality=evaluatePreviewQuality(preview);return <div><div className="headerRow"><div><h1>Preview Studio</h1><p className="muted">Manage premium demo templates and inspect the quality gate before anything reaches a lead.</p></div><span className="status">Quality {quality.score}/100 · {quality.passed?'PASS':'BLOCK'}</span></div><section className="twoCol"><div className="panel"><h2>Live sample</h2><PreviewCanvas preview={preview}/></div><div className="panel"><h2>Template policy</h2><p className="muted">Only active templates may be selected by Preview Director. Quality tier can be raised without changing agent code.</p><div className="healthList"><span>Templates <strong>{templates.length}</strong></span><span>Active <strong>{templates.filter(t=>t.active).length}</strong></span><span>Premium <strong>{templates.filter(t=>t.quality_tier==='PREMIUM').length}</strong></span></div></div></section><div className="settingsList">{templates.map(t=><form action={updatePreviewTemplate} className="settingsRow" key={t.id}><input type="hidden" name="id" value={t.id}/><div><strong>{t.vertical}</strong><span className="muted smallText">{t.id}</span></div><label>Name<input name="name" defaultValue={t.name} disabled={!editable}/></label><label>Quality<select name="quality_tier" defaultValue={t.quality_tier} disabled={!editable}><option>STANDARD</option><option>PREMIUM</option><option>EXPERIMENTAL</option></select></label><label className="toggleLabel"><input type="checkbox" name="active" defaultChecked={t.active} disabled={!editable}/> Active</label><button disabled={!editable}>Save</button></form>)}</div>{editable?<section className="panel settingsCreate"><h2>Add template</h2><form action={createPreviewTemplate} className="settingsGrid"><label>Template key<input name="id" placeholder="restaurant-premium" required/></label><label>Vertical<input name="vertical" placeholder="restaurant" required/></label><label>Name<input name="name" placeholder="Premium Restaurant" required/></label><label>Quality<select name="quality_tier"><option>PREMIUM</option><option>STANDARD</option><option>EXPERIMENTAL</option></select></label><button>Add template</button></form></section>:null}</div>}

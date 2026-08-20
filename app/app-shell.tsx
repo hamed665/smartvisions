@@ -4,46 +4,12 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-const nav = [
-  ['Dashboard', '/'],
-  ['Hunters', '/hunters'],
-  ['Leads', '/leads'],
-  ['Intent Leads', '/intent-leads'],
-  ['Campaigns', '/campaigns'],
-  ['Conversations', '/conversations'],
-  ['Hot Leads', '/hot-leads'],
-  ['Services', '/services'],
-  ['Pricing', '/pricing'],
-  ['Portfolio', '/portfolio'],
-  ['Preview Studio', '/preview-studio'],
-  ['Markets', '/markets'],
-  ['AI Agents', '/agents'],
-  ['Outreach', '/outreach'],
-  ['Reports', '/reports'],
-  ['System', '/system'],
+const groups = [
+  ['Sales', [['Dashboard','/'],['Hunters','/hunters'],['Leads','/leads'],['Intent Leads','/intent-leads'],['Campaigns','/campaigns'],['Conversations','/conversations'],['Hot Leads','/hot-leads']]],
+  ['Growth', [['Outreach','/outreach'],['Message Studio','/messages'],['Automations','/automations'],['Approvals','/approvals'],['Portfolio','/portfolio'],['Preview Studio','/preview-studio']]],
+  ['Control', [['Services','/services'],['Pricing','/pricing'],['Markets','/markets'],['AI Agents','/agents'],['Knowledge Base','/knowledge'],['Integrations','/integrations'],['Suppression / DNC','/suppression']]],
+  ['Operations', [['Reports','/reports'],['Audit Log','/audit'],['System','/system'],['Settings','/settings']]],
 ] as const;
+const publicPrefixes=['/login','/auth'];
 
-const publicPrefixes = ['/login', '/auth'];
-
-export function AppShell({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
-  const isPublic = publicPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-
-  if (isPublic) return <>{children}</>;
-
-  return (
-    <div className="shell">
-      <aside className="sidebar">
-        <div className="brand">Smart Visions</div>
-        <div className="badge">Growth OS</div>
-        <nav>
-          {nav.map(([item, href]) => {
-            const active = href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
-            return <Link className={active ? 'active' : undefined} href={href} key={item}>{item}</Link>;
-          })}
-        </nav>
-      </aside>
-      <main className="content">{children}</main>
-    </div>
-  );
-}
+export function AppShell({children}:{children:ReactNode}){const pathname=usePathname();const isPublic=publicPrefixes.some(p=>pathname===p||pathname.startsWith(`${p}/`));if(isPublic)return <>{children}</>;return <div className="shell"><aside className="sidebar"><div className="brand">Smart Visions</div><div className="badge">Growth OS</div><nav>{groups.map(([group,items])=><div className="navGroup" key={group}><span className="navLabel">{group}</span>{items.map(([item,href])=>{const active=href==='/'?pathname==='/':pathname===href||pathname.startsWith(`${href}/`);return <Link className={active?'active':undefined} href={href} key={item}>{item}</Link>})}</div>)}</nav></aside><main className="content">{children}</main></div>}

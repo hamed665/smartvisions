@@ -1,0 +1,28 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { getCurrentOrganization } from '@/lib/supabase/org';
+
+const text=(f:FormData,k:string)=>String(f.get(k)??'').trim();
+const required=(f:FormData,k:string)=>{const v=text(f,k);if(!v)throw new Error(`${k} is required`);return v};
+const numeric=(f:FormData,k:string,fallback=0)=>{const raw=text(f,k);if(!raw)return fallback;const v=Number(raw);if(!Number.isFinite(v))throw new Error(`${k} must be numeric`);return v};
+const bool=(f:FormData,k:string)=>f.get(k)==='on';
+const now=()=>new Date().toISOString();
+async function ctx(){return getCurrentOrganization(true)}
+async function audit(c:Awaited<ReturnType<typeof ctx>>,action:string,type:string,id:string,payload:unknown){await c.supabase.from('audit_logs').insert({organization_id:c.organizationId,actor_type:'USER',actor_id:c.userId,action,entity_type:type,entity_id:id,after_data:payload})}
+
+export async function updateLocaleProfile(f:FormData){const c=await ctx();const id=required(f,'id');const payload={primary_locale:required(f,'primary_locale'),fallback_locale:text(f,'fallback_locale')||null,dialect:text(f,'dialect')||null,tone_profile:text(f,'tone_profile')||null,dialect_intensity:Math.min(1,Math.max(0,numeric(f,'dialect_intensity',0.5))),max_first_touch_words:Math.max(10,Math.round(numeric(f,'max_first_touch_words',80))),max_reply_words:Math.max(10,Math.round(numeric(f,'max_reply_words',160))),updated_at:now()};const{error}=await c.supabase.from('locale_profiles').update(payload).eq('organization_id',c.organizationId).eq('id',id);if(error)throw error;await audit(c,'UPDATE_LOCALE_PROFILE','locale_profile',id,payload);revalidatePath('/markets')}
+
+export async function updateMailbox(f:FormData){const c=await ctx();const id=required(f,'id');const payload={enabled:bool(f,'enabled'),daily_limit:Math.max(0,Math.round(numeric(f,'daily_limit',20))),updated_at:now()};const{error}=await c.supabase.from('mailboxes').update(payload).eq('organization_id',c.organizationId).eq('id',id);if(error)throw error;await audit(c,'UPDATE_MAILBOX','mailbox',id,payload);revalidatePath('/outreach')}
+
+export async function updateMessageVariant(f:FormData){const c=await ctx();const id=required(f,'id');const payload={enabled:bool(f,'enabled'),sample_size:Math.max(1,Math.round(numeric(f,'sample_size',50))),updated_at:now()};const{error}=await c.supabase.from('message_variants').update(payload).eq('organization_id',c.organizationId).eq('id',id);if(error)throw error;await audit(c,'UPDATE_MESSAGE_VARIANT','message_variant',id,payload);revalidatePath('/messages');revalidatePath('/reports')}
+
+export async function createPrice(f:FormData){const c=await ctx();const payload={organization_id:c.organizationId,service_id:required(f,'service_id'),country_code:required(f,'country_code').toUpperCase(),currency:required(f,'currency').toUpperCase(),price:numeric(f,'price'),minimum_price:numeric(f,'minimum_price'),max_auto_discount_pct:numeric(f,'max_auto_discount_pct',5),max_discount_with_approval_pct:numeric(f,'max_discount_with_approval_pct',10)};const{data,error}=await c.supabase.from('service_prices').insert(payload).select('id').single();if(error)throw error;await audit(c,'CREATE_PRICE','service_price',data.id,payload);revalidatePath('/pricing')}
+
+export async function createMarket(f:FormData){const c=await ctx();const country=required(f,'country_code').toUpperCase();const payload={organization_id:c.organizationId,country_code:country,enabled:true,currency:required(f,'currency').toUpperCase(),timezone:required(f,'timezone'),send_window_start:text(f,'send_window_start')||'09:00',send_window_end:text(f,'send_window_end')||'19:00',config:{}};const{data,error}=await c.supabase.from('market_settings').insert(payload).select('id').single();if(error)throw error;await c.supabase.from('locale_profiles').insert({organization_id:c.organizationId,country_code:country,primary_locale:text(f,'primary_locale')||'en',fallback_locale:'en',dialect:text(f,'dialect')||null,tone_profile:text(f,'tone_profile')||'professional',dialect_intensity:0.5,max_first_touch_words:80,max_reply_words:160,config:{}});await audit(c,'CREATE_MARKET','market',data.id,payload);revalidatePath('/markets')}
+
+export async function createPortfolioItem(f:FormData){const c=await ctx();const payload={organization_id:c.organizationId,title:required(f,'title'),service_id:text(f,'service_id')||null,industry:text(f,'industry')||null,country_code:text(f,'country_code').toUpperCase()||null,approved:bool(f,'approved'),public_url:text(f,'public_url')||null,summary:text(f,'summary')||null,tags:[]};const{data,error}=await c.supabase.from('portfolio_items').insert(payload).select('id').single();if(error)throw error;await audit(c,'CREATE_PORTFOLIO_ITEM','portfolio_item',data.id,payload);revalidatePath('/portfolio')}
+
+export async function createPreviewTemplate(f:FormData){const c=await ctx();const id=required(f,'id').toLowerCase().replace(/[^a-z0-9_-]/g,'-');const payload={id,organization_id:c.organizationId,vertical:required(f,'vertical'),name:required(f,'name'),active:true,quality_tier:required(f,'quality_tier'),config:{}};const{error}=await c.supabase.from('preview_templates').insert(payload);if(error)throw error;await audit(c,'CREATE_PREVIEW_TEMPLATE','preview_template',id,payload);revalidatePath('/preview-studio')}
+
+export async function deleteSuppression(f:FormData){const c=await ctx();const id=required(f,'id');const{error}=await c.supabase.from('suppression_list').delete().eq('organization_id',c.organizationId).eq('id',id);if(error)throw error;await audit(c,'DELETE_SUPPRESSION','suppression',id,{});revalidatePath('/suppression')}
