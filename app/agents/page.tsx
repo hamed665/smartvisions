@@ -3,7 +3,8 @@ import { getCurrentOrganization } from '@/lib/supabase/org';
 
 export default async function AgentsPage() {
   const { supabase, organizationId, role } = await getCurrentOrganization();
-  const { data: agents = [] } = await supabase.from('agent_settings').select('id,agent_name,enabled,model,temperature,max_tokens,confidence_threshold').eq('organization_id', organizationId).order('agent_name');
+  const { data } = await supabase.from('agent_settings').select('id,agent_name,enabled,model,temperature,max_tokens,confidence_threshold').eq('organization_id', organizationId).order('agent_name');
+  const agents = data ?? [];
   const editable = role === 'OWNER';
 
   return <div>
