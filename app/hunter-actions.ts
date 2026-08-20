@@ -7,6 +7,11 @@ import { getCostGuardState } from '@/lib/reliability/cost-guard';
 import { controlledGooglePlacesIdSearch } from '@/lib/hunters/business/google-places-controlled';
 
 const text = (form: FormData, key: string) => String(form.get(key) ?? '').trim();
+const boundedInteger = (form: FormData, key: string, fallback: number, min: number, max: number) => {
+  const value = Number(text(form, key) || fallback);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
+};
 const safeMessage = (value: unknown) => {
   const message = value instanceof Error ? value.message : 'Google Places controlled sample failed';
   return message.replace(/AIza[0-9A-Za-z_-]+/g, '[redacted]').slice(0, 240);
@@ -16,7 +21,7 @@ async function updateGooglePlacesHealth(
   ctx: Awaited<ReturnType<typeof getCurrentOrganization>>,
   input: { status: 'NOT_CONFIGURED'|'READY'|'CONNECTED'|'ERROR'; error?: string | null; enabled?: boolean },
 ) {
-  await ctx.supabase
+  const { error } = await ctx.supabase
     .from('integration_connections')
     .update({
       status: input.status,
@@ -28,13 +33,14 @@ async function updateGooglePlacesHealth(
     .eq('organization_id', ctx.organizationId)
     .eq('provider', 'GOOGLE_PLACES')
     .eq('channel', 'DISCOVERY');
+  if (error) throw error;
 }
 
 export async function runGooglePlacesControlledSample(form: FormData) {
   const ctx = await getCurrentOrganization(true);
   const city = text(form, 'city') || 'Muscat';
   const industry = text(form, 'industry') || 'dental clinic';
-  const requestedLimit = Math.min(3, Math.max(1, Number(text(form, 'limit') || 3)));
+  const requestedLimit = boundedInteger(form, 'limit', 3, 1, 3);
   let destination = '/hunters/google-places';
 
   try {
@@ -100,7 +106,7 @@ export async function runGooglePlacesControlledSample(form: FormData) {
     }
 
     await updateGooglePlacesHealth(ctx, { status: 'CONNECTED', error: null, enabled: true });
-    await ctx.supabase.from('audit_logs').insert({
+    const { error: auditError } = await ctx.supabase.from('audit_logs').insert({
       organization_id: ctx.organizationId,
       actor_type: 'USER',
       actor_id: ctx.userId,
@@ -120,12 +126,17 @@ export async function runGooglePlacesControlledSample(form: FormData) {
         outreachTriggered: false,
       },
     });
+    if (auditError) throw auditError;
 
     destination = `/hunters/google-places?result=success&returned=${result.placeIds.length}&inserted=${newIds.length}&duplicates=${uniqueIds.length - newIds.length}`;
   } catch (error) {
     const message = safeMessage(error);
     if (process.env.GOOGLE_PLACES_API_KEY) {
-      await updateGooglePlacesHealth(ctx, { status: 'ERROR', error: message, enabled: false });
+      try {
+        await updateGooglePlacesHealth(ctx, { status: 'ERROR', error: message, enabled: false });
+      } catch {
+        // Keep the original failure as the operator-facing error.
+      }
     }
     await ctx.supabase.from('audit_logs').insert({
       organization_id: ctx.organizationId,
