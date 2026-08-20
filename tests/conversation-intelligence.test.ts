@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { classifyConversationStage, decideApproval, chooseReplyLanguage } from '@/lib/conversations/intelligence';
+import { decideConversationAutomation } from '@/lib/conversations/automation';
 import { normalizeVoiceIntake } from '@/lib/voice/intake';
 
 describe('conversation intelligence', () => {
@@ -24,6 +25,30 @@ describe('conversation intelligence', () => {
     expect(reply.language).toBe('ar');
     expect(reply.dialect).toBe('saudi');
     expect(reply.useNeutralArabic).toBe(true);
+  });
+});
+
+describe('autonomous approvals', () => {
+  const base = {
+    customerLanguage: 'en',
+    originalMessage: 'How long does the website take?',
+    persianTranslation: 'ساخت سایت چقدر طول می‌کشد؟',
+    persianSummary: 'مشتری درباره زمان تحویل سایت سؤال کرده.',
+    intent: 'TIMELINE',
+  };
+
+  it('auto-sends safe replies when shadow mode is off', () => {
+    expect(decideConversationAutomation({ ...base, signals: { confidence: 0.94 }, shadowMode: false }).delivery).toBe('SEND');
+  });
+
+  it('keeps launch traffic in review while shadow mode is on', () => {
+    expect(decideConversationAutomation({ ...base, signals: { confidence: 0.94 }, shadowMode: true }).delivery).toBe('REVIEW');
+  });
+
+  it('hands off commercial exceptions', () => {
+    const result = decideConversationAutomation({ ...base, signals: { discountBeyondAutoLimit: true }, shadowMode: false });
+    expect(result.delivery).toBe('HANDOFF');
+    expect(result.operatorBrief.action).toBe('HANDOFF');
   });
 });
 
