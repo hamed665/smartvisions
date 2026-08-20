@@ -1,9 +1,3 @@
-import { AdminSection } from '@/app/admin-section';
-
-export default function IntentLeadsPage() {
-  return <AdminSection title="Intent Leads" description="Prospects showing explicit demand for websites, automation, apps, or AI content." cards={[
-    { title: 'High intent', value: '0', note: 'Strong buying signals detected.' },
-    { title: 'Fresh', value: '0', note: 'Recently detected opportunities.' },
-    { title: 'Needs review', value: '0', note: 'Ambiguous opportunities awaiting validation.' },
-  ]} />;
-}
+import { getCurrentOrganization } from '@/lib/supabase/org';
+export const dynamic='force-dynamic';
+export default async function IntentLeadsPage(){const {supabase,organizationId}=await getCurrentOrganization();const {data}=await supabase.from('intent_opportunities').select('*').eq('organization_id',organizationId).order('intent_score',{ascending:false}).order('detected_at',{ascending:false}).limit(250);const rows=data??[];return <div><div className="headerRow"><div><h1>Intent Leads</h1><p className="muted">Fresh explicit requests for websites, apps, automation, content and related freelance work.</p></div><span className="status">{rows.filter(r=>r.priority==='HIGH').length} high priority</span></div><section className="grid"><div className="card"><span className="muted">High intent</span><div className="value">{rows.filter(r=>r.intent_score>=70).length}</div></div><div className="card"><span className="muted">Fresh 80+</span><div className="value">{rows.filter(r=>r.freshness_score>=80).length}</div></div><div className="card"><span className="muted">Contactable</span><div className="value">{rows.filter(r=>r.contactability==='CONTACTABLE').length}</div></div><div className="card"><span className="muted">Total</span><div className="value">{rows.length}</div></div></section><div className="conversationList">{rows.map(r=><section className="conversationCard" key={r.id}><div className="conversationTopline"><strong>{r.title}</strong><span className={`stageBadge ${r.priority==='HIGH'?'stage-hot':''}`}>{r.priority}</span><span className="status">Intent {r.intent_score}</span><span className="status">Fresh {r.freshness_score}</span></div><p>{r.body}</p><div className="conversationMeta"><span>{r.source_type}</span><span>{r.country_code||'Unknown country'}</span><span>{r.service_hint||'Unclassified service'}</span><span>{r.budget_amount?`${r.budget_amount} ${r.budget_currency||''}`:'Budget unknown'}</span><span>{r.contactability}</span></div></section>)}</div></div>}
