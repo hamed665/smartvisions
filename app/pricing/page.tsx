@@ -3,7 +3,8 @@ import { getCurrentOrganization } from '@/lib/supabase/org';
 
 export default async function PricingPage() {
   const { supabase, organizationId, role } = await getCurrentOrganization();
-  const { data: prices = [] } = await supabase.from('service_prices').select('id,service_id,country_code,currency,price,minimum_price,max_auto_discount_pct,max_discount_with_approval_pct').eq('organization_id', organizationId).order('country_code').order('service_id');
+  const { data } = await supabase.from('service_prices').select('id,service_id,country_code,currency,price,minimum_price,max_auto_discount_pct,max_discount_with_approval_pct').eq('organization_id', organizationId).order('country_code').order('service_id');
+  const prices = data ?? [];
   const editable = role === 'OWNER';
 
   return <div>
