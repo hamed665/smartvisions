@@ -14,8 +14,8 @@ export type ConversationStage =
   | 'PAUSED';
 
 export type ConversationSignals = {
-  inboundPending: boolean;
-  customerWaiting: boolean;
+  inboundPending?: boolean;
+  customerWaiting?: boolean;
   lastInboundMinutesAgo?: number;
   lastOutboundMinutesAgo?: number;
   intentScore?: number;
