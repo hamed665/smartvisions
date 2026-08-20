@@ -62,11 +62,13 @@ export function decideCommercialAction(context: AgentContext, results: AgentResu
 }
 
 export function secretaryCompose(context: AgentContext, decision: CommercialDecision, results: AgentResult[]): ReplyDraft {
-  const culture = results.find((result) => result.agent === 'culture_locale')?.data as { locale?: string } | undefined;
-  const locale = culture?.locale ?? 'en-US';
-  const secretaryData = results.find((result) => result.agent === 'secretary')?.data as { customerText?: unknown; language?: unknown } | undefined;
-  const runtimeText = typeof secretaryData?.customerText === 'string' ? secretaryData.customerText.trim() : '';
-  const runtimeLanguage = typeof secretaryData?.language === 'string' ? secretaryData.language : locale;
+  const culture = results.find((result) => result.agent === 'culture_locale')?.data as { locale?: string; reply_language?: string } | undefined;
+  const locale = culture?.reply_language ?? culture?.locale ?? 'en-US';
+  const secretaryData = results.find((result) => result.agent === 'secretary')?.data as { customer_reply?: unknown; customer_reply_language?: unknown; customerText?: unknown; language?: unknown } | undefined;
+  const rawText = secretaryData?.customer_reply ?? secretaryData?.customerText;
+  const rawLanguage = secretaryData?.customer_reply_language ?? secretaryData?.language;
+  const runtimeText = typeof rawText === 'string' ? rawText.trim() : '';
+  const runtimeLanguage = typeof rawLanguage === 'string' ? rawLanguage : locale;
 
   if (runtimeText) {
     return { text: runtimeText, language: runtimeLanguage, generatedBy: 'secretary' };
