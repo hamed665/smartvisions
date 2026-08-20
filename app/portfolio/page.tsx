@@ -1,9 +1,4 @@
-import { AdminSection } from '@/app/admin-section';
-
-export default function PortfolioPage() {
-  return <AdminSection title="Portfolio" description="Approved work samples that agents may safely reference in sales conversations." cards={[
-    { title: 'Approved', value: '0', note: 'Portfolio items cleared for outreach use.' },
-    { title: 'Draft', value: '0', note: 'Items awaiting operator review.' },
-    { title: 'Restricted', value: '0', note: 'Items blocked from automated claims.' },
-  ]} />;
-}
+import { updatePortfolioItem } from '@/app/management-actions';
+import { getCurrentOrganization } from '@/lib/supabase/org';
+export const dynamic='force-dynamic';
+export default async function PortfolioPage(){const {supabase,organizationId,role}=await getCurrentOrganization();const {data}=await supabase.from('portfolio_items').select('*').eq('organization_id',organizationId).order('updated_at',{ascending:false});const rows=data??[];const editable=role==='OWNER';return <div><div className="headerRow"><div><h1>Portfolio</h1><p className="muted">Approved work samples agents may reference. Unapproved items are excluded from automated claims.</p></div><span className="status">{rows.filter(r=>r.approved).length} approved</span></div><div className="settingsList">{rows.map(r=><form action={updatePortfolioItem} className="settingsRow portfolioRow" key={r.id}><input type="hidden" name="id" value={r.id}/><div><strong>{r.title}</strong><span className="muted smallText">{[r.service_id,r.industry,r.country_code].filter(Boolean).join(' · ')}</span></div><label>Title<input name="title" defaultValue={r.title} disabled={!editable}/></label><label>Public URL<input type="url" name="public_url" defaultValue={r.public_url??''} disabled={!editable}/></label><label className="wideField">Summary<textarea name="summary" rows={3} defaultValue={r.summary??''} disabled={!editable}/></label><label className="toggleLabel"><input type="checkbox" name="approved" defaultChecked={r.approved} disabled={!editable}/> Approved for sales</label><button disabled={!editable}>Save</button></form>)}</div>{rows.length===0?<section className="panel"><h2>No portfolio items yet</h2><p className="muted">Add approved work through the portfolio ingestion workflow before agents reference case studies.</p></section>:null}</div>}
