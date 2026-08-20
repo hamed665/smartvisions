@@ -3,7 +3,8 @@ import { getCurrentOrganization } from '@/lib/supabase/org';
 
 export default async function ServicesPage() {
   const { supabase, organizationId, role } = await getCurrentOrganization();
-  const { data: services = [] } = await supabase.from('services').select('id,name,enabled').eq('organization_id', organizationId).order('name');
+  const { data } = await supabase.from('services').select('id,name,enabled').eq('organization_id', organizationId).order('name');
+  const services = data ?? [];
   const editable = role === 'OWNER';
 
   return <div>
