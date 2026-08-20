@@ -1,29 +1,24 @@
-const agents = [
-  ['Intent Discovery', 'Detects explicit need, freshness and commercial signals.'],
-  ['Conversation Psychology', 'Reads hesitation, urgency and objections without sensitive-trait inference.'],
-  ['Business Analyst', 'Matches verified business needs to the right service.'],
-  ['Culture & Locale', 'Chooses language, dialect and business tone.'],
-  ['Sales & Marketing', 'Recommends the next commercial action without inventing claims.'],
-  ['Evidence Checker', 'Blocks unverified prices, facts, features and promises.'],
-  ['Preview Director', 'Chooses whether a premium preview should exist and which vertical template fits.'],
-  ['Decision Orchestrator', 'Combines specialist outputs into one constrained decision.'],
-  ['Secretary', 'The only customer-facing composer.'],
-  ['Relevance Checker', 'Confirms the actual question was answered.'],
-] as const;
+import { updateAgent } from '@/app/control-center-actions';
+import { getCurrentOrganization } from '@/lib/supabase/org';
 
-export default function AgentsPage() {
-  return (
-    <div>
-      <div className="headerRow">
-        <div>
-          <h1>AI Agents</h1>
-          <p className="muted">Router-based orchestration, traceable decisions and hard human-takeover controls.</p>
-        </div>
-        <span className="status">Secretary-only customer output</span>
-      </div>
-      <div className="twoCol">
-        {agents.map(([name, description]) => <section className="panel" key={name}><h2>{name}</h2><p className="muted">{description}</p></section>)}
-      </div>
+export default async function AgentsPage() {
+  const { supabase, organizationId, role } = await getCurrentOrganization();
+  const { data: agents = [] } = await supabase.from('agent_settings').select('id,agent_name,enabled,model,temperature,max_tokens,confidence_threshold').eq('organization_id', organizationId).order('agent_name');
+  const editable = role === 'OWNER';
+
+  return <div>
+    <div className="headerRow"><div><h1>AI Agents</h1><p className="muted">Live orchestration settings. Changes affect model choice and autonomous confidence thresholds.</p></div><span className="status">{agents.filter((a) => a.enabled).length} enabled</span></div>
+    <div className="settingsList">
+      {agents.map((agent) => <form action={updateAgent} className="settingsRow agentRow" key={agent.id}>
+        <input type="hidden" name="id" value={agent.id} />
+        <div><strong>{agent.agent_name}</strong><span className="muted smallText">Agent configuration</span></div>
+        <label>Model<input name="model" defaultValue={agent.model} disabled={!editable} /></label>
+        <label>Temperature<input type="number" min="0" max="2" step="0.05" name="temperature" defaultValue={agent.temperature} disabled={!editable} /></label>
+        <label>Max tokens<input type="number" min="64" step="1" name="max_tokens" defaultValue={agent.max_tokens} disabled={!editable} /></label>
+        <label>Confidence<input type="number" min="0" max="1" step="0.01" name="confidence_threshold" defaultValue={agent.confidence_threshold} disabled={!editable} /></label>
+        <label className="toggleLabel"><input type="checkbox" name="enabled" defaultChecked={agent.enabled} disabled={!editable} /> Enabled</label>
+        <button disabled={!editable}>Save</button>
+      </form>)}
     </div>
-  );
+  </div>;
 }
