@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { getCurrentOrganization } from '@/lib/supabase/org';
+import { OpenAIResponsesAgentRuntime } from '@/lib/agents/openai-runtime';
 
 const text = (f: FormData, key: string) => String(f.get(key) ?? '').trim();
 const num = (f: FormData, key: string, fallback = 0) => {
@@ -13,6 +14,34 @@ const num = (f: FormData, key: string, fallback = 0) => {
 };
 const integer = (f: FormData, key: string, fallback = 0) => Math.max(0, Math.round(num(f, key, fallback)));
 const checked = (f: FormData, key: string) => f.get(key) === 'on';
+
+export async function runOpenAiHealthCheck() {
+  const ctx = await getCurrentOrganization(true);
+  const runtime = new OpenAIResponsesAgentRuntime();
+  const result = await runtime.run('intent_discovery', {
+    organizationId: ctx.organizationId,
+    message: 'We need a simple business website. What would the next step be?',
+    countryCode: 'OM',
+    language: 'en',
+    stage: 'NEW',
+    intentScore: 20,
+    agentMode: 'AUTO',
+    shadowMode: true,
+  });
+
+  await ctx.supabase.from('audit_logs').insert({
+    organization_id: ctx.organizationId,
+    actor_type: 'USER',
+    actor_id: ctx.userId,
+    action: 'OPENAI_HEALTH_CHECK',
+    entity_type: 'integration',
+    entity_id: ctx.organizationId,
+    after_data: { provider: 'OPENAI', agent: result.agent, confidence: result.confidence, summary: result.summary },
+  });
+
+  revalidatePath('/cost-usage');
+  revalidatePath('/integrations');
+}
 
 export async function updateCostGuardSettings(f: FormData) {
   const ctx = await getCurrentOrganization(true);
