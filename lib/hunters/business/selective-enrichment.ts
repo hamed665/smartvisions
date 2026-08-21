@@ -1,0 +1,40 @@
+import { normalizeDomain } from './dedupe';
+import type { DiscoveredBusiness } from './types';
+
+const GOOGLE_PLACE_ID_PATTERN = /^[A-Za-z0-9_-]{10,220}$/;
+
+export function assertValidGooglePlaceId(placeId: string) {
+  if (!GOOGLE_PLACE_ID_PATTERN.test(placeId)) throw new Error('Invalid Google Place ID');
+  return placeId;
+}
+
+export function buildBusinessPersistenceRow(organizationId: string, business: DiscoveredBusiness) {
+  return {
+    organization_id: organizationId,
+    name: business.name,
+    country_code: business.countryCode,
+    city: business.city ?? null,
+    category: business.category ?? null,
+    google_place_id: business.googlePlaceId ?? null,
+    official_website: business.officialWebsite ?? null,
+    phone: business.phone ?? null,
+    email: business.email ?? null,
+    instagram: business.instagram ?? null,
+    whatsapp: business.whatsapp ?? null,
+    dedupe_domain: normalizeDomain(business.officialWebsite) ?? null,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+export function buildLeadPersistenceRow(organizationId: string, businessId: string) {
+  return {
+    organization_id: organizationId,
+    business_id: businessId,
+    status: 'NEW' as const,
+    opportunity_score: 0,
+    intent_score: 0,
+    agent_mode: 'AUTO' as const,
+    score_reasons: ['Google Places selective enrichment; website audit and qualification pending'],
+    updated_at: new Date().toISOString(),
+  };
+}
