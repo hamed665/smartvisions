@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getCurrentOrganization } from '@/lib/supabase/org';
-import { controlledGooglePlaceDetails } from '@/lib/hunters/business/google-places-controlled';
+import { controlledGooglePlaceQualification } from '@/lib/hunters/business/google-places-controlled';
 import {
   assertValidGooglePlaceId,
   buildBusinessPersistenceRow,
@@ -64,7 +64,9 @@ function existingToDiscovered(row: ExistingBusiness, fallbackCountry: string, fa
     userRatingCount: row.google_user_rating_count == null ? undefined : Number(row.google_user_rating_count),
     businessStatus: row.google_business_status ?? undefined,
     primaryTypeDisplayName: row.google_primary_type_display_name ?? undefined,
-    openingHours: row.google_opening_hours && typeof row.google_opening_hours === 'object' ? row.google_opening_hours as DiscoveredBusiness['openingHours'] : undefined,
+    openingHours: row.google_opening_hours && typeof row.google_opening_hours === 'object'
+      ? row.google_opening_hours as DiscoveredBusiness['openingHours']
+      : undefined,
     reviews: Array.isArray(row.google_reviews) ? row.google_reviews as DiscoveredBusiness['reviews'] : [],
     reviewSummary: row.google_review_summary ?? undefined,
     priceLevel: row.google_price_level ?? undefined,
@@ -103,7 +105,9 @@ export async function qualifyGooglePlacesPriorityBatch(form: FormData) {
     if (discoveryError) throw discoveryError;
 
     const candidates = (discoveries ?? []).filter((row) => {
-      const raw = row.raw_payload && typeof row.raw_payload === 'object' ? row.raw_payload as Record<string, unknown> : {};
+      const raw = row.raw_payload && typeof row.raw_payload === 'object'
+        ? row.raw_payload as Record<string, unknown>
+        : {};
       return Boolean(row.source_id) && !raw.enrichedAt;
     }).slice(0, maxChecks);
 
@@ -119,8 +123,11 @@ export async function qualifyGooglePlacesPriorityBatch(form: FormData) {
 
       for (const row of candidates) {
         if (prioritiesFound >= targetLeads) break;
+
         const placeId = assertValidGooglePlaceId(String(row.source_id ?? ''));
-        const raw = row.raw_payload && typeof row.raw_payload === 'object' ? row.raw_payload as Record<string, unknown> : {};
+        const raw = row.raw_payload && typeof row.raw_payload === 'object'
+          ? row.raw_payload as Record<string, unknown>
+          : {};
         const countryCode = String(raw.countryCode ?? 'OM').toUpperCase();
         const city = String(raw.city ?? 'Muscat').trim() || 'Muscat';
         if (countryCode !== 'OM') continue;
@@ -142,9 +149,18 @@ export async function qualifyGooglePlacesPriorityBatch(form: FormData) {
           reusedBusinesses += 1;
           business = existingToDiscovered(existingBusiness as ExistingBusiness, countryCode, city);
         } else {
+          // First-pass qualification deliberately excludes reviews/reviewSummary.
+          // websiteUri already places the request in Enterprise, so we keep useful
+          // same-tier contact/reputation fields while avoiding Enterprise+Atmosphere.
           providerCallAttempted = true;
           providerCalls += 1;
-          business = await controlledGooglePlaceDetails({ organizationId: ctx.organizationId, placeId, countryCode, city });
+          business = await controlledGooglePlaceQualification({
+            organizationId: ctx.organizationId,
+            placeId,
+            countryCode,
+            city,
+          });
+
           const { data: inserted, error: insertError } = await ctx.supabase
             .from('businesses')
             .insert(buildBusinessPersistenceRow(ctx.organizationId, business))
@@ -153,7 +169,11 @@ export async function qualifyGooglePlacesPriorityBatch(form: FormData) {
           if (insertError) {
             if (insertError.code !== '23505') throw insertError;
             const { data: raced, error: racedError } = await ctx.supabase
-              .from('businesses').select('id').eq('organization_id', ctx.organizationId).eq('google_place_id', placeId).single();
+              .from('businesses')
+              .select('id')
+              .eq('organization_id', ctx.organizationId)
+              .eq('google_place_id', placeId)
+              .single();
             if (racedError) throw racedError;
             businessId = String(raced.id);
           } else {
@@ -169,13 +189,17 @@ export async function qualifyGooglePlacesPriorityBatch(form: FormData) {
             : `STATUS_${String(business.businessStatus ?? 'UNKNOWN')}`;
 
         let leadId: string | null = null;
-        let createdLead = false;
         if (priorityQualified) {
           prioritiesFound += 1;
           const { data: existingLead, error: existingLeadError } = await ctx.supabase
-            .from('leads').select('id').eq('organization_id', ctx.organizationId).eq('business_id', businessId).maybeSingle();
+            .from('leads')
+            .select('id')
+            .eq('organization_id', ctx.organizationId)
+            .eq('business_id', businessId)
+            .maybeSingle();
           if (existingLeadError) throw existingLeadError;
           leadId = existingLead?.id ? String(existingLead.id) : null;
+
           if (!leadId) {
             const { data: insertedLead, error: insertLeadError } = await ctx.supabase
               .from('leads')
@@ -185,12 +209,15 @@ export async function qualifyGooglePlacesPriorityBatch(form: FormData) {
             if (insertLeadError) {
               if (insertLeadError.code !== '23505') throw insertLeadError;
               const { data: racedLead, error: racedLeadError } = await ctx.supabase
-                .from('leads').select('id').eq('organization_id', ctx.organizationId).eq('business_id', businessId).single();
+                .from('leads')
+                .select('id')
+                .eq('organization_id', ctx.organizationId)
+                .eq('business_id', businessId)
+                .single();
               if (racedLeadError) throw racedLeadError;
               leadId = String(racedLead.id);
             } else {
               leadId = String(insertedLead.id);
-              createdLead = true;
               leadsCreated += 1;
             }
           }
@@ -207,6 +234,8 @@ export async function qualifyGooglePlacesPriorityBatch(form: FormData) {
             detailsLookupCharged: Boolean(raw.detailsLookupCharged) || providerCallAttempted,
             priorityQualified,
             qualificationReason,
+            qualificationTier: providerCallAttempted ? 'ENTERPRISE_NO_REVIEWS' : 'CACHE_REUSE',
+            fullIntelligenceFetched: false,
             batchQualification: true,
           },
         }).eq('organization_id', ctx.organizationId).eq('id', row.id);
@@ -229,6 +258,8 @@ export async function qualifyGooglePlacesPriorityBatch(form: FormData) {
           prioritiesFound,
           leadsCreated,
           rejected,
+          qualificationMode: 'ENTERPRISE_NO_REVIEWS',
+          reviewsFetched: false,
           outreachTriggered: false,
         },
       });
