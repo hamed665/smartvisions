@@ -1,6 +1,7 @@
 import type { DiscoveredBusiness } from './types';
 import { classifyWebsiteUri, deriveWhatsappCandidate } from './selective-enrichment';
 import { buildZeroCostPersonalization } from './personalization';
+import { buildDigitalPresenceEvidence } from './digital-evidence';
 
 export type GrowthServiceRegion = 'MUSCAT_LOCAL' | 'OMAN_REMOTE' | 'INTERNATIONAL_REMOTE';
 export type GrowthLane = 'MUSCAT_LOCAL_GROWTH' | 'OMAN_REMOTE_GROWTH' | 'INTERNATIONAL_AI_GROWTH';
@@ -66,6 +67,7 @@ export function buildGrowthOpportunity(business: DiscoveredBusiness) {
   if (contactable) reasons.push('Direct contact path is available');
 
   const personalization = buildZeroCostPersonalization(business, region, websiteClass);
+  const digitalEvidence = buildDigitalPresenceEvidence(business, websiteClass);
   const contentCheckStatus: ContentCheckStatus = !operational ? 'NOT_ELIGIBLE' : personalization.socialCheckEligible ? 'PENDING_SOCIAL_CHECK' : 'READY_FOR_REVIEW';
   return {
     region,
@@ -79,5 +81,6 @@ export function buildGrowthOpportunity(business: DiscoveredBusiness) {
     recommendedServices: [...new Set(recommendedServices)],
     reasons,
     personalization,
+    digitalEvidence,
   };
 }
