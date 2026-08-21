@@ -3,6 +3,7 @@ import type { DiscoveredBusiness } from './types';
 export type PersonalizationRegion = 'MUSCAT_LOCAL' | 'OMAN_REMOTE' | 'INTERNATIONAL_REMOTE';
 export type WebsitePresenceClass = 'NONE' | 'CONTACT_ONLY' | 'STANDALONE';
 export type IndustrySegment = 'DENTAL' | 'BEAUTY' | 'RESTAURANT' | 'SALON' | 'VET' | 'CLINIC' | 'GENERIC';
+export type CheapestNextAction = 'SKIP' | 'CONTACT_READY' | 'SOCIAL_CHECK' | 'WEBSITE_EVIDENCE';
 
 const INDUSTRY_RULES: Array<{ segment: IndustrySegment; needles: string[]; angle: string }> = [
   { segment: 'DENTAL', needles: ['dental','dentist','orthodont','teeth','oral','اسنان','أسنان'], angle: 'trust, bookings, before/after proof and local patient acquisition' },
@@ -35,6 +36,7 @@ export function buildZeroCostPersonalization(
   const hasWhatsapp = Boolean(clean(business.whatsapp));
   const hasMaps = Boolean(clean(business.googleMapsUri));
   const hasAddress = Boolean(clean(business.formattedAddress));
+  const hasInstagram = Boolean(clean(business.instagram));
   const reviewCount = Math.max(0, Number(business.userRatingCount ?? 0));
   const rating = Math.max(0, Number(business.rating ?? 0));
   const market = MARKET_LABELS[String(business.countryCode ?? '').toUpperCase()] ?? String(business.countryCode ?? 'Unknown market').toUpperCase();
@@ -44,6 +46,9 @@ export function buildZeroCostPersonalization(
   const needScore = operational ? clamp((websiteClass==='NONE'?75:websiteClass==='CONTACT_ONLY'?68:20)+(region==='MUSCAT_LOCAL'?10:5)+(segment!=='GENERIC'?10:0)) : 0;
   const serviceFitScore = operational ? clamp(35+(segment!=='GENERIC'?25:10)+(region==='MUSCAT_LOCAL'?20:15)+(hasPhone?15:0)+(websiteClass!=='STANDALONE'?10:0)) : 0;
   const revenuePotentialScore = operational ? clamp(35+(reviewCount>=100?25:reviewCount>=20?15:reviewCount>0?8:0)+(rating>=4?10:0)+(['AE','SA','QA','GB','UK','US'].includes(String(business.countryCode??'').toUpperCase())?15:8)+(segment!=='GENERIC'?10:0)) : 0;
+  const personalizationPriorityScore = operational
+    ? clamp(contactabilityScore*0.35 + needScore*0.25 + serviceFitScore*0.25 + revenuePotentialScore*0.15)
+    : 0;
 
   const fingerprint = [
     segment,
@@ -53,6 +58,7 @@ export function buildZeroCostPersonalization(
     websiteClass==='STANDALONE'?'HAS_STANDALONE_WEBSITE':'NO_STANDALONE_WEBSITE',
     hasPhone?'PHONE_READY':'PHONE_MISSING',
     hasWhatsapp?'WHATSAPP_LINK_KNOWN':'WHATSAPP_CANDIDATE_OR_UNKNOWN',
+    hasInstagram?'INSTAGRAM_KNOWN':'SOCIAL_UNKNOWN',
   ];
 
   const offerBundle:string[]=[];
@@ -67,11 +73,28 @@ export function buildZeroCostPersonalization(
   if(region==='MUSCAT_LOCAL')messageHooks.push(`The business is in ${clean(business.city)||'Muscat'}, where on-site filming is serviceable.`);
   else messageHooks.push('Remote website and AI-content delivery is serviceable without on-site filming.');
   if(hasPhone)messageHooks.push('A direct phone contact path is available.');
+  if(hasInstagram)messageHooks.push('An Instagram profile is already known, but content quality is not assumed.');
   if(reviewCount>0)messageHooks.push(`Existing Google activity is visible (${reviewCount} rating${reviewCount===1?'':'s'}).`);
   messageHooks.push('Social-content quality is not claimed until evidence is checked.');
 
   const recommendedAngle = industryRule?.angle ?? 'clear digital presence, direct response and practical growth improvements';
-  const socialCheckEligible = operational && contactabilityScore>=50 && serviceFitScore>=60;
+  const socialCheckEligible = operational && contactabilityScore>=50 && serviceFitScore>=60 && personalizationPriorityScore>=60;
+
+  let cheapestNextAction: CheapestNextAction = 'SKIP';
+  let nextActionReason = 'Not enough verified value to spend or contact yet.';
+  let nextActionCanSpendMoney = false;
+  if (operational && contactabilityScore >= 55 && websiteClass !== 'STANDALONE' && personalizationPriorityScore >= 65) {
+    cheapestNextAction = 'CONTACT_READY';
+    nextActionReason = 'No standalone website plus a direct contact path is already enough for a personalized website/content approach.';
+  } else if (socialCheckEligible && (hasInstagram || websiteClass === 'STANDALONE')) {
+    cheapestNextAction = 'SOCIAL_CHECK';
+    nextActionReason = 'Content fit is strong; a controlled social check can change the offer before AI is used.';
+    nextActionCanSpendMoney = true;
+  } else if (operational && websiteClass === 'STANDALONE' && contactabilityScore >= 50 && serviceFitScore >= 55) {
+    cheapestNextAction = 'WEBSITE_EVIDENCE';
+    nextActionReason = 'A standalone website exists; deterministic website evidence may reveal a redesign/conversion opportunity.';
+    nextActionCanSpendMoney = true;
+  }
 
   return {
     segment,
@@ -80,11 +103,15 @@ export function buildZeroCostPersonalization(
     needScore,
     serviceFitScore,
     revenuePotentialScore,
+    personalizationPriorityScore,
     fingerprint,
     offerBundle:[...new Set(offerBundle)],
     recommendedAngle,
     messageHooks,
     socialCheckEligible,
+    cheapestNextAction,
+    nextActionReason,
+    nextActionCanSpendMoney,
     providerCalls:0,
     llmCalls:0,
     estimatedApiCostUsd:0,
