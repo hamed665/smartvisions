@@ -157,7 +157,7 @@ export default async function GooglePlacesControlledPage() {
               </div> : <div className="muted">ID only. No paid Place Details lookup has been persisted for this candidate.</div>}
             </div>
             <div>
-              {lead ? <Link className="textLink" href={`/leads/${lead.id}`}>Lead {lead.status}</Link> : business ? <span className="muted">Business exists · lead pending</span> : <form action={enrichGooglePlaceCandidate}>
+              {lead ? <Link className="textLink" href="/leads">Lead {lead.status}</Link> : business ? <span className="muted">Business exists · lead pending</span> : <form action={enrichGooglePlaceCandidate}>
                 <input type="hidden" name="placeId" value={placeId} />
                 <button disabled={!canEnrich}>Enrich one candidate</button>
               </form>}
