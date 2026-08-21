@@ -1,0 +1,14 @@
+alter table public.businesses add column if not exists formatted_address text;
+alter table public.businesses add column if not exists google_maps_uri text;
+alter table public.businesses add column if not exists international_phone text;
+alter table public.businesses add column if not exists google_rating numeric check (google_rating is null or (google_rating >= 0 and google_rating <= 5));
+alter table public.businesses add column if not exists google_user_rating_count integer check (google_user_rating_count is null or google_user_rating_count >= 0);
+alter table public.businesses add column if not exists google_business_status text;
+alter table public.businesses add column if not exists google_price_level text;
+alter table public.businesses add column if not exists google_primary_type_display_name text;
+alter table public.businesses add column if not exists google_opening_hours jsonb not null default '{}'::jsonb;
+alter table public.businesses add column if not exists google_reviews jsonb not null default '[]'::jsonb;
+alter table public.businesses add column if not exists google_review_summary text;
+alter table public.businesses add column if not exists google_intelligence_retrieved_at timestamptz;
+create index if not exists businesses_google_rating_idx on public.businesses(organization_id, google_rating desc, google_user_rating_count desc);
+comment on column public.businesses.google_reviews is 'Cached review subset returned by Google Places Place Details. Do not treat as the complete Google review corpus.';
