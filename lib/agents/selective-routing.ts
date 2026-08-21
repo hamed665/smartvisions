@@ -37,7 +37,7 @@ export function buildSelectiveRoutePlan(context: AgentContext): SelectiveRoutePl
     };
   }
 
-  if (!asksMeeting && !asksPayment && !objection && !technical && !asksPreview && !highIntent) {
+  if (!asksPrice && !asksMeeting && !asksPayment && !objection && !technical && !asksPreview && !highIntent) {
     return {
       tier: 'LIGHT',
       agents: ['intent_discovery', 'culture_locale', 'sales_marketing', 'decision_orchestrator', 'secretary', 'relevance_checker'],
@@ -55,6 +55,7 @@ export function buildSelectiveRoutePlan(context: AgentContext): SelectiveRoutePl
   agents.add('relevance_checker');
 
   const reasons: string[] = [];
+  if (asksPrice) reasons.push(hasVerifiedQuote ? 'PRICE_WITH_VERIFIED_QUOTE' : 'PRICE_REQUIRES_CONFIGURED_QUOTE');
   if (asksMeeting) reasons.push('MEETING_INTENT');
   if (asksPayment) reasons.push('PAYMENT_INTENT');
   if (objection) reasons.push('OBJECTION_OR_HESITATION');
