@@ -14,6 +14,9 @@ alter table public.growth_opportunities
   add column if not exists next_action_can_spend_money boolean not null default false,
   add column if not exists digital_presence_evidence jsonb not null default '{}'::jsonb;
 
+create index if not exists growth_opportunities_business_fk_idx
+  on public.growth_opportunities(business_id);
+
 create index if not exists growth_opportunities_personalization_idx
   on public.growth_opportunities(organization_id, social_check_eligible, contactability_score desc, overall_sales_score desc);
 
