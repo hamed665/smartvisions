@@ -59,11 +59,17 @@ export async function qualifyGooglePlacesPriorityBatch(form: FormData) {
     if (integrationError) throw integrationError;
     if (integration?.status !== 'CONNECTED' || integration.enabled !== true) throw new Error('Google Places must be CONNECTED before batch qualification');
 
-    const { data: discoveries, error: discoveryError } = await ctx.supabase.from('discovery_records').select('id,source_id,raw_payload,discovered_at').eq('organization_id', ctx.organizationId).eq('source_type', 'google_places').order('discovered_at', { ascending: false }).limit(100);
+    const [{ data: discoveries, error: discoveryError }, { data: markets, error: marketError }] = await Promise.all([
+      ctx.supabase.from('discovery_records').select('id,source_id,raw_payload,discovered_at').eq('organization_id', ctx.organizationId).eq('source_type', 'google_places').order('discovered_at', { ascending: false }).limit(100),
+      ctx.supabase.from('market_settings').select('country_code').eq('organization_id', ctx.organizationId).eq('enabled', true),
+    ]);
     if (discoveryError) throw discoveryError;
+    if (marketError) throw marketError;
+    const enabledMarkets = new Set((markets ?? []).map((row) => String(row.country_code).toUpperCase()));
     const candidates = (discoveries ?? []).filter((row) => {
       const raw = row.raw_payload && typeof row.raw_payload === 'object' ? row.raw_payload as Record<string, unknown> : {};
-      return Boolean(row.source_id) && !raw.enrichedAt;
+      const countryCode = String(raw.countryCode ?? 'OM').toUpperCase();
+      return Boolean(row.source_id) && !raw.enrichedAt && enabledMarkets.has(countryCode);
     }).slice(0, maxChecks);
 
     if (!candidates.length) {
@@ -75,7 +81,7 @@ export async function qualifyGooglePlacesPriorityBatch(form: FormData) {
         const placeId = assertValidGooglePlaceId(String(row.source_id ?? ''));
         const raw = row.raw_payload && typeof row.raw_payload === 'object' ? row.raw_payload as Record<string, unknown> : {};
         const countryCode = String(raw.countryCode ?? 'OM').toUpperCase(); const city = String(raw.city ?? 'Muscat').trim() || 'Muscat';
-        if (countryCode !== 'OM') continue; checked += 1;
+        if (!enabledMarkets.has(countryCode)) continue; checked += 1;
 
         const { data: existingBusiness, error: existingBusinessError } = await ctx.supabase
           .from('businesses')
@@ -168,7 +174,7 @@ export async function qualifyGooglePlacesPriorityBatch(form: FormData) {
         if (updateError) throw updateError;
       }
 
-      const { error: auditError } = await ctx.supabase.from('audit_logs').insert({ organization_id: ctx.organizationId, actor_type: 'USER', actor_id: ctx.userId, action: 'GOOGLE_PLACES_PRIORITY_BATCH_QUALIFICATION', entity_type: 'integration', entity_id: ctx.organizationId, after_data: { maxChecks, targetLeads, checked, providerCalls, reusedBusinesses, prioritiesFound, leadsCreated, rejected, growthRouted, qualificationMode: 'ENTERPRISE_NO_REVIEWS', personalizationMode: 'DETERMINISTIC_ZERO_COST', digitalEvidenceMode: 'KNOWN_FACTS_ONLY', whatsappLinksDerivedLocally: true, socialAnalysisTriggered: false, reviewsFetched: false, outreachTriggered: false } });
+      const { error: auditError } = await ctx.supabase.from('audit_logs').insert({ organization_id: ctx.organizationId, actor_type: 'USER', actor_id: ctx.userId, action: 'GOOGLE_PLACES_PRIORITY_BATCH_QUALIFICATION', entity_type: 'integration', entity_id: ctx.organizationId, after_data: { maxChecks, targetLeads, checked, providerCalls, reusedBusinesses, prioritiesFound, leadsCreated, rejected, growthRouted, enabledMarkets: [...enabledMarkets], qualificationMode: 'ENTERPRISE_NO_REVIEWS', personalizationMode: 'DETERMINISTIC_ZERO_COST', digitalEvidenceMode: 'KNOWN_FACTS_ONLY', whatsappLinksDerivedLocally: true, socialAnalysisTriggered: false, reviewsFetched: false, outreachTriggered: false } });
       if (auditError) throw auditError;
       destination = `/hunters/google-places?batch=success&checked=${checked}&calls=${providerCalls}&priority=${prioritiesFound}&created=${leadsCreated}&rejected=${rejected}&routed=${growthRouted}`;
     }
