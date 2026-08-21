@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { enrichGooglePlaceCandidate, runGooglePlacesControlledSample } from '@/app/hunter-actions';
+import { qualifyGooglePlacesPriorityBatch } from '@/app/hunter-batch-actions';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 
 export const dynamic = 'force-dynamic';
@@ -37,25 +38,30 @@ export default async function GooglePlacesControlledPage() {
 
   const businessByPlaceId = new Map(((businesses ?? []) as BusinessRow[]).filter((row) => row.google_place_id).map((row) => [String(row.google_place_id), row]));
   const leadByBusinessId = new Map(((leads ?? []) as LeadRow[]).filter((row) => row.business_id).map((row) => [String(row.business_id), row]));
+  const discoveryRows = (discoveries ?? []) as DiscoveryRow[];
+  const unqualifiedCount = discoveryRows.filter((row) => {
+    const raw = row.raw_payload && typeof row.raw_payload === 'object' ? row.raw_payload as Record<string, unknown> : {};
+    return Boolean(row.source_id) && !raw.enrichedAt;
+  }).length;
   const priorityBusinesses = ((businesses ?? []) as BusinessRow[])
     .filter((b) => String(b.google_business_status ?? '').toUpperCase() === 'OPERATIONAL' && !String(b.official_website ?? '').trim())
     .map((b) => ({ business: b, lead: leadByBusinessId.get(String(b.id)) }))
     .sort((a, b) => Number(b.lead?.opportunity_score ?? 0) - Number(a.lead?.opportunity_score ?? 0) || Number(b.business.google_user_rating_count ?? 0) - Number(a.business.google_user_rating_count ?? 0));
 
   return <div>
-    <div className="headerRow"><div><h1>Google Places No-Website Hunter</h1><p className="muted">Primary target: operational Oman businesses with no official website. Discovery stays cheap, qualification is selective, and only qualified no-website businesses become leads.</p></div><Link className="textLink" href="/hunters">← Hunters</Link></div>
+    <div className="headerRow"><div><h1>Google Places No-Website Hunter</h1><p className="muted">Primary target: operational Oman businesses with no official website. Discovery stays cheap, qualification is cost-guarded, and only qualified no-website businesses become leads.</p></div><Link className="textLink" href="/hunters">← Hunters</Link></div>
 
     <section className="grid">
       <div className="card"><span className="muted">Provider health</span><div className="value">{effectiveStatus}</div></div>
       <div className="card"><span className="muted">No-website priority leads</span><div className="value">{priorityBusinesses.length}</div></div>
+      <div className="card"><span className="muted">Candidates awaiting qualification</span><div className="value">{unqualifiedCount}</div></div>
       <div className="card"><span className="muted">Google Places budget</span><div className="value">${Number(costGuard?.google_places_budget_usd ?? 0).toFixed(2)}</div></div>
-      <div className="card"><span className="muted">Daily discovery quota</span><div className="value">{Number(costGuard?.daily_new_leads ?? 0)}</div></div>
     </section>
 
     <section className="panel">
       <div className="headerRow"><div><h2>Priority queue: active + no website</h2><p className="muted">These are the businesses we actually want for website-sales outreach. Businesses with a website are stored for evidence/deduplication but are not promoted into new leads.</p></div><span className="pill">OUTREACH DISABLED</span></div>
       <div className="settingsList">
-        {priorityBusinesses.length === 0 ? <p className="muted">No qualified operational no-website businesses yet. Discover IDs, then qualify candidates one at a time.</p> : priorityBusinesses.map(({ business, lead }) => <div className="settingsRow" key={business.id}>
+        {priorityBusinesses.length === 0 ? <p className="muted">No qualified operational no-website businesses yet.</p> : priorityBusinesses.map(({ business, lead }) => <div className="settingsRow" key={business.id}>
           <div><strong>{business.name}</strong><div className="muted">{business.category ?? 'category pending'} · {business.google_rating ?? '—'}/5 · {business.google_user_rating_count ?? 0} Google ratings</div><div className="muted">{business.formatted_address ?? 'address pending'} · {business.phone ? `phone ${business.phone}` : 'phone not returned'}</div></div>
           <div><strong>Opportunity {lead?.opportunity_score ?? '—'}</strong>{lead ? <div><Link className="textLink" href={`/leads/${lead.id}`}>Open lead →</Link></div> : <div className="muted">Lead pending</div>}</div>
         </div>)}
@@ -64,9 +70,9 @@ export default async function GooglePlacesControlledPage() {
 
     <section className="panel">
       <h2>1. Discover candidate IDs</h2>
-      <p className="muted">Google does not expose a direct “no website” search filter. So this first step fetches IDs only; the next controlled qualification checks whether each business is OPERATIONAL and has no official website.</p>
-      <div className="healthList"><span>Country <strong>OM</strong></span><span>Discovery field mask <strong>places.id only</strong></span><span>Lead rule <strong>OPERATIONAL + NO WEBSITE</strong></span><span>Outreach <strong>DISABLED</strong></span></div>
-      <form action={runGooglePlacesControlledSample} className="settingsList"><div className="settingsRow"><label>City<input name="city" defaultValue="Muscat" maxLength={80} required /></label><label>Industry<input name="industry" defaultValue="dental clinic" maxLength={100} required /></label><label>Max results<input name="limit" type="number" min="1" max="3" defaultValue="3" required /></label><button disabled={!canRun}>Discover candidate IDs</button></div></form>
+      <p className="muted">Google has no direct “no website” filter. This step requests IDs only, keeping discovery cheap. Qualification happens separately.</p>
+      <div className="healthList"><span>Country <strong>OM</strong></span><span>Discovery field mask <strong>places.id only</strong></span><span>Lead rule <strong>OPERATIONAL + NO WEBSITE</strong></span><span>Daily discovery quota <strong>{Number(costGuard?.daily_new_leads ?? 0)}</strong></span></div>
+      <form action={runGooglePlacesControlledSample} className="settingsList"><div className="settingsRow"><label>City<input name="city" defaultValue="Muscat" maxLength={80} required /></label><label>Industry<input name="industry" defaultValue="dental clinic" maxLength={100} required /></label><label>Max IDs<input name="limit" type="number" min="1" max="3" defaultValue="3" required /></label><button disabled={!canRun}>Discover candidate IDs</button></div></form>
       {!credentialPresent ? <p className="muted">Add GOOGLE_PLACES_API_KEY before running discovery.</p> : null}
       {Number(costGuard?.google_places_budget_usd ?? 0) <= 0 ? <p className="muted">Google Places is blocked because provider budget is zero.</p> : null}
       {integration?.last_checked_at ? <p className="muted">Last checked {formatMuscat(integration.last_checked_at)} Oman time.</p> : null}
@@ -74,9 +80,17 @@ export default async function GooglePlacesControlledPage() {
     </section>
 
     <section className="panel">
-      <div className="headerRow"><div><h2>2. Qualify candidates</h2><p className="muted">A paid-capable Place Details lookup checks status + website + contact/reputation evidence. Only OPERATIONAL businesses with no website become new leads. Existing businesses are reused without another Google request.</p></div><span className="pill">Cost Guard enforced</span></div>
+      <div className="headerRow"><div><h2>2. Find priority leads automatically</h2><p className="muted">Checks a small capped batch of unqualified IDs and stops as soon as the requested number of active no-website businesses is found. Existing cached businesses cost zero additional Google requests.</p></div><span className="pill">HARD CAP: 5 CHECKS</span></div>
+      <div className="healthList"><span>Max provider calls/run <strong>5</strong></span><span>Estimated reserve/check <strong>$0.04</strong></span><span>Worst-case reserve/run <strong>$0.20</strong></span><span>Outreach <strong>DISABLED</strong></span></div>
+      <form action={qualifyGooglePlacesPriorityBatch} className="settingsList"><div className="settingsRow"><label>Maximum candidates to check<input name="maxChecks" type="number" min="1" max="5" defaultValue="3" required /></label><label>Stop after priority leads found<input name="targetLeads" type="number" min="1" max="3" defaultValue="1" required /></label><button disabled={!canEnrich || unqualifiedCount < 1}>Find active businesses without websites</button></div></form>
+      <p className="muted">{unqualifiedCount} candidate ID(s) currently waiting. Cost Guard is checked before every paid-capable Place Details request.</p>
+      {!providerConnected ? <p className="muted">Batch qualification is blocked until Google Places is CONNECTED.</p> : null}
+    </section>
+
+    <section className="panel">
+      <div className="headerRow"><div><h2>3. Candidate evidence</h2><p className="muted">Manual one-by-one qualification remains available for debugging and review. A Place Details lookup checks status, website, contact information and reputation.</p></div><span className="pill">Cost Guard enforced</span></div>
       <div className="settingsList">
-        {((discoveries ?? []) as DiscoveryRow[]).length === 0 ? <p className="muted">No discovery records yet.</p> : ((discoveries ?? []) as DiscoveryRow[]).map((row) => {
+        {discoveryRows.length === 0 ? <p className="muted">No discovery records yet.</p> : discoveryRows.map((row) => {
           const placeId = String(row.source_id ?? '');
           const business = businessByPlaceId.get(placeId);
           const lead = business ? leadByBusinessId.get(String(business.id)) : undefined;
@@ -92,7 +106,6 @@ export default async function GooglePlacesControlledPage() {
           </div>;
         })}
       </div>
-      {!providerConnected ? <p className="muted">Qualification is blocked until Google Places is CONNECTED.</p> : null}
     </section>
 
     <section className="panel"><h2>Recent Google Places usage</h2><div className="settingsList">{(usage ?? []).length === 0 ? <p className="muted">No Google Places usage recorded yet.</p> : (usage ?? []).map((row, index) => <div className="settingsRow" key={`${row.created_at}-${index}`}><strong>{row.operation}</strong><span>${Number(row.cost_usd ?? 0).toFixed(6)}</span><span className="muted">{Number(row.units ?? 0)} request · {formatMuscat(row.created_at)} Oman time</span></div>)}</div></section>
