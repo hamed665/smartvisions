@@ -28,12 +28,18 @@ describe('zero-cost personalization', () => {
     expect(result.llmCalls).toBe(0);
   });
 
-  it('routes a strong standalone-site content lead to controlled evidence before AI', () => {
+  it('routes a strong standalone-site lead with known Instagram to controlled social evidence', () => {
     const result = buildZeroCostPersonalization({ ...base, countryCode: 'AE', city: 'Dubai', officialWebsite: 'https://example.ae', instagram: 'https://instagram.com/example' }, 'INTERNATIONAL_REMOTE', 'STANDALONE');
     expect(result.socialCheckEligible).toBe(true);
     expect(result.cheapestNextAction).toBe('SOCIAL_CHECK');
     expect(result.nextActionCanSpendMoney).toBe(true);
     expect(result.offerBundle).toContain('AI_CONTENT');
+  });
+
+  it('prefers free deterministic website evidence when a site exists but social is unknown', () => {
+    const result = buildZeroCostPersonalization({ ...base, officialWebsite: 'https://example.om' }, 'MUSCAT_LOCAL', 'STANDALONE');
+    expect(result.cheapestNextAction).toBe('WEBSITE_EVIDENCE');
+    expect(result.nextActionCanSpendMoney).toBe(false);
   });
 
   it('does not spend on a non-operational business', () => {
