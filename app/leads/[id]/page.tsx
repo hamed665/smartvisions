@@ -2,71 +2,17 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { runDeterministicWebsiteAudit } from '@/app/audit-actions';
 import { getCurrentOrganization } from '@/lib/supabase/org';
-
-export const dynamic = 'force-dynamic';
-
-type Props = { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
-
-export default async function LeadDetailPage({ params, searchParams }: Props) {
-  const { id } = await params;
-  const query = await searchParams;
-  const { supabase, organizationId, role } = await getCurrentOrganization();
-  const { data: lead } = await supabase
-    .from('leads')
-    .select('id,status,opportunity_score,intent_score,agent_mode,business_id,businesses(id,name,country_code,city,category,official_website,email,phone,whatsapp,instagram)')
-    .eq('organization_id', organizationId)
-    .eq('id', id)
-    .maybeSingle();
-  if (!lead) notFound();
-  const business = Array.isArray(lead.businesses) ? lead.businesses[0] : lead.businesses;
-  const { data: audits } = business?.id ? await supabase
-    .from('website_audits')
-    .select('id,status,source_url,title,detected_languages,has_arabic,has_english,has_booking,has_whatsapp,mobile_quality,seo_quality,cta_quality,contact_emails,contact_phones,social_links,evidence,error_message,audited_at,created_at')
-    .eq('organization_id', organizationId)
-    .eq('business_id', business.id)
-    .order('created_at', { ascending: false })
-    .limit(10) : { data: [] };
-  const latest = audits?.[0];
-  const auditMessage = query.audit === 'success' ? 'Website audit completed without an LLM or paid provider.' : query.audit === 'cached' ? 'Fresh cached audit reused; no website request was made.' : query.audit === 'error' ? `Audit failed: ${String(query.message ?? 'unknown error')}` : null;
-
-  return <div>
-    <div className="headerRow"><div><h1>{business?.name ?? 'Lead'}</h1><p className="muted">Controlled website evidence and deterministic audit for this lead.</p></div><Link className="textLink" href="/leads">← Leads</Link></div>
-    {auditMessage ? <section className="panel"><strong>{auditMessage}</strong></section> : null}
-    <section className="statsGrid fourStats">
-      <article><span>Status</span><strong>{lead.status}</strong></article>
-      <article><span>Website</span><strong>{business?.official_website ? 'PRESENT' : 'MISSING'}</strong></article>
-      <article><span>Audit</span><strong>{latest?.status ?? 'NOT RUN'}</strong></article>
-      <article><span>Outreach</span><strong>DISABLED</strong></article>
-    </section>
-    <section className="panel">
-      <h2>Controlled website audit</h2>
-      <p className="muted">Rule-based first pass only. It fetches the official website with SSRF protection, an 8-second timeout, a 1 MB body cap, daily quota and cache. No LLM or outreach is used.</p>
-      <div className="healthList">
-        <span>Official website <strong>{business?.official_website ?? 'none'}</strong></span>
-        <span>Lead score <strong>{lead.opportunity_score}</strong></span>
-        <span>Intent score <strong>{lead.intent_score}</strong></span>
-      </div>
-      <form action={runDeterministicWebsiteAudit}>
-        <input type="hidden" name="leadId" value={lead.id}/>
-        <button disabled={role !== 'OWNER' || !business?.official_website}>Run deterministic audit</button>
-      </form>
-    </section>
-    <section className="panel">
-      <h2>Latest audit evidence</h2>
-      {!latest ? <p className="muted">No audit has been run yet.</p> : <div className="healthList">
-        <span>Result <strong>{latest.status}</strong></span>
-        <span>Title <strong>{latest.title ?? '—'}</strong></span>
-        <span>Languages <strong>{(latest.detected_languages ?? []).join(', ') || '—'}</strong></span>
-        <span>Mobile <strong>{latest.mobile_quality ?? '—'}</strong></span>
-        <span>SEO <strong>{latest.seo_quality ?? '—'}</strong></span>
-        <span>CTA <strong>{latest.cta_quality ?? '—'}</strong></span>
-        <span>Booking signal <strong>{latest.has_booking === true ? 'YES' : latest.has_booking === false ? 'NO' : '—'}</strong></span>
-        <span>WhatsApp signal <strong>{latest.has_whatsapp === true ? 'YES' : latest.has_whatsapp === false ? 'NO' : '—'}</strong></span>
-        <span>Arabic <strong>{latest.has_arabic === true ? 'YES' : latest.has_arabic === false ? 'NO' : '—'}</strong></span>
-        <span>English <strong>{latest.has_english === true ? 'YES' : latest.has_english === false ? 'NO' : '—'}</strong></span>
-        <span>Audited <strong>{latest.audited_at ? new Date(latest.audited_at).toLocaleString() : '—'}</strong></span>
-        {latest.error_message ? <span>Error <strong>{latest.error_message}</strong></span> : null}
-      </div>}
-    </section>
-  </div>;
+export const dynamic='force-dynamic';
+type Props={params:Promise<{id:string}>;searchParams:Promise<Record<string,string|string[]|undefined>>};
+type Review={rating?:number;text?:string;relativePublishTimeDescription?:string;publishTime?:string;authorName?:string;authorUri?:string};
+export default async function LeadDetailPage({params,searchParams}:Props){const{id}=await params;const query=await searchParams;const{supabase,organizationId,role}=await getCurrentOrganization();
+ const{data:lead}=await supabase.from('leads').select('id,status,opportunity_score,intent_score,agent_mode,business_id,businesses(id,name,country_code,city,category,official_website,email,phone,whatsapp,instagram,formatted_address,google_maps_uri,international_phone,google_rating,google_user_rating_count,google_business_status,google_price_level,google_primary_type_display_name,google_opening_hours,google_reviews,google_review_summary,google_intelligence_retrieved_at)').eq('organization_id',organizationId).eq('id',id).maybeSingle();if(!lead)notFound();const business=Array.isArray(lead.businesses)?lead.businesses[0]:lead.businesses;
+ const{data:audits}=business?.id?await supabase.from('website_audits').select('id,status,source_url,title,detected_languages,has_arabic,has_english,has_booking,has_whatsapp,mobile_quality,seo_quality,cta_quality,contact_emails,contact_phones,social_links,evidence,error_message,audited_at,created_at').eq('organization_id',organizationId).eq('business_id',business.id).order('created_at',{ascending:false}).limit(10):{data:[]};const latest=audits?.[0];const reviews=(Array.isArray(business?.google_reviews)?business.google_reviews:[]) as Review[];const hours=(business?.google_opening_hours&&typeof business.google_opening_hours==='object'?business.google_opening_hours:{}) as {openNow?:boolean;weekdayDescriptions?:string[]};
+ const auditMessage=query.audit==='success'?'Website audit succeeded. No LLM or paid audit provider was used.':query.audit==='cached'?'Fresh cached audit reused; no website request was made.':query.audit==='error'?`Audit failed: ${String(query.message??'unknown error')}`:null;
+ return <div><div className="headerRow"><div><h1>{business?.name??'Lead'}</h1><p className="muted">Google business intelligence + controlled website evidence. Outreach remains disabled.</p></div><Link className="textLink" href="/leads">← Leads</Link></div>{auditMessage?<section className="panel"><strong>{auditMessage}</strong></section>:null}
+ <section className="statsGrid fourStats"><article><span>Status</span><strong>{lead.status}</strong></article><article><span>Google rating</span><strong>{business?.google_rating??'—'} / 5</strong></article><article><span>Google reviews</span><strong>{business?.google_user_rating_count??'—'}</strong></article><article><span>Outreach</span><strong>DISABLED</strong></article></section>
+ <section className="panel"><h2>Google Business Profile</h2><div className="healthList"><span>Category <strong>{business?.google_primary_type_display_name??business?.category??'—'}</strong></span><span>Status <strong>{business?.google_business_status??'—'}</strong></span><span>Address <strong>{business?.formatted_address??'—'}</strong></span><span>Phone <strong>{business?.phone??'—'}</strong></span><span>International phone <strong>{business?.international_phone??'—'}</strong></span><span>Website <strong>{business?.official_website??'—'}</strong></span><span>Price level <strong>{business?.google_price_level??'—'}</strong></span><span>Open now <strong>{hours.openNow===true?'YES':hours.openNow===false?'NO':'—'}</strong></span><span>Google data cached <strong>{business?.google_intelligence_retrieved_at?new Date(business.google_intelligence_retrieved_at).toLocaleString():'—'}</strong></span></div>{business?.google_maps_uri?<p><a className="textLink" href={business.google_maps_uri} target="_blank" rel="noreferrer">Open Google Maps ↗</a></p>:null}{hours.weekdayDescriptions?.length?<div><h3>Opening hours</h3>{hours.weekdayDescriptions.map((x:string)=><p key={x} className="muted">{x}</p>)}</div>:null}</section>
+ <section className="panel"><h2>Google Reviews</h2><p className="muted">Google rating count is the total shown by Google. The entries below are the review subset returned by the Places API, cached to prevent repeat paid requests.</p>{business?.google_review_summary?<p><strong>Google review summary:</strong> {business.google_review_summary}</p>:null}{reviews.length?reviews.map((r,i)=><article key={`${r.authorName??'review'}-${i}`} style={{marginBottom:18}}><strong>{r.authorName??'Google user'} · {r.rating??'—'}/5</strong><p>{r.text??'No review text returned.'}</p><small className="muted">{r.relativePublishTimeDescription??(r.publishTime?new Date(r.publishTime).toLocaleDateString():'')}</small></article>):<p className="muted">No review entries were returned/cached for this business.</p>}</section>
+ <section className="panel"><h2>Controlled website audit</h2><p className="muted">SSRF-protected deterministic audit with timeout, body cap, daily quota and cache. No LLM and no outreach.</p><div className="healthList"><span>Lead score <strong>{lead.opportunity_score}</strong></span><span>Intent score <strong>{lead.intent_score}</strong></span></div><form action={runDeterministicWebsiteAudit}><input type="hidden" name="leadId" value={lead.id}/><button disabled={role!=='OWNER'||!business?.official_website}>Run deterministic audit</button></form></section>
+ <section className="panel"><h2>Latest website audit evidence</h2>{!latest?<p className="muted">No audit has been run yet.</p>:<div className="healthList"><span>Result <strong>{latest.status}</strong></span><span>Title <strong>{latest.title??'—'}</strong></span><span>Languages <strong>{(latest.detected_languages??[]).join(', ')||'—'}</strong></span><span>Mobile <strong>{latest.mobile_quality??'—'}</strong></span><span>SEO <strong>{latest.seo_quality??'—'}</strong></span><span>CTA <strong>{latest.cta_quality??'—'}</strong></span><span>Booking <strong>{latest.has_booking===true?'YES':latest.has_booking===false?'NO':'—'}</strong></span><span>WhatsApp <strong>{latest.has_whatsapp===true?'YES':latest.has_whatsapp===false?'NO':'—'}</strong></span><span>Arabic <strong>{latest.has_arabic===true?'YES':latest.has_arabic===false?'NO':'—'}</strong></span><span>English <strong>{latest.has_english===true?'YES':latest.has_english===false?'NO':'—'}</strong></span><span>Audited <strong>{latest.audited_at?new Date(latest.audited_at).toLocaleString():'—'}</strong></span>{latest.error_message?<span>Error <strong>{latest.error_message}</strong></span>:null}</div>}</section></div>;
 }
