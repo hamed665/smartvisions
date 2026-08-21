@@ -1,4 +1,4 @@
-import type { WhatsAppProvider, WhatsAppSendInput, WhatsAppSendResult } from './provider';
+import type { WhatsAppProvider, WhatsAppSendInput, WhatsAppSendResult, WhatsAppTemplateSendInput } from './provider';
 
 export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
   constructor(
@@ -13,7 +13,7 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
     }
   }
 
-  async sendText(input: WhatsAppSendInput): Promise<WhatsAppSendResult> {
+  private async sendPayload(payload: Record<string, unknown>): Promise<WhatsAppSendResult> {
     this.assertConfigured();
     const response = await fetch(`https://graph.facebook.com/${this.graphVersion}/${this.phoneNumberId}/messages`, {
       method: 'POST',
@@ -21,14 +21,7 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
         Authorization: `Bearer ${this.token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to: input.to,
-        type: 'text',
-        text: { preview_url: false, body: input.text },
-        ...(input.replyToMessageId ? { context: { message_id: input.replyToMessageId } } : {}),
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
@@ -40,6 +33,30 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
     const providerMessageId = body.messages?.[0]?.id;
     if (!providerMessageId) throw new Error('Meta WhatsApp response did not include a message id');
     return { providerMessageId, status: 'accepted' };
+  }
+
+  async sendText(input: WhatsAppSendInput): Promise<WhatsAppSendResult> {
+    return this.sendPayload({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: input.to,
+      type: 'text',
+      text: { preview_url: false, body: input.text },
+      ...(input.replyToMessageId ? { context: { message_id: input.replyToMessageId } } : {}),
+    });
+  }
+
+  async sendTemplate(input: WhatsAppTemplateSendInput): Promise<WhatsAppSendResult> {
+    return this.sendPayload({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: input.to,
+      type: 'template',
+      template: {
+        name: input.templateName,
+        language: { code: input.languageCode },
+      },
+    });
   }
 
   async health() {
