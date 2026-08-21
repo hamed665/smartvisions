@@ -9,8 +9,9 @@ The project must be continued from the repository state, not from memory or assu
 1. `AGENTS.md` — non-negotiable project rules and current priorities.
 2. `docs/CURRENT_STATE.md` — exact production status and the next unfinished task.
 3. `docs/MASTER_PLAN.md` — complete product scope and completion roadmap.
-4. `docs/EXECUTION_PLAYBOOK.md` — how changes must be implemented, tested, migrated, deployed, and handed off.
-5. `.env.example` — integration contract. Never place real secrets in GitHub.
+4. `docs/V1_FINAL_4_PR_PLAN.md` — locked Production V1 closure plan and duplicate-work prevention inventory.
+5. `docs/EXECUTION_PLAYBOOK.md` — how changes must be implemented, tested, migrated, deployed, and handed off.
+6. `.env.example` — integration contract. Never place real secrets in GitHub.
 
 If chat history conflicts with repository documentation, verify the current code, migrations, Supabase state, and deployment before acting. Update `docs/CURRENT_STATE.md` after every meaningful production change.
 
@@ -75,6 +76,7 @@ Cost settings are runtime-editable. Large increases must require explicit confir
 - Any new paid provider must implement: preflight budget check, provider quota check, retry policy, usage recording, and visible integration health.
 - Avoid duplicate CRMs, duplicate lead tables, duplicate conversation models, or parallel configuration systems. Extend existing primitives first.
 - Do not describe untested functionality as complete. Mark it `implemented`, `configured`, `tested`, or `production-verified` accurately.
+- During Production V1 closure, map all missing work into PR #36–#39 as defined in `docs/V1_FINAL_4_PR_PLAN.md`; do not spawn micro-feature PRs unless an isolated emergency production fix is required.
 
 ## Definition of done for a feature
 
@@ -95,4 +97,4 @@ A feature is not complete because a page exists. It is complete only when applic
 
 ## Immediate continuation rule
 
-At the start of a new chat/session, **do not invent a new roadmap**. Read `docs/CURRENT_STATE.md`, verify the referenced PR/commit/deployment/database state, and continue from the first unchecked item in `docs/MASTER_PLAN.md` unless the owner explicitly changes priority.
+At the start of a new chat/session, **do not invent a new roadmap**. Read `docs/CURRENT_STATE.md`, verify the referenced PR/commit/deployment/database state, then follow `docs/V1_FINAL_4_PR_PLAN.md` for Production V1 closure. Use `docs/MASTER_PLAN.md` as the complete scope inventory. The four-PR closure plan takes precedence for sequencing unless the owner explicitly changes priority.
