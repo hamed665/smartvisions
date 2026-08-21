@@ -27,6 +27,12 @@ const safeMessage = (value: unknown) => {
   return message.replace(/AIza[0-9A-Za-z_-]+/g, '[redacted]').slice(0, 240);
 };
 
+async function assertEnabledMarket(ctx: Awaited<ReturnType<typeof getCurrentOrganization>>, countryCode: string) {
+  const { data, error } = await ctx.supabase.from('market_settings').select('country_code,enabled').eq('organization_id', ctx.organizationId).eq('country_code', countryCode).maybeSingle();
+  if (error) throw error;
+  if (!data?.enabled) throw new Error(`Market ${countryCode} is not enabled`);
+}
+
 async function updateGooglePlacesHealth(
   ctx: Awaited<ReturnType<typeof getCurrentOrganization>>,
   input: { status: 'NOT_CONFIGURED'|'READY'|'CONNECTED'|'ERROR'; error?: string | null; enabled?: boolean },
@@ -48,6 +54,7 @@ async function updateGooglePlacesHealth(
 
 export async function runGooglePlacesControlledSample(form: FormData) {
   const ctx = await getCurrentOrganization(true);
+  const countryCode = (text(form, 'countryCode') || 'OM').toUpperCase();
   const city = text(form, 'city') || 'Muscat';
   const industry = text(form, 'industry') || 'dental clinic';
   const requestedLimit = boundedInteger(form, 'limit', 3, 1, 3);
@@ -59,6 +66,7 @@ export async function runGooglePlacesControlledSample(form: FormData) {
       throw new Error('GOOGLE_PLACES_API_KEY is not configured');
     }
 
+    await assertEnabledMarket(ctx, countryCode);
     const state = await getCostGuardState(ctx.organizationId);
     if (!state) throw new Error('Cost Guard state is unavailable; discovery blocked');
 
@@ -76,7 +84,7 @@ export async function runGooglePlacesControlledSample(form: FormData) {
     const limit = Math.min(requestedLimit, remainingDaily);
     if (limit < 1) throw new Error('Daily new-lead quota reached; Google Places sample blocked');
 
-    const query = { countryCode: 'OM', city, industry, limit };
+    const query = { countryCode, city, industry, limit };
     const result = await controlledGooglePlacesIdSearch({ organizationId: ctx.organizationId, query });
     const uniqueIds = [...new Set(result.placeIds)].slice(0, limit);
 
@@ -104,12 +112,12 @@ export async function runGooglePlacesControlledSample(form: FormData) {
           raw_payload: {
             provider: 'GOOGLE_PLACES',
             operation: 'TEXT_SEARCH_IDS_ONLY',
-            countryCode: 'OM',
+            countryCode,
             city,
             industry,
             placeId,
             controlledSample: true,
-            qualificationTarget: 'OPERATIONAL_NO_WEBSITE',
+            qualificationTarget: 'GROWTH_OPPORTUNITY',
           },
         })),
       );
@@ -125,21 +133,21 @@ export async function runGooglePlacesControlledSample(form: FormData) {
       entity_type: 'integration',
       entity_id: ctx.organizationId,
       after_data: {
-        countryCode: 'OM', city, industry, requestedLimit: limit,
+        countryCode, city, industry, requestedLimit: limit,
         returnedCount: result.placeIds.length, uniqueCount: uniqueIds.length,
         insertedCount: newIds.length, duplicateCount: uniqueIds.length - newIds.length,
-        latencyMs: result.latencyMs, qualificationTarget: 'OPERATIONAL_NO_WEBSITE', outreachTriggered: false,
+        latencyMs: result.latencyMs, qualificationTarget: 'GROWTH_OPPORTUNITY', outreachTriggered: false,
       },
     });
     if (auditError) throw auditError;
 
-    destination = `/hunters/google-places?result=success&returned=${result.placeIds.length}&inserted=${newIds.length}&duplicates=${uniqueIds.length - newIds.length}`;
+    destination = `/hunters/google-places?result=success&market=${encodeURIComponent(countryCode)}&returned=${result.placeIds.length}&inserted=${newIds.length}&duplicates=${uniqueIds.length - newIds.length}`;
   } catch (error) {
     const message = safeMessage(error);
     if (process.env.GOOGLE_PLACES_API_KEY) {
       try { await updateGooglePlacesHealth(ctx, { status: 'ERROR', error: message, enabled: false }); } catch { /* preserve original error */ }
     }
-    await ctx.supabase.from('audit_logs').insert({ organization_id: ctx.organizationId, actor_type: 'USER', actor_id: ctx.userId, action: 'GOOGLE_PLACES_CONTROLLED_SAMPLE_FAILED', entity_type: 'integration', entity_id: ctx.organizationId, after_data: { error: message, outreachTriggered: false } });
+    await ctx.supabase.from('audit_logs').insert({ organization_id: ctx.organizationId, actor_type: 'USER', actor_id: ctx.userId, action: 'GOOGLE_PLACES_CONTROLLED_SAMPLE_FAILED', entity_type: 'integration', entity_id: ctx.organizationId, after_data: { countryCode, error: message, outreachTriggered: false } });
     destination = `/hunters/google-places?result=error&message=${encodeURIComponent(message)}`;
   }
 
@@ -167,7 +175,7 @@ export async function enrichGooglePlaceCandidate(form: FormData) {
     const rawPayload = (discovery.raw_payload && typeof discovery.raw_payload === 'object') ? discovery.raw_payload as Record<string, unknown> : {};
     const countryCode = String(rawPayload.countryCode ?? 'OM').toUpperCase();
     const city = String(rawPayload.city ?? 'Muscat').trim() || 'Muscat';
-    if (countryCode !== 'OM') throw new Error('Selective enrichment is currently limited to Oman');
+    await assertEnabledMarket(ctx, countryCode);
 
     const { data: existingBusiness, error: existingBusinessError } = await ctx.supabase
       .from('businesses')
@@ -233,7 +241,7 @@ export async function enrichGooglePlaceCandidate(form: FormData) {
     const { error: auditError } = await ctx.supabase.from('audit_logs').insert({
       organization_id: ctx.organizationId, actor_type: 'USER', actor_id: ctx.userId,
       action: 'GOOGLE_PLACE_SELECTIVE_ENRICHMENT', entity_type: leadId ? 'lead' : 'business', entity_id: leadId || businessId,
-      after_data: { placeId, businessId, leadId: leadId || null, businessName, providerCallAttempted, providerCallSucceeded, reusedBusiness, createdLead, priorityQualified, qualificationReason, outreachTriggered: false },
+      after_data: { placeId, countryCode, businessId, leadId: leadId || null, businessName, providerCallAttempted, providerCallSucceeded, reusedBusiness, createdLead, priorityQualified, qualificationReason, outreachTriggered: false },
     });
     if (auditError) throw auditError;
 
