@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { controlledGooglePlaceQualification } from '@/lib/hunters/business/google-places-controlled';
+import { buildGrowthOpportunity } from '@/lib/hunters/business/growth-routing';
 import {
   assertValidGooglePlaceId,
   buildBusinessPersistenceRow,
@@ -68,7 +69,7 @@ export async function qualifyGooglePlacesPriorityBatch(form: FormData) {
     if (!candidates.length) {
       destination = '/hunters/google-places?batch=empty';
     } else {
-      let checked = 0; let providerCalls = 0; let prioritiesFound = 0; let leadsCreated = 0; let rejected = 0; let reusedBusinesses = 0;
+      let checked = 0; let providerCalls = 0; let prioritiesFound = 0; let leadsCreated = 0; let rejected = 0; let reusedBusinesses = 0; let growthRouted = 0;
       for (const row of candidates) {
         if (prioritiesFound >= targetLeads) break;
         const placeId = assertValidGooglePlaceId(String(row.source_id ?? ''));
@@ -98,6 +99,26 @@ export async function qualifyGooglePlacesPriorityBatch(form: FormData) {
           business = { ...business, whatsapp: rowToPersist.whatsapp ?? undefined };
         }
 
+        const growth = buildGrowthOpportunity(business);
+        const { error: growthError } = await ctx.supabase.from('growth_opportunities').upsert({
+          organization_id: ctx.organizationId,
+          business_id: businessId,
+          service_region: growth.region,
+          sales_lane: growth.lane,
+          website_class: growth.websiteClass,
+          website_score: growth.websiteScore,
+          local_content_score: growth.localContentScore,
+          ai_content_score: growth.aiContentScore,
+          overall_sales_score: growth.overallSalesScore,
+          content_check_status: growth.contentCheckStatus,
+          recommended_services: growth.recommendedServices,
+          routing_reasons: growth.reasons,
+          routed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'organization_id,business_id' });
+        if (growthError) throw growthError;
+        growthRouted += 1;
+
         const websiteClass = classifyWebsiteUri(business.officialWebsite);
         const priorityQualified = isPriorityNoWebsiteBusiness(business);
         const qualificationReason = priorityQualified
@@ -122,14 +143,16 @@ export async function qualifyGooglePlacesPriorityBatch(form: FormData) {
         const { error: updateError } = await ctx.supabase.from('discovery_records').update({ raw_payload: {
           ...raw, enrichedAt: new Date().toISOString(), businessId, leadId, detailsLookupCharged: Boolean(raw.detailsLookupCharged) || providerCallAttempted,
           priorityQualified, qualificationReason, websiteClass, whatsappCandidate: business.whatsapp ?? null,
+          growthLane: growth.lane, serviceRegion: growth.region, websiteScore: growth.websiteScore, localContentScore: growth.localContentScore,
+          aiContentScore: growth.aiContentScore, overallSalesScore: growth.overallSalesScore, contentCheckStatus: growth.contentCheckStatus,
           qualificationTier: providerCallAttempted ? 'ENTERPRISE_NO_REVIEWS' : 'CACHE_REUSE', fullIntelligenceFetched: false, batchQualification: true,
         }}).eq('organization_id', ctx.organizationId).eq('id', row.id);
         if (updateError) throw updateError;
       }
 
-      const { error: auditError } = await ctx.supabase.from('audit_logs').insert({ organization_id: ctx.organizationId, actor_type: 'USER', actor_id: ctx.userId, action: 'GOOGLE_PLACES_PRIORITY_BATCH_QUALIFICATION', entity_type: 'integration', entity_id: ctx.organizationId, after_data: { maxChecks, targetLeads, checked, providerCalls, reusedBusinesses, prioritiesFound, leadsCreated, rejected, qualificationMode: 'ENTERPRISE_NO_REVIEWS', whatsappLinksDerivedLocally: true, reviewsFetched: false, outreachTriggered: false } });
+      const { error: auditError } = await ctx.supabase.from('audit_logs').insert({ organization_id: ctx.organizationId, actor_type: 'USER', actor_id: ctx.userId, action: 'GOOGLE_PLACES_PRIORITY_BATCH_QUALIFICATION', entity_type: 'integration', entity_id: ctx.organizationId, after_data: { maxChecks, targetLeads, checked, providerCalls, reusedBusinesses, prioritiesFound, leadsCreated, rejected, growthRouted, qualificationMode: 'ENTERPRISE_NO_REVIEWS', whatsappLinksDerivedLocally: true, socialAnalysisTriggered: false, reviewsFetched: false, outreachTriggered: false } });
       if (auditError) throw auditError;
-      destination = `/hunters/google-places?batch=success&checked=${checked}&calls=${providerCalls}&priority=${prioritiesFound}&created=${leadsCreated}&rejected=${rejected}`;
+      destination = `/hunters/google-places?batch=success&checked=${checked}&calls=${providerCalls}&priority=${prioritiesFound}&created=${leadsCreated}&rejected=${rejected}&routed=${growthRouted}`;
     }
   } catch (error) {
     const message = safeMessage(error);
@@ -137,5 +160,5 @@ export async function qualifyGooglePlacesPriorityBatch(form: FormData) {
     destination = `/hunters/google-places?batch=error&message=${encodeURIComponent(message)}`;
   }
 
-  revalidatePath('/hunters/google-places'); revalidatePath('/hunters'); revalidatePath('/leads'); revalidatePath('/cost-usage'); redirect(destination);
+  revalidatePath('/hunters/google-places'); revalidatePath('/hunters/growth-opportunities'); revalidatePath('/hunters'); revalidatePath('/leads'); revalidatePath('/cost-usage'); redirect(destination);
 }
