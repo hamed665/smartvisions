@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { buildGrowthOpportunity } from '@/lib/hunters/business/growth-routing';
+import type { CheapestNextAction } from '@/lib/hunters/business/personalization';
 import { deriveWhatsappCandidate } from '@/lib/hunters/business/selective-enrichment';
 import type { DiscoveredBusiness } from '@/lib/hunters/business/types';
 
@@ -30,7 +31,7 @@ export async function routeCachedGrowthOpportunities(){
     for(const row of(data??[]) as CachedBusiness[]){
       const business=toDiscovered(row);if(String(business.businessStatus??'').toUpperCase()!=='OPERATIONAL'){skipped+=1;continue;}
       const opportunity=buildGrowthOpportunity(business);const p=opportunity.personalization;const freshAudit=auditByBusiness.get(row.id);
-      let cheapestNextAction=p.cheapestNextAction;let nextActionReason=p.nextActionReason;let nextActionCanSpendMoney=p.nextActionCanSpendMoney;
+      let cheapestNextAction:CheapestNextAction=p.cheapestNextAction;let nextActionReason=p.nextActionReason;let nextActionCanSpendMoney=p.nextActionCanSpendMoney;
       let digitalEvidence:Record<string,unknown>={...opportunity.digitalEvidence};
       if(freshAudit){
         evidenceReused+=1;
