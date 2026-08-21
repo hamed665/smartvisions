@@ -2,101 +2,112 @@
 
 **Last updated:** 2026-08-21 (Oman, UTC+4)
 
-This file is the operational handoff for the next engineer/agent/chat. Update it after every meaningful production change.
+This file is the operational handoff. Verify production before acting and update this file after every meaningful production change.
 
-## Production endpoints and infrastructure
+## Production
 
 - Repository: `hamed665/smartvisions`
 - Production branch: `main`
 - Production URL: `https://smartvisions.vercel.app`
 - Supabase project ref: `pkypexzpyfbikdnkrzvw`
-- Auth: Supabase email/password; OWNER operator exists.
+- Current production commit: `46d1c86f93bca39657554841bf908b9e1cc2029a` (PR #35)
+- Vercel deployment for PR #35: `READY / production`.
+- Supabase migration `0027_growth_opportunity_routing.sql` is applied.
 
 ## Production-verified foundations
 
+### Platform / security / controls
+
+- Supabase Auth and organization-scoped RLS are live.
+- OWNER control model is live.
+- Control Center, runtime switches, audit primitives, market/service/pricing foundations are present.
+- Supabase security advisor has no new schema/RLS issue from Growth routing; separate Auth warning remains: Leaked Password Protection disabled.
+
 ### Cost Guard / OpenAI
 
-- Editable Cost Guard and usage metering are live.
+- Editable Cost Guard and provider usage metering are live.
 - OpenAI is production-verified end to end.
-- OpenAI prepaid API balance is active with auto-reload disabled.
-- Verified OpenAI smoke test: `AGENT_INTENT_DISCOVERY`, 394 tokens displayed, `$0.000575` estimated cost recorded.
+- OpenAI auto-reload remains disabled.
+- Paid operations are designed to fail closed if Cost Guard cannot be evaluated.
 
-### Google Places IDs-only discovery
+### Google Places / Business Hunter
 
-- `GOOGLE_PLACES_API_KEY` is configured server-side in Vercel Production and Preview and restricted to Places API (New).
-- Provider state is `CONNECTED`, enabled, with `last_error = null`.
-- Production sample: Oman / Muscat / dental clinic / max 3.
-- Google returned exactly 3 Place IDs.
-- One `TEXT_SEARCH_IDS_ONLY` usage row exists at `$0.000000` internal cost.
-- Exactly 3 discovery records exist with Google Places provenance.
-- No outreach occurred.
-- Migration 0023 fixed authenticated audit-log inserts and the successful sample was reconciled without another Google request.
+- Google Places credential is configured and provider is `CONNECTED`.
+- IDs-only discovery is production-verified and recorded at zero internal cost.
+- Selective/batch Place Details qualification is implemented with durable identity checks, provider budget guard, dedupe and usage metering.
+- First-pass qualification deliberately avoids review text and uses the cheaper Enterprise/no-reviews path.
+- Google Business Intelligence full review/rating enrichment exists separately and is cached; it is not part of routine hunting.
+- Current optimization principle: `IDs only → durable/cache check → minimum qualification → only then deeper evidence if it can change a sales decision`.
 
-Do not rerun the same IDs-only sample merely to prove an already-verified provider path.
+### Website/no-website/contact routing
 
-## Selective Place Details / lead promotion — deployed, awaiting first production candidate test
+- Business identity persists in existing `businesses`; CRM pipeline identity remains in existing `leads`.
+- Standalone website classification distinguishes first-party websites from social/contact/directory links.
+- Instagram/Facebook/WhatsApp/link-in-bio and directory/booking profiles such as WhatClinic/Fresha/Booksy do not count as a standalone website.
+- Local `wa.me` candidate links are derived from phone numbers without another API call; this is a contact candidate, not proof that WhatsApp is active.
+- Deterministic website-audit foundation exists with SSRF/timeout/body limits and cache. No website audit should run for a true no-website lead.
 
-PR #24 is merged and Vercel Production is green. Migration 0024 is applied.
+### Growth Opportunity routing
 
-Production implementation now provides:
+- `growth_opportunities` is live with these lanes:
+  - `MUSCAT_LOCAL_GROWTH`
+  - `OMAN_REMOTE_GROWTH`
+  - `INTERNATIONAL_AI_GROWTH`
+- Separate website/local-content/AI-content/overall scores are implemented.
+- Muscat can route to on-site filming/reels/photography + website/AI assist.
+- Outside Muscat Oman routes to website + remote AI content.
+- International routes to website + AI content/creative production.
+- Businesses with a standalone website are not discarded; they can remain candidates for later content/social evidence checks.
+- PR #35 adds an idempotent Owner-only cached-business routing action that uses existing database data and makes zero Google/OpenAI/social provider calls.
 
-- One-candidate-at-a-time enrichment on `/hunters/google-places`.
-- Only Place IDs already present in organization-scoped Google discovery can be enriched.
-- Current first gate remains Oman-only.
-- Google must be `CONNECTED`, credential must be present, and provider budget must be non-zero.
-- Existing `businesses.google_place_id` matches are checked before any paid-capable Place Details call.
-- New Place Details requests pass Cost Guard and Google provider-budget checks and record usage with the conservative `$0.02` internal reserve.
-- Place Details persist into the existing `businesses` table, including normalized `dedupe_domain`.
-- The business is promoted into the existing `leads` table as `NEW / AUTO / opportunity 0 / intent 0`, explicitly pending website audit and qualification.
-- Discovery provenance is updated with `businessId`, `leadId`, enrichment time and whether a details lookup was performed.
-- No campaign, email, WhatsApp or outreach side effect exists.
-- DB-level dedupe protects one business per organization/Google Place ID and one lead per organization/business.
+## Existing modules that must be extended, not rebuilt
 
-### Post-migration advisor cleanup
+- `lib/agents/*`: contracts, executor, router, pipeline, OpenAI runtime.
+- `lib/outreach/*`: eligibility, locale, scheduler, follow-ups, variants, pricing, replies, mailbox health.
+- Existing conversation intelligence and handoff/approval model.
+- Existing WhatsApp provider/send foundations.
+- Existing preview engine/templates/quality/API.
+- Existing portfolio primitives.
+- Existing Cost Guard/runtime/reliability primitives.
+- Existing integration connection/status model.
 
-PR #25 is merged and migration 0025 is applied.
-
-- The new duplicate business unique index from 0024 was removed because the pre-existing `businesses_place_unique` already provides the same protection.
-- The audit INSERT RLS policy now uses `(select auth.uid())::text` to avoid per-row auth function re-evaluation.
-- Supabase performance advisor no longer reports the duplicate-index or auth-RLS-initplan warnings from this work.
-- Remaining unused-index notices are informational at current traffic levels.
-- Supabase Auth still reports the separate Leaked Password Protection warning.
-
-## Exact next action — DO THIS FIRST
-
-1. Refresh `/hunters/google-places`.
-2. Confirm `Provider health = CONNECTED` and the 3 existing Place IDs appear under **Selective candidate enrichment**.
-3. Click **Enrich one candidate** for exactly one candidate. Do not enrich all 3 yet.
-4. Verify in production:
-   - exactly one new `PLACE_DETAILS_ENTERPRISE` usage row;
-   - one business row with the selected `google_place_id`;
-   - one lead linked to that business;
-   - discovery provenance contains business/lead IDs and enrichment timestamp;
-   - one successful enrichment audit row;
-   - zero outreach rows/actions.
-5. Click enrichment for the **same candidate again**. It must reuse the existing business/lead and must **not** create another `PLACE_DETAILS_ENTERPRISE` usage row.
-6. Only after this idempotency test passes should the remaining two candidates be selectively enriched.
-7. Then begin Phase 3: official-website/public-source enrichment and deterministic website audit. Crawl4AI is not production-verified yet.
-
-## External integrations not yet production-verified
+## External integrations still not production-verified
 
 - Crawl4AI.
-- Redis/queue runtime if retained.
 - Email outbound provider.
-- WhatsApp Cloud API.
-- Voice transcription.
+- WhatsApp Cloud API complete inbound/outbound webhook flow.
+- Voice transcription production flow.
 - Freelancer/project hunting sources.
-- Full preview/demo generation and deployment flow.
+- Full preview/demo deployment/content-production flow.
+- Redis is optional; do not add/require it unless a concrete queue/reliability need justifies it.
 
-## Important production decisions
+## Final Production V1 execution lock
 
-- Main UI is English; owner/operator summaries and reports are Persian.
-- Paid operations fail closed through editable Cost Guard controls.
-- Google Places is discovery/reference first; durable business data belongs in `businesses`, pipeline identity in `leads`.
-- Avoid repeat paid enrichment by checking durable identity first.
-- Cold outreach stays disabled until enrichment, audit, qualification, DNC, budget, send-window and response-handling gates are verified.
-- OpenAI API auto-reload remains disabled.
+The remaining product completion is constrained to four major PRs. Read `docs/V1_FINAL_4_PR_PLAN.md` before adding features.
 
-## Handoff sentence for a new chat
+1. **PR #36 — Complete Growth Intelligence & Integrations**
+2. **PR #37 — Complete AI Sales, Conversations & Outreach**
+3. **PR #38 — Complete Website & Content Production Engine**
+4. **PR #39 — Complete Control Center, Reliability & Production Launch**
 
-> Read `AGENTS.md`, `docs/CURRENT_STATE.md`, `docs/MASTER_PLAN.md`, and `docs/EXECUTION_PLAYBOOK.md`. Google Places IDs-only discovery is production-verified and CONNECTED with 3 Muscat dental-clinic Place IDs. PR #24 selective enrichment and migrations 0024/0025 are production-deployed. Enrich exactly one existing candidate, verify one Place Details usage + one business + one lead + provenance + audit + zero outreach, then enrich the same candidate again to prove no second paid Place Details request occurs before moving to website/public-source enrichment.
+Do not create duplicate subsystems. Missing work must first be mapped to an existing primitive and one of these four PR scopes.
+
+## Exact next action
+
+Current development branch: `phase5/pr36-complete-growth-integrations`.
+
+For PR #36:
+
+1. Reconcile current Hunter/Growth code against the existing data model and Cost Guard.
+2. Use PR #35 cached routing instead of re-querying Google for already-known businesses.
+3. Finish digital-presence/social-evidence status without fabricating evidence and without default paid social calls.
+4. Finish multi-market Growth routing using existing market settings.
+5. Complete/verify Google + Crawl4AI integration-health/smoke-test behavior using the existing `integration_connections` model.
+6. Keep review text, deep AI, outreach and heavy preview generation out of acquisition by default.
+7. CI must pass lint/typecheck/tests/build before merge.
+8. Apply any required migration only after CI and run Supabase advisors.
+9. Production-verify with the smallest useful batch and confirm no duplicate paid calls.
+
+## Handoff sentence
+
+> Read `AGENTS.md`, `docs/CURRENT_STATE.md`, `docs/MASTER_PLAN.md`, `docs/V1_FINAL_4_PR_PLAN.md` and `docs/EXECUTION_PLAYBOOK.md`. Production is on PR #35 commit `46d1c86f...`; Growth routing and zero-cost cached backfill are deployed. Continue only on PR #36 Growth Intelligence & Integrations, reusing existing Hunters, Cost Guard, integration status, audit and growth-opportunity primitives. Do not rebuild existing agent/outreach/preview/conversation systems and do not add paid calls before cache/deterministic gates.

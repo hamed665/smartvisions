@@ -1,5 +1,7 @@
 import type { DiscoveredBusiness } from './types';
 import { classifyWebsiteUri, deriveWhatsappCandidate } from './selective-enrichment';
+import { buildZeroCostPersonalization } from './personalization';
+import { buildDigitalPresenceEvidence } from './digital-evidence';
 
 export type GrowthServiceRegion = 'MUSCAT_LOCAL' | 'OMAN_REMOTE' | 'INTERNATIONAL_REMOTE';
 export type GrowthLane = 'MUSCAT_LOCAL_GROWTH' | 'OMAN_REMOTE_GROWTH' | 'INTERNATIONAL_AI_GROWTH';
@@ -64,6 +66,21 @@ export function buildGrowthOpportunity(business: DiscoveredBusiness) {
   if (region === 'INTERNATIONAL_REMOTE') reasons.push('International: route to website + remote AI content');
   if (contactable) reasons.push('Direct contact path is available');
 
-  const contentCheckStatus: ContentCheckStatus = operational ? 'PENDING_SOCIAL_CHECK' : 'NOT_ELIGIBLE';
-  return { region, lane, websiteClass, websiteScore, localContentScore, aiContentScore, overallSalesScore, contentCheckStatus, recommendedServices: [...new Set(recommendedServices)], reasons };
+  const personalization = buildZeroCostPersonalization(business, region, websiteClass);
+  const digitalEvidence = buildDigitalPresenceEvidence(business, websiteClass);
+  const contentCheckStatus: ContentCheckStatus = !operational ? 'NOT_ELIGIBLE' : personalization.socialCheckEligible ? 'PENDING_SOCIAL_CHECK' : 'READY_FOR_REVIEW';
+  return {
+    region,
+    lane,
+    websiteClass,
+    websiteScore,
+    localContentScore,
+    aiContentScore,
+    overallSalesScore,
+    contentCheckStatus,
+    recommendedServices: [...new Set(recommendedServices)],
+    reasons,
+    personalization,
+    digitalEvidence,
+  };
 }

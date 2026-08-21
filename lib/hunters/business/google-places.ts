@@ -27,9 +27,13 @@ type PlaceDetails = {
   reviewSummary?: { text?: { text?: string } };
 };
 
+const COUNTRY_LABELS: Record<string,string> = {
+  OM: 'Oman', AE: 'United Arab Emirates', SA: 'Saudi Arabia', QA: 'Qatar', GB: 'United Kingdom', US: 'United States',
+};
+
 // Website URI already triggers Place Details Enterprise. Keep first-pass qualification
 // below Enterprise+Atmosphere by excluding reviews/reviewSummary. Every returned field
-// is useful for deciding whether a business is an actionable no-website lead.
+// is useful for deciding whether a business is an actionable growth opportunity.
 export const GOOGLE_PRIORITY_QUALIFICATION_FIELD_MASK = [
   'id',
   'displayName',
@@ -52,6 +56,16 @@ export const GOOGLE_BUSINESS_INTELLIGENCE_FIELD_MASK = [
   'reviewSummary',
   'priceLevel',
 ].join(',');
+
+export function buildGoogleTextSearchRequest(query: BusinessDiscoveryQuery) {
+  const countryCode = String(query.countryCode || '').trim().toUpperCase();
+  const countryLabel = COUNTRY_LABELS[countryCode] ?? countryCode;
+  return {
+    textQuery: `${query.industry} in ${query.city}, ${countryLabel}`,
+    pageSize: Math.min(Math.max(1, query.limit), 20),
+    regionCode: countryCode || undefined,
+  };
+}
 
 function toBusiness(
   placeId: string,
@@ -106,10 +120,7 @@ export class GooglePlacesClient {
         'X-Goog-Api-Key': this.apiKey,
         'X-Goog-FieldMask': 'places.id',
       },
-      body: JSON.stringify({
-        textQuery: `${query.industry} in ${query.city}, ${query.countryCode}`,
-        pageSize: Math.min(query.limit, 20),
-      }),
+      body: JSON.stringify(buildGoogleTextSearchRequest(query)),
     });
     if (!response.ok) throw new Error(`Google Places search failed: ${response.status}`);
     const payload = await response.json() as TextSearchResponse;
