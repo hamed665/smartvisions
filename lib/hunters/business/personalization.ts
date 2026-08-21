@@ -86,14 +86,14 @@ export function buildZeroCostPersonalization(
   if (operational && contactabilityScore >= 55 && websiteClass !== 'STANDALONE' && personalizationPriorityScore >= 65) {
     cheapestNextAction = 'CONTACT_READY';
     nextActionReason = 'No standalone website plus a direct contact path is already enough for a personalized website/content approach.';
-  } else if (socialCheckEligible && (hasInstagram || websiteClass === 'STANDALONE')) {
+  } else if (socialCheckEligible && hasInstagram) {
     cheapestNextAction = 'SOCIAL_CHECK';
-    nextActionReason = 'Content fit is strong; a controlled social check can change the offer before AI is used.';
+    nextActionReason = 'A known Instagram presence and strong content fit make a controlled social check useful before AI is used.';
     nextActionCanSpendMoney = true;
   } else if (operational && websiteClass === 'STANDALONE' && contactabilityScore >= 50 && serviceFitScore >= 55) {
     cheapestNextAction = 'WEBSITE_EVIDENCE';
-    nextActionReason = 'A standalone website exists; deterministic website evidence may reveal a redesign/conversion opportunity.';
-    nextActionCanSpendMoney = true;
+    nextActionReason = 'A standalone website exists; the existing deterministic website audit can add useful evidence before any paid social or AI step.';
+    nextActionCanSpendMoney = false;
   }
 
   return {
