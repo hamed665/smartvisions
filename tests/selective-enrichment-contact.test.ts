@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyWebsiteUri, deriveWhatsappCandidate, isPriorityNoWebsiteBusiness } from '@/lib/hunters/business/selective-enrichment';
+import { classifyWebsiteUri, deriveWhatsappCandidate, isPriorityNoWebsiteBusiness } from '../lib/hunters/business/selective-enrichment';
 
 const base = { sourceType: 'google_places' as const, name: 'Example Clinic', countryCode: 'OM', retrievedAt: new Date().toISOString(), businessStatus: 'OPERATIONAL' };
 
