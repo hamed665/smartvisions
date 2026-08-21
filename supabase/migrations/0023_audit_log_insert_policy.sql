@@ -6,6 +6,6 @@ with check (
   public.is_org_member(organization_id)
   and (
     actor_type <> 'USER'
-    or actor_id = auth.uid()
+    or actor_id = auth.uid()::text
   )
 );
