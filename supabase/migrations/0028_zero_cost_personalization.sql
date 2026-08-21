@@ -9,7 +9,7 @@ alter table public.growth_opportunities
   add column if not exists recommended_angle text,
   add column if not exists message_hooks jsonb not null default '[]'::jsonb,
   add column if not exists social_check_eligible boolean not null default false,
-  add column if not exists cheapest_next_action text not null default 'SKIP' check (cheapest_next_action in ('SKIP','CONTACT_READY','SOCIAL_CHECK','WEBSITE_EVIDENCE')),
+  add column if not exists cheapest_next_action text not null default 'SKIP' check (cheapest_next_action in ('SKIP','CONTACT_READY','SOCIAL_CHECK','WEBSITE_EVIDENCE','EVIDENCE_READY')),
   add column if not exists next_action_reason text,
   add column if not exists next_action_can_spend_money boolean not null default false,
   add column if not exists digital_presence_evidence jsonb not null default '{}'::jsonb;
