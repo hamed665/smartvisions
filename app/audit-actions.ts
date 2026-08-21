@@ -39,6 +39,10 @@ async function fetchWebsite(startUrl: string) {
   throw new Error('Website exceeded the redirect limit');
 }
 
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
 export async function runDeterministicWebsiteAudit(form: FormData) {
   const ctx = await getCurrentOrganization(true);
   const leadId = String(form.get('leadId') ?? '').trim();
@@ -71,7 +75,18 @@ export async function runDeterministicWebsiteAudit(form: FormData) {
   const cacheCutoff = new Date(Date.now() - Number(settings.audit_cache_days) * 86_400_000).toISOString();
   const { data: cached, error: cacheError } = await ctx.supabase.from('website_audits').select('id,audited_at,status').eq('organization_id', ctx.organizationId).eq('business_id', businessId).eq('status', 'SUCCEEDED').gte('audited_at', cacheCutoff).order('audited_at', { ascending: false }).limit(1).maybeSingle();
   if (cacheError) throw cacheError;
-  if (cached) redirect(leadId ? `/leads/${encodeURIComponent(leadId)}?audit=cached` : '/hunters/growth-opportunities?audit=cached');
+  if (cached) {
+    const { data: growth } = await ctx.supabase.from('growth_opportunities').select('digital_presence_evidence').eq('organization_id', ctx.organizationId).eq('business_id', businessId).maybeSingle();
+    const currentEvidence = objectValue(growth?.digital_presence_evidence);
+    await ctx.supabase.from('growth_opportunities').update({
+      cheapest_next_action: 'EVIDENCE_READY',
+      next_action_reason: 'Fresh deterministic website evidence is already cached; do not repeat the audit.',
+      next_action_can_spend_money: false,
+      digital_presence_evidence: { ...currentEvidence, websiteEvidenceStatus: 'AUDITED', websiteAuditId: cached.id, websiteAuditedAt: cached.audited_at, providerCallsForWebsiteEvidence: 0, llmCallsForWebsiteEvidence: 0 },
+      updated_at: new Date().toISOString(),
+    }).eq('organization_id', ctx.organizationId).eq('business_id', businessId);
+    redirect(leadId ? `/leads/${encodeURIComponent(leadId)}?audit=cached` : '/hunters/growth-opportunities?audit=cached');
+  }
 
   const dayStart = new Date(); dayStart.setUTCHours(0,0,0,0);
   const { count: auditsToday, error: countError } = await ctx.supabase.from('website_audits').select('id', { count: 'exact', head: true }).eq('organization_id', ctx.organizationId).gte('created_at', dayStart.toISOString());
@@ -84,6 +99,25 @@ export async function runDeterministicWebsiteAudit(form: FormData) {
     if (leadId) {
       const { error: leadUpdateError } = await ctx.supabase.from('leads').update({ status: leadStatus === 'NEW' ? 'AUDITED' : leadStatus, updated_at: completedAt }).eq('organization_id', ctx.organizationId).eq('id', leadId); if (leadUpdateError) throw leadUpdateError;
     }
+    const { data: growth, error: growthReadError } = await ctx.supabase.from('growth_opportunities').select('digital_presence_evidence').eq('organization_id', ctx.organizationId).eq('business_id', businessId).maybeSingle();
+    if (growthReadError) throw growthReadError;
+    const currentEvidence = objectValue(growth?.digital_presence_evidence);
+    const { error: growthUpdateError } = await ctx.supabase.from('growth_opportunities').update({
+      cheapest_next_action: 'EVIDENCE_READY',
+      next_action_reason: 'Deterministic website evidence is fresh and ready for offer selection; no repeat audit is needed inside the cache window.',
+      next_action_can_spend_money: false,
+      digital_presence_evidence: {
+        ...currentEvidence,
+        websiteEvidenceStatus: 'AUDITED',
+        websiteAuditId: auditRow.id,
+        websiteAuditedAt: completedAt,
+        websiteAudit: { title: result.title, hasArabic: result.hasArabic, hasEnglish: result.hasEnglish, hasBooking: result.hasBooking, hasWhatsapp: result.hasWhatsapp, mobileQuality: result.mobileQuality, seoQuality: result.seoQuality, ctaQuality: result.ctaQuality, socialLinks: result.socialLinks },
+        providerCallsForWebsiteEvidence: 0,
+        llmCallsForWebsiteEvidence: 0,
+      },
+      updated_at: completedAt,
+    }).eq('organization_id', ctx.organizationId).eq('business_id', businessId);
+    if (growthUpdateError) throw growthUpdateError;
     const { error: logError } = await ctx.supabase.from('audit_logs').insert({ organization_id: ctx.organizationId, actor_type: 'USER', actor_id: ctx.userId, action: 'DETERMINISTIC_WEBSITE_AUDIT', entity_type: 'website_audit', entity_id: auditRow.id, after_data: { leadId: leadId || null, businessId, sourceUrl: fetched.finalUrl, bytesInspected: fetched.html.length, origin: leadId ? 'LEAD' : 'GROWTH_OPPORTUNITY', llmUsed: false, paidProviderUsed: false, outreachTriggered: false } }); if (logError) throw logError;
     destination = leadId ? `/leads/${encodeURIComponent(leadId)}?audit=success` : '/hunters/growth-opportunities?audit=success';
   } catch (error) {
