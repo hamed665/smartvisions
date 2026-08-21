@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { enrichGooglePlaceCandidate, runGooglePlacesControlledSample } from '@/app/hunter-actions';
+import { runGooglePlacesControlledSample } from '@/app/hunter-actions';
 import { qualifyGooglePlacesPriorityBatch } from '@/app/hunter-batch-actions';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 
@@ -11,15 +11,28 @@ const formatMuscat = (value: string | null | undefined) => value
 
 type DiscoveryRow = { source_id: string | null; raw_payload: unknown; discovered_at: string };
 type BusinessRow = {
-  id: string; name: string; google_place_id: string | null; official_website: string | null; phone: string | null; category: string | null;
-  google_business_status: string | null; google_rating: number | null; google_user_rating_count: number | null; formatted_address: string | null;
+  id: string;
+  name: string;
+  google_place_id: string | null;
+  official_website: string | null;
+  phone: string | null;
+  category: string | null;
+  google_business_status: string | null;
+  google_rating: number | null;
+  google_user_rating_count: number | null;
+  formatted_address: string | null;
 };
 type LeadRow = { id: string; business_id: string | null; status: string; opportunity_score: number | null };
 
 export default async function GooglePlacesControlledPage() {
   const { supabase, organizationId, role } = await getCurrentOrganization(true);
   const [
-    { data: integration }, { data: usage }, { data: discoveries }, { data: costGuard }, { data: businesses }, { data: leads },
+    { data: integration },
+    { data: usage },
+    { data: discoveries },
+    { data: costGuard },
+    { data: businesses },
+    { data: leads },
   ] = await Promise.all([
     supabase.from('integration_connections').select('status,enabled,last_checked_at,last_error').eq('organization_id', organizationId).eq('provider', 'GOOGLE_PLACES').eq('channel', 'DISCOVERY').maybeSingle(),
     supabase.from('usage_events').select('operation,cost_usd,units,metadata,created_at').eq('organization_id', organizationId).eq('provider', 'GOOGLE_PLACES').order('created_at', { ascending: false }).limit(12),
@@ -43,13 +56,20 @@ export default async function GooglePlacesControlledPage() {
     const raw = row.raw_payload && typeof row.raw_payload === 'object' ? row.raw_payload as Record<string, unknown> : {};
     return Boolean(row.source_id) && !raw.enrichedAt;
   }).length;
+
   const priorityBusinesses = ((businesses ?? []) as BusinessRow[])
-    .filter((b) => String(b.google_business_status ?? '').toUpperCase() === 'OPERATIONAL' && !String(b.official_website ?? '').trim())
-    .map((b) => ({ business: b, lead: leadByBusinessId.get(String(b.id)) }))
+    .filter((business) => String(business.google_business_status ?? '').toUpperCase() === 'OPERATIONAL' && !String(business.official_website ?? '').trim())
+    .map((business) => ({ business, lead: leadByBusinessId.get(String(business.id)) }))
     .sort((a, b) => Number(b.lead?.opportunity_score ?? 0) - Number(a.lead?.opportunity_score ?? 0) || Number(b.business.google_user_rating_count ?? 0) - Number(a.business.google_user_rating_count ?? 0));
 
   return <div>
-    <div className="headerRow"><div><h1>Google Places No-Website Hunter</h1><p className="muted">Primary target: operational Oman businesses with no official website. Discovery stays cheap, qualification is cost-guarded, and only qualified no-website businesses become leads.</p></div><Link className="textLink" href="/hunters">← Hunters</Link></div>
+    <div className="headerRow">
+      <div>
+        <h1>Google Places No-Website Hunter</h1>
+        <p className="muted">Primary target: operational Oman businesses with no official website. ID discovery is free-tier-friendly; first-pass qualification deliberately excludes Google reviews and only priority leads can justify deeper intelligence later.</p>
+      </div>
+      <Link className="textLink" href="/hunters">← Hunters</Link>
+    </div>
 
     <section className="grid">
       <div className="card"><span className="muted">Provider health</span><div className="value">{effectiveStatus}</div></div>
@@ -59,10 +79,20 @@ export default async function GooglePlacesControlledPage() {
     </section>
 
     <section className="panel">
-      <div className="headerRow"><div><h2>Priority queue: active + no website</h2><p className="muted">These are the businesses we actually want for website-sales outreach. Businesses with a website are stored for evidence/deduplication but are not promoted into new leads.</p></div><span className="pill">OUTREACH DISABLED</span></div>
+      <div className="headerRow">
+        <div>
+          <h2>Priority queue: active + no website</h2>
+          <p className="muted">Only businesses that are operational and have no official website become website-sales leads. Review text is not fetched during hunting.</p>
+        </div>
+        <span className="pill">OUTREACH DISABLED</span>
+      </div>
       <div className="settingsList">
         {priorityBusinesses.length === 0 ? <p className="muted">No qualified operational no-website businesses yet.</p> : priorityBusinesses.map(({ business, lead }) => <div className="settingsRow" key={business.id}>
-          <div><strong>{business.name}</strong><div className="muted">{business.category ?? 'category pending'} · {business.google_rating ?? '—'}/5 · {business.google_user_rating_count ?? 0} Google ratings</div><div className="muted">{business.formatted_address ?? 'address pending'} · {business.phone ? `phone ${business.phone}` : 'phone not returned'}</div></div>
+          <div>
+            <strong>{business.name}</strong>
+            <div className="muted">{business.category ?? 'category pending'} · {business.google_rating ?? '—'}/5 · {business.google_user_rating_count ?? 0} Google ratings</div>
+            <div className="muted">{business.formatted_address ?? 'address pending'} · {business.phone ? `phone ${business.phone}` : 'phone not returned'}</div>
+          </div>
           <div><strong>Opportunity {lead?.opportunity_score ?? '—'}</strong>{lead ? <div><Link className="textLink" href={`/leads/${lead.id}`}>Open lead →</Link></div> : <div className="muted">Lead pending</div>}</div>
         </div>)}
       </div>
@@ -70,9 +100,21 @@ export default async function GooglePlacesControlledPage() {
 
     <section className="panel">
       <h2>1. Discover candidate IDs</h2>
-      <p className="muted">Google has no direct “no website” filter. This step requests IDs only, keeping discovery cheap. Qualification happens separately.</p>
-      <div className="healthList"><span>Country <strong>OM</strong></span><span>Discovery field mask <strong>places.id only</strong></span><span>Lead rule <strong>OPERATIONAL + NO WEBSITE</strong></span><span>Daily discovery quota <strong>{Number(costGuard?.daily_new_leads ?? 0)}</strong></span></div>
-      <form action={runGooglePlacesControlledSample} className="settingsList"><div className="settingsRow"><label>City<input name="city" defaultValue="Muscat" maxLength={80} required /></label><label>Industry<input name="industry" defaultValue="dental clinic" maxLength={100} required /></label><label>Max IDs<input name="limit" type="number" min="1" max="3" defaultValue="3" required /></label><button disabled={!canRun}>Discover candidate IDs</button></div></form>
+      <p className="muted">Google has no direct “no website” filter. This request asks for places.id only, so we do not pay for ratings, reviews, phones or website data during discovery.</p>
+      <div className="healthList">
+        <span>Country <strong>OM</strong></span>
+        <span>Discovery field mask <strong>places.id only</strong></span>
+        <span>Lead rule <strong>OPERATIONAL + NO WEBSITE</strong></span>
+        <span>Daily discovery quota <strong>{Number(costGuard?.daily_new_leads ?? 0)}</strong></span>
+      </div>
+      <form action={runGooglePlacesControlledSample} className="settingsList">
+        <div className="settingsRow">
+          <label>City<input name="city" defaultValue="Muscat" maxLength={80} required /></label>
+          <label>Industry<input name="industry" defaultValue="dental clinic" maxLength={100} required /></label>
+          <label>Max IDs<input name="limit" type="number" min="1" max="3" defaultValue="3" required /></label>
+          <button disabled={!canRun}>Discover candidate IDs</button>
+        </div>
+      </form>
       {!credentialPresent ? <p className="muted">Add GOOGLE_PLACES_API_KEY before running discovery.</p> : null}
       {Number(costGuard?.google_places_budget_usd ?? 0) <= 0 ? <p className="muted">Google Places is blocked because provider budget is zero.</p> : null}
       {integration?.last_checked_at ? <p className="muted">Last checked {formatMuscat(integration.last_checked_at)} Oman time.</p> : null}
@@ -80,15 +122,39 @@ export default async function GooglePlacesControlledPage() {
     </section>
 
     <section className="panel">
-      <div className="headerRow"><div><h2>2. Find priority leads automatically</h2><p className="muted">Checks a small capped batch of unqualified IDs and stops as soon as the requested number of active no-website businesses is found. Existing cached businesses cost zero additional Google requests.</p></div><span className="pill">HARD CAP: 5 CHECKS</span></div>
-      <div className="healthList"><span>Max provider calls/run <strong>5</strong></span><span>Estimated reserve/check <strong>$0.04</strong></span><span>Worst-case reserve/run <strong>$0.20</strong></span><span>Outreach <strong>DISABLED</strong></span></div>
-      <form action={qualifyGooglePlacesPriorityBatch} className="settingsList"><div className="settingsRow"><label>Maximum candidates to check<input name="maxChecks" type="number" min="1" max="5" defaultValue="3" required /></label><label>Stop after priority leads found<input name="targetLeads" type="number" min="1" max="3" defaultValue="1" required /></label><button disabled={!canEnrich || unqualifiedCount < 1}>Find active businesses without websites</button></div></form>
-      <p className="muted">{unqualifiedCount} candidate ID(s) currently waiting. Cost Guard is checked before every paid-capable Place Details request.</p>
+      <div className="headerRow">
+        <div>
+          <h2>2. Find priority leads automatically</h2>
+          <p className="muted">First-pass Place Details stops at the Enterprise tier and excludes reviews/reviewSummary. It checks website + activity and keeps same-tier useful contact/rating fields. Full review intelligence is deferred until a priority lead actually needs it.</p>
+        </div>
+        <span className="pill">HARD CAP: 5 CHECKS</span>
+      </div>
+      <div className="healthList">
+        <span>Max provider calls/run <strong>5</strong></span>
+        <span>Qualification reserve/check <strong>$0.02</strong></span>
+        <span>Worst-case reserve/run <strong>$0.10</strong></span>
+        <span>Reviews during hunting <strong>OFF</strong></span>
+        <span>Outreach <strong>DISABLED</strong></span>
+      </div>
+      <form action={qualifyGooglePlacesPriorityBatch} className="settingsList">
+        <div className="settingsRow">
+          <label>Maximum candidates to check<input name="maxChecks" type="number" min="1" max="5" defaultValue="3" required /></label>
+          <label>Stop after priority leads found<input name="targetLeads" type="number" min="1" max="3" defaultValue="1" required /></label>
+          <button disabled={!canEnrich || unqualifiedCount < 1}>Find active businesses without websites</button>
+        </div>
+      </form>
+      <p className="muted">{unqualifiedCount} candidate ID(s) currently waiting. Cached candidates cause zero extra Google requests. Cost Guard runs before every paid-capable qualification call.</p>
       {!providerConnected ? <p className="muted">Batch qualification is blocked until Google Places is CONNECTED.</p> : null}
     </section>
 
     <section className="panel">
-      <div className="headerRow"><div><h2>3. Candidate evidence</h2><p className="muted">Manual one-by-one qualification remains available for debugging and review. A Place Details lookup checks status, website, contact information and reputation.</p></div><span className="pill">Cost Guard enforced</span></div>
+      <div className="headerRow">
+        <div>
+          <h2>3. Candidate evidence</h2>
+          <p className="muted">Evidence only. There is no manual “full details” button here, so an accidental click cannot fetch review text for a rejected business.</p>
+        </div>
+        <span className="pill">COST-FIRST</span>
+      </div>
       <div className="settingsList">
         {discoveryRows.length === 0 ? <p className="muted">No discovery records yet.</p> : discoveryRows.map((row) => {
           const placeId = String(row.source_id ?? '');
@@ -97,17 +163,31 @@ export default async function GooglePlacesControlledPage() {
           const raw = row.raw_payload && typeof row.raw_payload === 'object' ? row.raw_payload as Record<string, unknown> : {};
           const qualified = raw.priorityQualified === true || Boolean(business && String(business.google_business_status ?? '').toUpperCase() === 'OPERATIONAL' && !String(business.official_website ?? '').trim());
           const rejectedReason = String(raw.qualificationReason ?? '');
+          const tier = String(raw.qualificationTier ?? '');
+
           return <div className="settingsRow" key={placeId}>
-            <div><strong>{business?.name ?? placeId}</strong><div className="muted">{placeId} · discovered {formatMuscat(row.discovered_at)} Oman time</div>
-              {business ? <div className="muted">{business.google_business_status ?? 'status pending'} · {business.official_website ? 'HAS WEBSITE → not priority' : 'NO WEBSITE'} · {business.phone ? 'phone found' : 'phone not returned'} · {business.google_user_rating_count ?? 0} ratings</div> : <div className="muted">ID only. Qualification has not yet used Place Details.</div>}
+            <div>
+              <strong>{business?.name ?? placeId}</strong>
+              <div className="muted">{placeId} · discovered {formatMuscat(row.discovered_at)} Oman time</div>
+              {business ? <div className="muted">{business.google_business_status ?? 'status pending'} · {business.official_website ? 'HAS WEBSITE → not priority' : 'NO WEBSITE'} · {business.phone ? 'phone found' : 'phone not returned'} · {business.google_user_rating_count ?? 0} ratings</div> : <div className="muted">ID only. Waiting for cost-guarded batch qualification.</div>}
+              {tier ? <div className="muted">Qualification tier: {tier}</div> : null}
               {qualified ? <div><strong>✓ PRIORITY: operational + no website</strong></div> : rejectedReason ? <div className="muted">Not priority: {rejectedReason}</div> : null}
             </div>
-            <div>{lead ? <Link className="textLink" href={`/leads/${lead.id}`}>Lead {lead.status} →</Link> : business ? <span className="muted">Stored for dedupe/evidence · no lead created</span> : <form action={enrichGooglePlaceCandidate}><input type="hidden" name="placeId" value={placeId} /><button disabled={!canEnrich}>Check website + activity</button></form>}</div>
+            <div>{lead ? <Link className="textLink" href={`/leads/${lead.id}`}>Lead {lead.status} →</Link> : business ? <span className="muted">Evidence cached · no lead created</span> : <span className="muted">Awaiting batch</span>}</div>
           </div>;
         })}
       </div>
     </section>
 
-    <section className="panel"><h2>Recent Google Places usage</h2><div className="settingsList">{(usage ?? []).length === 0 ? <p className="muted">No Google Places usage recorded yet.</p> : (usage ?? []).map((row, index) => <div className="settingsRow" key={`${row.created_at}-${index}`}><strong>{row.operation}</strong><span>${Number(row.cost_usd ?? 0).toFixed(6)}</span><span className="muted">{Number(row.units ?? 0)} request · {formatMuscat(row.created_at)} Oman time</span></div>)}</div></section>
+    <section className="panel">
+      <h2>Recent Google Places usage</h2>
+      <div className="settingsList">
+        {(usage ?? []).length === 0 ? <p className="muted">No Google Places usage recorded yet.</p> : (usage ?? []).map((row, index) => <div className="settingsRow" key={`${row.created_at}-${index}`}>
+          <strong>{row.operation}</strong>
+          <span>${Number(row.cost_usd ?? 0).toFixed(6)}</span>
+          <span className="muted">{Number(row.units ?? 0)} request · {formatMuscat(row.created_at)} Oman time</span>
+        </div>)}
+      </div>
+    </section>
   </div>;
 }
