@@ -12,6 +12,13 @@ export function normalizePhoneDigits(value?: string | null) {
   return String(value ?? '').replace(/\D/g, '');
 }
 
+export function phonesRepresentSameNumber(targetValue?: string | null, candidateValue?: string | null) {
+  const target = normalizePhoneDigits(targetValue);
+  const candidate = normalizePhoneDigits(candidateValue);
+  if (target.length < 8 || candidate.length < 8) return false;
+  return target === candidate || target.endsWith(candidate) || candidate.endsWith(target);
+}
+
 export function mapWhatsAppDeliveryStatus(status: NormalizedWhatsAppStatus['status']) {
   switch (status) {
     case 'sent': return 'SENT';
@@ -37,11 +44,9 @@ async function resolveLeadByPhone(organizationId: string, from: string) {
     .limit(20);
   if (businessError) throw new Error(`WhatsApp business lookup failed: ${businessError.message}`);
 
-  const exact = (businesses ?? []).filter(row => {
-    const phone = normalizePhoneDigits(row.phone);
-    const whatsapp = normalizePhoneDigits(row.whatsapp);
-    return phone === target || whatsapp.endsWith(target) || target.endsWith(phone) || target.endsWith(whatsapp);
-  }).filter(row => normalizePhoneDigits(row.phone).length >= 8 || normalizePhoneDigits(row.whatsapp).length >= 8);
+  const exact = (businesses ?? []).filter(row =>
+    phonesRepresentSameNumber(target, row.phone) || phonesRepresentSameNumber(target, row.whatsapp),
+  );
   if (exact.length !== 1) return null;
 
   const { data: leads, error: leadError } = await supabase
