@@ -96,7 +96,7 @@ export async function generateProductionAsset(input: {
 
   const { data: existingRows, error: existingError } = await supabase
     .from('previews')
-    .select('id,public_token,status,payload,created_at,expires_at')
+    .select('id,public_token,status,payload,brief_hash,created_at,expires_at')
     .eq('organization_id', input.organizationId)
     .eq('lead_id', input.leadId)
     .order('created_at', { ascending: false })
@@ -106,7 +106,7 @@ export async function generateProductionAsset(input: {
   const duplicate = (existingRows ?? []).find((row) => {
     const payload = (row.payload ?? {}) as Record<string, unknown>;
     const metadata = (payload.metadata ?? {}) as Record<string, unknown>;
-    return metadata.brief_hash === briefHash && row.status !== 'EXPIRED' && row.status !== 'ARCHIVED';
+    return (row.brief_hash === briefHash || metadata.brief_hash === briefHash) && row.status !== 'EXPIRED' && row.status !== 'ARCHIVED';
   });
   if (duplicate) {
     return { eligible: true as const, reused: true as const, previewId: duplicate.id, publicToken: duplicate.public_token, status: duplicate.status, eligibility };
@@ -182,30 +182,47 @@ export async function generateProductionAsset(input: {
     template_id: templateId,
     vertical,
     status,
+    brief_hash: briefHash,
     payload,
     quality_score: qualityScore,
     quality_checks: qualityChecks,
     quality_blockers: qualityBlockers,
   }).select('id,public_token,status,expires_at').single();
-  if (createError) throw new Error(`Production preview persistence failed: ${createError.message}`);
 
+  if (createError?.code === '23505') {
+    const { data: concurrent } = await supabase
+      .from('previews')
+      .select('id,public_token,status')
+      .eq('organization_id', input.organizationId)
+      .eq('lead_id', input.leadId)
+      .eq('brief_hash', briefHash)
+      .maybeSingle();
+    if (concurrent) return { eligible: true as const, reused: true as const, previewId: concurrent.id, publicToken: concurrent.public_token, status: concurrent.status, eligibility };
+  }
+  if (createError || !created) throw new Error(`Production preview persistence failed: ${createError?.message ?? 'unknown insert failure'}`);
+
+  let reconciliationRequired = false;
   const { error: eventError } = await supabase.from('preview_events').insert({
     organization_id: input.organizationId,
     preview_id: created.id,
     event_type: status === 'QUALITY_FAILED' ? 'QUALITY_FAILED' : 'GENERATED',
     metadata: { lane, version, brief_hash: briefHash, generation_cost_usd: 0 },
   });
-  if (eventError) throw new Error(`Preview generation event persistence failed: ${eventError.message}`);
+  reconciliationRequired = Boolean(eventError);
 
-  await recordUsage({
-    organizationId: input.organizationId,
-    provider: 'INTERNAL',
-    operation: lane === 'WEBSITE' ? 'WEBSITE_PREVIEW_PROPOSAL' : 'CONTENT_PROPOSAL_GENERATION',
-    costUsd: 0,
-    units: 1,
-    leadId: input.leadId,
-    metadata: { preview_id: created.id, lane, version, brief_hash: briefHash, generation_mode: 'DETERMINISTIC_PROPOSAL' },
-  });
+  try {
+    await recordUsage({
+      organizationId: input.organizationId,
+      provider: 'INTERNAL',
+      operation: lane === 'WEBSITE' ? 'WEBSITE_PREVIEW_PROPOSAL' : 'CONTENT_PROPOSAL_GENERATION',
+      costUsd: 0,
+      units: 1,
+      leadId: input.leadId,
+      metadata: { preview_id: created.id, lane, version, brief_hash: briefHash, generation_mode: 'DETERMINISTIC_PROPOSAL' },
+    });
+  } catch {
+    reconciliationRequired = true;
+  }
 
   return {
     eligible: true as const,
@@ -219,6 +236,7 @@ export async function generateProductionAsset(input: {
     heavyGenerationAllowed,
     quality: { score: qualityScore, checks: qualityChecks, blockers: qualityBlockers },
     portfolioMatches,
+    reconciliationRequired,
     eligibility,
   };
 }
