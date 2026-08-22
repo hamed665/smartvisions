@@ -7,6 +7,7 @@ const base = {
   shadowMode: false,
   globalKillSwitch: false,
   channelPaused: false,
+  agentsPaused: false,
   doNotContact: false,
   agentMode: 'AUTO',
   messageChannel: 'EMAIL',
@@ -41,5 +42,11 @@ describe('approved send policy', () => {
   it('blocks kill switch and paused channels independently', () => {
     const result = evaluateApprovedSendPolicy({ ...base, globalKillSwitch: true, channelPaused: true });
     expect(result.blocks).toEqual(expect.arrayContaining(['GLOBAL_KILL_SWITCH', 'CHANNEL_PAUSED']));
+  });
+
+  it('blocks approved sending while all agents are globally paused', () => {
+    const result = evaluateApprovedSendPolicy({ ...base, agentsPaused: true });
+    expect(result.allowed).toBe(false);
+    expect(result.blocks).toContain('AGENTS_PAUSED');
   });
 });
