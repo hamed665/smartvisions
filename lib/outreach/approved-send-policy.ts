@@ -6,6 +6,7 @@ export type ApprovedSendPolicyInput = {
   shadowMode: boolean;
   globalKillSwitch: boolean;
   channelPaused: boolean;
+  agentsPaused?: boolean;
   doNotContact: boolean;
   agentMode?: string | null;
   messageChannel: string;
@@ -19,6 +20,7 @@ export function evaluateApprovedSendPolicy(input: ApprovedSendPolicyInput) {
   if (input.shadowMode) blocks.push('SHADOW_MODE_ENABLED');
   if (input.globalKillSwitch) blocks.push('GLOBAL_KILL_SWITCH');
   if (input.channelPaused) blocks.push('CHANNEL_PAUSED');
+  if (input.agentsPaused) blocks.push('AGENTS_PAUSED');
   if (input.doNotContact) blocks.push('DO_NOT_CONTACT');
   if (input.agentMode === 'HUMAN') blocks.push('HUMAN_TAKEOVER');
   if (input.agentMode === 'PAUSED') blocks.push('AGENT_PAUSED');
