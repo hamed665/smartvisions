@@ -57,11 +57,11 @@ export function buildLaunchReadiness(input: LaunchReadinessInput) {
 
   gates.push({
     key: 'shadow_mode',
-    label: 'Shadow-mode protection',
-    state: controls.shadow_mode ? 'PASS' : 'PENDING',
+    label: 'Shadow-mode state',
+    state: 'PASS',
     detail: controls.shadow_mode
       ? 'Autonomous outbound is still shadowed while launch verification is in progress.'
-      : 'Shadow Mode is off. Keep this intentional and only after controlled live-provider verification.',
+      : 'Shadow Mode is off. This is acceptable only after controlled live-provider verification and explicit launch approval.',
   });
 
   const cost = input.costGuard;
@@ -69,9 +69,19 @@ export function buildLaunchReadiness(input: LaunchReadinessInput) {
     gates.push({ key: 'cost_guard', label: 'Cost Guard', state: 'BLOCKED', detail: 'Canonical Cost Guard settings are missing.' });
   } else {
     const budget = Number(cost.monthly_total_budget_usd ?? 0);
-    const thresholds = [cost.warning_pct, cost.throttle_pct, cost.critical_pct, cost.hard_stop_pct].map((v) => Number(v ?? 0));
+    const warning = Number(cost.warning_pct ?? 0);
+    const throttle = Number(cost.throttle_pct ?? 0);
+    const critical = Number(cost.critical_pct ?? 0);
+    const hardStop = Number(cost.hard_stop_pct ?? 0);
+    const thresholds = [warning, throttle, critical, hardStop];
     const ordered = thresholds.every((value, index) => index === 0 || value >= thresholds[index - 1]);
-    const { mode } = evaluateBudgetMode(Number(input.monthSpendUsd ?? 0), cost as CostGuardSettings);
+    const { mode } = evaluateBudgetMode(Number(input.monthSpendUsd ?? 0), {
+      monthly_total_budget_usd: budget,
+      warning_pct: warning,
+      throttle_pct: throttle,
+      critical_pct: critical,
+      hard_stop_pct: hardStop,
+    });
     gates.push({
       key: 'cost_guard',
       label: 'Cost Guard',
@@ -117,9 +127,9 @@ export function buildLaunchReadiness(input: LaunchReadinessInput) {
   });
 
   const blocked = gates.some((gate) => gate.state === 'BLOCKED');
-  const pending = gates.some((gate) => gate.state === 'PENDING');
+  const pendingExceptOutbound = gates.some((gate) => gate.state === 'PENDING' && gate.key !== 'outbound_providers');
   const codeReady = !blocked;
-  const liveAutomationReady = codeReady && !pending && outboundReady && !controls.shadow_mode;
+  const liveAutomationReady = codeReady && !pendingExceptOutbound && outboundReady && controls.shadow_mode === false;
 
   return { gates, codeReady, liveAutomationReady };
 }
