@@ -3,6 +3,7 @@ import type { AgentRuntime } from './runtime';
 import { routeAiTask, type AiTaskClass } from '@/lib/ai/model-router';
 import { estimateOpenAiCostUsd } from '@/lib/ai/openai-pricing';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
+import { assertRuntimeOperationAllowed } from '@/lib/reliability/runtime-safety';
 
 const agentInstructions: Record<AgentName, string> = {
   intent_discovery: 'Extract explicit commercial intent only: price, timeline, portfolio, preview, meeting, payment, service need, freshness and contactability. In data_json include intent_label and intent_score when supported. Do not invent facts.',
@@ -73,6 +74,7 @@ export class OpenAIResponsesAgentRuntime implements AgentRuntime {
     this.assertConfigured();
     if (!context.organizationId) throw new Error('organizationId is required for paid AI operations');
 
+    await assertRuntimeOperationAllowed(context.organizationId, 'AI');
     const costState = await getCostGuardState(context.organizationId);
     if (!costState) throw new Error('Cost guard state unavailable; paid AI operation blocked');
     assertPaidOperationAllowed(costState, priorityForAgent(agent, context));
