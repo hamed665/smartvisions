@@ -28,6 +28,10 @@ function normalizeAddress(value?: string) {
   return (match?.[1] ?? value).trim().toLowerCase();
 }
 
+export function shouldReplayEmailSideEffects(insertedCount: number) {
+  return insertedCount >= 0;
+}
+
 async function fetchReceivedEmail(emailId: string) {
   const key = process.env.EMAIL_PROVIDER_API_KEY?.trim();
   if (!key) throw new Error('EMAIL_PROVIDER_API_KEY is required to retrieve inbound email content');
@@ -135,14 +139,17 @@ export async function persistResendWebhookEvent(event: ResendWebhookEvent) {
     }, { onConflict: 'organization_id,provider,provider_event_id', ignoreDuplicates: true })
     .select('id');
   if (insertError) throw new Error(`Email event persistence failed: ${insertError.message}`);
-  if (!inserted || inserted.length === 0) return { duplicate: true, organizationId };
+  const duplicate = !inserted || inserted.length === 0;
 
+  // A duplicate ledger row does not imply side effects completed. Every side effect below is
+  // written idempotently, so webhook retries are deliberately replayed to recover from a
+  // transient failure that happened after the durable event row was first inserted.
   if (event.eventType === 'email.received' && event.providerMessageId) {
     const received = await fetchReceivedEmail(event.providerMessageId);
     const from = normalizeAddress(received.from ?? event.from);
-    if (!from) return { duplicate: false, organizationId, linked: false };
+    if (!from) return { duplicate, organizationId, linked: false };
     const lead = await matchLeadByEmail(organizationId, from);
-    if (!lead) return { duplicate: false, organizationId, linked: false };
+    if (!lead) return { duplicate, organizationId, linked: false };
 
     const conversationId = await ensureConversation(organizationId, lead.id);
     const body = received.text?.trim() || '[HTML email received]';
@@ -167,10 +174,11 @@ export async function persistResendWebhookEvent(event: ResendWebhookEvent) {
     }, { onConflict: 'organization_id,idempotency_key', ignoreDuplicates: true });
     if (messageError) throw new Error(`Inbound email message persistence failed: ${messageError.message}`);
 
-    await supabase.from('sales_conversations').update({
+    const { error: conversationError } = await supabase.from('sales_conversations').update({
       last_message_at: received.created_at ?? event.occurredAt,
       updated_at: new Date().toISOString(),
     }).eq('id', conversationId).eq('organization_id', organizationId);
+    if (conversationError) throw new Error(`Email conversation update failed: ${conversationError.message}`);
 
     if (!['WON','LOST','DO_NOT_CONTACT','HUMAN'].includes(lead.status)) {
       const { error: leadError } = await supabase
@@ -181,7 +189,7 @@ export async function persistResendWebhookEvent(event: ResendWebhookEvent) {
       if (leadError) throw new Error(`Email lead status update failed: ${leadError.message}`);
     }
     await cancelFollowups(organizationId, lead.id);
-    return { duplicate: false, organizationId, linked: true, leadId: lead.id, conversationId };
+    return { duplicate, organizationId, linked: true, leadId: lead.id, conversationId };
   }
 
   if (event.providerMessageId) {
@@ -210,5 +218,5 @@ export async function persistResendWebhookEvent(event: ResendWebhookEvent) {
     await suppressEmail(organizationId, recipient, event.eventType.toUpperCase());
   }
 
-  return { duplicate: false, organizationId, linked: false };
+  return { duplicate, organizationId, linked: false };
 }
