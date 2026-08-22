@@ -52,8 +52,8 @@ describe('content engine controlled E2E fixtures', () => {
       services: ['CONTENT_CREATION'],
     });
     expect(proposal.kind).toBe('LOCAL_CONTENT_PROPOSAL');
-    expect(proposal.shotList.length).toBeGreaterThan(3);
-    expect(proposal.reelConcepts.length).toBeGreaterThan(1);
+    expect((proposal.shotList ?? []).length).toBeGreaterThan(3);
+    expect((proposal.reelConcepts ?? []).length).toBeGreaterThan(1);
 
     const matches = matchPortfolio({
       items: [
