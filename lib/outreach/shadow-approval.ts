@@ -12,6 +12,8 @@ export type ShadowDraftInput = {
   idempotencyKey: string;
   to: string;
   subject?: string;
+  html?: string;
+  mailboxId?: string;
   marketCode?: string;
   leadTimezone?: string;
   lastCustomerMessageAt?: string;
@@ -39,6 +41,9 @@ export function shadowProviderMessageId(idempotencyKey: string) {
 export async function queueShadowDraft(input: ShadowDraftInput) {
   if (!input.organizationId || !input.conversationId || !input.to || !input.draft.trim()) {
     throw new Error('organizationId, conversationId, to and draft are required');
+  }
+  if (input.channel === 'EMAIL' && (!input.subject || !input.mailboxId)) {
+    throw new Error('Email shadow drafts require subject and mailboxId');
   }
 
   const controls = await getRuntimeControls(input.organizationId);
@@ -79,6 +84,8 @@ export async function queueShadowDraft(input: ShadowDraftInput) {
       send_context: {
         to: input.to,
         subject: input.subject ?? null,
+        html: input.html ?? null,
+        mailbox_id: input.mailboxId ?? null,
         market_code: input.marketCode ?? null,
         lead_timezone: input.leadTimezone ?? null,
         last_customer_message_at: input.lastCustomerMessageAt ?? null,
@@ -90,14 +97,10 @@ export async function queueShadowDraft(input: ShadowDraftInput) {
 
   const { data, error } = await supabase
     .from('conversation_messages')
-    .upsert(row, {
-      onConflict: 'organization_id,channel,provider_message_id',
-      ignoreDuplicates: true,
-    })
+    .upsert(row, { onConflict: 'organization_id,channel,provider_message_id', ignoreDuplicates: true })
     .select('id,status,requires_approval')
     .maybeSingle();
   if (error) throw new Error(`Shadow approval queue failed: ${error.message}`);
-
   if (data) return { queued: true, duplicate: false, messageId: data.id, status: data.status };
 
   const { data: existing, error: existingError } = await supabase
