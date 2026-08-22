@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { PreviewCanvas } from '@/components/preview/PreviewCanvas';
-import { ContentProposalCanvas } from '@/components/preview/ContentProposalCanvas';
+import { ContentProposalCanvas, type ContentProposal } from '@/components/preview/ContentProposalCanvas';
 import { loadPublicPreview } from '@/lib/preview/persistence';
 import type { PreviewDocument } from '@/lib/preview/types';
 
@@ -13,7 +13,7 @@ export default async function PublicPreviewPage({ params }: { params: Promise<{ 
 
   const payload = (row.payload ?? {}) as Record<string, unknown>;
   const preview = payload.preview as PreviewDocument | undefined;
-  const proposal = payload.proposal as Record<string, unknown> | undefined;
+  const proposal = payload.proposal as ContentProposal | undefined;
   const metadata = (payload.metadata ?? {}) as Record<string, unknown>;
   const growthSource = (metadata.growth_source ?? {}) as Record<string, unknown>;
   const business = (growthSource.business ?? {}) as Record<string, unknown>;
