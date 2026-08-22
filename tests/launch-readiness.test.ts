@@ -32,6 +32,21 @@ describe('launch readiness', () => {
     expect(result.gates.find((gate) => gate.key === 'outbound_providers')?.state).toBe('PENDING');
   });
 
+  it('becomes live-ready only when outbound providers are verified and shadow mode is intentionally off', () => {
+    const result = buildLaunchReadiness({
+      controls: { global_kill_switch: false, shadow_mode: false },
+      costGuard,
+      monthSpendUsd: 0.5,
+      integrations: coreIntegrations.map((row) => row.provider === 'EMAIL_PROVIDER' || row.channel === 'WHATSAPP' ? { ...row, enabled: true, status: 'CONNECTED' } : row),
+      enabledOutreachMarkets: 6,
+      manualReviewMarkets: 6,
+    });
+
+    expect(result.codeReady).toBe(true);
+    expect(result.liveAutomationReady).toBe(true);
+    expect(result.gates.find((gate) => gate.key === 'outbound_providers')?.state).toBe('PASS');
+  });
+
   it('blocks launch when the kill switch is active or Cost Guard thresholds are invalid', () => {
     const result = buildLaunchReadiness({
       controls: { global_kill_switch: true, shadow_mode: true },
