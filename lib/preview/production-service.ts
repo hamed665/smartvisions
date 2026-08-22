@@ -52,7 +52,8 @@ export async function generateProductionAsset(input: {
   const lane = normalizeProductionLane(opportunity.sales_lane, services);
   const config = (previewDirector?.config ?? {}) as Record<string, unknown>;
   const thresholdFromConfidence = Math.round(Number(previewDirector?.confidence_threshold ?? 0.6) * 100);
-  const threshold = Number(config.generation_score_threshold ?? thresholdFromConfidence || 60);
+  const configuredThreshold = config.generation_score_threshold ?? thresholdFromConfidence;
+  const threshold = Number(configuredThreshold) || 60;
   const eligibility = evaluateGenerationEligibility({
     leadStatus: lead.status,
     opportunityScore: lead.opportunity_score,
