@@ -7,7 +7,6 @@ import { evaluateMailboxHealth } from '@/lib/outreach/mailbox-health';
 import { evaluateWhatsAppSendPolicy } from '@/lib/whatsapp/policy';
 import { MetaCloudWhatsAppProvider } from '@/lib/whatsapp/meta-cloud';
 import { ResendEmailProvider } from '@/lib/outreach/resend-provider';
-import { getRuntimeControls } from '@/lib/reliability/runtime-controls';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
 
 function serviceClient() {
@@ -47,9 +46,23 @@ export async function POST(request: Request) {
     .maybeSingle();
   if (messageError || !message) return NextResponse.json({ error: messageError?.message ?? 'Approved message not found' }, { status: 404 });
 
-  const [{ data: controls, error: controlsError }, { data: lead, error: leadError }] = await Promise.all([
+  const providerIdentity = message.channel === 'EMAIL'
+    ? { provider: 'EMAIL_PROVIDER', channel: 'EMAIL' }
+    : message.channel === 'WHATSAPP'
+      ? { provider: 'META', channel: 'WHATSAPP' }
+      : null;
+
+  const [{ data: controls, error: controlsError }, { data: lead, error: leadError }, providerConnectionResult] = await Promise.all([
     supabase.from('system_controls').select('global_kill_switch,email_paused,whatsapp_ai_paused,shadow_mode').eq('organization_id', body.organizationId).maybeSingle(),
     message.lead_id ? supabase.from('leads').select('id,status,agent_mode').eq('organization_id', body.organizationId).eq('id', message.lead_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    providerIdentity
+      ? supabase.from('integration_connections')
+        .select('enabled,status,last_error')
+        .eq('organization_id', body.organizationId)
+        .eq('provider', providerIdentity.provider)
+        .eq('channel', providerIdentity.channel)
+        .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
   ]);
   if (controlsError || !controls) return NextResponse.json({ error: controlsError?.message ?? 'Runtime controls unavailable' }, { status: 409 });
   if (leadError) return NextResponse.json({ error: leadError.message }, { status: 500 });
@@ -65,6 +78,21 @@ export async function POST(request: Request) {
     messageChannel: message.channel,
   });
   if (!policy.allowed) return NextResponse.json({ error: 'Approved send blocked by safety policy', policy }, { status: 409 });
+
+  if (!providerIdentity) {
+    return NextResponse.json({ error: 'Approved send channel has no configured provider mapping' }, { status: 409 });
+  }
+  if (providerConnectionResult.error) {
+    return NextResponse.json({ error: `Provider connection lookup failed: ${providerConnectionResult.error.message}` }, { status: 409 });
+  }
+  const providerConnection = providerConnectionResult.data;
+  if (!providerConnection || !providerConnection.enabled || providerConnection.status !== 'CONNECTED') {
+    return NextResponse.json({
+      error: 'Approved send blocked because provider is not production-verified CONNECTED',
+      provider: providerIdentity,
+      providerStatus: providerConnection?.status ?? 'MISSING',
+    }, { status: 409 });
+  }
 
   const metadata = (message.metadata ?? {}) as Record<string, unknown>;
   const sendContext = ((metadata.send_context ?? {}) as SendContext);
