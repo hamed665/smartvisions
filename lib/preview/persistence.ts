@@ -50,6 +50,7 @@ export async function transitionPreview(input: {
   if (updateError) throw new Error(`Preview transition failed: ${updateError.message}`);
   if (!updated) throw new Error('Preview transition lost a concurrency race; reload before retrying');
 
+  let eventPersisted = true;
   const eventType = eventForAction[input.action];
   if (eventType) {
     const { error: eventError } = await supabase.from('preview_events').insert({
@@ -58,10 +59,10 @@ export async function transitionPreview(input: {
       event_type: eventType,
       metadata: input.metadata ?? {},
     });
-    if (eventError) throw new Error(`Preview lifecycle event failed: ${eventError.message}`);
+    eventPersisted = !eventError;
   }
 
-  return updated;
+  return { ...updated, eventPersisted, reconciliationRequired: !eventPersisted };
 }
 
 export async function loadPublicPreview(publicToken: string) {
@@ -84,14 +85,13 @@ export async function loadPublicPreview(publicToken: string) {
       .maybeSingle();
     if (updateError) throw new Error(`Preview view transition failed: ${updateError.message}`);
     if (viewed) {
-      const { error: eventError } = await supabase.from('preview_events').insert({
+      await supabase.from('preview_events').insert({
         organization_id: preview.organization_id,
         preview_id: preview.id,
         event_type: 'VIEWED',
         metadata: { source: 'public_preview' },
       });
-      if (eventError) throw new Error(`Preview view event failed: ${eventError.message}`);
-      preview.status = 'VIEWED';
+      return { ...preview, status: 'VIEWED' };
     }
   }
 
