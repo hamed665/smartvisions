@@ -53,7 +53,7 @@ export async function POST(request: Request) {
       : null;
 
   const [{ data: controls, error: controlsError }, { data: lead, error: leadError }, providerConnectionResult] = await Promise.all([
-    supabase.from('system_controls').select('global_kill_switch,email_paused,whatsapp_ai_paused,shadow_mode').eq('organization_id', body.organizationId).maybeSingle(),
+    supabase.from('system_controls').select('global_kill_switch,email_paused,whatsapp_ai_paused,agents_paused,shadow_mode').eq('organization_id', body.organizationId).maybeSingle(),
     message.lead_id ? supabase.from('leads').select('id,status,agent_mode').eq('organization_id', body.organizationId).eq('id', message.lead_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
     providerIdentity
       ? supabase.from('integration_connections')
@@ -73,6 +73,7 @@ export async function POST(request: Request) {
     shadowMode: Boolean(controls.shadow_mode),
     globalKillSwitch: Boolean(controls.global_kill_switch),
     channelPaused: message.channel === 'EMAIL' ? Boolean(controls.email_paused) : Boolean(controls.whatsapp_ai_paused),
+    agentsPaused: Boolean(controls.agents_paused),
     doNotContact: lead?.status === 'DO_NOT_CONTACT',
     agentMode: lead?.agent_mode ?? null,
     messageChannel: message.channel,
