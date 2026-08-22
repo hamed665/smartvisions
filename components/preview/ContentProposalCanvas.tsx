@@ -1,4 +1,4 @@
-type Proposal = {
+export type ContentProposal = {
   kind?: string;
   angle?: string;
   filmingBrief?: string;
@@ -16,7 +16,7 @@ function List({ title, items }: { title: string; items?: string[] }) {
   return <section><h3>{title}</h3><ul>{items.map((item) => <li key={item}>{item}</li>)}</ul></section>;
 }
 
-export function ContentProposalCanvas({ proposal, businessName }: { proposal: Proposal; businessName?: string }) {
+export function ContentProposalCanvas({ proposal, businessName }: { proposal: ContentProposal; businessName?: string }) {
   return (
     <article style={{ maxWidth: 900, margin: '0 auto', padding: '40px 24px', lineHeight: 1.6 }}>
       <p style={{ opacity: 0.65, marginBottom: 8 }}>{businessName ?? 'Smart Visions'} · Content Proposal</p>
