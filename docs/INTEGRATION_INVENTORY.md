@@ -2,79 +2,76 @@
 
 **Reconciled:** 2026-08-22 (Oman, UTC+4)
 
-This is the canonical operational inventory for the 19 integration/configuration slots tracked in Master Tracker #18. These are not 19 separately billed APIs. Several rows are credentials or runtime controls belonging to the same provider.
+This is the canonical operational inventory for the integration/configuration slots tracked by the Production V1 plan. `CONNECTED` means durable production evidence exists. `READY` means the code/config path exists but a live production E2E is not yet proven. `NOT_CONFIGURED` means required production credentials/config are not confirmed. `OPTIONAL` means V1 correctness does not depend on it.
 
-Status vocabulary: `CONNECTED` = controlled production E2E evidence exists; `READY` = code/config path exists but production E2E is not yet proven; `NOT_CONFIGURED` = required runtime credential/config is not confirmed; `OPTIONAL` = not required for V1 unless a concrete need appears.
+| Slot | Purpose | Current state | Spend risk | Launch rule |
+|---|---|---|---|---|
+| Supabase browser/auth | Authenticated data plane | CONNECTED | Low | RLS/OWNER controls remain canonical. |
+| Supabase server credential | Privileged server operations | CONNECTED | Low | Server-only; never surface secret values. |
+| OpenAI API | Agent reasoning | CONNECTED | Yes | Durable production usage already proves connectivity. Do not repeat paid smoke tests without a real need. |
+| OpenAI model routing | Cost-aware model selection | CONNECTED | Yes | Reuse Cost Guard + agent settings. |
+| Google Places | Discovery/qualification/intelligence | CONNECTED | Yes | IDs-only first; paid Details are journaled/idempotent and Cost Guard protected. |
+| Crawl4AI | Optional external website audit | READY in code / NOT_CONFIGURED in production | Potential infra | Production audit endpoint requires integration `CONNECTED`, Cost Guard, cache miss and single-running claim. |
+| Email provider identity/config | Outbound email | NOT_CONFIGURED | Yes | Remains fail-closed until real provider + sender/domain verification. |
+| Email provider credential | Email send/receive | NOT_CONFIGURED | Yes | One controlled live E2E before marking CONNECTED. |
+| Email DNS/domain | SPF/DKIM/DMARC / health | NOT_CONFIGURED | Indirect | External sender setup required before pilot. |
+| Meta WhatsApp token | WhatsApp Cloud auth | NOT_CONFIGURED | Yes | Keep provider row disabled until real verification. |
+| Meta phone number ID | WhatsApp sender identity | NOT_CONFIGURED | Low | Configure with token. |
+| Meta Graph API version | Endpoint contract | READY in code | Low | Verify with WhatsApp E2E. |
+| Meta App Secret | Webhook HMAC | NOT_CONFIGURED | Low | Required for live webhook verification. |
+| Meta webhook verify token | Subscription handshake | NOT_CONFIGURED | Low | Configure during Meta setup. |
+| Internal API key | Protect internal endpoints | READY / secret presence not exposed | Low | Server-only. Internal paid endpoints now also enforce DB runtime controls/idempotency. |
+| Redis / runtime queue | Optional async queue | OPTIONAL / NOT_CONFIGURED | Infra | Do not add unless measured V1 reliability requires it. |
+| Vercel Production | Hosting/runtime | CONNECTED | Hosting | `main` deploys Production; exact merge SHA must be READY at exit. |
+| Global runtime controls | Kill/pause controls | CONNECTED | Prevents spend | DB is source of truth. Global kill is enforced before controlled provider operations. |
+| Shadow Mode | Prevent live autonomous outbound | CONNECTED / intentionally SAFE | Prevents spend | Remain ON until live provider E2E + explicit owner launch decision. |
 
-| # | Slot | Purpose | Current reconciled state | Spend risk | Evidence / next action |
-|---|---|---|---|---|---|
-| 1 | Supabase public URL/client key | Browser/server authenticated data plane | CONNECTED | No per-call app API budget | Production Auth/RLS and Control Center are live. |
-| 2 | Supabase server secret/service credential | Server-side privileged operations | CONNECTED | No provider call budget | Cost Guard/backend production operations and PR #37 migrations succeeded. |
-| 3 | OpenAI API | Agent reasoning / transcription-capable AI path | CONNECTED | Yes | Production `AGENT_INTENT_DISCOVERY` usage proves the provider worked; the stale integration row was reconciled on 2026-08-22 without another paid smoke test. |
-| 4 | OpenAI model routing/config | Cheap/full model selection and token limits | CONNECTED / panel-configured foundation | Yes | Cost-aware runtime/model routing and editable agent settings already exist. Extend, do not rebuild. |
-| 5 | Google Places API | Business discovery + qualification | CONNECTED | Yes | `integration_connections` says CONNECTED; production usage proves IDs-only + Place Details. |
-| 6 | Crawl4AI service | Controlled website evidence/audit | READY in code, NOT_CONFIGURED in production inventory | Potential infra cost | Owner-only smoke-test path exists. Configure URL then verify once. |
-| 7 | Email provider identity/config | Outbound provider selection/account identity | NOT_CONFIGURED | Yes | Resend production path exists in code, but live sending remains blocked until the provider row is enabled and production-verified CONNECTED. |
-| 8 | Email provider API credential | Actual send/receive integration | NOT_CONFIGURED | Yes | Configure only when launching email; then one controlled E2E test. |
-| 9 | Email sending domain DNS | SPF/DKIM/DMARC + sender health | NOT_CONFIGURED / external owner action | Indirect | Must be verified before live email pilot; do not fake CONNECTED from API-key presence. |
-| 10 | Meta WhatsApp access token | WhatsApp Cloud API auth | NOT_CONFIGURED in production inventory | Yes | Meta provider code exists; credential + production verification remain. |
-| 11 | Meta WhatsApp phone number ID | Sender identity | NOT_CONFIGURED in production inventory | No direct spend alone | Configure together with token. |
-| 12 | Meta Graph API version | Graph endpoint contract | READY in env contract; production value not independently verified | No | Keep server-side; verify as part of WhatsApp E2E. |
-| 13 | Meta App Secret | Webhook HMAC verification | NOT_CONFIGURED in production inventory | No | Signature-verification code exists; verify with real webhook. |
-| 14 | Meta webhook verify token | Webhook subscription handshake | NOT_CONFIGURED in production inventory | No | Configure during Meta webhook setup. |
-| 15 | Internal API key | Protect internal service endpoints | READY / implementation present; secret presence not exposed in panel | No | Keep server-only. Verify one internal protected route during final QA; never display value. |
-| 16 | Redis/runtime queue | Optional async queue | OPTIONAL / NOT_CONFIGURED | Infra cost | Do not add unless PR #39 proves an actual queue/reliability requirement. |
-| 17 | Vercel production environment/config | Runtime hosting and secure env | CONNECTED | Hosting cost | `main` deploys production app; PR #37 preview deploys are READY; env values remain secret and are not duplicated into DB. |
-| 18 | Global runtime controls / Kill Switch | Emergency stop / channel controls | CONNECTED | Prevents spend | `system_controls.global_kill_switch=false`; DB is runtime source of truth with env only as bootstrap fallback. |
-| 19 | Shadow Mode / autonomous outbound state | Prevent uncontrolled outbound before launch | CONNECTED / intentionally SAFE | Prevents spend | `system_controls.shadow_mode=true`; remain true through #37/#38 and final launch gates. |
+## Production provider rows
 
-## Provider rows currently present in production `integration_connections`
+- `GOOGLE_PLACES / DISCOVERY` — CONNECTED, enabled.
+- `OPENAI / AI` — CONNECTED, enabled.
+- `CRAWL4AI / AUDIT` — NOT_CONFIGURED, disabled.
+- `EMAIL_PROVIDER / EMAIL` — NOT_CONFIGURED, disabled.
+- `META / WHATSAPP` — NOT_CONFIGURED, disabled.
+- `META / INSTAGRAM` — NOT_CONFIGURED, disabled.
+- `REDIS / QUEUE` — NOT_CONFIGURED, disabled and optional.
 
-- `GOOGLE_PLACES / DISCOVERY` — `CONNECTED`, enabled.
-- `OPENAI / AI` — `CONNECTED`, enabled; reconciled from durable successful production usage, with no repeat paid smoke test.
-- `CRAWL4AI / AUDIT` — `NOT_CONFIGURED`, disabled.
-- `EMAIL_PROVIDER / EMAIL` — `NOT_CONFIGURED`, disabled.
-- `META / WHATSAPP` — `NOT_CONFIGURED`, disabled.
-- `META / INSTAGRAM` — `NOT_CONFIGURED`, disabled; Instagram automation remains policy-aware/semi-manual.
-- `REDIS / QUEUE` — `NOT_CONFIGURED`, disabled and optional.
+## Runtime controls and budget ownership
 
-## Runtime control evidence
+Production runtime controls currently report:
 
-Production `system_controls` currently reports:
+- global kill switch: OFF
+- email pause: OFF
+- WhatsApp AI pause: OFF
+- agents pause: OFF
+- Shadow Mode: ON
 
-- global kill switch: off
-- email paused: off
-- WhatsApp AI paused: off
-- agents paused: off
-- Shadow Mode: on
-- monthly budget: USD 150
+Budget is **not** owned by `system_controls.monthly_budget_usd`. That column is a legacy duplicate. Production runtime and Control Center now use `cost_guard_settings` as the canonical budget/quota source. Current total monthly budget is **USD 25**.
 
-These are existing controls. PR #39 may improve panel wiring/visibility, but must not create a second runtime-control system.
+## Provider fail-closed rules
 
-## PR #37 provider fail-closed rule
+Approved Send requires the mapped provider row to be both enabled and production-verified CONNECTED before claiming a message:
 
-`/api/outreach/approved-send` must not infer provider readiness from an environment credential alone. Before a message is claimed for sending, the route now requires the mapped production integration row to be both `enabled=true` and `status=CONNECTED`:
+- Email → `EMAIL_PROVIDER / EMAIL`
+- WhatsApp → `META / WHATSAPP`
 
-- Email -> `EMAIL_PROVIDER / EMAIL`
-- WhatsApp -> `META / WHATSAPP`
+Shadow Mode, global kill, channel pause, DNC, human takeover, Agent pause, local send window, Cost Guard and channel-specific policy remain independent earlier gates.
 
-Therefore the current production Email and WhatsApp rows intentionally block live outbound even if a stale credential happens to exist in Vercel. Shadow Mode remains an independent earlier block.
+Crawl4AI production business audit likewise requires `CRAWL4AI / AUDIT = CONNECTED + enabled`; credential presence alone is insufficient.
+
+## Idempotency / retry rules at provider boundaries
+
+- Google Place Details: existing `discovery_records` uniquely journals each organization + Place ID request. Completed results replay; PROCESSING/FAILED attempts do not blindly rerun paid Details.
+- Website audit: cached evidence is reused; a unique one-RUNNING-per-business index blocks concurrent duplicate crawls.
+- Inbound AI: `agent_runs.request_key` claims one logical request and stores final result payload for replay. PROCESSING/FAILED keys are locked against automatic paid rerun.
+- Voice: media identity cache + recovery lease.
+- Email webhook: provider event replay/idempotency path.
+- Approved outbound: pre-provider claim + reconciliation-only post-provider persistence failure. No blind automatic retry after provider acceptance.
 
 ## Cost-first verification rule
 
-Before any new smoke test, check durable DB/usage evidence. Do not repeat a paid provider call merely because `integration_connections` is stale. If prior evidence proves the provider worked, reconcile state first. Only run a new minimal smoke test when current credentials/configuration or an end-to-end path actually remains unproven.
+Before any new smoke test, check durable DB/usage/audit evidence. Do not repeat a paid provider call merely because an integration row or UI badge is stale. Reconcile from durable evidence where safe. Only run a new minimal live test when current credentials/configuration or an end-to-end path is genuinely unproven.
 
-## PR #37 production verification evidence
+## Current final launch distinction
 
-- Migrations for `voice_transcriptions` and `email_events` were applied to Production.
-- Supabase Performance Advisor exposed missing covering indexes for the new voice-transcription lead/conversation foreign keys; migration `0031_voice_transcription_fk_indexes.sql` was added and applied, clearing those new FK warnings.
-- Security Advisor has no new PR #37 RLS finding; the remaining leaked-password-protection warning is an Auth project setting, not a schema regression from this PR.
-- From PR #37 creation time (`2026-08-21T16:43:32Z`) through this reconciliation, Production has zero new `usage_events`, zero `email_events`, zero `whatsapp_events`, zero sent `conversation_messages`, and zero sent `outreach_messages` attributable to this phase. No uncontrolled provider send is evidenced.
-
-## Locked ownership by remaining PR
-
-- PR #37: complete Email + Meta WhatsApp + Voice + sales/conversation wiring and leave unconfigured providers fail-closed.
-- PR #38: Preview/content production provider paths and generation cost linkage.
-- PR #39: final Integrations health/status reconciliation, panel completeness, reliability, QA and launch gates.
-
-No separate integration subsystem or duplicate secret store is allowed.
+Code-complete / controlled-pilot readiness can be true while Email and WhatsApp remain NOT_CONFIGURED and Shadow Mode remains ON. `liveAutomationReady` must remain false until real sender credentials/domain/webhooks are verified, one controlled E2E per live channel succeeds, and Shadow Mode is intentionally disabled by the owner.

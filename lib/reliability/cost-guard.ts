@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { assertRuntimeOperationAllowed } from './runtime-safety';
 
 export type CostGuardSettings = {
   organization_id: string;
@@ -68,6 +69,9 @@ function serviceClient() {
 
 export async function getCostGuardState(organizationId?: string): Promise<CostGuardState | null> {
   if (!organizationId) throw new Error('organizationId is required for paid operations');
+  // Cost Guard is a shared preflight for provider operations. The global kill
+  // switch must therefore be enforced here as well as at channel-specific gates.
+  await assertRuntimeOperationAllowed(organizationId, 'DISCOVERY');
   const supabase = serviceClient();
 
   const start = new Date();
