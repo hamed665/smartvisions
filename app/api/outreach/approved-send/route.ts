@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
-import { evaluateApprovedSendPolicy } from '@/lib/outreach/approved-send-policy';
+import { approvedSendFailureDisposition, evaluateApprovedSendPolicy } from '@/lib/outreach/approved-send-policy';
 import { evaluateLocalWindow, type MarketCode } from '@/lib/outreach/scheduler';
 import { evaluateMailboxHealth } from '@/lib/outreach/mailbox-health';
 import { evaluateWhatsAppSendPolicy } from '@/lib/whatsapp/policy';
@@ -112,7 +112,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Cost guard block' }, { status: 409 });
   }
 
-  // Claim the approved message before touching a provider. PROCESSING is deliberately not auto-retried.
   const { data: claimed, error: claimError } = await supabase
     .from('conversation_messages')
     .update({ status: 'PROCESSING', processed_at: new Date().toISOString() })
@@ -125,9 +124,9 @@ export async function POST(request: Request) {
   if (claimError) return NextResponse.json({ error: claimError.message }, { status: 500 });
   if (!claimed) return NextResponse.json({ error: 'Message was already claimed or is no longer approved' }, { status: 409 });
 
+  let providerAccepted = false;
+  let providerMessageId: string | null = null;
   try {
-    let providerMessageId: string;
-
     if (message.channel === 'EMAIL') {
       if (!sendContext.mailbox_id || !sendContext.subject) throw new Error('Approved email is missing mailbox_id or subject');
       const { data: mailbox, error: mailboxError } = await supabase
@@ -159,8 +158,14 @@ export async function POST(request: Request) {
         idempotencyKey,
       });
       providerMessageId = result.providerMessageId;
+      providerAccepted = true;
 
-      await supabase.from('outreach_messages').upsert({
+      const accepted = await supabase.from('conversation_messages').update({
+        status: 'SENT', provider_message_id: providerMessageId, sent_at: new Date().toISOString(), processed_at: new Date().toISOString(), approval_reason: null,
+      }).eq('organization_id', body.organizationId).eq('id', body.messageId).eq('status', 'PROCESSING');
+      if (accepted.error) throw new Error(`Provider-accepted email reconciliation failed: ${accepted.error.message}`);
+
+      const outreach = await supabase.from('outreach_messages').upsert({
         organization_id: body.organizationId,
         lead_id: message.lead_id ?? null,
         mailbox_id: sendContext.mailbox_id,
@@ -174,7 +179,10 @@ export async function POST(request: Request) {
         sent_at: new Date().toISOString(),
         metadata: { provider: 'RESEND', source: 'APPROVED_SHADOW_DRAFT' },
       }, { onConflict: 'organization_id,idempotency_key' });
-      await supabase.from('mailboxes').update({ sent_today: Number(mailbox.sent_today) + 1, updated_at: new Date().toISOString() }).eq('organization_id', body.organizationId).eq('id', sendContext.mailbox_id);
+      if (outreach.error) throw new Error(`Email send ledger reconciliation failed: ${outreach.error.message}`);
+
+      const mailboxUpdate = await supabase.from('mailboxes').update({ sent_today: Number(mailbox.sent_today) + 1, updated_at: new Date().toISOString() }).eq('organization_id', body.organizationId).eq('id', sendContext.mailbox_id);
+      if (mailboxUpdate.error) throw new Error(`Mailbox counter reconciliation failed: ${mailboxUpdate.error.message}`);
       await recordUsage({ organizationId: body.organizationId, provider: 'EMAIL', operation: 'SEND_EMAIL', costUsd: 0, units: 1, leadId: message.lead_id ?? undefined, metadata: { provider: 'RESEND', source: 'APPROVED_SHADOW_DRAFT', pricing_status: 'PENDING_RECONCILIATION' } });
     } else {
       const whatsappPolicy = evaluateWhatsAppSendPolicy({ lastCustomerMessageAt: sendContext.last_customer_message_at ?? undefined, templateName: sendContext.template_name ?? undefined });
@@ -184,7 +192,14 @@ export async function POST(request: Request) {
         ? await provider.sendTemplate({ to: sendContext.to, templateName: sendContext.template_name!, languageCode: sendContext.template_language_code ?? 'en' })
         : await provider.sendText({ to: sendContext.to, text: message.original_text });
       providerMessageId = result.providerMessageId;
-      await supabase.from('whatsapp_events').upsert({
+      providerAccepted = true;
+
+      const accepted = await supabase.from('conversation_messages').update({
+        status: 'SENT', provider_message_id: providerMessageId, sent_at: new Date().toISOString(), processed_at: new Date().toISOString(), approval_reason: null,
+      }).eq('organization_id', body.organizationId).eq('id', body.messageId).eq('status', 'PROCESSING');
+      if (accepted.error) throw new Error(`Provider-accepted WhatsApp reconciliation failed: ${accepted.error.message}`);
+
+      const eventWrite = await supabase.from('whatsapp_events').upsert({
         organization_id: body.organizationId,
         lead_id: message.lead_id ?? null,
         conversation_id: message.conversation_id,
@@ -193,15 +208,27 @@ export async function POST(request: Request) {
         event_type: whatsappPolicy.mode === 'TEMPLATE' ? 'TEMPLATE_SENT' : 'TEXT_SENT',
         payload: { source: 'APPROVED_SHADOW_DRAFT' },
       }, { onConflict: 'organization_id,provider_message_id,direction,event_type', ignoreDuplicates: true });
+      if (eventWrite.error) throw new Error(`WhatsApp event reconciliation failed: ${eventWrite.error.message}`);
       await recordUsage({ organizationId: body.organizationId, provider: 'WHATSAPP', operation: whatsappPolicy.mode === 'TEMPLATE' ? 'SEND_TEMPLATE' : 'SEND_TEXT', costUsd: 0, units: 1, leadId: message.lead_id ?? undefined, metadata: { source: 'APPROVED_SHADOW_DRAFT', pricing_status: 'PENDING_RECONCILIATION' } });
     }
 
-    await supabase.from('conversation_messages').update({ status: 'SENT', provider_message_id: providerMessageId, sent_at: new Date().toISOString(), processed_at: new Date().toISOString() }).eq('organization_id', body.organizationId).eq('id', body.messageId);
-    await supabase.from('sales_conversations').update({ last_outbound_at: new Date().toISOString(), last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('organization_id', body.organizationId).eq('id', message.conversation_id);
+    const conversationUpdate = await supabase.from('sales_conversations').update({ last_outbound_at: new Date().toISOString(), last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('organization_id', body.organizationId).eq('id', message.conversation_id);
+    if (conversationUpdate.error) throw new Error(`Conversation reconciliation failed: ${conversationUpdate.error.message}`);
 
     return NextResponse.json({ sent: true, channel: message.channel, providerMessageId, idempotencyKey });
   } catch (error) {
-    await supabase.from('conversation_messages').update({ status: 'FAILED', approval_reason: error instanceof Error ? error.message.slice(0, 500) : 'Approved send failed', processed_at: new Date().toISOString() }).eq('organization_id', body.organizationId).eq('id', body.messageId);
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Approved send failed', retryPolicy: 'NO_AUTOMATIC_RETRY' }, { status: 502 });
+    const errorMessage = error instanceof Error ? error.message : 'Approved send failed';
+    const disposition = approvedSendFailureDisposition(providerAccepted);
+    if (disposition.markFailed) {
+      await supabase.from('conversation_messages').update({ status: 'FAILED', approval_reason: errorMessage.slice(0, 500), processed_at: new Date().toISOString() }).eq('organization_id', body.organizationId).eq('id', body.messageId).eq('status', 'PROCESSING');
+    } else {
+      await supabase.from('conversation_messages').update({ approval_reason: `PROVIDER_ACCEPTED_RECONCILIATION_REQUIRED: ${errorMessage}`.slice(0, 500), processed_at: new Date().toISOString() }).eq('organization_id', body.organizationId).eq('id', body.messageId);
+    }
+    return NextResponse.json({
+      error: errorMessage,
+      providerAccepted,
+      providerMessageId,
+      retryPolicy: disposition.retryPolicy,
+    }, { status: disposition.httpStatus });
   }
 }

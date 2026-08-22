@@ -4,6 +4,7 @@ import { evaluateBudgetMode, getCostGuardState, recordUsage, shouldAllowPaidOper
 const TRANSCRIPTION_MODEL = 'gpt-4o-mini-transcribe';
 const TRANSCRIPTION_USD_PER_MINUTE = 0.003;
 const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
+const PROCESSING_LEASE_MS = 10 * 60 * 1000;
 
 type VoiceTranscriptionRow = {
   id: string;
@@ -18,6 +19,7 @@ type VoiceTranscriptionRow = {
   model: string | null;
   estimated_cost_usd: number;
   error_message: string | null;
+  updated_at: string;
 };
 
 export type VoiceTranscriptionResult = {
@@ -50,6 +52,14 @@ export function extensionForMimeType(mimeType?: string) {
   if (normalized.includes('wav')) return 'wav';
   if (normalized.includes('webm')) return 'webm';
   return 'bin';
+}
+
+export function voiceCacheAction(status: VoiceTranscriptionRow['status'], updatedAt: string, nowMs = Date.now()) {
+  if (status === 'SUCCEEDED') return 'RETURN' as const;
+  if (status === 'FAILED') return 'RETRY' as const;
+  const updatedMs = Date.parse(updatedAt);
+  if (!Number.isFinite(updatedMs) || nowMs - updatedMs >= PROCESSING_LEASE_MS) return 'RETRY' as const;
+  return 'RETURN' as const;
 }
 
 async function findCached(organizationId: string, providerMessageId: string, mediaId: string) {
@@ -85,6 +95,20 @@ function cachedResult(row: VoiceTranscriptionRow): VoiceTranscriptionResult {
   };
 }
 
+async function reclaimCached(row: VoiceTranscriptionRow) {
+  const supabase = serviceClient();
+  const now = new Date().toISOString();
+  let query = supabase
+    .from('voice_transcriptions')
+    .update({ status: 'PROCESSING', error_message: null, completed_at: null, updated_at: now })
+    .eq('id', row.id)
+    .eq('status', row.status);
+  if (row.status === 'PROCESSING') query = query.eq('updated_at', row.updated_at);
+  const { data, error } = await query.select('*').maybeSingle();
+  if (error) throw new Error(`Voice cache reclaim failed: ${error.message}`);
+  return (data as VoiceTranscriptionRow | null) ?? null;
+}
+
 async function downloadMetaVoice(mediaId: string, fallbackMimeType?: string) {
   const token = process.env.META_WHATSAPP_TOKEN;
   const graphVersion = process.env.META_GRAPH_VERSION;
@@ -108,10 +132,7 @@ async function downloadMetaVoice(mediaId: string, fallbackMimeType?: string) {
   const bytes = await mediaResponse.arrayBuffer();
   if (bytes.byteLength > MAX_MEDIA_BYTES) throw new Error('Voice media exceeds the 25 MB transcription limit');
 
-  return {
-    bytes,
-    mimeType: metadata.mime_type || fallbackMimeType || 'application/octet-stream',
-  };
+  return { bytes, mimeType: metadata.mime_type || fallbackMimeType || 'application/octet-stream' };
 }
 
 async function transcribeWithOpenAI(bytes: ArrayBuffer, mimeType: string) {
@@ -148,7 +169,16 @@ export async function transcribeWhatsAppVoiceOnce(input: {
   priority?: 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
 }): Promise<VoiceTranscriptionResult> {
   const cached = await findCached(input.organizationId, input.providerMessageId, input.mediaId);
-  if (cached) return cachedResult(cached);
+  let row: VoiceTranscriptionRow | null = null;
+  if (cached) {
+    if (voiceCacheAction(cached.status, cached.updated_at) === 'RETURN') return cachedResult(cached);
+    row = await reclaimCached(cached);
+    if (!row) {
+      const raced = await findCached(input.organizationId, input.providerMessageId, input.mediaId);
+      if (raced) return cachedResult(raced);
+      throw new Error('Voice cache retry reservation was lost');
+    }
+  }
 
   const costState = await getCostGuardState(input.organizationId);
   if (!costState) throw new Error('Cost guard state is unavailable; voice transcription blocked');
@@ -159,34 +189,38 @@ export async function transcribeWhatsAppVoiceOnce(input: {
   }
 
   const supabase = serviceClient();
-  const insert = await supabase
-    .from('voice_transcriptions')
-    .insert({
-      organization_id: input.organizationId,
-      lead_id: input.leadId ?? null,
-      conversation_id: input.conversationId ?? null,
-      provider_message_id: input.providerMessageId,
-      media_id: input.mediaId,
-      mime_type: input.mimeType ?? null,
-      status: 'PROCESSING',
-      model: TRANSCRIPTION_MODEL,
-      estimated_cost_usd: reserve,
-    })
-    .select('*')
-    .single();
+  if (!row) {
+    const insert = await supabase
+      .from('voice_transcriptions')
+      .insert({
+        organization_id: input.organizationId,
+        lead_id: input.leadId ?? null,
+        conversation_id: input.conversationId ?? null,
+        provider_message_id: input.providerMessageId,
+        media_id: input.mediaId,
+        mime_type: input.mimeType ?? null,
+        status: 'PROCESSING',
+        model: TRANSCRIPTION_MODEL,
+        estimated_cost_usd: reserve,
+      })
+      .select('*')
+      .single();
 
-  if (insert.error) {
-    if (insert.error.code === '23505') {
-      const raced = await findCached(input.organizationId, input.providerMessageId, input.mediaId);
-      if (raced) return cachedResult(raced);
+    if (insert.error) {
+      if (insert.error.code === '23505') {
+        const raced = await findCached(input.organizationId, input.providerMessageId, input.mediaId);
+        if (raced) return cachedResult(raced);
+      }
+      throw new Error(`Voice cache reservation failed: ${insert.error.message}`);
     }
-    throw new Error(`Voice cache reservation failed: ${insert.error.message}`);
+    row = insert.data as VoiceTranscriptionRow;
   }
-  const row = insert.data as VoiceTranscriptionRow;
 
+  let providerAccepted = false;
   try {
     const media = await downloadMetaVoice(input.mediaId, input.mimeType);
     const transcription = await transcribeWithOpenAI(media.bytes, media.mimeType);
+    providerAccepted = true;
 
     const completed = await supabase
       .from('voice_transcriptions')
@@ -195,6 +229,7 @@ export async function transcribeWhatsAppVoiceOnce(input: {
         transcript: transcription.text,
         detected_language: transcription.language ?? null,
         mime_type: media.mimeType,
+        error_message: null,
         completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -227,15 +262,17 @@ export async function transcribeWhatsAppVoiceOnce(input: {
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown voice transcription failure';
-    await supabase
-      .from('voice_transcriptions')
-      .update({
-        status: 'FAILED',
-        error_message: message.slice(0, 1000),
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', row.id);
+    if (!providerAccepted) {
+      await supabase
+        .from('voice_transcriptions')
+        .update({ status: 'FAILED', error_message: message.slice(0, 1000), completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('id', row.id);
+    } else {
+      await supabase
+        .from('voice_transcriptions')
+        .update({ error_message: `POST_PROVIDER_RECONCILIATION_REQUIRED: ${message}`.slice(0, 1000), updated_at: new Date().toISOString() })
+        .eq('id', row.id);
+    }
     throw error;
   }
 }
