@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { estimateVoiceTranscriptionReserve, extensionForMimeType } from '@/lib/voice/transcription';
+import { estimateVoiceTranscriptionReserve, extensionForMimeType, voiceCacheAction } from '@/lib/voice/transcription';
 
 describe('voice transcription cost controls', () => {
   it('reserves against the configured maximum voice duration', () => {
@@ -18,5 +18,13 @@ describe('voice transcription cost controls', () => {
     expect(extensionForMimeType('audio/mp4')).toBe('m4a');
     expect(extensionForMimeType('audio/webm')).toBe('webm');
     expect(extensionForMimeType(undefined)).toBe('bin');
+  });
+
+  it('retries failed rows and stale processing leases but not fresh work', () => {
+    const now = Date.parse('2026-08-22T12:00:00Z');
+    expect(voiceCacheAction('SUCCEEDED', '2026-08-22T11:00:00Z', now)).toBe('RETURN');
+    expect(voiceCacheAction('FAILED', '2026-08-22T11:59:00Z', now)).toBe('RETRY');
+    expect(voiceCacheAction('PROCESSING', '2026-08-22T11:55:00Z', now)).toBe('RETURN');
+    expect(voiceCacheAction('PROCESSING', '2026-08-22T11:40:00Z', now)).toBe('RETRY');
   });
 });
