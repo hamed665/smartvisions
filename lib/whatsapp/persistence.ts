@@ -9,9 +9,6 @@ function serviceClient() {
 }
 
 async function resolveWhatsAppOrganizationId() {
-  const configured = process.env.WHATSAPP_ORGANIZATION_ID?.trim();
-  if (configured) return configured;
-
   const supabase = serviceClient();
   const { data, error } = await supabase
     .from('integration_connections')
@@ -22,7 +19,7 @@ async function resolveWhatsAppOrganizationId() {
     .limit(2);
   if (error) throw new Error(`WhatsApp integration lookup failed: ${error.message}`);
   if (!data || data.length !== 1) {
-    throw new Error('WhatsApp webhook requires exactly one enabled META/WHATSAPP integration or WHATSAPP_ORGANIZATION_ID');
+    throw new Error('WhatsApp webhook requires exactly one enabled META/WHATSAPP integration');
   }
   return String(data[0].organization_id);
 }
