@@ -32,3 +32,9 @@ export function evaluateApprovedSendPolicy(input: ApprovedSendPolicyInput) {
     channel: input.messageChannel as ApprovedSendChannel,
   };
 }
+
+export function approvedSendFailureDisposition(providerAccepted: boolean) {
+  return providerAccepted
+    ? { markFailed: false as const, httpStatus: 202 as const, retryPolicy: 'RECONCILIATION_ONLY' as const }
+    : { markFailed: true as const, httpStatus: 502 as const, retryPolicy: 'NO_AUTOMATIC_RETRY' as const };
+}
