@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateApprovedSendPolicy } from '@/lib/outreach/approved-send-policy';
+import { approvedSendFailureDisposition, evaluateApprovedSendPolicy } from '@/lib/outreach/approved-send-policy';
 
 const base = {
   messageStatus: 'APPROVED',
@@ -48,5 +48,18 @@ describe('approved send policy', () => {
     const result = evaluateApprovedSendPolicy({ ...base, agentsPaused: true });
     expect(result.allowed).toBe(false);
     expect(result.blocks).toContain('AGENTS_PAUSED');
+  });
+
+  it('never marks a provider-accepted message failed or automatically retryable', () => {
+    expect(approvedSendFailureDisposition(true)).toEqual({
+      markFailed: false,
+      httpStatus: 202,
+      retryPolicy: 'RECONCILIATION_ONLY',
+    });
+    expect(approvedSendFailureDisposition(false)).toEqual({
+      markFailed: true,
+      httpStatus: 502,
+      retryPolicy: 'NO_AUTOMATIC_RETRY',
+    });
   });
 });
