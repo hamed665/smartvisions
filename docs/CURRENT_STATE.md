@@ -14,6 +14,7 @@ This file is the operational handoff. Production facts win over stale documentat
 - Current development PR: #37 `phase5/pr37-complete-ai-sales-outreach`.
 - PR #36 is complete and must not be reopened as a new acquisition subsystem.
 - Growth migration `0028_zero_cost_personalization.sql` and its production index fix were applied during PR #36 production verification.
+- PR #37 production migrations for voice transcription cache, email provider events, and the follow-up voice FK indexes have now been applied.
 
 ## Existing Control Center is protected
 
@@ -29,12 +30,13 @@ Pricing is already live and owner-editable per service/market with `price`, `min
 - Services, Pricing, Markets, Agents, approval settings and runtime controls are live foundations.
 - Cost Guard/provider allocations/usage metering are live.
 - Production `system_controls` currently has global kill switch OFF and Shadow Mode ON; Shadow Mode stays ON through V1 launch gates.
+- Security Advisor has no new PR #37 schema/RLS regression. The remaining leaked-password-protection warning is a Supabase Auth project setting and is not caused by PR #37.
 
 ### OpenAI
 
-- OpenAI has successful production usage evidence (`AGENT_INTENT_DISCOVERY`, 394-token historical smoke test, recorded cost $0.000575).
+- OpenAI has successful production usage evidence (`AGENT_INTENT_DISCOVERY`, 394 tokens, recorded cost $0.000575 on 2026-08-20).
 - Cost-aware model routing exists and must be reused.
-- Current `integration_connections` OpenAI row is stale (`NOT_CONFIGURED`) despite successful production evidence. Treat this as status reconciliation, not a reason to rebuild or repeatedly pay for smoke tests.
+- The previously stale `integration_connections` row was reconciled on 2026-08-22 from that durable usage evidence: `OPENAI / AI` is now `CONNECTED`, enabled, with no repeat paid smoke test.
 
 ### Google Places / Growth acquisition — PR #36 COMPLETE
 
@@ -64,11 +66,11 @@ Read `docs/INTEGRATION_INVENTORY.md`. It freezes the 19 operational integration/
 Current provider summary from production `integration_connections`:
 
 - Google Places / Discovery: CONNECTED, enabled.
+- OpenAI / AI: CONNECTED, enabled; reconciled from existing successful usage evidence.
 - Crawl4AI / Audit: NOT_CONFIGURED, disabled; code-ready smoke test exists.
 - Email Provider / Email: NOT_CONFIGURED, disabled.
-- Meta / WhatsApp: NOT_CONFIGURED, disabled; provider/webhook foundations exist.
+- Meta / WhatsApp: NOT_CONFIGURED, disabled; provider/webhook code exists but live outbound must remain blocked.
 - Meta / Instagram: NOT_CONFIGURED, disabled; keep policy-aware/semi-manual where required.
-- OpenAI / AI: table status stale NOT_CONFIGURED, but production usage proves prior success.
 - Redis / Queue: NOT_CONFIGURED, disabled and optional unless a concrete V1 reliability need proves otherwise.
 
 ## Existing modules that MUST be extended, not rebuilt
@@ -84,7 +86,7 @@ Current provider summary from production `integration_connections`:
 
 ## PR #37 — current active completion scope
 
-PR #37 is the single completion PR for AI Sales, Conversations, Email, WhatsApp and Voice. Work already present on its branch includes:
+PR #37 is the single completion PR for AI Sales, Conversations, Email, WhatsApp and Voice. Work now present on its branch includes:
 
 - zero-cost Growth Opportunity → Sales Context bridge;
 - deterministic personalization context reuse;
@@ -92,14 +94,30 @@ PR #37 is the single completion PR for AI Sales, Conversations, Email, WhatsApp 
 - deterministic language/script detection and safe market fallback;
 - commercial price/discount guard built around existing configured price sources;
 - stronger follow-up stop conditions;
-- WhatsApp 24-hour/free-form vs approved-template policy support on top of the existing Meta provider.
+- WhatsApp 24-hour/free-form vs approved-template policy support on top of the existing Meta provider;
+- WhatsApp inbound/status persistence and webhook normalization;
+- single-transcription voice cache path;
+- Resend email provider/send/webhook lifecycle path and email event persistence;
+- Shadow Mode approval queue that persists the complete send context;
+- `/api/outreach/approved-send` with APPROVED → PROCESSING claim → provider send → SENT, FAILED on provider-path error, and explicit `NO_AUTOMATIC_RETRY`;
+- repeated safety checks for Shadow Mode, kill switch, channel pause, DNC, human takeover, agent pause, local send window, Cost Guard, mailbox health, and WhatsApp 24-hour/template policy;
+- provider readiness fail-closed before claim: Email requires `EMAIL_PROVIDER / EMAIL` CONNECTED+enabled and WhatsApp requires `META / WHATSAPP` CONNECTED+enabled.
 
-Before merge, PR #37 still must complete/verify the actual gaps from Master Tracker: conversation lifecycle wiring, Email production provider path, WhatsApp inbound/status persistence/idempotency, Voice single-transcription cache path, Shadow Mode sales queue/approval behavior, integration health/usage visibility, and controlled E2E tests.
+## PR #37 production exit-gate evidence
+
+- Original approved-send head `bdfbbe808c5ff1701e674abaab45c70ccbc0917c` passed GitHub CI and Vercel Preview was READY.
+- Production migrations for voice transcription cache and email events were applied.
+- Supabase Performance Advisor then exposed missing covering indexes for the new `voice_transcriptions.lead_id` and `conversation_id` foreign keys.
+- Migration `0031_voice_transcription_fk_indexes.sql` was added to the branch and applied to Production; those new unindexed-FK advisor findings are cleared.
+- From PR #37 creation time (`2026-08-21T16:43:32Z`) through the production verification, there are zero new `usage_events`, zero `email_events`, zero `whatsapp_events`, zero sent `conversation_messages`, and zero sent `outreach_messages` from this phase. No uncontrolled real provider send is evidenced.
+- Production still has `shadow_mode=true`.
+- Email and WhatsApp integration rows remain `NOT_CONFIGURED`, disabled, so live approved-send is additionally blocked before provider contact even if an old environment credential were accidentally present.
+- Existing Approved Send policy tests cover healthy allow, Shadow Mode block, DNC block, human takeover block, unapproved-message block, and kill-switch/channel-pause block. Final merge still requires the newest branch head CI to be green.
 
 ## Remaining locked sequence
 
 - PR #36 — COMPLETE and merged.
-- PR #37 — ACTIVE: AI Sales + Conversations + Email + WhatsApp + Voice.
+- PR #37 — ACTIVE, at final CI/merge gate: AI Sales + Conversations + Email + WhatsApp + Voice.
 - PR #38 — Website Demo & Content Production Engine using existing Preview Studio/portfolio.
 - PR #39 — Control Center wiring/completeness + reliability + QA + launch. Preserve visual design.
 
@@ -107,8 +125,8 @@ After #39, run the six launch gates from Master Tracker #18: provider smoke test
 
 ## Exact next action
 
-Continue PR #37 only from real gaps. Do not touch PR #36 acquisition work unless a verified regression exists. Use `docs/INTEGRATION_INVENTORY.md` before connecting credentials or adding providers. Do not create duplicate pricing, Control Center, agent, conversation, WhatsApp, Cost Guard, preview or integration-state systems.
+Do not add more PR #37 features unless final CI exposes a real regression. If the newest #37 head is green and Vercel Preview is READY, merge #37. Do not enable Email or WhatsApp merely to make the Integrations screen look greener; those providers remain intentionally fail-closed until their real credentials/domain/webhook setup and controlled live E2E are completed at launch readiness.
 
 ## Handoff sentence
 
-> Production main is `cd66a18b...` from merged PR #36. PR #37 is active. Read the frozen Integration Inventory and Master Tracker #18 before coding. Acquisition/Growth Intelligence is complete enough to treat as a foundation; current gaps are Sales/Conversation provider wiring and E2E verification. Preserve the existing Control Center and consume its Services/Pricing/Markets/Agents/Cost/runtime settings as the source of truth.
+> Production main is `cd66a18b...` from merged PR #36. PR #37 has completed its code/migration/provider-fail-closed work and is at the final CI/merge gate. OpenAI and Google Places are production-evidenced CONNECTED; Email and WhatsApp remain deliberately NOT_CONFIGURED and cannot send through Approved Send until production-verified. Preserve the existing Control Center and continue with PR #38 only after #37 merges.
