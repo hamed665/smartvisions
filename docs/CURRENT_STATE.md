@@ -1,132 +1,134 @@
 # Smart Visions Growth OS — Current Production State
 
-**Last reconciled:** 2026-08-22 (Oman, UTC+4)
+**Reconciled:** 2026-08-22 (Oman, UTC+4)
 
-This file is the operational handoff. Production facts win over stale documentation. Before adding work, read this file, `AGENTS.md`, `docs/V1_FINAL_4_PR_PLAN.md`, `docs/INTEGRATION_INVENTORY.md`, `docs/MASTER_PLAN.md` and Master Tracker #18.
+This is the operational handoff. Production facts and the current `main` branch win over stale planning text. Preserve the existing Control Center and extend only verified gaps.
 
-## Production
+## Production identity
 
 - Repository: `hamed665/smartvisions`
 - Production branch: `main`
 - Production URL: `https://smartvisions.vercel.app`
-- Supabase project ref: `pkypexzpyfbikdnkrzvw`
-- Current `main` commit: `cd66a18bd4353819f01f242a58e4348f1592ba72` — merged PR #36.
-- Current development PR: #37 `phase5/pr37-complete-ai-sales-outreach`.
-- PR #36 is complete and must not be reopened as a new acquisition subsystem.
-- Growth migration `0028_zero_cost_personalization.sql` and its production index fix were applied during PR #36 production verification.
-- PR #37 production migrations for voice transcription cache, email provider events, and the follow-up voice FK indexes have now been applied.
+- Supabase project: `pkypexzpyfbikdnkrzvw`
+- Production `main` entering the final PR: `d392fc98a1c9ec38d2b725bbe57e61b92cb2ff49` (merged PR #39)
+- Final development PR: #40 `phase5/pr40-control-center-launch-readiness`
+
+## Completed sequence
+
+- #36 ✅ Growth Intelligence / acquisition and growth-opportunity routing
+- #37 ✅ AI Sales / Conversations / Email / WhatsApp / Voice foundation
+- #38 ✅ Reliability hardening for the five PR #37 review failures
+- #39 ✅ Website Demo & Content Production Engine on existing Preview Studio / Portfolio / Growth Opportunity foundations
+- #40 🔄 Final Control Center completeness, reliability, QA and launch gates
+
+The emergency #38 shifted the original four-PR numbering by one. Do not create another Hunter, CRM, pricing, preview, Cost Guard, provider-state or agent subsystem to restore old numbering.
 
 ## Existing Control Center is protected
 
-The current panel is a foundation, not a redesign target. Existing modules must be preserved and extended only where a verified gap exists: Dashboard, CRM/Leads, Hunters/Growth, Campaigns, Conversations, Hot Leads, Services, Pricing, Portfolio, Preview Studio, Markets, Agents, Message Studio, Automations, Approvals, Integrations, Cost & Usage, Audit, DNC/Suppression, System and Reports.
+The current panel is the production foundation: Dashboard, Leads/CRM, Hunters/Growth, Campaigns, Conversations, Hot Leads, Services, Pricing, Portfolio, Preview Studio, Markets, Agents, Message Studio, Automations, Approvals, Integrations, Cost & Usage, Audit, Suppression/DNC, System and Reports.
 
-Pricing is already live and owner-editable per service/market with `price`, `minimum_price`, `max_auto_discount_pct`, and `max_discount_with_approval_pct`. Sales logic must consume this source of truth; do not build a second pricing or discount system.
+PR #40 preserves the visual design and completes wiring only where a verified gap exists.
 
-## Production-verified foundations
+## Canonical runtime sources
 
-### Platform / security / controls
+- Emergency/runtime flags: `system_controls`
+- Budget, quotas, provider allocations and cost thresholds: `cost_guard_settings`
+- Market/channel policy: `market_settings.config` plus `outreach_policies`
+- Agent model/confidence/runtime config: `agent_settings`
+- Prices/discount boundaries: existing service price tables
+- Provider health/state: `integration_connections`
+- Usage/cost ledger: `usage_events`
+- Audit trail: `audit_logs`
 
-- Supabase Auth, organization-scoped RLS and OWNER controls are live.
-- Services, Pricing, Markets, Agents, approval settings and runtime controls are live foundations.
-- Cost Guard/provider allocations/usage metering are live.
-- Production `system_controls` currently has global kill switch OFF and Shadow Mode ON; Shadow Mode stays ON through V1 launch gates.
-- Security Advisor has no new PR #37 schema/RLS regression. The remaining leaked-password-protection warning is a Supabase Auth project setting and is not caused by PR #37.
+`system_controls.monthly_budget_usd` is a legacy duplicate and is no longer written or presented as the operational budget. The canonical monthly budget is `cost_guard_settings.monthly_total_budget_usd`, currently USD 25.
 
-### OpenAI
+## Current production safety state
 
-- OpenAI has successful production usage evidence (`AGENT_INTENT_DISCOVERY`, 394 tokens, recorded cost $0.000575 on 2026-08-20).
-- Cost-aware model routing exists and must be reused.
-- The previously stale `integration_connections` row was reconciled on 2026-08-22 from that durable usage evidence: `OPENAI / AI` is now `CONNECTED`, enabled, with no repeat paid smoke test.
+- Global kill switch: OFF
+- Shadow Mode: ON
+- Email pause: OFF
+- WhatsApp AI pause: OFF
+- Agents pause: OFF
+- Enabled outreach markets require manual review
+- Live outbound remains fail-closed because Email and WhatsApp are not production verified
 
-### Google Places / Growth acquisition — PR #36 COMPLETE
+Do not turn Shadow Mode off merely to make the dashboard greener. Live-autonomous readiness requires verified Email + WhatsApp provider setup and an explicit launch decision.
 
-- Google Places is `CONNECTED` in production.
-- IDs-only discovery, durable dedupe, selective minimum qualification and usage metering are implemented.
-- Routine hunting avoids review text; deeper Google Business Intelligence is separate/cached.
-- Multi-market query/routing uses existing market settings.
-- Business fingerprinting, Contactability/Need/Service Fit/Revenue/Priority signals are deterministic and zero-provider-cost.
-- Cheapest-next-action routing is implemented: contact-ready, deterministic website evidence, selective social check, or skip.
-- Digital/social quality remains unknown/pending when evidence does not exist; the system does not fabricate social weakness.
-- Deterministic website evidence is preferred before paid social checks and reuses the existing website-audit subsystem.
-- Acquisition dry-run expected-cost planning exists.
-- Controlled Crawl4AI smoke-test UI/path exists, but the service is not production configured/verified yet.
-- Cached growth rerouting/backfill is idempotent and should create zero provider calls.
+## Provider state
 
-### Growth opportunity lanes
+- Google Places / Discovery: CONNECTED + enabled
+- OpenAI / AI: CONNECTED + enabled
+- Crawl4AI / Audit: NOT_CONFIGURED + disabled; code-ready controlled verification path exists
+- Email Provider / Email: NOT_CONFIGURED + disabled
+- Meta / WhatsApp: NOT_CONFIGURED + disabled
+- Meta / Instagram: NOT_CONFIGURED + disabled
+- Redis / Queue: optional, NOT_CONFIGURED + disabled
 
-- `MUSCAT_LOCAL_GROWTH`: website + on-site filming/reels/photography/content where appropriate.
-- `OMAN_REMOTE_GROWTH`: website + remote AI content/creative.
-- `INTERNATIONAL_AI_GROWTH`: website + AI content/creative.
-- Businesses with standalone websites remain eligible for content opportunity; website ownership is not the sole sales filter.
+Google/OpenAI already have durable production evidence. Do not repeat paid smoke tests simply to refresh a badge.
 
-## Current canonical Integration Inventory
+## Cost Guard
 
-Read `docs/INTEGRATION_INVENTORY.md`. It freezes the 19 operational integration/configuration slots from Master Tracker #18 and distinguishes billed providers from credentials/config controls.
+Canonical production budget:
 
-Current provider summary from production `integration_connections`:
+- Total monthly: $25
+- OpenAI: $10
+- Google Places: $5
+- Email: $4
+- WhatsApp: $3
+- Reserve: $3
+- Warning / throttle / critical / hard-stop: 70 / 85 / 95 / 100%
+- Daily new leads: 50
+- Daily website audits: 15
+- Daily deep AI runs: 10
+- Max AI runs per lead: 20
+- Max voice seconds: 180
+- Max automatic retries: 1
 
-- Google Places / Discovery: CONNECTED, enabled.
-- OpenAI / AI: CONNECTED, enabled; reconciled from existing successful usage evidence.
-- Crawl4AI / Audit: NOT_CONFIGURED, disabled; code-ready smoke test exists.
-- Email Provider / Email: NOT_CONFIGURED, disabled.
-- Meta / WhatsApp: NOT_CONFIGURED, disabled; provider/webhook code exists but live outbound must remain blocked.
-- Meta / Instagram: NOT_CONFIGURED, disabled; keep policy-aware/semi-manual where required.
-- Redis / Queue: NOT_CONFIGURED, disabled and optional unless a concrete V1 reliability need proves otherwise.
+PR #40 exposes provider/operation/day/campaign spend, cost per qualified/replied/won lead and budget-derived anomaly warnings without creating a second ledger.
 
-## Existing modules that MUST be extended, not rebuilt
+## Reliability boundaries completed through #40
 
-- `lib/agents/*` contracts/executor/router/pipeline/OpenAI runtime.
-- `lib/outreach/*` eligibility/locale/scheduler/followups/variants/pricing/replies/mailbox health.
-- Conversation intelligence, Persian operator briefs and human handoff/approval model.
-- WhatsApp Meta Cloud provider, webhook signature verification and inbound normalization foundations.
-- Preview engine/templates/quality/API and portfolio primitives.
-- Cost Guard/runtime controls/usage/audit/reliability primitives.
-- Integration connection/status model and server-only environment secret pattern.
-- Existing Control Center pages and styling.
+- Business persistence uses durable Google Place/domain dedupe.
+- Paid Google Place Details claims/replays through existing `discovery_records`; PROCESSING/FAILED attempts are not blindly retried.
+- Website audits use cache + daily quota and a unique one-RUNNING-per-business guard.
+- Paid inbound AI requires a caller idempotency key and journals through `agent_runs`; completed results replay, PROCESSING/FAILED requests do not blindly rerun paid AI.
+- Preview generation uses stable `brief_hash` plus a unique organization/lead/brief guard.
+- Voice transcription has failure recovery and a processing lease.
+- Email webhook handling is replayable/idempotent.
+- Approved Send claims APPROVED → PROCESSING before Provider contact; after provider acceptance, later persistence failures are reconciliation-only and cannot turn the message into a resendable FAILED state.
+- Runtime global kill is enforced before controlled provider operations; Agent pause is enforced before AI execution.
 
-## PR #37 — current active completion scope
+Production migrations added for these final reliability boundaries:
 
-PR #37 is the single completion PR for AI Sales, Conversations, Email, WhatsApp and Voice. Work now present on its branch includes:
+- `0032_preview_generation_idempotency`
+- `0033_agent_run_idempotency`
+- `0034_website_audit_running_guard`
 
-- zero-cost Growth Opportunity → Sales Context bridge;
-- deterministic personalization context reuse;
-- selective agent routing tiers (`ZERO_COST`, `LIGHT`, `FULL`) so simple messages do not trigger all agents;
-- deterministic language/script detection and safe market fallback;
-- commercial price/discount guard built around existing configured price sources;
-- stronger follow-up stop conditions;
-- WhatsApp 24-hour/free-form vs approved-template policy support on top of the existing Meta provider;
-- WhatsApp inbound/status persistence and webhook normalization;
-- single-transcription voice cache path;
-- Resend email provider/send/webhook lifecycle path and email event persistence;
-- Shadow Mode approval queue that persists the complete send context;
-- `/api/outreach/approved-send` with APPROVED → PROCESSING claim → provider send → SENT, FAILED on provider-path error, and explicit `NO_AUTOMATIC_RETRY`;
-- repeated safety checks for Shadow Mode, kill switch, channel pause, DNC, human takeover, agent pause, local send window, Cost Guard, mailbox health, and WhatsApp 24-hour/template policy;
-- provider readiness fail-closed before claim: Email requires `EMAIL_PROVIDER / EMAIL` CONNECTED+enabled and WhatsApp requires `META / WHATSAPP` CONNECTED+enabled.
+## Production queue/state evidence before final #40 merge
 
-## PR #37 production exit-gate evidence
+At the final QA audit:
 
-- Original approved-send head `bdfbbe808c5ff1701e674abaab45c70ccbc0917c` passed GitHub CI and Vercel Preview was READY.
-- Production migrations for voice transcription cache and email events were applied.
-- Supabase Performance Advisor then exposed missing covering indexes for the new `voice_transcriptions.lead_id` and `conversation_id` foreign keys.
-- Migration `0031_voice_transcription_fk_indexes.sql` was added to the branch and applied to Production; those new unindexed-FK advisor findings are cleared.
-- From PR #37 creation time (`2026-08-21T16:43:32Z`) through the production verification, there are zero new `usage_events`, zero `email_events`, zero `whatsapp_events`, zero sent `conversation_messages`, and zero sent `outreach_messages` from this phase. No uncontrolled real provider send is evidenced.
-- Production still has `shadow_mode=true`.
-- Email and WhatsApp integration rows remain `NOT_CONFIGURED`, disabled, so live approved-send is additionally blocked before provider contact even if an old environment credential were accidentally present.
-- Existing Approved Send policy tests cover healthy allow, Shadow Mode block, DNC block, human takeover block, unapproved-message block, and kill-switch/channel-pause block. Final merge still requires the newest branch head CI to be green.
+- `agent_runs`: no stuck rows
+- `voice_transcriptions`: no stuck rows
+- `email_events`: 0
+- `conversation_messages`: no pending/sent rows
+- `outreach_messages`: no pending/sent rows
+- `previews`: no stuck rows
+- `website_audits`: one historical FAILED deterministic audit from 2026-08-21 (`wassandental.com`), not a running job
 
-## Remaining locked sequence
+No uncontrolled outbound is evidenced. Preserve the historical failed audit row as audit history; do not delete evidence for cosmetic cleanliness.
 
-- PR #36 — COMPLETE and merged.
-- PR #37 — ACTIVE, at final CI/merge gate: AI Sales + Conversations + Email + WhatsApp + Voice.
-- PR #38 — Website Demo & Content Production Engine using existing Preview Studio/portfolio.
-- PR #39 — Control Center wiring/completeness + reliability + QA + launch. Preserve visual design.
+## Advisor state
 
-After #39, run the six launch gates from Master Tracker #18: provider smoke tests, Cost Guard proof, policy/safety proof, Shadow Mode E2E scenarios, small Oman pilot, then measured scale decision.
+- Supabase Security Advisor: no new schema/RLS regression from #40. One existing project-level warning remains: Leaked Password Protection is disabled in Supabase Auth.
+- Supabase Performance Advisor: no new blocking issue; current notices are INFO-level unused indexes expected in a very low-traffic/new database.
+
+## Final #40 launch distinction
+
+`codeReady` / controlled-pilot readiness and `liveAutomationReady` are intentionally different states.
+
+The system may be code-ready while Shadow Mode remains ON and Email/WhatsApp remain fail-closed. Live autonomous outbound must not be declared ready until the real sender credentials/domain/webhooks are configured, provider rows are production-verified CONNECTED, one controlled E2E per live channel passes, and Shadow Mode is then intentionally disabled.
 
 ## Exact next action
 
-Do not add more PR #37 features unless final CI exposes a real regression. If the newest #37 head is green and Vercel Preview is READY, merge #37. Do not enable Email or WhatsApp merely to make the Integrations screen look greener; those providers remain intentionally fail-closed until their real credentials/domain/webhook setup and controlled live E2E are completed at launch readiness.
-
-## Handoff sentence
-
-> Production main is `cd66a18b...` from merged PR #36. PR #37 has completed its code/migration/provider-fail-closed work and is at the final CI/merge gate. OpenAI and Google Places are production-evidenced CONNECTED; Email and WhatsApp remain deliberately NOT_CONFIGURED and cannot send through Approved Send until production-verified. Preserve the existing Control Center and continue with PR #38 only after #37 merges.
+Finish PR #40 CI/Vercel/review-thread checks and merge only if the final head is fully green. After merge, verify the exact merge commit is READY in Vercel Production and rerun the production launch evidence query. Do not start another feature PR unless final verification exposes a real defect.
