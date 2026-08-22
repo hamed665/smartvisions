@@ -38,6 +38,10 @@ export function shadowProviderMessageId(idempotencyKey: string) {
   return `shadow:${normalized}`;
 }
 
+export function isShadowDuplicateError(code?: string | null) {
+  return code === '23505';
+}
+
 export async function queueShadowDraft(input: ShadowDraftInput) {
   if (!input.organizationId || !input.conversationId || !input.to || !input.draft.trim()) {
     throw new Error('organizationId, conversationId, to and draft are required');
@@ -97,11 +101,11 @@ export async function queueShadowDraft(input: ShadowDraftInput) {
 
   const { data, error } = await supabase
     .from('conversation_messages')
-    .upsert(row, { onConflict: 'organization_id,channel,provider_message_id', ignoreDuplicates: true })
+    .insert(row)
     .select('id,status,requires_approval')
     .maybeSingle();
-  if (error) throw new Error(`Shadow approval queue failed: ${error.message}`);
-  if (data) return { queued: true, duplicate: false, messageId: data.id, status: data.status };
+  if (!error && data) return { queued: true, duplicate: false, messageId: data.id, status: data.status };
+  if (error && !isShadowDuplicateError(error.code)) throw new Error(`Shadow approval queue failed: ${error.message}`);
 
   const { data: existing, error: existingError } = await supabase
     .from('conversation_messages')
