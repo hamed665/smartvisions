@@ -10,6 +10,7 @@ import {
   recordUsage,
   type CostGuardState,
 } from '@/lib/reliability/cost-guard';
+import { assertRuntimeOperationAllowed } from '@/lib/reliability/runtime-safety';
 
 export const GOOGLE_PLACES_ID_SEARCH_ESTIMATED_COST_USD = 0;
 // Current global list price beyond the free monthly cap is $20 / 1,000 for
@@ -30,6 +31,7 @@ async function preflight(
   estimatedCostUsd: number,
   priority: 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL' = 'LOW',
 ) {
+  await assertRuntimeOperationAllowed(organizationId, 'DISCOVERY');
   const state = await getCostGuardState(organizationId);
   if (!state) throw new Error('Cost Guard state is unavailable; Google Places request blocked');
   assertPaidOperationAllowed(state, priority);
