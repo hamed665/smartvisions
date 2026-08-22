@@ -17,8 +17,14 @@ export function buildFollowupSchedule(input: {
   policy?: FollowupPolicy;
   hasReply?: boolean;
   unsubscribed?: boolean;
+  humanTakeover?: boolean;
+  won?: boolean;
+  lost?: boolean;
+  paused?: boolean;
 }) {
   const policy = input.policy ?? defaultFollowupPolicy;
+  const terminalOrManual = input.humanTakeover || input.won || input.lost || input.paused;
+  if (terminalOrManual) return [];
   if ((policy.stopOnReply && input.hasReply) || (policy.stopOnUnsubscribe && input.unsubscribed)) return [];
 
   return policy.delaysDays

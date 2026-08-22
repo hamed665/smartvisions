@@ -12,7 +12,7 @@ type RuntimeControls = {
 export async function getRuntimeControls(organizationId?: string): Promise<RuntimeControls | null> {
   if (!organizationId) return null;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) return null;
 
   const supabase = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -26,7 +26,7 @@ export async function getRuntimeControls(organizationId?: string): Promise<Runti
 }
 
 export function assertChannelAllowed(controls: RuntimeControls | null, channel: 'EMAIL' | 'WHATSAPP' | 'AGENT') {
-  if (!controls) return;
+  if (!controls) throw new Error('Runtime controls are unavailable; operation blocked');
   if (controls.global_kill_switch) throw new Error('Global kill switch is enabled');
   if (channel === 'EMAIL' && controls.email_paused) throw new Error('Email sending is paused');
   if (channel === 'WHATSAPP' && controls.whatsapp_ai_paused) throw new Error('WhatsApp AI sending is paused');
