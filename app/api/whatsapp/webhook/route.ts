@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { extractWhatsAppInbound, verifyMetaSignature } from '@/lib/whatsapp/webhook';
+import { persistWhatsAppWebhookEvents } from '@/lib/whatsapp/persistence';
+import { extractWhatsAppInbound, extractWhatsAppStatuses, verifyMetaSignature } from '@/lib/whatsapp/webhook';
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -28,6 +29,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const events = extractWhatsAppInbound(payload);
-  return NextResponse.json({ accepted: true, events });
+  const inbound = extractWhatsAppInbound(payload);
+  const statuses = extractWhatsAppStatuses(payload);
+
+  try {
+    const persistence = await persistWhatsAppWebhookEvents({ inbound, statuses });
+    return NextResponse.json({
+      accepted: true,
+      inboundCount: inbound.length,
+      statusCount: statuses.length,
+      persistence,
+    });
+  } catch (error) {
+    return NextResponse.json({
+      error: error instanceof Error ? error.message : 'WhatsApp webhook persistence failed',
+    }, { status: 503 });
+  }
 }
