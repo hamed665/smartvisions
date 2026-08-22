@@ -1,0 +1,45 @@
+import { describe, expect, it } from 'vitest';
+import { evaluateApprovedSendPolicy } from '@/lib/outreach/approved-send-policy';
+
+const base = {
+  messageStatus: 'APPROVED',
+  requiresApproval: false,
+  shadowMode: false,
+  globalKillSwitch: false,
+  channelPaused: false,
+  doNotContact: false,
+  agentMode: 'AUTO',
+  messageChannel: 'EMAIL',
+};
+
+describe('approved send policy', () => {
+  it('allows an approved live-mode message with all guards clear', () => {
+    expect(evaluateApprovedSendPolicy(base)).toEqual({ allowed: true, blocks: [], channel: 'EMAIL' });
+  });
+
+  it('blocks approved messages while shadow mode is still enabled', () => {
+    const result = evaluateApprovedSendPolicy({ ...base, shadowMode: true });
+    expect(result.allowed).toBe(false);
+    expect(result.blocks).toContain('SHADOW_MODE_ENABLED');
+  });
+
+  it('blocks do-not-contact leads', () => {
+    const result = evaluateApprovedSendPolicy({ ...base, doNotContact: true });
+    expect(result.blocks).toContain('DO_NOT_CONTACT');
+  });
+
+  it('blocks human takeover even after owner approval', () => {
+    const result = evaluateApprovedSendPolicy({ ...base, agentMode: 'HUMAN' });
+    expect(result.blocks).toContain('HUMAN_TAKEOVER');
+  });
+
+  it('blocks a message that is not actually approved', () => {
+    const result = evaluateApprovedSendPolicy({ ...base, messageStatus: 'READY' });
+    expect(result.blocks).toContain('MESSAGE_NOT_APPROVED');
+  });
+
+  it('blocks kill switch and paused channels independently', () => {
+    const result = evaluateApprovedSendPolicy({ ...base, globalKillSwitch: true, channelPaused: true });
+    expect(result.blocks).toEqual(expect.arrayContaining(['GLOBAL_KILL_SWITCH', 'CHANNEL_PAUSED']));
+  });
+});
