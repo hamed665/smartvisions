@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { applyWhatsAppInboundLifecycle, applyWhatsAppStatusLifecycle } from './lifecycle';
 import type { NormalizedWhatsAppInbound, NormalizedWhatsAppStatus } from './webhook';
 
 function serviceClient() {
@@ -28,7 +29,7 @@ export async function persistWhatsAppWebhookEvents(input: {
   inbound: NormalizedWhatsAppInbound[];
   statuses: NormalizedWhatsAppStatus[];
 }) {
-  if (input.inbound.length === 0 && input.statuses.length === 0) return { inserted: 0, duplicates: 0 };
+  if (input.inbound.length === 0 && input.statuses.length === 0) return { inserted: 0, duplicates: 0, linkedInbound: 0, statusUpdates: 0 };
 
   const organizationId = await resolveWhatsAppOrganizationId();
   const supabase = serviceClient();
@@ -58,6 +59,18 @@ export async function persistWhatsAppWebhookEvents(input: {
     .select('id');
   if (error) throw new Error(`WhatsApp event persistence failed: ${error.message}`);
 
+  let linkedInbound = 0;
+  for (const event of input.inbound) {
+    const lifecycle = await applyWhatsAppInboundLifecycle(organizationId, event);
+    if (lifecycle.linked) linkedInbound += 1;
+  }
+
+  let statusUpdates = 0;
+  for (const event of input.statuses) {
+    const lifecycle = await applyWhatsAppStatusLifecycle(organizationId, event);
+    statusUpdates += lifecycle.matched;
+  }
+
   const inserted = data?.length ?? 0;
-  return { inserted, duplicates: Math.max(0, rows.length - inserted), organizationId };
+  return { inserted, duplicates: Math.max(0, rows.length - inserted), organizationId, linkedInbound, statusUpdates };
 }
