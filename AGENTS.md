@@ -4,46 +4,69 @@
 
 ## Source of truth
 
-The project must be continued from the repository state, not from memory or assumptions. Before starting work, read these files in order:
+Continue from repository and production state, never from chat memory alone. Read in this order:
 
-1. `AGENTS.md` — non-negotiable project rules and current priorities.
-2. `docs/CURRENT_STATE.md` — exact production status and the next unfinished task.
-3. `docs/MASTER_PLAN.md` — complete product scope and completion roadmap.
-4. `docs/V1_FINAL_4_PR_PLAN.md` — locked Production V1 closure plan and duplicate-work prevention inventory.
-5. `docs/EXECUTION_PLAYBOOK.md` — how changes must be implemented, tested, migrated, deployed, and handed off.
-6. `.env.example` — integration contract. Never place real secrets in GitHub.
+1. `AGENTS.md` — non-negotiable engineering/operational rules.
+2. `docs/CURRENT_STATE.md` — exact production status and current next action.
+3. `docs/MASTER_PLAN.md` — product scope, Production V1 completion state and post-V1 backlog.
+4. `docs/V1_FINAL_4_PR_PLAN.md` — actual #36–#40 closure sequence and exit gate.
+5. `docs/INTEGRATION_INVENTORY.md` — provider/config state and verification rules.
+6. `docs/EXECUTION_PLAYBOOK.md` — implementation/deployment discipline.
+7. `.env.example` — integration contract. Never commit real secrets.
 
-If chat history conflicts with repository documentation, verify the current code, migrations, Supabase state, and deployment before acting. Update `docs/CURRENT_STATE.md` after every meaningful production change.
+If chat history conflicts with repository documentation, verify code, current PR SHA, Supabase schema/state and Vercel deployment first. Update `docs/CURRENT_STATE.md` after every meaningful production change.
 
 ## Project identity
 
 - Repository: `hamed665/smartvisions`
 - Product: **Smart Visions Growth OS**
-- This repository is completely separate from DrKhaleej. Never modify the DrKhaleej repository for Smart Visions work.
+- This repository is separate from DrKhaleej. Never modify DrKhaleej for Smart Visions work.
 - Frontend/control plane: Next.js on Vercel.
 - Database/Auth: Supabase.
-- Production database project ref: `pkypexzpyfbikdnkrzvw`.
-- Main product UI language: **English**.
-- Operator-facing explanations, reports, conversation translations, summaries, alerts, and handoff context for the owner: **Persian**.
+- Production Supabase ref: `pkypexzpyfbikdnkrzvw`.
+- Main Control Center language: English.
+- Owner/operator explanations, translations, summaries and handoff context: Persian where applicable.
+
+## Current Production V1 sequence
+
+- PR #36 — Growth Intelligence — COMPLETE.
+- PR #37 — AI Sales / Conversations / Outreach foundations — COMPLETE.
+- PR #38 — emergency reliability hardening of five real #37 review defects — COMPLETE.
+- PR #39 — Website Demo & Content Production Engine — COMPLETE.
+- PR #40 — Control Center completeness / reliability / final QA / launch gates — final closure PR.
+
+The original four-feature-PR plan was shifted by emergency #38. Do not resurrect old numbering by creating duplicate subsystems or reopening completed phases.
 
 ## Product operating principles
 
-1. **Automation by default, human approval by exception.** The owner cannot sit behind the panel all day. Routine, low-risk work should proceed automatically. Human approval/handoff is reserved for high-risk pricing changes, unusual discounts, custom contractual/payment terms, complaints/legal claims, low-confidence decisions, policy exceptions, or explicitly configured cases.
-2. **No uncontrolled API spending.** Every paid provider must pass Cost Guard before execution and record usage afterward. Paid operations fail closed if Cost Guard cannot be evaluated.
-3. **No fake integrations.** A UI card may show `NOT CONFIGURED`, `READY`, `DEGRADED`, or `CONNECTED`, but must never imply a provider is active before an end-to-end test succeeds.
-4. **Do not hardcode business controls.** Budgets, quotas, market settings, prices, discount ceilings, agent thresholds, runtime safety switches, and outreach windows should be editable from the Control Center and stored in Supabase whenever practical.
-5. **Respect local time.** Automated outbound messages are constrained to **09:00–19:00 in the recipient market's local timezone**, unless the owner explicitly changes the market policy in the panel.
-6. **Localized communication.** Oman, UAE, Saudi Arabia, Qatar, UK, USA and future markets use the appropriate language/tone. Oman uses Omani Arabic where confidence is high, UAE Emirati Arabic, Saudi Saudi Arabic, Qatar Qatari/Gulf Arabic. If dialect confidence is low, use natural Gulf-neutral Arabic rather than pretending certainty. UK and USA use their respective natural English tone.
-7. **Multilingual inbound intelligence.** Text and voice may arrive in Arabic dialects, English variants, Persian, Urdu, Hindi, Pakistani/Indian English, or mixed language. Detect language/dialect conservatively, transcribe voice once, cache transcript, provide Persian operator brief, and reply in the customer's appropriate language/style.
-8. **Original + Persian view.** Preserve original customer content. Operator views should show original message, Persian translation, Persian summary, intent, sentiment, stage, relevant risk flags, and the Persian translation of any generated outgoing reply.
-9. **Conversation inbox must remain operationally useful.** Core categories include New/Unread, Active Conversation, Closing/Finalizing, Waiting for Customer, Unanswered, Hot Lead, Needs Human, Follow-up Due, Won, Lost/Not Interested, Do Not Contact, Spam/Low Quality, and Paused. Classification should be automatic and explainable.
-10. **No autonomous platform abuse.** Do not implement unsafe bulk/cold automation that violates provider/platform terms. Instagram cold DM and marketplace auto-apply should remain policy-aware/semi-manual where required. WhatsApp and email workflows must honor applicable provider rules, consent/opt-out requirements, DNC, send windows, and reputation safeguards.
+1. **Automation by default, human approval by exception, but launch permission is explicit.** Routine low-risk work may become autonomous only after its provider/policy launch gate is proven. Human approval/handoff is required for configured high-risk pricing, unusual discounts, payment/contract terms, complaints/legal claims, low confidence, exceptions, or owner-configured cases.
+2. **No uncontrolled API spending.** Every paid provider passes runtime safety and Cost Guard before execution and records/reconciles usage after execution.
+3. **No fake integrations.** `CONNECTED` means durable production E2E evidence. Credential presence alone is not connectivity.
+4. **One source of truth per control.** Budget/quota thresholds live in `cost_guard_settings`; emergency runtime state lives in `system_controls`; pricing remains in existing pricing tables; provider state remains in `integration_connections`. Do not revive legacy duplicate controls such as `system_controls.monthly_budget_usd` as operational inputs.
+5. **Do not hardcode business controls that operators must change.** Use existing database settings/config JSON and Control Center surfaces where practical.
+6. **Respect recipient-local time and channel policy.** Existing market/outreach windows, DNC/suppression, channel pause, provider policy and reputation safeguards are hard gates.
+7. **Localized communication without fake certainty.** Use appropriate market language/tone; if dialect confidence is weak, prefer natural neutral language rather than invented specificity.
+8. **Original + Persian operator view.** Preserve original customer content and useful Persian translation/summary/intent for the owner where relevant.
+9. **No autonomous platform abuse.** Instagram cold DM and marketplace auto-apply remain policy-aware/semi-manual where required. WhatsApp/email must honor provider policy, consent/opt-out, DNC and reputation safeguards.
+10. **No blind retry across paid or externally visible boundaries.** Use the existing journals/claims/caches described below.
+
+## Canonical reliability boundaries
+
+- Business identity: existing Google Place/domain dedupe.
+- Google Place Details: `discovery_records` journal; completed replay, PROCESSING/FAILED fail closed against blind rerun.
+- Website audit: TTL cache + quota + unique one-RUNNING-per-business guard.
+- Inbound AI: caller idempotency key + `agent_runs.request_key/result_payload`; completed replay; PROCESSING/FAILED keys do not blindly rerun AI.
+- Voice: media transcription cache with failure/stale-processing recovery policy.
+- Preview/content: stable `brief_hash` + organization/lead/brief uniqueness.
+- Email/WhatsApp send: pre-provider claim; provider acceptance is final for resend safety, with later persistence failures reconciliation-only.
+- Global kill switch: enforced before controlled provider operations.
+- Agent pause: enforced from database state before AI execution; caller input cannot override it.
 
 ## Current safety defaults
 
-These are defaults, not permanent constants. The owner can change them from the panel:
+These are runtime-editable defaults, not permanent constants:
 
-- Monthly total paid-API budget: `$25`
+- Canonical monthly paid-API budget: `$25`
 - OpenAI: `$10`
 - Google Places: `$5`
 - Email: `$4`
@@ -52,49 +75,64 @@ These are defaults, not permanent constants. The owner can change them from the 
 - Daily new leads: `50`
 - Daily website audits: `15`
 - Daily deep AI runs: `10`
-- Max AI runs per lead before escalation/value check: `20`
+- Max AI runs per lead: `20`
 - Max voice duration: `180 seconds`
 - Automatic retry ceiling: `1`
-- Website audit/cache default: `30 days`
-- Warning: `70%`
-- Throttle: `85%`
-- Critical: `95%`
-- Hard stop: `100%`
+- Website audit cache: `30 days`
+- Warning / throttle / critical / hard stop: `70 / 85 / 95 / 100%`
 
-Cost settings are runtime-editable. Large increases must require explicit confirmation and be audit logged.
+Large budget/quota increases require explicit confirmation and audit logging. The legacy System monthly-budget field is not a second source of truth.
+
+## Current provider launch state
+
+- Google Places / Discovery: production-evidenced CONNECTED.
+- OpenAI / AI: production-evidenced CONNECTED.
+- Crawl4AI / Audit: code-ready but production NOT_CONFIGURED; optional for V1 because deterministic website audit exists.
+- Email Provider / Email: NOT_CONFIGURED and fail-closed.
+- Meta / WhatsApp: NOT_CONFIGURED and fail-closed.
+- Meta / Instagram: NOT_CONFIGURED; keep restricted automation semi-manual/policy-aware.
+- Redis / Queue: OPTIONAL / NOT_CONFIGURED. Do not add merely because queues are fashionable.
+- Shadow Mode: remains ON until live outbound providers are configured, controlled E2E passes and owner explicitly approves launch level.
 
 ## Engineering rules
 
-- Work through isolated branches and pull requests.
-- Never merge a PR with failing lint, typecheck, tests, or build.
-- Prefer least privilege. Do not fix authorization errors by broadly granting access.
-- For Supabase DDL/policies/grants, add a migration in `supabase/migrations/` and apply it to production only after review/CI.
-- After DDL/RLS work, run Supabase security and performance advisors.
-- Secrets stay in Vercel/Supabase/provider secret stores. Never commit real tokens, API keys, passwords, webhook secrets, or service keys.
-- Server-paid operations must use server-only credentials and must not expose privileged keys to the browser.
-- Preserve idempotency, audit logging, DNC/suppression, human takeover lock, retry limits, and kill switches.
-- Any new paid provider must implement: preflight budget check, provider quota check, retry policy, usage recording, and visible integration health.
-- Avoid duplicate CRMs, duplicate lead tables, duplicate conversation models, or parallel configuration systems. Extend existing primitives first.
-- Do not describe untested functionality as complete. Mark it `implemented`, `configured`, `tested`, or `production-verified` accurately.
-- During Production V1 closure, map all missing work into PR #36–#39 as defined in `docs/V1_FINAL_4_PR_PLAN.md`; do not spawn micro-feature PRs unless an isolated emergency production fix is required.
+- Work through isolated branches and PRs.
+- Never merge with failing install, lint, typecheck, tests or build.
+- Merge with expected head SHA so a moving branch cannot slip through the gate.
+- Prefer least privilege. Never fix authorization errors with broad grants.
+- Supabase DDL/policy/grant changes require a migration and production verification.
+- Run Supabase Security and Performance Advisors after final DDL/RLS changes.
+- Secrets stay in Vercel/Supabase/provider secret stores. Never commit tokens, API keys, passwords, webhook secrets or service keys.
+- Server-paid operations use server-only credentials.
+- Preserve idempotency, audit logging, DNC/suppression, human takeover, retry ceilings, Cost Guard and kill/pause controls.
+- Any newly activated paid provider needs: runtime-safety preflight, Cost Guard/provider quota, explicit retry semantics, usage evidence and visible health state.
+- Extend existing primitives before adding schema or services. No duplicate CRM, pricing, conversations, agents, previews, Cost Guard or integration state.
+- Do not describe untested work as production-verified. Use `implemented`, `configured`, `tested`, `READY`, or `CONNECTED` accurately.
+- Do not run paid smoke tests just to refresh a dashboard badge when durable evidence already proves the provider works.
+- Historical failed rows are evidence, not visual clutter. Do not delete them merely to make dashboards look clean.
 
-## Definition of done for a feature
+## Definition of done
 
-A feature is not complete because a page exists. It is complete only when applicable items are satisfied:
+A feature/closure item is complete only when applicable items are satisfied:
 
-- Data model/migration exists and RLS/permissions are correct.
-- Server action/API/runtime is implemented.
-- UI supports useful read/write operation, not decorative statistics only.
-- Validation and error states are usable.
-- Audit log is written for meaningful operator changes.
-- Cost Guard is enforced if the feature can spend money.
-- Tests cover important policy/routing/business logic.
-- `lint`, `typecheck`, `tests`, and `build` are green.
-- Supabase migration is applied if required.
-- Vercel production deployment is healthy.
-- Integration smoke test is successful if external providers are involved.
-- `docs/CURRENT_STATE.md` is updated with exact status and next action.
+- schema/migration and RLS/permissions are correct;
+- server action/API/runtime works;
+- existing UI supports useful operation without decorative duplication;
+- validation/failure states are usable and fail closed;
+- meaningful operator changes are audited;
+- paid work is runtime-safety + Cost Guard protected;
+- idempotency/retry behavior is explicit;
+- tests cover important business/safety logic;
+- install/lint/typecheck/tests/build are green on the exact final head;
+- migrations are applied and Advisors reviewed if schema changed;
+- Vercel Preview is READY on the exact final head;
+- review threads are resolved/absent;
+- merge uses expected head SHA;
+- exact merge commit is READY in Production;
+- `docs/CURRENT_STATE.md` reflects the resulting truth.
 
 ## Immediate continuation rule
 
-At the start of a new chat/session, **do not invent a new roadmap**. Read `docs/CURRENT_STATE.md`, verify the referenced PR/commit/deployment/database state, then follow `docs/V1_FINAL_4_PR_PLAN.md` for Production V1 closure. Use `docs/MASTER_PLAN.md` as the complete scope inventory. The four-PR closure plan takes precedence for sequencing unless the owner explicitly changes priority.
+At the start of a new chat/session, **do not invent another roadmap**. Read `docs/CURRENT_STATE.md`, verify the referenced commit/PR/deployment/database state, then continue only the listed real gap.
+
+After PR #40, normal next work is not another feature PR by default. It is controlled provider configuration/pilot evidence where required: Email sender/domain, WhatsApp assets/webhooks, one controlled E2E per channel, then an explicit owner decision about Shadow Mode and automation level. New feature work should be justified by production/pilot evidence rather than checklist aesthetics.
