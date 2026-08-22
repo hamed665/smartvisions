@@ -41,8 +41,20 @@ export function normalizeProductionLane(salesLane?: string | null, recommendedSe
   return null;
 }
 
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, nested]) => [key, canonicalize(nested)]),
+    );
+  }
+  return value;
+}
+
 export function previewBriefHash(input: Record<string, unknown>) {
-  const stable = JSON.stringify(input, Object.keys(input).sort());
+  const stable = JSON.stringify(canonicalize(input));
   return createHash('sha256').update(stable).digest('hex');
 }
 
