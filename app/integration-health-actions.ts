@@ -2,12 +2,20 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
+import { createClient } from '@supabase/supabase-js';
 import { Crawl4AiAuditor } from '@/lib/audit/crawl4ai';
 import { ResendEmailProvider } from '@/lib/outreach/resend-provider';
 import { recordUsage } from '@/lib/reliability/cost-guard';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 
 const TEST_URL = 'https://example.com';
+
+function serviceClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Server Supabase credentials are required for integration verification');
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
 
 function safeMessage(value: unknown) {
   const message = value instanceof Error ? value.message : 'Integration verification failed';
@@ -22,6 +30,7 @@ function requiredEmail(formData: FormData) {
 
 export async function verifyEmailIntegration(formData: FormData) {
   const ctx = await getCurrentOrganization(true);
+  const db = serviceClient();
   let destination = '/integrations';
   const startedAt = Date.now();
 
@@ -31,7 +40,7 @@ export async function verifyEmailIntegration(formData: FormData) {
     const apiKeyPresent = Boolean(process.env.EMAIL_PROVIDER_API_KEY?.trim());
     if (provider !== 'RESEND' || !apiKeyPresent) throw new Error('Resend email credentials are not configured');
 
-    const { data: mailbox, error: mailboxError } = await ctx.supabase
+    const { data: mailbox, error: mailboxError } = await db
       .from('mailboxes')
       .select('id,address,enabled,daily_limit,sent_today')
       .eq('organization_id', ctx.organizationId)
@@ -55,14 +64,14 @@ export async function verifyEmailIntegration(formData: FormData) {
 
     const checkedAt = new Date().toISOString();
     const latencyMs = Date.now() - startedAt;
-    const { error: mailboxUpdateError } = await ctx.supabase.from('mailboxes').update({
+    const { error: mailboxUpdateError } = await db.from('mailboxes').update({
       sent_today: Number(mailbox.sent_today ?? 0) + 1,
       health_status: 'VERIFYING',
       updated_at: checkedAt,
     }).eq('organization_id', ctx.organizationId).eq('id', mailbox.id);
     if (mailboxUpdateError) throw mailboxUpdateError;
 
-    const { error: integrationUpdateError } = await ctx.supabase.from('integration_connections').update({
+    const { error: integrationUpdateError } = await db.from('integration_connections').update({
       enabled: false,
       status: 'NOT_CONFIGURED',
       account_label: mailbox.address,
@@ -72,7 +81,7 @@ export async function verifyEmailIntegration(formData: FormData) {
     }).eq('organization_id', ctx.organizationId).eq('provider', 'EMAIL_PROVIDER').eq('channel', 'EMAIL');
     if (integrationUpdateError) throw integrationUpdateError;
 
-    const { error: auditError } = await ctx.supabase.from('audit_logs').insert({
+    const { error: auditError } = await db.from('audit_logs').insert({
       organization_id: ctx.organizationId,
       actor_type: 'USER',
       actor_id: ctx.userId,
@@ -106,14 +115,14 @@ export async function verifyEmailIntegration(formData: FormData) {
   } catch (error) {
     const message = safeMessage(error);
     const checkedAt = new Date().toISOString();
-    await ctx.supabase.from('integration_connections').update({
+    await db.from('integration_connections').update({
       enabled: false,
       status: 'NOT_CONFIGURED',
       last_checked_at: checkedAt,
       last_error: message,
       updated_at: checkedAt,
     }).eq('organization_id', ctx.organizationId).eq('provider', 'EMAIL_PROVIDER').eq('channel', 'EMAIL');
-    await ctx.supabase.from('audit_logs').insert({
+    await db.from('audit_logs').insert({
       organization_id: ctx.organizationId,
       actor_type: 'USER',
       actor_id: ctx.userId,
