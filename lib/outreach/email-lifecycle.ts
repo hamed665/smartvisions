@@ -15,10 +15,9 @@ async function resolveEmailOrganizationId() {
     .select('organization_id')
     .eq('provider', 'EMAIL_PROVIDER')
     .eq('channel', 'EMAIL')
-    .eq('enabled', true)
     .limit(2);
   if (error) throw new Error(`Email integration lookup failed: ${error.message}`);
-  if (!data || data.length !== 1) throw new Error('Email webhook requires exactly one enabled EMAIL_PROVIDER/EMAIL integration');
+  if (!data || data.length !== 1) throw new Error('Email webhook requires exactly one EMAIL_PROVIDER/EMAIL integration');
   return String(data[0].organization_id);
 }
 
@@ -141,9 +140,6 @@ export async function persistResendWebhookEvent(event: ResendWebhookEvent) {
   if (insertError) throw new Error(`Email event persistence failed: ${insertError.message}`);
   const duplicate = !inserted || inserted.length === 0;
 
-  // A duplicate ledger row does not imply side effects completed. Every side effect below is
-  // written idempotently, so webhook retries are deliberately replayed to recover from a
-  // transient failure that happened after the durable event row was first inserted.
   if (event.eventType === 'email.received' && event.providerMessageId) {
     const received = await fetchReceivedEmail(event.providerMessageId);
     const from = normalizeAddress(received.from ?? event.from);
