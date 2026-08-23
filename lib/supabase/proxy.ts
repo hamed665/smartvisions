@@ -1,7 +1,16 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+const PUBLIC_WEBHOOK_PATHS = new Set([
+  '/api/email/webhook',
+  '/api/whatsapp/webhook',
+]);
+
 export async function updateSession(request: NextRequest) {
+  if (PUBLIC_WEBHOOK_PATHS.has(request.nextUrl.pathname)) {
+    return NextResponse.next({ request });
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
