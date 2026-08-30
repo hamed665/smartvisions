@@ -20,6 +20,11 @@ function normalizeRecipient(value: FormDataEntryValue | null) {
   return digits;
 }
 
+function whatsappCredentialsReady() {
+  const token = process.env.META_WHATSAPP_ACCESS_TOKEN?.trim() || process.env.META_WHATSAPP_TOKEN?.trim();
+  return Boolean(token && process.env.META_WHATSAPP_PHONE_NUMBER_ID?.trim());
+}
+
 function safeMessage(value: unknown) {
   return (value instanceof Error ? value.message : 'WhatsApp verification failed')
     .replace(/https?:\/\/[^\s]+/g, '[url]')
@@ -43,12 +48,7 @@ export async function verifyWhatsAppIntegration(formData: FormData) {
 
   try {
     const recipient = normalizeRecipient(formData.get('test_whatsapp'));
-    const credentialsReady = Boolean(
-      process.env.META_WHATSAPP_TOKEN?.trim() &&
-      process.env.META_WHATSAPP_PHONE_NUMBER_ID?.trim() &&
-      process.env.META_GRAPH_VERSION?.trim(),
-    );
-    if (!credentialsReady) throw new Error('Meta WhatsApp credentials are not fully configured');
+    if (!whatsappCredentialsReady()) throw new Error('Meta WhatsApp credentials are not fully configured');
 
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: inbound, error: inboundError } = await db
