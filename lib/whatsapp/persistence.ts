@@ -16,11 +16,10 @@ async function resolveWhatsAppOrganizationId() {
     .select('organization_id')
     .eq('provider', 'META')
     .eq('channel', 'WHATSAPP')
-    .eq('enabled', true)
     .limit(2);
   if (error) throw new Error(`WhatsApp integration lookup failed: ${error.message}`);
   if (!data || data.length !== 1) {
-    throw new Error('WhatsApp webhook requires exactly one enabled META/WHATSAPP integration');
+    throw new Error('WhatsApp webhook requires exactly one META/WHATSAPP integration');
   }
   return String(data[0].organization_id);
 }
