@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
 import { MetaCloudWhatsAppProvider } from '@/lib/whatsapp/meta-cloud';
 import { getCurrentOrganization } from '@/lib/supabase/org';
+import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -61,9 +62,25 @@ export async function verifyWhatsAppIntegration(formData: FormData) {
     if (inboundError) throw inboundError;
     if (!inbound?.length) throw new Error('No successful inbound WhatsApp webhook was recorded in the last 24 hours');
 
+    const costState = await getCostGuardState(ctx.organizationId);
+    assertPaidOperationAllowed(costState, 'NORMAL');
+
     const result = await new MetaCloudWhatsAppProvider().sendText({
       to: recipient,
       text: 'Smart Visions WhatsApp production verification. This is a controlled test reply; no action is required.',
+    });
+
+    await recordUsage({
+      organizationId: ctx.organizationId,
+      provider: 'WHATSAPP',
+      operation: 'WHATSAPP_PROVIDER_VERIFICATION',
+      costUsd: 0,
+      units: 1,
+      metadata: {
+        source: 'OWNER_CONTROLLED_INTEGRATION_VERIFICATION',
+        pricing_status: 'PENDING_RECONCILIATION',
+        provider_message_id: result.providerMessageId,
+      },
     });
 
     const checkedAt = new Date().toISOString();
@@ -91,6 +108,7 @@ export async function verifyWhatsAppIntegration(formData: FormData) {
         latencyMs,
         providerCalls: 1,
         inboundWebhookConfirmed: true,
+        usageRecorded: true,
         outreachTriggered: false,
         integrationEnabled: preservedEnabled,
       },
