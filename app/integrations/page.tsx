@@ -6,7 +6,7 @@ import { getCurrentOrganization } from '@/lib/supabase/org';
 import { evaluateBudgetMode } from '@/lib/reliability/cost-guard';
 export const dynamic='force-dynamic';
 
-function whatsappCredentialsReady(){const token=process.env.META_WHATSAPP_ACCESS_TOKEN?.trim()||process.env.META_WHATSAPP_TOKEN?.trim();return Boolean(token&&process.env.META_WHATSAPP_PHONE_NUMBER_ID?.trim())}
+function whatsappCredentialsReady(){const token=process.env.META_WHATSAPP_ACCESS_TOKEN?.trim()||process.env.META_WHATSAPP_TOKEN?.trim()||process.env.WHATSAPP_ACCESS_TOKEN?.trim();const phoneNumberId=process.env.META_WHATSAPP_PHONE_NUMBER_ID?.trim()||process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();return Boolean(token&&phoneNumberId)}
 function credentialReady(provider:string,channel:string){switch(`${provider}:${channel}`){case'OPENAI:AI':return Boolean(process.env.OPENAI_API_KEY);case'META:WHATSAPP':return whatsappCredentialsReady();case'META:INSTAGRAM':return false;case'GOOGLE_PLACES:DISCOVERY':return Boolean(process.env.GOOGLE_PLACES_API_KEY);case'CRAWL4AI:AUDIT':return Boolean(process.env.CRAWL4AI_URL);case'REDIS:QUEUE':return Boolean(process.env.REDIS_URL);case'EMAIL_PROVIDER:EMAIL':return Boolean(process.env.EMAIL_PROVIDER&&process.env.EMAIL_PROVIDER_API_KEY);default:return false}}
 function effectiveStatus(status:string,credential:boolean){if(!credential)return'NOT_CONFIGURED';if(status==='NOT_CONFIGURED')return'READY';return status}
 
