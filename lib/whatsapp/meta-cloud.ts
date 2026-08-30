@@ -1,15 +1,23 @@
 import type { WhatsAppProvider, WhatsAppSendInput, WhatsAppSendResult, WhatsAppTemplateSendInput } from './provider';
 
+function resolveMetaWhatsAppToken() {
+  return process.env.META_WHATSAPP_ACCESS_TOKEN?.trim() || process.env.META_WHATSAPP_TOKEN?.trim();
+}
+
+function resolveMetaGraphVersion() {
+  return process.env.META_GRAPH_VERSION?.trim() || 'v23.0';
+}
+
 export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
   constructor(
-    private readonly token = process.env.META_WHATSAPP_TOKEN,
-    private readonly phoneNumberId = process.env.META_WHATSAPP_PHONE_NUMBER_ID,
-    private readonly graphVersion = process.env.META_GRAPH_VERSION,
+    private readonly token = resolveMetaWhatsAppToken(),
+    private readonly phoneNumberId = process.env.META_WHATSAPP_PHONE_NUMBER_ID?.trim(),
+    private readonly graphVersion = resolveMetaGraphVersion(),
   ) {}
 
   private assertConfigured() {
-    if (!this.token || !this.phoneNumberId || !this.graphVersion) {
-      throw new Error('META_WHATSAPP_TOKEN, META_WHATSAPP_PHONE_NUMBER_ID and META_GRAPH_VERSION are required');
+    if (!this.token || !this.phoneNumberId) {
+      throw new Error('META_WHATSAPP_ACCESS_TOKEN (or legacy META_WHATSAPP_TOKEN) and META_WHATSAPP_PHONE_NUMBER_ID are required');
     }
   }
 
