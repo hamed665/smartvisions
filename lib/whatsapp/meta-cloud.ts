@@ -1,7 +1,14 @@
 import type { WhatsAppProvider, WhatsAppSendInput, WhatsAppSendResult, WhatsAppTemplateSendInput } from './provider';
 
 function resolveMetaWhatsAppToken() {
-  return process.env.META_WHATSAPP_ACCESS_TOKEN?.trim() || process.env.META_WHATSAPP_TOKEN?.trim();
+  return process.env.META_WHATSAPP_ACCESS_TOKEN?.trim()
+    || process.env.META_WHATSAPP_TOKEN?.trim()
+    || process.env.WHATSAPP_ACCESS_TOKEN?.trim();
+}
+
+function resolveMetaPhoneNumberId() {
+  return process.env.META_WHATSAPP_PHONE_NUMBER_ID?.trim()
+    || process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
 }
 
 function resolveMetaGraphVersion() {
@@ -11,13 +18,13 @@ function resolveMetaGraphVersion() {
 export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
   constructor(
     private readonly token = resolveMetaWhatsAppToken(),
-    private readonly phoneNumberId = process.env.META_WHATSAPP_PHONE_NUMBER_ID?.trim(),
+    private readonly phoneNumberId = resolveMetaPhoneNumberId(),
     private readonly graphVersion = resolveMetaGraphVersion(),
   ) {}
 
   private assertConfigured() {
     if (!this.token || !this.phoneNumberId) {
-      throw new Error('META_WHATSAPP_ACCESS_TOKEN (or legacy META_WHATSAPP_TOKEN) and META_WHATSAPP_PHONE_NUMBER_ID are required');
+      throw new Error('WhatsApp access token and phone-number ID are required');
     }
   }
 

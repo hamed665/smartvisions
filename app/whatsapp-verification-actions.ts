@@ -21,8 +21,12 @@ function normalizeRecipient(value: FormDataEntryValue | null) {
 }
 
 function whatsappCredentialsReady() {
-  const token = process.env.META_WHATSAPP_ACCESS_TOKEN?.trim() || process.env.META_WHATSAPP_TOKEN?.trim();
-  return Boolean(token && process.env.META_WHATSAPP_PHONE_NUMBER_ID?.trim());
+  const token = process.env.META_WHATSAPP_ACCESS_TOKEN?.trim()
+    || process.env.META_WHATSAPP_TOKEN?.trim()
+    || process.env.WHATSAPP_ACCESS_TOKEN?.trim();
+  const phoneNumberId = process.env.META_WHATSAPP_PHONE_NUMBER_ID?.trim()
+    || process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
+  return Boolean(token && phoneNumberId);
 }
 
 function safeMessage(value: unknown) {
