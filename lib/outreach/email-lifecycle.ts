@@ -31,6 +31,10 @@ export function shouldReplayEmailSideEffects(insertedCount: number) {
   return insertedCount >= 0;
 }
 
+export function isEmailInboundDuplicateError(code?: string | null) {
+  return code === '23505';
+}
+
 async function fetchReceivedEmail(emailId: string) {
   const key = process.env.EMAIL_PROVIDER_API_KEY?.trim();
   if (!key) throw new Error('EMAIL_PROVIDER_API_KEY is required to retrieve inbound email content');
@@ -149,7 +153,7 @@ export async function persistResendWebhookEvent(event: ResendWebhookEvent) {
 
     const conversationId = await ensureConversation(organizationId, lead.id);
     const body = received.text?.trim() || '[HTML email received]';
-    const { error: messageError } = await supabase.from('outreach_messages').upsert({
+    const { error: messageError } = await supabase.from('outreach_messages').insert({
       organization_id: organizationId,
       lead_id: lead.id,
       channel: 'EMAIL',
@@ -167,8 +171,10 @@ export async function persistResendWebhookEvent(event: ResendWebhookEvent) {
         conversationId,
         hasHtml: Boolean(received.html),
       },
-    }, { onConflict: 'organization_id,idempotency_key', ignoreDuplicates: true });
-    if (messageError) throw new Error(`Inbound email message persistence failed: ${messageError.message}`);
+    });
+    if (messageError && !isEmailInboundDuplicateError(messageError.code)) {
+      throw new Error(`Inbound email message persistence failed: ${messageError.message}`);
+    }
 
     const { error: conversationError } = await supabase.from('sales_conversations').update({
       last_message_at: received.created_at ?? event.occurredAt,
