@@ -5,6 +5,7 @@ const TRANSCRIPTION_MODEL = 'gpt-4o-mini-transcribe';
 const TRANSCRIPTION_USD_PER_MINUTE = 0.003;
 const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
 const PROCESSING_LEASE_MS = 10 * 60 * 1000;
+const POST_PROVIDER_RECONCILIATION_PREFIX = 'POST_PROVIDER_RECONCILIATION_REQUIRED:';
 
 type VoiceTranscriptionRow = {
   id: string;
@@ -54,9 +55,24 @@ export function extensionForMimeType(mimeType?: string) {
   return 'bin';
 }
 
-export function voiceCacheAction(status: VoiceTranscriptionRow['status'], updatedAt: string, nowMs = Date.now()) {
+export function resolveMetaVoiceConfig(env: NodeJS.ProcessEnv = process.env) {
+  return {
+    token: env.META_WHATSAPP_ACCESS_TOKEN?.trim()
+      || env.META_WHATSAPP_TOKEN?.trim()
+      || env.WHATSAPP_ACCESS_TOKEN?.trim(),
+    graphVersion: env.META_GRAPH_VERSION?.trim() || 'v23.0',
+  };
+}
+
+export function voiceCacheAction(
+  status: VoiceTranscriptionRow['status'],
+  updatedAt: string,
+  nowMs = Date.now(),
+  errorMessage?: string | null,
+) {
   if (status === 'SUCCEEDED') return 'RETURN' as const;
   if (status === 'FAILED') return 'RETRY' as const;
+  if (errorMessage?.startsWith(POST_PROVIDER_RECONCILIATION_PREFIX)) return 'RETURN' as const;
   const updatedMs = Date.parse(updatedAt);
   if (!Number.isFinite(updatedMs) || nowMs - updatedMs >= PROCESSING_LEASE_MS) return 'RETRY' as const;
   return 'RETURN' as const;
@@ -110,9 +126,8 @@ async function reclaimCached(row: VoiceTranscriptionRow) {
 }
 
 async function downloadMetaVoice(mediaId: string, fallbackMimeType?: string) {
-  const token = process.env.META_WHATSAPP_TOKEN;
-  const graphVersion = process.env.META_GRAPH_VERSION;
-  if (!token || !graphVersion) throw new Error('Meta WhatsApp media credentials are not configured');
+  const { token, graphVersion } = resolveMetaVoiceConfig();
+  if (!token) throw new Error('Meta WhatsApp media credentials are not configured');
 
   const metadataResponse = await fetch(`https://graph.facebook.com/${graphVersion}/${encodeURIComponent(mediaId)}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -171,7 +186,9 @@ export async function transcribeWhatsAppVoiceOnce(input: {
   const cached = await findCached(input.organizationId, input.providerMessageId, input.mediaId);
   let row: VoiceTranscriptionRow | null = null;
   if (cached) {
-    if (voiceCacheAction(cached.status, cached.updated_at) === 'RETURN') return cachedResult(cached);
+    if (voiceCacheAction(cached.status, cached.updated_at, Date.now(), cached.error_message) === 'RETURN') {
+      return cachedResult(cached);
+    }
     row = await reclaimCached(cached);
     if (!row) {
       const raced = await findCached(input.organizationId, input.providerMessageId, input.mediaId);
@@ -270,7 +287,7 @@ export async function transcribeWhatsAppVoiceOnce(input: {
     } else {
       await supabase
         .from('voice_transcriptions')
-        .update({ error_message: `POST_PROVIDER_RECONCILIATION_REQUIRED: ${message}`.slice(0, 1000), updated_at: new Date().toISOString() })
+        .update({ error_message: `${POST_PROVIDER_RECONCILIATION_PREFIX} ${message}`.slice(0, 1000), updated_at: new Date().toISOString() })
         .eq('id', row.id);
     }
     throw error;
