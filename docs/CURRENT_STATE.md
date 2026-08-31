@@ -1,8 +1,8 @@
 # Smart Visions Growth OS — Current Production State
 
-**Reconciled:** 2026-08-22 (Oman, UTC+4)
+**Reconciled:** 2026-08-31 (Oman, UTC+4)
 
-This is the operational handoff. Production facts and the current `main` branch win over stale planning text. Preserve the existing Control Center and extend only verified gaps.
+This is the operational handoff. Production facts and the current `main` branch win over older planning text. Preserve the existing Control Center and extend only verified gaps.
 
 ## Production identity
 
@@ -10,24 +10,30 @@ This is the operational handoff. Production facts and the current `main` branch 
 - Production branch: `main`
 - Production URL: `https://smartvisions.vercel.app`
 - Supabase project: `pkypexzpyfbikdnkrzvw`
-- Production `main` entering the final PR: `d392fc98a1c9ec38d2b725bbe57e61b92cb2ff49` (merged PR #39)
-- Final development PR: #40 `phase5/pr40-control-center-launch-readiness`
+- Current production main: `e07a5801298879133d36d66dcfde33d971ace5c3` (merged PR #56)
+- Vercel deployment for that exact commit: `dpl_4fS8RbWTiTXJcDVECJJG2X33HLKR` — READY, target `production`, aliases include `smartvisions.vercel.app`
 
 ## Completed sequence
 
 - #36 ✅ Growth Intelligence / acquisition and growth-opportunity routing
 - #37 ✅ AI Sales / Conversations / Email / WhatsApp / Voice foundation
 - #38 ✅ Reliability hardening for the five PR #37 review failures
-- #39 ✅ Website Demo & Content Production Engine on existing Preview Studio / Portfolio / Growth Opportunity foundations
-- #40 🔄 Final Control Center completeness, reliability, QA and launch gates
+- #39 ✅ Website Demo & Content Production Engine
+- #40 ✅ Control Center completeness / reliability / launch gates
+- #49 ✅ Restore service-role grants required by WhatsApp webhook lifecycle
+- #50 ✅ Controlled WhatsApp production verification path
+- #51 ✅ Separate Meta WhatsApp readiness from Instagram readiness
+- #52 ✅ Allow owner to enter WhatsApp verification test number before credentials are ready
+- #53 ✅ Support the actual deployed WhatsApp environment variable names while retaining legacy aliases
+- #54 ✅ Restore least-required runtime-safety service-role grants for WhatsApp controlled verification
+- #55 ✅ Wire the live Smart Visions WhatsApp Catalog into the existing Approved Send path
+- #56 ✅ Bridge explicit agent service intent to one fail-closed WhatsApp catalog recommendation
 
-The emergency #38 shifted the original four-PR numbering by one. Do not create another Hunter, CRM, pricing, preview, Cost Guard, provider-state or agent subsystem to restore old numbering.
+Do not recreate WhatsApp foundations, CRM, pricing, conversations, Cost Guard, provider state, agent framework or catalog storage as parallel systems.
 
 ## Existing Control Center is protected
 
-The current panel is the production foundation: Dashboard, Leads/CRM, Hunters/Growth, Campaigns, Conversations, Hot Leads, Services, Pricing, Portfolio, Preview Studio, Markets, Agents, Message Studio, Automations, Approvals, Integrations, Cost & Usage, Audit, Suppression/DNC, System and Reports.
-
-PR #40 preserves the visual design and completes wiring only where a verified gap exists.
+The production panel remains the foundation: Dashboard, Leads/CRM, Hunters/Growth, Campaigns, Conversations, Hot Leads, Services, Pricing, Portfolio, Preview Studio, Markets, Agents, Message Studio, Automations, Approvals, Integrations, Cost & Usage, Audit, Suppression/DNC, System and Reports.
 
 ## Canonical runtime sources
 
@@ -40,35 +46,61 @@ PR #40 preserves the visual design and completes wiring only where a verified ga
 - Usage/cost ledger: `usage_events`
 - Audit trail: `audit_logs`
 
-`system_controls.monthly_budget_usd` is a legacy duplicate and is no longer written or presented as the operational budget. The canonical monthly budget is `cost_guard_settings.monthly_total_budget_usd`, currently USD 25.
+`system_controls.monthly_budget_usd` is legacy. The canonical budget remains `cost_guard_settings.monthly_total_budget_usd`.
 
-## Current production safety state
+## Current safety defaults
 
-- Global kill switch: OFF
-- Shadow Mode: ON
-- Email pause: OFF
-- WhatsApp AI pause: OFF
-- Agents pause: OFF
+- Global kill switch: OFF unless changed in production runtime state
+- Shadow Mode: ON unless explicitly changed by owner after launch evidence
+- Email pause: OFF unless changed in runtime state
+- WhatsApp AI pause: OFF unless changed in runtime state
+- Agents pause: OFF unless changed in runtime state
 - Enabled outreach markets require manual review
-- Live outbound remains fail-closed because Email and WhatsApp are not production verified
+- Catalog support does not enable autonomous outbound
 
-Do not turn Shadow Mode off merely to make the dashboard greener. Live-autonomous readiness requires verified Email + WhatsApp provider setup and an explicit launch decision.
+Do not turn Shadow Mode off just to make a readiness screen greener. Live autonomous outbound still requires explicit owner launch approval after durable provider/policy evidence.
 
-## Provider state
+## WhatsApp production continuation
 
-- Google Places / Discovery: CONNECTED + enabled
-- OpenAI / AI: CONNECTED + enabled
-- Crawl4AI / Audit: NOT_CONFIGURED + disabled; code-ready controlled verification path exists
-- Email Provider / Email: NOT_CONFIGURED + disabled
-- Meta / WhatsApp: NOT_CONFIGURED + disabled
-- Meta / Instagram: NOT_CONFIGURED + disabled
-- Redis / Queue: optional, NOT_CONFIGURED + disabled
+### Existing verified code path
 
-Google/OpenAI already have durable production evidence. Do not repeat paid smoke tests simply to refresh a badge.
+The existing WhatsApp implementation now includes:
+
+- Meta webhook verification and signature validation
+- durable inbound/status persistence and idempotency
+- controlled production verification from Integrations
+- deployed credential aliases (`WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`) plus supported `META_*` aliases
+- Approved Send safety flow: APPROVED → PROCESSING → provider → SENT
+- provider CONNECTED gate, runtime safety, DNC/human takeover, recipient-local window and Cost Guard checks
+- no blind retry after provider acceptance
+- WhatsApp 24-hour session/template policy enforcement
+
+### Production WhatsApp Catalog
+
+Canonical catalog ID:
+
+- `1773319100642340`
+
+Canonical Content IDs:
+
+- `SV-WEB-001` — Website Design & Development
+- `SV-IG-CONTENT-001` — Instagram Content Creation
+- `SV-WA-001` — WhatsApp Automation
+- `SV-SEO-001` — SEO & GEO
+- `SV-AI-AGENT-001` — AI Agents
+- `SV-SM-001` — Social Media Management
+
+PR #55 extends the existing Meta Cloud provider with single-product interactive messages. Catalog product sends are only allowed through the existing approved-send path and only inside an open 24-hour customer-service window. Unknown Content IDs fail closed. Product sends are journaled as `PRODUCT_SENT` / `SEND_PRODUCT` with the Content ID for audit and reconciliation.
+
+PR #56 adds deterministic agent-to-catalog recommendation without adding provider calls. Existing Growth OS service IDs map to the corresponding catalog item, and explicit English/Arabic/Persian requests can resolve to one catalog item. Ambiguous multi-service requests and vague requests return no recommendation instead of guessing. A blocked agent reply cannot produce a catalog recommendation.
+
+## Provider-state accuracy rule
+
+Do not infer `integration_connections.status='CONNECTED'` merely from credentials, successful builds, or catalog configuration. `CONNECTED` must still come from durable production E2E evidence. The old 2026-08-22 provider snapshot is no longer authoritative for WhatsApp because PRs #49–#54 materially changed that path; query production state before making a current provider-status claim.
 
 ## Cost Guard
 
-Canonical production budget:
+Canonical production budget remains:
 
 - Total monthly: $25
 - OpenAI: $10
@@ -84,51 +116,30 @@ Canonical production budget:
 - Max voice seconds: 180
 - Max automatic retries: 1
 
-PR #40 exposes provider/operation/day/campaign spend, cost per qualified/replied/won lead and budget-derived anomaly warnings without creating a second ledger.
+Large increases require explicit owner confirmation and audit logging.
 
-## Reliability boundaries completed through #40
+## Reliability boundaries
 
 - Business persistence uses durable Google Place/domain dedupe.
-- Paid Google Place Details claims/replays through existing `discovery_records`; PROCESSING/FAILED attempts are not blindly retried.
-- Website audits use cache + daily quota and a unique one-RUNNING-per-business guard.
-- Paid inbound AI requires a caller idempotency key and journals through `agent_runs`; completed results replay, PROCESSING/FAILED requests do not blindly rerun paid AI.
-- Preview generation uses stable `brief_hash` plus a unique organization/lead/brief guard.
+- Paid Google Place Details claims/replays through `discovery_records`.
+- Website audits use cache + daily quota + one-RUNNING guard.
+- Paid inbound AI uses caller idempotency plus `agent_runs` replay/lock semantics.
+- Preview generation uses stable `brief_hash` uniqueness.
 - Voice transcription has failure recovery and a processing lease.
 - Email webhook handling is replayable/idempotent.
-- Approved Send claims APPROVED → PROCESSING before Provider contact; after provider acceptance, later persistence failures are reconciliation-only and cannot turn the message into a resendable FAILED state.
-- Runtime global kill is enforced before controlled provider operations; Agent pause is enforced before AI execution.
-
-Production migrations added for these final reliability boundaries:
-
-- `0032_preview_generation_idempotency`
-- `0033_agent_run_idempotency`
-- `0034_website_audit_running_guard`
-
-## Production queue/state evidence before final #40 merge
-
-At the final QA audit:
-
-- `agent_runs`: no stuck rows
-- `voice_transcriptions`: no stuck rows
-- `email_events`: 0
-- `conversation_messages`: no pending/sent rows
-- `outreach_messages`: no pending/sent rows
-- `previews`: no stuck rows
-- `website_audits`: one historical FAILED deterministic audit from 2026-08-21 (`wassandental.com`), not a running job
-
-No uncontrolled outbound is evidenced. Preserve the historical failed audit row as audit history; do not delete evidence for cosmetic cleanliness.
-
-## Advisor state
-
-- Supabase Security Advisor: no new schema/RLS regression from #40. One existing project-level warning remains: Leaked Password Protection is disabled in Supabase Auth.
-- Supabase Performance Advisor: no new blocking issue; current notices are INFO-level unused indexes expected in a very low-traffic/new database.
-
-## Final #40 launch distinction
-
-`codeReady` / controlled-pilot readiness and `liveAutomationReady` are intentionally different states.
-
-The system may be code-ready while Shadow Mode remains ON and Email/WhatsApp remain fail-closed. Live autonomous outbound must not be declared ready until the real sender credentials/domain/webhooks are configured, provider rows are production-verified CONNECTED, one controlled E2E per live channel passes, and Shadow Mode is then intentionally disabled.
+- Approved Send claims before provider contact; provider acceptance is final for resend safety and later persistence failures are reconciliation-only.
+- Global kill and Agent pause remain enforced at runtime boundaries.
+- Catalog item selection is allowlisted and ambiguity fails closed.
 
 ## Exact next action
 
-Finish PR #40 CI/Vercel/review-thread checks and merge only if the final head is fully green. After merge, verify the exact merge commit is READY in Vercel Production and rerun the production launch evidence query. Do not start another feature PR unless final verification exposes a real defect.
+Wire the existing `catalogRecommendation` from the agent pipeline into the existing `queueShadowDraft` call site so that a reviewable WhatsApp draft can carry `catalog_content_id` into `/approvals` without any automatic send. Preserve these gates:
+
+1. only one unambiguous allowlisted catalog item;
+2. Shadow Mode / human approval remains in force;
+3. product send is possible only when the WhatsApp 24-hour customer-service window is open;
+4. outside that window the normal template/text policy remains authoritative;
+5. no duplicate conversation/catalog/send subsystem;
+6. no provider call is made merely because the agent recommended a product.
+
+After that bridge is implemented, validate CI, Vercel review/preview, merge with expected head SHA, verify the exact production deployment, then perform only a controlled end-to-end approval test using real production evidence. Do not disable Shadow Mode as part of this step.
