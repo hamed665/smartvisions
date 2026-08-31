@@ -8,10 +8,17 @@ function serviceClient() {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
+function hasExpired(expiresAt: string | Date) {
+  const value = expiresAt instanceof Date ? expiresAt : new Date(expiresAt);
+  return !Number.isFinite(value.getTime()) || value.getTime() <= Date.now();
+}
+
 const eventForAction: Partial<Record<PreviewLifecycleAction, string>> = {
   APPROVE: 'APPROVED',
   SEND: 'SENT',
   VIEW: 'VIEWED',
+  EXPIRE: 'EXPIRED',
+  ARCHIVE: 'ARCHIVED',
 };
 
 export async function transitionPreview(input: {
@@ -31,6 +38,27 @@ export async function transitionPreview(input: {
   if (readError || !current) throw new Error(readError?.message ?? 'Preview not found');
 
   const currentStatus = current.status as PreviewLifecycleStatus;
+  if ((input.action === 'APPROVE' || input.action === 'SEND') && hasExpired(current.expires_at)) {
+    const { data: expired, error: expireError } = await supabase
+      .from('previews')
+      .update({ status: 'EXPIRED' })
+      .eq('organization_id', input.organizationId)
+      .eq('id', input.previewId)
+      .eq('status', currentStatus)
+      .select('id')
+      .maybeSingle();
+    if (expireError) throw new Error(`Preview expiry reconciliation failed: ${expireError.message}`);
+    if (!expired) throw new Error('Preview expiry reconciliation lost a concurrency race; reload before retrying');
+    const { error: expireEventError } = await supabase.from('preview_events').insert({
+      organization_id: input.organizationId,
+      preview_id: input.previewId,
+      event_type: 'EXPIRED',
+      metadata: { source: 'preview_lifecycle', reason: 'TTL_ELAPSED' },
+    });
+    if (expireEventError) throw new Error(`Preview expiry event failed: ${expireEventError.message}`);
+    throw new Error('Preview expired; generate a new version before approval or sharing');
+  }
+
   const nextStatus = nextPreviewStatus(currentStatus, input.action);
   const patch: Record<string, unknown> = { status: nextStatus };
   if (input.action === 'APPROVE') {
