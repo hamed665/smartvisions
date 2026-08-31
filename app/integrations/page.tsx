@@ -44,7 +44,9 @@ export default async function IntegrationsPage() {
   const monthStart = new Date();
   monthStart.setUTCDate(1);
   monthStart.setUTCHours(0, 0, 0, 0);
-  const sinceVoice = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const sinceVoiceDate = new Date();
+  sinceVoiceDate.setUTCDate(sinceVoiceDate.getUTCDate() - 1);
+  const sinceVoice = sinceVoiceDate.toISOString();
 
   const [
     { data },
