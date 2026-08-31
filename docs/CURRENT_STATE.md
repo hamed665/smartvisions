@@ -2,109 +2,65 @@
 
 **Reconciled:** 2026-08-31 (Oman, UTC+4)
 
-This is the operational handoff. Production facts and current `main` win over older planning text. Preserve the existing Control Center and extend only verified gaps.
+This is the operational handoff. Production evidence and current `main` override older planning text. Preserve the existing Control Center and extend only verified gaps.
 
 ## Production identity
 
 - Repository: `hamed665/smartvisions`
-- Production branch: `main`
+- Branch: `main`
 - Production URL: `https://smartvisions.vercel.app`
 - Supabase project: `pkypexzpyfbikdnkrzvw`
-- Current production main: `40b7f64485c1067e168e126737b2356271e122b3` — merged PR #69
-- Current Vercel production deployment for that code after the Resend Full Access credential redeploy: `dpl_BUY2bw8HKCnWVCHhzx5VdTtm9R8M` — READY, target `production`, canonical alias remains `smartvisions.vercel.app`
+- Current production main: `227f0d4948ba5512751d1b98d2603e4717f509a6` — merged PR #76
+- Current Vercel production deployment: `dpl_4FPTwhW9uTr63FNLwkvKxhcDQ9f1` — READY, target `production`, alias `smartvisions.vercel.app`
 
-## Completed implementation / hardening sequence
+## Protection rules
 
-- #36 ✅ Growth Intelligence / acquisition and growth-opportunity routing
-- #37 ✅ AI Sales / Conversations / Email / WhatsApp / Voice foundation
-- #38 ✅ Reliability hardening for the five PR #37 review failures
-- #39 ✅ Website Demo & Content Production Engine
-- #40 ✅ Control Center completeness / reliability / launch gates
-- #49–#54 ✅ WhatsApp production webhook, verification, environment-name and least-privilege hardening
-- #55 ✅ Live Smart Visions WhatsApp Catalog wired into canonical Approved Send
-- #56 ✅ Deterministic Agent service intent → allowlisted Catalog recommendation
-- #57 ✅ Catalog-era handoff reconciliation
-- #58 ✅ Agent REVIEW → existing Shadow Approval bridge with durable 24-hour evidence
-- #59 ✅ Pilot-state reconciliation
-- #60 ✅ WhatsApp inbound lifecycle idempotency fix for partial unique-index conflict handling
-- #61 ✅ Owner-only Controlled WhatsApp Agent Pilot surface
-- #62 ✅ Pilot routing hardening attempt; superseded by later root-cause fixes
-- #63 ✅ Internal AI route session-proxy boundary fixed
-- #64 ⛔ Closed without merge because its documentation became stale after new production evidence
-- #65 ✅ WhatsApp pilot idempotency uses durable internal inbound UUID rather than raw Meta message ID
-- #66 ✅ Least-required service-role grants restored for Agent → Shadow Approval runtime
-- #67 ✅ Owner-controlled Catalog send gate through canonical Approved Send while global Shadow Mode remains ON
-- #68 ✅ Production evidence / integration inventory reconciliation
-- #69 ✅ Email inbound lifecycle idempotency hardened to plain insert + `23505` duplicate handling
+- Shadow Mode remains ON.
+- Global kill switch remains OFF.
+- Agents pause remains OFF.
+- WhatsApp AI pause remains OFF.
+- Do not create parallel CRM, Lead, Conversation, Pricing, Cost Guard, Integration, Agent, Preview or Catalog subsystems.
+- Do not repeat paid smoke tests for behavior already proven by durable production evidence.
 
-Do not recreate WhatsApp foundations, Email foundations, CRM, pricing, conversations, Cost Guard, provider state, agent framework, preview engine or catalog storage as parallel systems.
+## Completed production hardening / verification sequence
 
-## Existing Control Center is protected
+The existing V1 architecture remains canonical. Recent production closure milestones include:
 
-The current production panel remains the foundation: Dashboard, Leads/CRM, Hunters/Growth, Campaigns, Conversations, Hot Leads, Services, Pricing, Portfolio, Preview Studio, Markets, Agents, Message Studio, Automations, Approvals, Integrations, Cost & Usage, Audit, Suppression/DNC, System, Knowledge Base and Reports.
+- #55–#68: WhatsApp Catalog, Agent recommendation, Shadow Approval, inbound idempotency, controlled pilot, Approved Send and production evidence reconciliation.
+- #69: Email inbound partial-index/idempotency hardening.
+- #70: branded Email production evidence reconciliation.
+- #71: controlled WhatsApp Voice production pilot.
+- #72: least-required Voice transcription service-role grants restored.
+- #73: Preview production readiness, grants, stale identity and expiry hardening.
+- #74: controlled Preview production pilot and terminal lifecycle event alignment.
+- #75: tokenized `/p/[token]` Preview routes made genuinely accessible without an operator session.
+- #76: public Preview isolated from the internal Control Center shell/navigation.
 
-No redesign or replacement subsystem is justified by the current production state.
+All merged code PRs above were merged only after exact-head lint, typecheck, tests and build were green.
 
-## Canonical runtime sources
-
-- Emergency/runtime flags: `system_controls`
-- Budget, quotas, provider allocations and thresholds: `cost_guard_settings`
-- Market/channel policy: `market_settings.config` plus `outreach_policies`
-- Agent runtime/model/confidence settings: `agent_settings`
-- Pricing: existing service price tables
-- Provider health/state: `integration_connections`
-- Usage/cost ledger: `usage_events`
-- Audit trail: `audit_logs`
-
-`system_controls.monthly_budget_usd` remains legacy. The canonical budget is `cost_guard_settings.monthly_total_budget_usd`.
-
-## Current verified production runtime state
-
-Queried directly from Growth OS Supabase on 2026-08-31 after the controlled pilots:
+## Current verified provider state
 
 - `GOOGLE_PLACES / DISCOVERY`: CONNECTED, enabled
 - `OPENAI / AI`: CONNECTED, enabled
 - `META / WHATSAPP`: CONNECTED, enabled
 - `EMAIL_PROVIDER / EMAIL`: CONNECTED, enabled
-- `CRAWL4AI / AUDIT`: NOT_CONFIGURED, disabled; optional for V1 because deterministic audit exists
-- `META / INSTAGRAM`: NOT_CONFIGURED, disabled; restricted automation remains intentionally deferred/policy-aware
-- `REDIS / QUEUE`: NOT_CONFIGURED, disabled; optional until measured queue/recovery load justifies it
-- Global kill switch: OFF
-- Email pause: OFF
-- WhatsApp AI pause: OFF
-- Agents pause: OFF
-- Shadow Mode: ON
+- `CRAWL4AI / AUDIT`: NOT_CONFIGURED, disabled, optional for V1 while deterministic audit remains sufficient
+- `META / INSTAGRAM`: NOT_CONFIGURED, disabled, intentionally deferred
+- `REDIS / QUEUE`: NOT_CONFIGURED, disabled, optional
 
-## WhatsApp controlled E2E — PRODUCTION VERIFIED
+## WhatsApp Catalog E2E — PRODUCTION VERIFIED
 
-The WhatsApp controlled Catalog path is proven with real production evidence.
+Verified controlled path:
 
-Real customer/test inbound:
+`real inbound → linked Lead/Conversation → Agent → deterministic Catalog recommendation → Shadow Approval → owner approval → canonical Approved Send → Meta product message → SENT → DELIVERED → READ`
 
-`Can you show me your website service?`
+Canonical Catalog ID: `1773319100642340`.
 
-Verified path:
+Verified website Content ID: `SV-WEB-001`.
 
-`real linked WhatsApp inbound → /api/ai/process-inbound → exactly one Agent run → deterministic Catalog recommendation → exactly one Shadow Approval → owner approval → controlled canonical Approved Send → Meta product message → SENT → DELIVERED → READ`
+No duplicate provider send occurred and Shadow Mode remained ON throughout.
 
-Evidence:
-
-- Recommended/approved Catalog Content ID: `SV-WEB-001` — Website Design & Development
-- `conversation_messages` final status: `SENT`
-- Real Meta provider message ID: `wamid.HBgLOTY4Nzc1MTEwNTMVAgARGBIxOThBNjM4MURFQzYwM0RGNzUA`
-- `whatsapp_events`: `PRODUCT_SENT` with `catalog_content_id = SV-WEB-001`
-- Provider status webhooks persisted: `SENT`, `DELIVERED`, `READ`
-- `usage_events`: exactly one `WHATSAPP / SEND_PRODUCT`, one unit, Content ID persisted
-- Duplicate/idempotency verification: one logical message row and one provider message identity for the controlled send
-- Global Shadow Mode remained ON before, during and after the pilot
-
-PR #67 did not create a parallel sender. Its owner-only exception verifies durable INTERNAL_TEST evidence and then reuses existing Approved Send / `MetaCloudWhatsAppProvider`. Kill/pause, DNC, human takeover, provider CONNECTED, local send window, WhatsApp 24-hour policy, Cost Guard, claim/idempotency and no-blind-retry semantics remain active.
-
-### Production WhatsApp Catalog
-
-Canonical Catalog ID: `1773319100642340`
-
-Canonical Content IDs:
+Current Catalog Content IDs:
 
 - `SV-WEB-001` — Website Design & Development
 - `SV-IG-CONTENT-001` — Instagram Content Creation
@@ -113,171 +69,157 @@ Canonical Content IDs:
 - `SV-AI-AGENT-001` — AI Agents
 - `SV-SM-001` — Social Media Management
 
-No further paid WhatsApp smoke test is required merely to refresh a badge. New WhatsApp tests must correspond to a genuinely unproven behavior.
+## Email / Resend — OUTBOUND + BRANDED INBOUND PRODUCTION VERIFIED
 
-## Email / Resend — CUSTOM-DOMAIN INBOUND + OUTBOUND PRODUCTION VERIFIED
+Provider: Resend.
 
-The Email Provider is Resend.
+### Outbound
 
-### Outbound evidence
+- Sender: `hello@smartvisionsai.com`
+- durable `email.sent` and `email.delivered` evidence exists
+- mailbox/provider integration is CONNECTED and enabled
 
-Existing durable evidence from 2026-08-23:
+### Receiving
 
-- Mailbox: `hello@smartvisionsai.com`
-- Provider message ID: `a180f18d-0a5f-4bee-9687-5c962bf0610e`
-- Signed `email.sent` webhook persisted
-- Signed `email.delivered` webhook persisted
-- Integration reconciled to CONNECTED + enabled from durable evidence with zero unnecessary provider calls
-- Mailbox health: HEALTHY
-
-### Receiving configuration
-
-Custom-domain receiving is now configured and verified rather than inferred:
-
-- Resend domain: `smartvisionsai.com` — Verified
+- domain: `smartvisionsai.com`
 - DNS provider: Cloudflare
-- Resend receiving region: Tokyo / `ap-northeast-1`
-- Root receiving MX: `@ → inbound-smtp.ap-northeast-1.amazonaws.com`
-- Priority: `10`
-- Resend Receiving status: Verified
-- Existing sending DKIM remains Verified
-- Existing sending SPF/Return-Path records remain Verified
-- DMARC record exists as `v=DMARC1; p=none;`
-- Resend webhook endpoint: `https://smartvisions.vercel.app/api/email/webhook`
-- `email.received` subscription is enabled
+- Receiving region: `ap-northeast-1`
+- root MX: `@ → inbound-smtp.ap-northeast-1.amazonaws.com`, priority `10`
+- Receiving state: Verified
+- DKIM/SPF remain Verified
+- DMARC exists as `v=DMARC1; p=none;`
+- webhook: `https://smartvisions.vercel.app/api/email/webhook`
 
-The Resend API credential used by Growth OS was upgraded from sending-only permission to Full Access because inbound content retrieval uses Resend Receiving API. The secret remains only in Vercel Environment Variables; no secret is committed to the repository.
+Real branded inbound proof:
 
-### Real custom-domain inbound evidence
+`Gmail → hello@smartvisionsai.com → Resend Receiving → signed email.received → content retrieval → exact INTERNAL_TEST Business/Lead match → EMAIL conversation → inbound outreach_messages → Lead REPLIED`
 
-A real Gmail message was sent through normal Internet mail delivery to the production mailbox:
+The controlled inbound persisted exactly once. Email transport is green.
 
-- From: `capcutproazivibe@gmail.com`
-- To: `hello@smartvisionsai.com`
-- Subject: `Website service inquiry`
-- Body: `Hi, I’m interested in your website service. Can you tell me more about what is included?`
-- Resend received email ID / provider message ID: `e7a8b6d1-0db9-4634-b802-c7d7c0d35cb7`
-- Resend webhook event ID: `msg_3IghZHR1eyuRFv4lAgzVgp2Igfv`
-- Gmail Message-ID: `<CAGYidLPgm6ZTi9yd+86eLfZxdMVpCjoZcat1mBzSOnoD9Xgopg@mail.gmail.com>`
+### Known Email intelligence distinction
 
-Verified path:
+The provider webhook intentionally does not directly invoke paid AI because provider retries must not duplicate paid Agent calls. Email transport success therefore does not prove multi-turn Agent intelligence. Future completion must reuse the existing idempotent `agent_runs`, conversation intelligence and Shadow Approval primitives through a controlled boundary.
 
-`Gmail → hello@smartvisionsai.com → Resend Receiving → signed email.received webhook → Resend content retrieval → exact INTERNAL_TEST Business/Lead match → EMAIL sales_conversation → inbound outreach_messages → Lead REPLIED`
+## WhatsApp Voice — PRODUCTION VERIFIED
 
-Durable evidence:
+A real WhatsApp voice note from the linked INTERNAL_TEST contact was received through Meta and transcribed through the existing OpenAI Voice path.
 
-- `email_events`: exactly one `email.received` for the provider identity
-- `outreach_messages`: exactly one EMAIL / INBOUND / RECEIVED row for the provider identity
-- inbound idempotency key: `resend:inbound:e7a8b6d1-0db9-4634-b802-c7d7c0d35cb7`
-- linked EMAIL conversation ID: `438b12c3-5ec7-4d92-a175-09b105894d89`
-- dedicated INTERNAL_TEST Lead ID: `2e4a14bd-6f87-474d-81c1-db1fb3c5ef1a`
-- Lead status: `REPLIED`
-- no duplicate lifecycle row was produced
-- no pending follow-up existed for this test Lead, so do **not** claim a real pending-job cancellation occurred in this particular proof; cancellation code remains implemented and requires a later scenario with an actual pending job to prove that behavior
+Real transcript:
 
-### Known Email intelligence gap exposed by the successful transport test
+`I need a website for my clinic. Can you show me your website services?`
 
-Transport/lifecycle success is not the same as Agent conversation intelligence.
+Evidence:
 
-The real EMAIL conversation currently proves persistence, but the existing `email-lifecycle` path only updates `last_message_at`, Lead `REPLIED`, and pending follow-up cancellation. It does **not** directly call the paid Agent pipeline from the provider webhook, which is intentional because webhook retries must not duplicate paid AI calls.
+- real Meta `provider_message_id` and `media_id`
+- exactly one logical `voice_transcriptions` row
+- model: `gpt-4o-mini-transcribe`
+- status: `SUCCEEDED`
+- one paid OpenAI Voice usage event for the first transcription
+- controlled accounting estimate recorded at `$0.009`
+- second identical logical request returned the cached transcription with `cached=true` and `openAiCalls=0`
+- no second OpenAI usage/cost event was created
+- no outbound message was triggered
+- Shadow Mode remained ON
 
-Observed fields after the real inbound:
+The Voice path is green, including cache/idempotency proof.
 
-- `stage = NEW`
-- `last_inbound_at = null`
-- `unread_count = 0`
-- `awaiting_party = NONE`
-- `intent_label = null`
-- `persian_summary = null`
+## Preview E2E — PRODUCTION VERIFIED
 
-This is a real launch/intelligence gap, not an Email transport failure. Do not solve it by wiring Resend webhook retries directly to paid AI. Reuse the existing idempotent `agent_runs`, conversation intelligence and Shadow Approval primitives when that behavior is completed.
+Controlled Preview ID: `9f962982-a25d-4d66-8f80-3fc4c9791948`.
 
-## Agent / knowledge intelligence status
+Public token: `dcf27c1b-cffe-4e0d-affe-df234ce0bb6d`.
 
-The canonical multi-agent stack exists and is selectively routed rather than running every specialist on every message. Existing Agent context supports fields such as conversation summary, stage, quoted service/price and verified evidence.
+Linked evidence uses the same real INTERNAL_TEST WhatsApp voice Lead and Website intent.
 
-Known gaps discovered during production review:
+Verified lifecycle:
 
-- `/api/ai/process-inbound` currently relies mainly on caller-provided context and does not fully hydrate recent conversation history itself.
-- Knowledge Base UI/versioning exists, but Production currently has no active service-knowledge corpus and runtime does not yet load `knowledge_versions` into Agent reasoning.
-- Agent prompt/version controls exist in the Control Center, but the current OpenAI runtime still uses canonical code instructions rather than active DB prompt versions.
-- `services` / `service_prices` and the WhatsApp Catalog are not yet fully reconciled as one commercial source of truth; Catalog includes SEO/GEO, AI Agents and Social Media Management while the current structured service table is narrower.
+`real voice Website request → deterministic zero-provider-cost Preview → GENERATED → owner APPROVED → controlled internal share → SENT → public token view → VIEWED`
 
-Do not create a new Agent framework. Future intelligence improvement should wire these existing Control Center primitives into the canonical runtime.
+Evidence:
 
-## Hunter / acquisition status
+- Quality: `100/100`
+- generation cost: `0`
+- provider calls during Preview generation/share: `0`
+- outbound triggered: `false`
+- `GENERATED` event count: 1
+- `APPROVED` event count: 1
+- `SENT` event count: 1
+- `VIEWED` event count: 1
+- repeated public reads do not create duplicate `VIEWED` events
+- Preview remains `VIEWED`
+- Shadow Mode remained ON
+- no outbound message was created after Preview generation
+
+### Public Preview boundary hardening
+
+The first authenticated owner view exposed two real launch bugs that were fixed before calling the gate complete:
+
+1. The global Supabase session proxy redirected unauthenticated `/p/[token]` visitors to `/login`. PR #75 now permits only tokenized `/p/...` public Preview routes to bypass operator session enforcement while `/preview-studio`, CRM and other operator routes remain protected.
+2. The public Preview still inherited the internal Control Center sidebar/navigation. PR #76 isolates `/p/...` from the operator AppShell.
+
+Unauthenticated production fetch now returns HTTP 200 with the Preview content and no internal Control Center sidebar/navigation. The public Preview gate is green.
+
+## Agent / Knowledge intelligence status
+
+The multi-agent architecture exists and remains the foundation. Do not build another Agent framework.
+
+Known quality gaps before broad autonomous advisory conversations:
+
+- `/api/ai/process-inbound` does not yet fully hydrate recent conversation history by itself.
+- Knowledge Base UI/versioning exists, but Production has no complete active service-knowledge corpus and runtime does not yet consume `knowledge_versions` as canonical service knowledge.
+- Agent prompt/version controls exist in the Control Center, but current OpenAI instructions are still primarily code-level rather than active DB prompt versions.
+- structured Services/Pricing and the WhatsApp Catalog are not yet fully reconciled as one commercial source of truth.
+- natural Smart Visions brand voice needs explicit runtime examples/rules before broad autonomous sales use.
+
+These are runtime-wiring/knowledge tasks, not permission to redesign the system.
+
+## Hunter / Instagram status
 
 Business Hunter remains intact and must not be rebuilt.
 
-Current canonical behavior includes:
+Canonical acquisition behavior still includes:
 
-- Google Places IDs-only discovery first
-- selective qualification and durable dedupe
-- operational business with no website → high Website opportunity score
-- social/contact-only link without standalone site → priority Website opportunity
-- standalone website → low Website-opportunity score while content opportunities can still remain valid
-- Growth routing by Muscat local / Oman remote / international remote lane
-- no automatic social analysis or outreach from qualification itself
+- Google Places IDs-first discovery
+- dedupe and minimum qualification
+- no standalone website → strong Website opportunity
+- social/contact-only URL without standalone site → priority Website opportunity
+- standalone website → low Website-opportunity score while other growth routes may remain valid
+- Muscat/Oman/international lane routing
+- no automatic outreach from qualification itself
 
-Instagram is not a current Hunter runtime provider. `META / INSTAGRAM` remains NOT_CONFIGURED/DEFERRED and any later social source must feed the existing CRM/Hunter/Cost Guard model rather than create a parallel system or uncontrolled cold-DM bot.
+Instagram is not currently a production Hunter provider. `META / INSTAGRAM` remains NOT_CONFIGURED and there is no production Instagram monitoring/cold-DM engine. Any later permitted Instagram integration must feed the existing Hunter/Lead/Conversation/Cost Guard model rather than create a second system.
 
 ## Cost Guard
 
-Canonical production budget remains:
+Canonical monthly budget remains:
 
-- Total monthly: $25
-- OpenAI: $10
-- Google Places: $5
-- Email: $4
-- WhatsApp: $3
-- Reserve: $3
-- Warning / throttle / critical / hard-stop: 70 / 85 / 95 / 100%
-- Daily new leads: 50
-- Daily website audits: 15
-- Daily deep AI runs: 10
-- Max AI runs per lead: 20
-- Max voice seconds: 180
-- Max automatic retries: 1
+- total: `$25`
+- OpenAI: `$10`
+- Google Places: `$5`
+- Email: `$4`
+- WhatsApp: `$3`
+- reserve: `$3`
+- warning / throttle / critical / hard-stop: `70 / 85 / 95 / 100%`
+- daily new leads: `50`
+- daily website audits: `15`
+- daily deep AI runs: `10`
+- max AI runs per lead: `20`
+- max voice seconds: `180`
+- max automatic retries: `1`
 
-Large budget/quota increases require explicit owner confirmation and audit logging.
+## Remaining launch gates
 
-## Reliability boundaries that remain canonical
+Do not disable Shadow Mode and do not begin broad autonomous prospecting yet.
 
-- Business identity: existing Google Place/domain dedupe
-- Paid Google Details: `discovery_records` claim/replay journal
-- Website audit: cache + quota + unique RUNNING guard
-- Inbound AI: `agent_runs.request_key/result_payload` claim/replay semantics
-- Voice: media cache + FAILED recovery + stale PROCESSING lease
-- Preview/content: stable `brief_hash` idempotency
-- Email webhook: signed, provider-event idempotency + inbound-message idempotency
-- WhatsApp webhook: signed/durable/idempotent event and lifecycle persistence
-- Approved outbound: pre-provider claim; provider acceptance is final for resend safety; later persistence failures are reconciliation-only
-- Global kill / Agent pause / channel pause / DNC / human takeover remain hard gates
+Provider connectivity for Google Places, OpenAI, WhatsApp, Email, Voice and Preview is now production-proven. The remaining launch work is behavior/policy evidence rather than reconnecting providers.
 
-## Exact next action
+Prioritized next work:
 
-Do **not** disable Shadow Mode. Do **not** repeat WhatsApp or Email connectivity tests merely to refresh UI state.
+1. verify the Project Hunter source inventory uses only public/official/licensed/permitted sources actually intended for V1; do not add a parallel lead system;
+2. run the controlled Shadow Mode scenarios using test contacts only: positive reply, no reply/follow-up, objection, DNC/unsubscribe and human takeover;
+3. prove follow-up cancellation with an actual pending follow-up, not a synthetic claim;
+4. verify DNC/human takeover/global kill/local-time/commercial-price boundaries remain fail-closed in the full path;
+5. close the Agent intelligence gaps needed before broad autonomous advice: conversation hydration, Knowledge Base runtime wiring, prompt/settings runtime wiring, service source-of-truth reconciliation and natural brand voice;
+6. only after the gates are green, make an explicit owner decision on a tiny Oman pilot and permitted automation level.
 
-Email custom-domain inbound transport is now proven. The next genuinely unproven provider behavior in the locked launch sequence is a controlled **WhatsApp voice transcription production test** using the existing OpenAI connection and existing voice-transcription cache.
-
-Requirements for that test:
-
-1. use the existing dedicated INTERNAL_TEST WhatsApp Business/Lead/Conversation;
-2. receive one real WhatsApp voice note through the existing signed webhook path — no fake media ID, message ID or timestamp;
-3. do not invoke paid transcription directly from the webhook retry path;
-4. execute the existing `transcribeWhatsAppVoiceOnce` primitive through a controlled, idempotent owner/internal boundary;
-5. verify exactly one `voice_transcriptions` logical row for the provider message/media identity;
-6. verify transcript + detected language + `OPENAI / VOICE_TRANSCRIPTION` usage evidence;
-7. invoke the same logical request again only as an idempotency check and confirm it returns cached evidence without a second OpenAI call/usage row;
-8. preserve Cost Guard, max-media, failure recovery and no-blind-retry semantics;
-9. keep Shadow Mode ON and do not send any outbound message as part of the transcription proof.
-
-After Voice proof:
-
-- Preview generate → share/send → public view E2E
-- Crawl4AI only if its external service is actually configured and useful; one smallest controlled smoke test
-- smallest safe bounce/suppression/unsubscribe evidence where still required
-- full Shadow Mode scenarios: positive reply, no reply, objection, DNC, human takeover
-- only then consider a tiny Oman pilot and a separate explicit automation-level decision
-
-Separately, before broad autonomous conversations, the known Agent intelligence gaps — conversation hydration, Knowledge Base runtime wiring, prompt/settings runtime wiring and service-source reconciliation — must be closed by extending the existing primitives, not by creating new subsystems.
+Crawl4AI, Redis and Instagram are not current V1 launch blockers unless the owner explicitly chooses a V1 use case that requires them.
