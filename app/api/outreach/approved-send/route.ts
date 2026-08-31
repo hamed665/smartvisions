@@ -7,6 +7,7 @@ import { evaluateMailboxHealth } from '@/lib/outreach/mailbox-health';
 import { evaluateWhatsAppSendPolicy } from '@/lib/whatsapp/policy';
 import { MetaCloudWhatsAppProvider } from '@/lib/whatsapp/meta-cloud';
 import { assertSmartVisionsCatalogContentId } from '@/lib/whatsapp/catalog';
+import type { WhatsAppSendResult } from '@/lib/whatsapp/provider';
 import { ResendEmailProvider } from '@/lib/outreach/resend-provider';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
 
@@ -193,10 +194,10 @@ export async function POST(request: Request) {
       const catalogContentId = sendContext.catalog_content_id?.trim() || null;
       let whatsappOperation: 'SEND_TEMPLATE' | 'SEND_TEXT' | 'SEND_PRODUCT';
       let whatsappEventType: 'TEMPLATE_SENT' | 'TEXT_SENT' | 'PRODUCT_SENT';
+      let result: WhatsAppSendResult;
 
-      let result;
       if (catalogContentId) {
-        if (whatsappPolicy.mode !== 'SESSION') throw new Error('WhatsApp catalog product messages require an open 24-hour customer service window');
+        if (whatsappPolicy.mode !== 'FREEFORM') throw new Error('WhatsApp catalog product messages require an open 24-hour customer service window');
         assertSmartVisionsCatalogContentId(catalogContentId);
         result = await provider.sendCatalogProduct({
           to: sendContext.to,
