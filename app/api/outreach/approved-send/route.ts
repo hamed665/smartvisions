@@ -6,6 +6,7 @@ import { evaluateLocalWindow, type MarketCode } from '@/lib/outreach/scheduler';
 import { evaluateMailboxHealth } from '@/lib/outreach/mailbox-health';
 import { evaluateWhatsAppSendPolicy } from '@/lib/whatsapp/policy';
 import { MetaCloudWhatsAppProvider } from '@/lib/whatsapp/meta-cloud';
+import { assertSmartVisionsCatalogContentId } from '@/lib/whatsapp/catalog';
 import { ResendEmailProvider } from '@/lib/outreach/resend-provider';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
 
@@ -26,6 +27,7 @@ type SendContext = {
   last_customer_message_at?: string | null;
   template_name?: string | null;
   template_language_code?: string | null;
+  catalog_content_id?: string | null;
 };
 
 export async function POST(request: Request) {
@@ -188,9 +190,30 @@ export async function POST(request: Request) {
       const whatsappPolicy = evaluateWhatsAppSendPolicy({ lastCustomerMessageAt: sendContext.last_customer_message_at ?? undefined, templateName: sendContext.template_name ?? undefined });
       if (!whatsappPolicy.allowed) throw new Error('WhatsApp 24-hour policy blocks this approved send');
       const provider = new MetaCloudWhatsAppProvider();
-      const result = whatsappPolicy.mode === 'TEMPLATE'
-        ? await provider.sendTemplate({ to: sendContext.to, templateName: sendContext.template_name!, languageCode: sendContext.template_language_code ?? 'en' })
-        : await provider.sendText({ to: sendContext.to, text: message.original_text });
+      const catalogContentId = sendContext.catalog_content_id?.trim() || null;
+      let whatsappOperation: 'SEND_TEMPLATE' | 'SEND_TEXT' | 'SEND_PRODUCT';
+      let whatsappEventType: 'TEMPLATE_SENT' | 'TEXT_SENT' | 'PRODUCT_SENT';
+
+      let result;
+      if (catalogContentId) {
+        if (whatsappPolicy.mode !== 'SESSION') throw new Error('WhatsApp catalog product messages require an open 24-hour customer service window');
+        assertSmartVisionsCatalogContentId(catalogContentId);
+        result = await provider.sendCatalogProduct({
+          to: sendContext.to,
+          contentId: catalogContentId,
+          bodyText: message.original_text,
+        });
+        whatsappOperation = 'SEND_PRODUCT';
+        whatsappEventType = 'PRODUCT_SENT';
+      } else if (whatsappPolicy.mode === 'TEMPLATE') {
+        result = await provider.sendTemplate({ to: sendContext.to, templateName: sendContext.template_name!, languageCode: sendContext.template_language_code ?? 'en' });
+        whatsappOperation = 'SEND_TEMPLATE';
+        whatsappEventType = 'TEMPLATE_SENT';
+      } else {
+        result = await provider.sendText({ to: sendContext.to, text: message.original_text });
+        whatsappOperation = 'SEND_TEXT';
+        whatsappEventType = 'TEXT_SENT';
+      }
       providerMessageId = result.providerMessageId;
       providerAccepted = true;
 
@@ -205,11 +228,11 @@ export async function POST(request: Request) {
         conversation_id: message.conversation_id,
         provider_message_id: providerMessageId,
         direction: 'OUTBOUND',
-        event_type: whatsappPolicy.mode === 'TEMPLATE' ? 'TEMPLATE_SENT' : 'TEXT_SENT',
-        payload: { source: 'APPROVED_SHADOW_DRAFT' },
+        event_type: whatsappEventType,
+        payload: { source: 'APPROVED_SHADOW_DRAFT', ...(catalogContentId ? { catalog_content_id: catalogContentId } : {}) },
       }, { onConflict: 'organization_id,provider_message_id,direction,event_type', ignoreDuplicates: true });
       if (eventWrite.error) throw new Error(`WhatsApp event reconciliation failed: ${eventWrite.error.message}`);
-      await recordUsage({ organizationId: body.organizationId, provider: 'WHATSAPP', operation: whatsappPolicy.mode === 'TEMPLATE' ? 'SEND_TEMPLATE' : 'SEND_TEXT', costUsd: 0, units: 1, leadId: message.lead_id ?? undefined, metadata: { source: 'APPROVED_SHADOW_DRAFT', pricing_status: 'PENDING_RECONCILIATION' } });
+      await recordUsage({ organizationId: body.organizationId, provider: 'WHATSAPP', operation: whatsappOperation, costUsd: 0, units: 1, leadId: message.lead_id ?? undefined, metadata: { source: 'APPROVED_SHADOW_DRAFT', pricing_status: 'PENDING_RECONCILIATION', ...(catalogContentId ? { catalog_content_id: catalogContentId } : {}) } });
     }
 
     const conversationUpdate = await supabase.from('sales_conversations').update({ last_outbound_at: new Date().toISOString(), last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('organization_id', body.organizationId).eq('id', message.conversation_id);
