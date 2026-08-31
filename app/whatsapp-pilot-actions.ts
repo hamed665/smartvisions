@@ -7,6 +7,15 @@ function normalizePhone(value: string | null | undefined) {
   return String(value ?? '').replace(/\D/g, '');
 }
 
+function growthOsProductionBaseUrl() {
+  const vercelHost = String(process.env.VERCEL_PROJECT_PRODUCTION_URL ?? '').trim();
+  if (vercelHost) {
+    const normalizedHost = vercelHost.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+    return `https://${normalizedHost}`;
+  }
+  return 'https://smartvisions.vercel.app';
+}
+
 export async function processLatestWhatsAppInboundPilot() {
   const ctx = await getCurrentOrganization(true);
 
@@ -85,9 +94,9 @@ export async function processLatestWhatsAppInboundPilot() {
 
   const internalKey = process.env.INTERNAL_API_KEY;
   if (!internalKey) throw new Error('INTERNAL_API_KEY is not configured');
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://smartvisions.vercel.app';
+  const endpoint = `${growthOsProductionBaseUrl()}/api/ai/process-inbound`;
 
-  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/ai/process-inbound`, {
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -120,11 +129,13 @@ export async function processLatestWhatsAppInboundPilot() {
 
   const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
   if (!response.ok && response.status !== 202) {
-    throw new Error(typeof payload.error === 'string' ? payload.error : `Agent pilot failed with HTTP ${response.status}`);
+    throw new Error(typeof payload.error === 'string'
+      ? payload.error
+      : `Agent pilot failed with HTTP ${response.status} on Growth OS process-inbound`);
   }
 
   const approvalQueue = payload.approvalQueue as Record<string, unknown> | undefined;
-  await ctx.supabase.from('audit_logs').insert({
+  const { error: auditError } = await ctx.supabase.from('audit_logs').insert({
     organization_id: ctx.organizationId,
     actor_type: 'USER',
     actor_id: ctx.userId,
@@ -141,6 +152,7 @@ export async function processLatestWhatsAppInboundPilot() {
         : null,
     },
   });
+  if (auditError) throw new Error(`Pilot audit log failed: ${auditError.message}`);
 
   revalidatePath('/approvals');
   revalidatePath('/conversations');
