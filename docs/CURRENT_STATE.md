@@ -61,6 +61,8 @@ Queried directly from Growth OS Supabase on 2026-08-31:
 - Shadow Mode = `true`
 - Linked inbound WhatsApp rows in `outreach_messages`: `0`
 - WhatsApp messages currently waiting in Approvals: `1`; that legacy row has no catalog Content ID
+- Latest durable raw inbound WhatsApp event had no matching CRM Business/Lead, explaining why lifecycle linkage stayed at zero
+- One dedicated `WhatsApp Production Pilot` Business plus one AUTO Lead now exists for that latest inbound sender, marked `INTERNAL_TEST`; creation is recorded in `audit_logs` as `CREATE_WHATSAPP_PRODUCTION_PILOT_FIXTURE`
 
 Provider `CONNECTED` is now a verified production database fact, not an inference from credentials. Keep the distinction: future status claims must still be queried from production state.
 
@@ -72,6 +74,7 @@ Provider `CONNECTED` is now a verified production database fact, not an inferenc
 - No product card can be attached merely because an internal caller claims the WhatsApp 24-hour window is open.
 - PR #58 derives the latest customer inbound timestamp from durable linked `outreach_messages` and verifies the conversation belongs to the organization, is WhatsApp, is lead-linked, and matches `context.leadId` when supplied.
 - A paid AI result is persisted as `COMPLETED` before Shadow Approval reconciliation. If the queue write fails, replay retries only the idempotent database queue operation and does not call the model again.
+- The pilot fixture does not send anything and does not fabricate inbound timestamps. It only allows the next real webhook message from the same test sender to link deterministically to one Business/Lead.
 
 Do not turn Shadow Mode off just to make a readiness screen greener. Live autonomous outbound still requires explicit owner launch approval after production pilot evidence.
 
@@ -151,16 +154,15 @@ Large increases require explicit owner confirmation and audit logging.
 
 Do not disable Shadow Mode. The next production gate is a **controlled linked-inbound → Agent → Approval → catalog send** pilot.
 
-Current blocker: production currently has zero linked WhatsApp inbound rows in `outreach_messages`, so there is no durable lead-linked customer-service-window evidence for a safe catalog product send yet. The Meta integration itself is CONNECTED.
+The deterministic pilot Business/Lead fixture is ready. The only missing evidence is a **new real inbound WhatsApp message from the same test sender**. The previous webhook event happened before the fixture existed and correctly remains unlinked; do not rewrite history to make it look linked.
 
 Proceed in this order:
 
-1. confirm the intended test WhatsApp number is represented by exactly one existing Business/Lead in Growth OS so inbound phone matching can link deterministically;
-2. receive one real inbound WhatsApp message from that number and verify webhook → `outreach_messages` + conversation linkage;
-3. invoke the existing idempotent Agent processing path with that conversation delivery context; verify one Shadow Approval row is created and, for one unambiguous service request, contains the expected allowlisted `catalog_content_id`;
-4. owner approves the row in `/approvals`;
-5. execute existing `/api/outreach/approved-send` exactly once and verify provider message ID, `PRODUCT_SENT`, `SEND_PRODUCT`, conversation timestamps and usage ledger reconciliation;
-6. verify delivery/read status webhook evidence;
-7. keep Shadow Mode ON after the pilot. Autonomous launch is a separate explicit owner decision.
+1. receive one new real inbound WhatsApp message from the prepared test sender and verify webhook → `outreach_messages` + conversation linkage;
+2. invoke the existing idempotent Agent processing path with that conversation delivery context; verify exactly one Shadow Approval row is created and, for one unambiguous service request, contains the expected allowlisted `catalog_content_id`;
+3. owner approves the row in `/approvals`;
+4. execute existing `/api/outreach/approved-send` exactly once and verify provider message ID, `PRODUCT_SENT`, `SEND_PRODUCT`, conversation timestamps and usage ledger reconciliation;
+5. verify delivery/read status webhook evidence;
+6. keep Shadow Mode ON after the pilot. Autonomous launch is a separate explicit owner decision.
 
 Do not fabricate test rows or alter production timestamps to manufacture a 24-hour window. The pilot must use a real inbound webhook event.
