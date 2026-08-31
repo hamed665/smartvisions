@@ -19,6 +19,10 @@ export function phonesRepresentSameNumber(targetValue?: string | null, candidate
   return target === candidate || target.endsWith(candidate) || candidate.endsWith(target);
 }
 
+export function isWhatsAppInboundDuplicateError(code?: string | null) {
+  return code === '23505';
+}
+
 export function mapWhatsAppDeliveryStatus(status: NormalizedWhatsAppStatus['status']) {
   switch (status) {
     case 'sent': return 'SENT';
@@ -40,7 +44,7 @@ async function resolveLeadByPhone(organizationId: string, from: string) {
     .from('businesses')
     .select('id,phone,whatsapp')
     .eq('organization_id', organizationId)
-    .or(`phone.ilike.%${suffix},whatsapp.ilike.%${suffix}%`)
+    .or(`phone.ilike.%${suffix}%,whatsapp.ilike.%${suffix}%`)
     .limit(20);
   if (businessError) throw new Error(`WhatsApp business lookup failed: ${businessError.message}`);
 
@@ -99,7 +103,7 @@ export async function applyWhatsAppInboundLifecycle(organizationId: string, even
   const body = event.text?.trim() || (event.type === 'audio' ? '[WhatsApp voice message]' : `[WhatsApp ${event.type} message]`);
   const idempotencyKey = `whatsapp:inbound:${event.providerMessageId}`;
 
-  const { error: messageError } = await supabase.from('outreach_messages').upsert({
+  const { error: messageError } = await supabase.from('outreach_messages').insert({
     organization_id: organizationId,
     lead_id: lead.id,
     channel: 'WHATSAPP',
@@ -110,8 +114,10 @@ export async function applyWhatsAppInboundLifecycle(organizationId: string, even
     idempotency_key: idempotencyKey,
     received_at: receivedAt,
     metadata: { conversation_id: conversation.id, type: event.type, media_id: event.mediaId ?? null, mime_type: event.mimeType ?? null, voice: Boolean(event.voice) },
-  }, { onConflict: 'organization_id,idempotency_key', ignoreDuplicates: true });
-  if (messageError) throw new Error(`WhatsApp inbound message persistence failed: ${messageError.message}`);
+  });
+  if (messageError && !isWhatsAppInboundDuplicateError(messageError.code)) {
+    throw new Error(`WhatsApp inbound message persistence failed: ${messageError.message}`);
+  }
 
   const terminal = new Set(['WON','LOST','DO_NOT_CONTACT','HUMAN']);
   if (!terminal.has(String(lead.status))) {
