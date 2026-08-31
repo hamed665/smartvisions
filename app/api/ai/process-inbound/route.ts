@@ -16,7 +16,9 @@ function serviceClient() {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-function parseDeliveryContext(value: unknown): WhatsAppShadowDeliveryContext | null {
+type RequestedWhatsAppDeliveryContext = Omit<WhatsAppShadowDeliveryContext, 'lastCustomerMessageAt'>;
+
+function parseDeliveryContext(value: unknown): RequestedWhatsAppDeliveryContext | null {
   if (value == null) return null;
   if (!value || typeof value !== 'object') throw new Error('deliveryContext must be an object');
   const input = value as Record<string, unknown>;
@@ -30,9 +32,47 @@ function parseDeliveryContext(value: unknown): WhatsAppShadowDeliveryContext | n
     to: String(input.to).trim(),
     marketCode: String(input.marketCode).trim().toUpperCase(),
     leadTimezone: optional('leadTimezone'),
-    lastCustomerMessageAt: optional('lastCustomerMessageAt'),
     templateName: optional('templateName'),
     templateLanguageCode: optional('templateLanguageCode'),
+  };
+}
+
+async function resolveTrustedDeliveryContext(input: {
+  supabase: ReturnType<typeof serviceClient>;
+  organizationId: string;
+  leadId?: string;
+  requested: RequestedWhatsAppDeliveryContext | null;
+}): Promise<WhatsAppShadowDeliveryContext | null> {
+  if (!input.requested) return null;
+
+  const { data: conversation, error: conversationError } = await input.supabase
+    .from('sales_conversations')
+    .select('id,lead_id,channel')
+    .eq('organization_id', input.organizationId)
+    .eq('id', input.requested.conversationId)
+    .maybeSingle();
+  if (conversationError) throw new Error(`Delivery conversation lookup failed: ${conversationError.message}`);
+  if (!conversation) throw new Error('Delivery conversation not found');
+  if (conversation.channel !== 'WHATSAPP') throw new Error('deliveryContext conversation must be WHATSAPP');
+  if (!conversation.lead_id) throw new Error('WhatsApp delivery conversation must be linked to a lead');
+  if (input.leadId && input.leadId !== conversation.lead_id) throw new Error('deliveryContext conversation does not match context.leadId');
+
+  const { data: inbound, error: inboundError } = await input.supabase
+    .from('outreach_messages')
+    .select('received_at')
+    .eq('organization_id', input.organizationId)
+    .eq('lead_id', conversation.lead_id)
+    .eq('channel', 'WHATSAPP')
+    .eq('direction', 'INBOUND')
+    .not('received_at', 'is', null)
+    .order('received_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (inboundError) throw new Error(`Latest WhatsApp inbound lookup failed: ${inboundError.message}`);
+
+  return {
+    ...input.requested,
+    lastCustomerMessageAt: inbound?.received_at ? String(inbound.received_at) : undefined,
   };
 }
 
@@ -58,10 +98,10 @@ export async function POST(request: Request) {
   }
 
   let requestKey: string;
-  let deliveryContext: WhatsAppShadowDeliveryContext | null;
+  let requestedDeliveryContext: RequestedWhatsAppDeliveryContext | null;
   try {
     requestKey = normalizeIdempotencyKey(String(body.idempotencyKey ?? ''));
-    deliveryContext = parseDeliveryContext(body.deliveryContext);
+    requestedDeliveryContext = parseDeliveryContext(body.deliveryContext);
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid request' }, { status: 400 });
   }
@@ -76,6 +116,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'AI runtime controls blocked processing' }, { status: 423 });
   }
   const trustedContext: AgentContext = { ...body.context, shadowMode: controls.shadow_mode };
+
+  let deliveryContext: WhatsAppShadowDeliveryContext | null;
+  try {
+    deliveryContext = await resolveTrustedDeliveryContext({
+      supabase,
+      organizationId,
+      leadId: trustedContext.leadId,
+      requested: requestedDeliveryContext,
+    });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'WhatsApp delivery evidence lookup failed' }, { status: 409 });
+  }
 
   const reconcileApproval = async (result: unknown) => {
     if (!deliveryContext) return undefined;
