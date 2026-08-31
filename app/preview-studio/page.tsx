@@ -1,6 +1,7 @@
 import { PreviewCanvas } from '@/components/preview/PreviewCanvas';
 import { generatePreview } from '@/lib/preview/engine';
 import { evaluatePreviewQuality } from '@/lib/preview/quality';
+import { PREVIEW_TEMPLATE_LIBRARY } from '@/lib/preview/templates';
 import { updatePreviewTemplate } from '@/app/management-actions';
 import { createPreviewTemplate } from '@/app/extended-actions';
 import {
@@ -33,11 +34,13 @@ export default async function PreviewStudioPage() {
   const templates = templateData ?? [];
   const productionPreviews = productionData ?? [];
   const editable = role === 'OWNER';
+  const customerGradeBuiltIns = PREVIEW_TEMPLATE_LIBRARY.filter((template) => template.customerFacing);
   const preview = generatePreview({
     businessName: 'Northstar Dental',
     vertical: 'dental',
     countryCode: 'OM',
-    language: 'en',
+    language: 'bilingual',
+    languageSource: 'owner',
     city: 'Muscat',
     services: ['Preventive Care', 'Cosmetic Dentistry', 'Smile Consultations'],
     whatsapp: '+96800000000',
@@ -51,38 +54,49 @@ export default async function PreviewStudioPage() {
       <div className="headerRow">
         <div>
           <h1>Preview Studio</h1>
-          <p className="muted">Manage premium demo templates and inspect the quality gate before anything reaches a lead.</p>
+          <p className="muted">Customer-grade 2026 website concepts with explicit language, evidence-safe personalization and mobile-first quality gates.</p>
         </div>
         <span className="status">Quality {quality.score}/100 · {quality.passed ? 'PASS' : 'BLOCK'}</span>
       </div>
 
       <section className="panel">
         <h2>Controlled production proof</h2>
-        <p className="muted">Owner-only launch proof. It can use only the linked INTERNAL_TEST WhatsApp lead with a successful real voice request for a website, keeps Shadow Mode on, creates only a deterministic zero-provider-cost Preview, and never sends anything to the test contact.</p>
-        <form action={generateControlledPreviewPilot}>
-          <button disabled={!editable}>Generate controlled test preview</button>
+        <p className="muted">Owner-only launch proof. Website language must be customer/owner confirmed; country or conversation language is never used as a substitute. Generation is deterministic, uses the existing INTERNAL_TEST lead, keeps Shadow Mode on, creates no provider spend, and sends nothing to the test contact.</p>
+        <form action={generateControlledPreviewPilot} className="settingsGrid">
+          <label>
+            Confirmed website language
+            <select name="site_language" defaultValue="" required disabled={!editable}>
+              <option value="" disabled>Choose before generating</option>
+              <option value="ar">Arabic</option>
+              <option value="en">English</option>
+              <option value="bilingual">Arabic + English</option>
+            </select>
+          </label>
+          <button disabled={!editable}>Generate controlled premium preview</button>
         </form>
       </section>
 
       <section className="twoCol">
         <div className="panel">
-          <h2>Live sample</h2>
+          <h2>Live customer-grade sample</h2>
+          <p className="muted smallText">Bilingual sample. Use the language switch inside the preview and narrow the browser to inspect the mobile layout.</p>
           <PreviewCanvas preview={preview}/>
         </div>
         <div className="panel">
           <h2>Template policy</h2>
-          <p className="muted">Only active templates may be selected by Preview Director. Quality tier can be raised without changing agent code.</p>
+          <p className="muted">The built-in library is the zero-API-cost baseline. Organization templates remain optional overrides; Preview Director does not need an LLM call just to choose a layout.</p>
           <div className="healthList">
-            <span>Templates <strong>{templates.length}</strong></span>
-            <span>Active <strong>{templates.filter((template) => template.active).length}</strong></span>
-            <span>Premium <strong>{templates.filter((template) => template.quality_tier === 'PREMIUM').length}</strong></span>
+            <span>2026 built-ins <strong>{customerGradeBuiltIns.length}</strong></span>
+            <span>Customer-grade <strong>{customerGradeBuiltIns.filter((template) => template.customerFacing).length}</strong></span>
+            <span>DB overrides <strong>{templates.length}</strong></span>
+            <span>Active DB overrides <strong>{templates.filter((template) => template.active).length}</strong></span>
           </div>
         </div>
       </section>
 
       <section className="panel">
         <h2>Production previews</h2>
-        <p className="muted">Generation stays proposal-first. Owner approval is required before a public preview can be marked as shared. Lifecycle actions independently reject elapsed previews even if a stale browser view still shows a button.</p>
+        <p className="muted">Generation stays proposal-first. Customer-facing website previews require explicit site language and a passing 2026/mobile/evidence quality gate. Owner approval is still required before sharing.</p>
         <div className="settingsList">
           {productionPreviews.length ? productionPreviews.map((item) => {
             const payload = recordValue(item.payload);
@@ -91,6 +105,7 @@ export default async function PreviewStudioPage() {
             const business = recordValue(growthSource.business);
             const lane = String(metadata.lane ?? item.vertical ?? 'UNKNOWN');
             const version = Number(metadata.version ?? 1);
+            const siteLanguage = String(metadata.site_language ?? '—');
             const publicPath = previewPublicPath(String(item.public_token));
             const shareable = item.status === 'SENT' || item.status === 'VIEWED';
             const controlledInternal = String(business.category ?? '') === 'INTERNAL_TEST';
@@ -98,7 +113,7 @@ export default async function PreviewStudioPage() {
               <div className="settingsRow" key={item.id}>
                 <div>
                   <strong>{lane} · v{version}</strong>
-                  <span className="muted smallText">{item.status} · Quality {item.quality_score}/100</span>
+                  <span className="muted smallText">{item.status} · Quality {item.quality_score}/100 · Language {siteLanguage}</span>
                   {controlledInternal ? <span className="muted smallText">Controlled INTERNAL_TEST preview · no external recipient</span> : null}
                 </div>
                 <div>
@@ -140,7 +155,8 @@ export default async function PreviewStudioPage() {
 
       {editable ? (
         <section className="panel settingsCreate">
-          <h2>Add template</h2>
+          <h2>Add template override</h2>
+          <p className="muted smallText">Use this only when an organization-specific override is genuinely needed. Built-in customer-grade templates remain the safe default.</p>
           <form action={createPreviewTemplate} className="settingsGrid">
             <label>Template key<input name="id" placeholder="restaurant-premium" required/></label>
             <label>Vertical<input name="vertical" placeholder="restaurant" required/></label>
