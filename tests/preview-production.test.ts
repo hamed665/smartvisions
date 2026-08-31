@@ -3,6 +3,7 @@ import {
   buildContentProposal,
   buildWebsitePreviewInput,
   evaluateGenerationEligibility,
+  isPreviewExpiredAt,
   normalizeProductionLane,
   previewBriefHash,
   shouldAllowHeavyGeneration,
@@ -29,6 +30,14 @@ describe('production preview planning', () => {
     const a = previewBriefHash({ business: { name: 'A', city: 'Muscat' }, services: ['web'] });
     const b = previewBriefHash({ services: ['web'], business: { city: 'Muscat', name: 'A' } });
     expect(a).toBe(b);
+  });
+
+  it('treats elapsed or invalid preview lifetimes as expired', () => {
+    const now = new Date('2026-08-31T17:00:00Z');
+    expect(isPreviewExpiredAt('2026-08-30T17:00:00Z', now)).toBe(true);
+    expect(isPreviewExpiredAt('2026-09-01T17:00:00Z', now)).toBe(false);
+    expect(isPreviewExpiredAt('not-a-date', now)).toBe(true);
+    expect(isPreviewExpiredAt(null, now)).toBe(true);
   });
 
   it('builds market-appropriate website preview input from existing business facts', () => {
