@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { generatePreview, isPreviewEligible } from '@/lib/preview/engine';
 import { evaluatePreviewQuality } from '@/lib/preview/quality';
+import { isSiteLanguage, isSiteLanguageSource } from '@/lib/preview/production';
 import type { PreviewInput } from '@/lib/preview/types';
 
 export async function POST(request: Request) {
@@ -9,8 +10,8 @@ export async function POST(request: Request) {
   if (authError) return authError;
 
   const input = await request.json() as PreviewInput;
-  if (!input.businessName || !input.vertical || !input.countryCode || !input.language) {
-    return NextResponse.json({ error: 'businessName, vertical, countryCode and language are required' }, { status: 400 });
+  if (!input.businessName || !input.vertical || !input.countryCode || !isSiteLanguage(input.language) || !isSiteLanguageSource(input.languageSource)) {
+    return NextResponse.json({ error: 'businessName, vertical, countryCode, explicit language and languageSource are required' }, { status: 400 });
   }
 
   const eligibility = isPreviewEligible(input);
