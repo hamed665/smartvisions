@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { getRuntimeControls } from '@/lib/reliability/runtime-controls';
+import { assertSmartVisionsCatalogContentId } from '@/lib/whatsapp/catalog';
 
 export type ShadowDraftChannel = 'EMAIL' | 'WHATSAPP';
 
@@ -19,6 +20,7 @@ export type ShadowDraftInput = {
   lastCustomerMessageAt?: string;
   templateName?: string;
   templateLanguageCode?: string;
+  catalogContentId?: string;
   replyLanguage?: string;
   replyDialect?: string;
   persianTranslation?: string;
@@ -48,6 +50,10 @@ export async function queueShadowDraft(input: ShadowDraftInput) {
   }
   if (input.channel === 'EMAIL' && (!input.subject || !input.mailboxId)) {
     throw new Error('Email shadow drafts require subject and mailboxId');
+  }
+  if (input.catalogContentId) {
+    if (input.channel !== 'WHATSAPP') throw new Error('Catalog products can only be attached to WhatsApp drafts');
+    assertSmartVisionsCatalogContentId(input.catalogContentId);
   }
 
   const controls = await getRuntimeControls(input.organizationId);
@@ -95,6 +101,7 @@ export async function queueShadowDraft(input: ShadowDraftInput) {
         last_customer_message_at: input.lastCustomerMessageAt ?? null,
         template_name: input.templateName ?? null,
         template_language_code: input.templateLanguageCode ?? null,
+        catalog_content_id: input.catalogContentId ?? null,
       },
     },
   };
