@@ -7,6 +7,7 @@ import {
   buildContentProposal,
   buildWebsitePreviewInput,
   evaluateGenerationEligibility,
+  isPreviewExpiredAt,
   normalizeProductionLane,
   previewBriefHash,
   shouldAllowHeavyGeneration,
@@ -103,11 +104,47 @@ export async function generateProductionAsset(input: {
     .limit(20);
   if (existingError) throw new Error(`Preview history lookup failed: ${existingError.message}`);
 
-  const duplicate = (existingRows ?? []).find((row) => {
+  let reconciliationRequired = false;
+  const now = new Date();
+  const matchingBriefRows = (existingRows ?? []).filter((row) => {
     const payload = (row.payload ?? {}) as Record<string, unknown>;
     const metadata = (payload.metadata ?? {}) as Record<string, unknown>;
-    return (row.brief_hash === briefHash || metadata.brief_hash === briefHash) && row.status !== 'EXPIRED' && row.status !== 'ARCHIVED';
+    return row.brief_hash === briefHash || metadata.brief_hash === briefHash;
   });
+
+  const staleActive = matchingBriefRows.find((row) => (
+    row.status !== 'EXPIRED'
+      && row.status !== 'ARCHIVED'
+      && row.status !== 'QUALITY_FAILED'
+      && isPreviewExpiredAt(row.expires_at, now)
+  ));
+  if (staleActive) {
+    const { data: expired, error: expireError } = await supabase
+      .from('previews')
+      .update({ status: 'EXPIRED' })
+      .eq('organization_id', input.organizationId)
+      .eq('id', staleActive.id)
+      .eq('status', staleActive.status)
+      .select('id')
+      .maybeSingle();
+    if (expireError) throw new Error(`Expired preview reconciliation failed: ${expireError.message}`);
+    if (!expired) throw new Error('Expired preview reconciliation lost a concurrency race; retry from current state');
+
+    const { error: expireEventError } = await supabase.from('preview_events').insert({
+      organization_id: input.organizationId,
+      preview_id: staleActive.id,
+      event_type: 'EXPIRED',
+      metadata: { source: 'production_generation', reason: 'TTL_ELAPSED', brief_hash: briefHash },
+    });
+    reconciliationRequired = Boolean(expireEventError);
+  }
+
+  const duplicate = matchingBriefRows.find((row) => (
+    row.id !== staleActive?.id
+      && row.status !== 'EXPIRED'
+      && row.status !== 'ARCHIVED'
+      && !isPreviewExpiredAt(row.expires_at, now)
+  ));
   if (duplicate) {
     return { eligible: true as const, reused: true as const, previewId: duplicate.id, publicToken: duplicate.public_token, status: duplicate.status, eligibility };
   }
@@ -190,25 +227,30 @@ export async function generateProductionAsset(input: {
   }).select('id,public_token,status,expires_at').single();
 
   if (createError?.code === '23505') {
-    const { data: concurrent } = await supabase
+    const { data: concurrentRows } = await supabase
       .from('previews')
-      .select('id,public_token,status')
+      .select('id,public_token,status,expires_at')
       .eq('organization_id', input.organizationId)
       .eq('lead_id', input.leadId)
       .eq('brief_hash', briefHash)
-      .maybeSingle();
+      .order('created_at', { ascending: false })
+      .limit(5);
+    const concurrent = (concurrentRows ?? []).find((row) => (
+      row.status !== 'EXPIRED'
+        && row.status !== 'ARCHIVED'
+        && !isPreviewExpiredAt(row.expires_at)
+    ));
     if (concurrent) return { eligible: true as const, reused: true as const, previewId: concurrent.id, publicToken: concurrent.public_token, status: concurrent.status, eligibility };
   }
   if (createError || !created) throw new Error(`Production preview persistence failed: ${createError?.message ?? 'unknown insert failure'}`);
 
-  let reconciliationRequired = false;
   const { error: eventError } = await supabase.from('preview_events').insert({
     organization_id: input.organizationId,
     preview_id: created.id,
     event_type: status === 'QUALITY_FAILED' ? 'QUALITY_FAILED' : 'GENERATED',
     metadata: { lane, version, brief_hash: briefHash, generation_cost_usd: 0 },
   });
-  reconciliationRequired = Boolean(eventError);
+  reconciliationRequired = reconciliationRequired || Boolean(eventError);
 
   try {
     await recordUsage({
