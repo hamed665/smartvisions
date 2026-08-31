@@ -26,15 +26,15 @@ describe('voice transcription cost controls', () => {
   });
 
   it('uses the same Meta token aliases and graph-version default as the WhatsApp provider', () => {
-    expect(resolveMetaVoiceConfig({ META_WHATSAPP_ACCESS_TOKEN: ' preferred ' })).toEqual({
+    expect(resolveMetaVoiceConfig({ NODE_ENV: 'test', META_WHATSAPP_ACCESS_TOKEN: ' preferred ' })).toEqual({
       token: 'preferred',
       graphVersion: 'v23.0',
     });
-    expect(resolveMetaVoiceConfig({ META_WHATSAPP_TOKEN: 'legacy', META_GRAPH_VERSION: 'v99.0' })).toEqual({
+    expect(resolveMetaVoiceConfig({ NODE_ENV: 'test', META_WHATSAPP_TOKEN: 'legacy', META_GRAPH_VERSION: 'v99.0' })).toEqual({
       token: 'legacy',
       graphVersion: 'v99.0',
     });
-    expect(resolveMetaVoiceConfig({ WHATSAPP_ACCESS_TOKEN: 'fallback' })).toEqual({
+    expect(resolveMetaVoiceConfig({ NODE_ENV: 'test', WHATSAPP_ACCESS_TOKEN: 'fallback' })).toEqual({
       token: 'fallback',
       graphVersion: 'v23.0',
     });
