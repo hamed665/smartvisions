@@ -15,6 +15,12 @@ export type GenerationEligibilityInput = {
 
 const blockedLeadStatuses = new Set(['DO_NOT_CONTACT','LOST']);
 
+export function isPreviewExpiredAt(expiresAt: string | Date | null | undefined, now = new Date()) {
+  if (!expiresAt) return true;
+  const value = expiresAt instanceof Date ? expiresAt : new Date(expiresAt);
+  return !Number.isFinite(value.getTime()) || value.getTime() <= now.getTime();
+}
+
 export function evaluateGenerationEligibility(input: GenerationEligibilityInput) {
   const threshold = Math.max(0, Math.min(100, input.threshold ?? 60));
   const score = Math.max(
