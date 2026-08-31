@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { Manrope, Noto_Sans_Arabic } from 'next/font/google';
 import type { PreviewDocument, PreviewLocale, PreviewSection } from '@/lib/preview/types';
 import styles from './PreviewCanvas.module.css';
@@ -10,18 +10,42 @@ const arabicFont = Noto_Sans_Arabic({ subsets: ['arabic'], display: 'swap', vari
 
 type ThemeStyle = CSSProperties & Record<`--preview-${string}`, string>;
 
-function whatsappHref(value?: string) {
-  const digits = String(value ?? '').replace(/\D/g, '');
-  return digits.length >= 8 ? `https://wa.me/${digits}` : null;
+const arabicVerticalLabels: Record<PreviewDocument['vertical'], string> = {
+  dental: 'العناية بالأسنان',
+  clinic: 'الرعاية الصحية',
+  beauty: 'الجمال والعناية',
+  salon: 'الصالون',
+  restaurant: 'المطعم',
+  cafe: 'المقهى',
+  hospitality: 'الضيافة',
+  pet_clinic: 'رعاية الحيوانات',
+  real_estate: 'العقارات',
+  automotive: 'السيارات',
+  fitness: 'اللياقة',
+  professional: 'الخدمات المهنية',
+  corporate: 'خدمات الأعمال',
+  general: 'الخدمات',
+};
+
+function uiLabel(locale: PreviewLocale, key: 'proof' | 'services' | 'highlights' | 'visual' | 'next' | 'location') {
+  const labels = {
+    proof: ['Proof', 'ثقة موثقة'],
+    services: ['Services', 'الخدمات'],
+    highlights: ['Highlights', 'الأهم أولاً'],
+    visual: ['Visual direction', 'الاتجاه البصري'],
+    next: ['Next step', 'الخطوة التالية'],
+    location: ['Location', 'الموقع'],
+  } as const;
+  return locale === 'ar' ? labels[key][1] : labels[key][0];
 }
 
-function renderSection(section: PreviewSection, preview: PreviewDocument) {
+function renderSection(section: PreviewSection, preview: PreviewDocument, locale: PreviewLocale) {
   const imageUrls = preview.assets.imageUrls;
 
   if (section.kind === 'proof') {
     return (
       <section className={`${styles.section} ${styles.proofSection}`} key={section.kind}>
-        <p className={styles.kicker}>01 · Proof</p>
+        <p className={styles.kicker}>01 · {uiLabel(locale, 'proof')}</p>
         <div className={styles.proofGrid}>
           <h3>{section.heading}</h3>
           <p>{section.body}</p>
@@ -34,7 +58,7 @@ function renderSection(section: PreviewSection, preview: PreviewDocument) {
     return (
       <section className={styles.section} key={section.kind}>
         <div className={styles.sectionHeader}>
-          <p className={styles.kicker}>{section.kind === 'offer' ? 'Highlights' : 'Services'}</p>
+          <p className={styles.kicker}>{uiLabel(locale, section.kind === 'offer' ? 'highlights' : 'services')}</p>
           <h3>{section.heading}</h3>
         </div>
         <div className={styles.cards}>
@@ -42,7 +66,7 @@ function renderSection(section: PreviewSection, preview: PreviewDocument) {
             <div className={styles.service} key={`${item}-${index}`}>
               <span className={styles.cardIndex}>{String(index + 1).padStart(2, '0')}</span>
               <strong>{item}</strong>
-              <span className={styles.cardArrow}>↗</span>
+              <span className={styles.cardArrow}>{locale === 'ar' ? '↖' : '↗'}</span>
             </div>
           ))}
         </div>
@@ -54,14 +78,14 @@ function renderSection(section: PreviewSection, preview: PreviewDocument) {
     return (
       <section className={styles.section} key={section.kind}>
         <div className={styles.sectionHeader}>
-          <p className={styles.kicker}>Visual direction</p>
+          <p className={styles.kicker}>{uiLabel(locale, 'visual')}</p>
           <h3>{section.heading}</h3>
         </div>
         <div className={styles.gallery}>
           {[0, 1, 2].map((index) => imageUrls[index] ? (
             <div className={styles.galleryFrame} key={imageUrls[index]}>
-              {/* Verified business image URL only. */}
-              <img src={imageUrls[index]} alt={`${preview.businessName} visual ${index + 1}`} loading="lazy"/>
+              {/* Only URLs supplied as verified business assets are rendered. */}
+              <img src={imageUrls[index]} alt={`${preview.businessName} ${locale === 'ar' ? 'صورة موثقة' : 'verified visual'} ${index + 1}`} loading="lazy"/>
             </div>
           ) : (
             <div className={`${styles.galleryFrame} ${styles.safeVisual}`} key={`safe-${index}`} aria-hidden="true">
@@ -77,11 +101,11 @@ function renderSection(section: PreviewSection, preview: PreviewDocument) {
     return (
       <section className={`${styles.section} ${styles.booking}`} id="contact" key={section.kind}>
         <div>
-          <p className={styles.kicker}>Next step</p>
+          <p className={styles.kicker}>{uiLabel(locale, 'next')}</p>
           <h3>{section.heading}</h3>
           {section.body ? <p>{section.body}</p> : null}
         </div>
-        <a className={styles.primary} href="#contact">{preview.primaryCta}</a>
+        <a className={styles.primary} href="#contact">{preview.localized[locale]?.primaryCta ?? preview.primaryCta}</a>
       </section>
     );
   }
@@ -89,7 +113,7 @@ function renderSection(section: PreviewSection, preview: PreviewDocument) {
   if (section.kind === 'location') {
     return (
       <section className={`${styles.section} ${styles.location}`} key={section.kind}>
-        <p className={styles.kicker}>Location</p>
+        <p className={styles.kicker}>{uiLabel(locale, 'location')}</p>
         <h3>{section.heading}</h3>
         {section.body ? <p>{section.body}</p> : null}
       </section>
@@ -103,14 +127,6 @@ export function PreviewCanvas({ preview }: { preview: PreviewDocument }) {
   const [locale, setLocale] = useState<PreviewLocale>(preview.primaryLocale);
   const copy = preview.localized[locale] ?? preview.localized[preview.primaryLocale];
   const direction = locale === 'ar' ? 'rtl' : 'ltr';
-  const whatsapp = whatsappHref(preview.secondaryCta ? undefined : undefined);
-  const verifiedWhatsapp = useMemo(() => {
-    const booking = preview.sections.find((section) => section.kind === 'booking');
-    void booking;
-    return null;
-  }, [preview.sections]);
-  void whatsapp;
-  void verifiedWhatsapp;
 
   if (!copy) return null;
 
@@ -129,7 +145,8 @@ export function PreviewCanvas({ preview }: { preview: PreviewDocument }) {
   const trustRating = preview.evidence.rating;
   const trustCount = preview.evidence.reviewCount;
   const hasVerifiedRating = typeof trustRating === 'number' && typeof trustCount === 'number' && trustCount > 0;
-  const categoryLabel = preview.evidence.categoryLabel || preview.vertical.replaceAll('_', ' ');
+  const rawCategory = preview.evidence.categoryLabel || preview.vertical.replaceAll('_', ' ');
+  const categoryLabel = locale === 'ar' ? arabicVerticalLabels[preview.vertical] : rawCategory;
   const heroImage = preview.assets.imageUrls[0];
   const remainingSections = copy.sections.filter((section) => section.kind !== 'hero');
 
@@ -148,7 +165,7 @@ export function PreviewCanvas({ preview }: { preview: PreviewDocument }) {
           <strong>{preview.businessName}</strong>
         </div>
         {preview.availableLocales.length > 1 ? (
-          <div className={styles.languageSwitch} aria-label="Website language preview">
+          <div className={styles.languageSwitch} aria-label={locale === 'ar' ? 'لغة معاينة الموقع' : 'Website language preview'}>
             {preview.availableLocales.map((item) => (
               <button type="button" key={item} onClick={() => setLocale(item)} data-active={item === locale}>
                 {item === 'ar' ? 'العربية' : 'English'}
@@ -160,7 +177,7 @@ export function PreviewCanvas({ preview }: { preview: PreviewDocument }) {
 
       <section className={styles.hero}>
         <div className={styles.heroCopy}>
-          <div className={styles.eyebrow}>{categoryLabel} · Concept preview</div>
+          <div className={styles.eyebrow}>{categoryLabel} · {locale === 'ar' ? 'تصور أولي' : 'Concept preview'}</div>
           <h2 className={styles.headline}>{copy.headline}</h2>
           <p className={styles.sub}>{copy.subheadline}</p>
           <div className={styles.actions}>
@@ -168,13 +185,17 @@ export function PreviewCanvas({ preview }: { preview: PreviewDocument }) {
             {copy.secondaryCta ? <span className={styles.secondary}>{copy.secondaryCta}</span> : null}
           </div>
           <div className={styles.trustRow}>
-            {hasVerifiedRating ? <span><strong>{trustRating!.toFixed(1)} ★</strong> · {Math.round(trustCount!)} Google reviews</span> : <span>Mobile-first · Clear actions · Fast to scan</span>}
+            {hasVerifiedRating ? (
+              <span><strong>{trustRating!.toFixed(1)} ★</strong> · {Math.round(trustCount!)} {locale === 'ar' ? 'تقييماً على Google' : 'Google reviews'}</span>
+            ) : (
+              <span>{locale === 'ar' ? 'مهيأ للجوال · إجراءات واضحة · قراءة سريعة' : 'Mobile-first · Clear actions · Fast to scan'}</span>
+            )}
             {preview.evidence.address ? <span>{preview.evidence.address}</span> : null}
           </div>
         </div>
         <div className={styles.heroVisual}>
           {heroImage ? (
-            <img src={heroImage} alt={`${preview.businessName} verified business visual`} loading="eager"/>
+            <img src={heroImage} alt={`${preview.businessName} ${locale === 'ar' ? 'صورة موثقة' : 'verified business visual'}`} loading="eager"/>
           ) : (
             <div className={styles.visualPlaceholder} aria-hidden="true">
               <span className={styles.visualLabel}>{categoryLabel}</span>
@@ -185,7 +206,7 @@ export function PreviewCanvas({ preview }: { preview: PreviewDocument }) {
         </div>
       </section>
 
-      {remainingSections.map((section) => renderSection(section, preview))}
+      {remainingSections.map((section) => renderSection(section, preview, locale))}
 
       <footer className={styles.footer}>
         <strong>{preview.businessName}</strong>
