@@ -17,6 +17,8 @@ const eventForAction: Partial<Record<PreviewLifecycleAction, string>> = {
   APPROVE: 'APPROVED',
   SEND: 'SENT',
   VIEW: 'VIEWED',
+  EXPIRE: 'EXPIRED',
+  ARCHIVE: 'ARCHIVED',
 };
 
 export async function transitionPreview(input: {
@@ -47,12 +49,13 @@ export async function transitionPreview(input: {
       .maybeSingle();
     if (expireError) throw new Error(`Preview expiry reconciliation failed: ${expireError.message}`);
     if (!expired) throw new Error('Preview expiry reconciliation lost a concurrency race; reload before retrying');
-    await supabase.from('preview_events').insert({
+    const { error: expireEventError } = await supabase.from('preview_events').insert({
       organization_id: input.organizationId,
       preview_id: input.previewId,
       event_type: 'EXPIRED',
       metadata: { source: 'preview_lifecycle', reason: 'TTL_ELAPSED' },
     });
+    if (expireEventError) throw new Error(`Preview expiry event failed: ${expireEventError.message}`);
     throw new Error('Preview expired; generate a new version before approval or sharing');
   }
 
