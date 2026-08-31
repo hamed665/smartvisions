@@ -3,11 +3,25 @@ import { generatePreview } from '@/lib/preview/engine';
 import { evaluatePreviewQuality } from '@/lib/preview/quality';
 import { updatePreviewTemplate } from '@/app/management-actions';
 import { createPreviewTemplate } from '@/app/extended-actions';
-import { approvePreview, markPreviewSent } from '@/app/preview-actions';
+import {
+  approvePreview,
+  generateControlledPreviewPilot,
+  markControlledPreviewShared,
+  markPreviewSent,
+} from '@/app/preview-actions';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { previewPublicPath } from '@/lib/preview/lifecycle';
 
 export const dynamic = 'force-dynamic';
+
+function recordValue(value: unknown) {
+  return value && typeof value === 'object' ? value as Record<string, unknown> : {};
+}
+
+function previewExpired(expiresAt: unknown) {
+  const value = new Date(String(expiresAt ?? ''));
+  return !Number.isFinite(value.getTime()) || value.getTime() <= Date.now();
+}
 
 export default async function PreviewStudioPage() {
   const { supabase, organizationId, role } = await getCurrentOrganization();
@@ -47,6 +61,14 @@ export default async function PreviewStudioPage() {
         <span className="status">Quality {quality.score}/100 · {quality.passed ? 'PASS' : 'BLOCK'}</span>
       </div>
 
+      <section className="panel">
+        <h2>Controlled production proof</h2>
+        <p className="muted">Owner-only launch proof. It can use only the linked INTERNAL_TEST WhatsApp lead with a successful real voice request for a website, keeps Shadow Mode on, creates only a deterministic zero-provider-cost Preview, and never sends anything to the test contact.</p>
+        <form action={generateControlledPreviewPilot}>
+          <button disabled={!editable}>Generate controlled test preview</button>
+        </form>
+      </section>
+
       <section className="twoCol">
         <div className="panel">
           <h2>Live sample</h2>
@@ -68,32 +90,37 @@ export default async function PreviewStudioPage() {
         <p className="muted">Generation stays proposal-first. Owner approval is required before a public preview can be marked as shared.</p>
         <div className="settingsList">
           {productionPreviews.length ? productionPreviews.map((item) => {
-            const payload = (item.payload ?? {}) as Record<string, unknown>;
-            const metadata = (payload.metadata ?? {}) as Record<string, unknown>;
+            const payload = recordValue(item.payload);
+            const metadata = recordValue(payload.metadata);
+            const growthSource = recordValue(metadata.growth_source);
+            const business = recordValue(growthSource.business);
             const lane = String(metadata.lane ?? item.vertical ?? 'UNKNOWN');
             const version = Number(metadata.version ?? 1);
             const publicPath = previewPublicPath(String(item.public_token));
             const shareable = item.status === 'SENT' || item.status === 'VIEWED';
+            const expired = previewExpired(item.expires_at);
+            const controlledInternal = String(business.category ?? '') === 'INTERNAL_TEST';
             return (
               <div className="settingsRow" key={item.id}>
                 <div>
                   <strong>{lane} · v{version}</strong>
-                  <span className="muted smallText">{item.status} · Quality {item.quality_score}/100</span>
+                  <span className="muted smallText">{item.status} · Quality {item.quality_score}/100{expired && item.status !== 'EXPIRED' && item.status !== 'ARCHIVED' ? ' · TTL expired' : ''}</span>
+                  {controlledInternal ? <span className="muted smallText">Controlled INTERNAL_TEST preview · no external recipient</span> : null}
                 </div>
                 <div>
-                  {item.status === 'GENERATED' && editable ? (
+                  {item.status === 'GENERATED' && editable && !expired ? (
                     <form action={approvePreview}>
                       <input type="hidden" name="preview_id" value={item.id}/>
                       <button>Approve</button>
                     </form>
                   ) : null}
-                  {item.status === 'APPROVED' && editable ? (
-                    <form action={markPreviewSent}>
+                  {item.status === 'APPROVED' && editable && !expired ? (
+                    <form action={controlledInternal ? markControlledPreviewShared : markPreviewSent}>
                       <input type="hidden" name="preview_id" value={item.id}/>
-                      <button>Mark shared</button>
+                      <button>{controlledInternal ? 'Mark internal test shared' : 'Mark shared'}</button>
                     </form>
                   ) : null}
-                  {shareable ? <a href={publicPath} target="_blank" rel="noreferrer">Open public preview</a> : null}
+                  {shareable && !expired ? <a href={publicPath} target="_blank" rel="noreferrer">Open public preview</a> : null}
                 </div>
               </div>
             );
