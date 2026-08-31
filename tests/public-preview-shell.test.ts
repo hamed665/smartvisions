@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isPublicShellPath } from '@/app/app-shell';
+import { isPublicShellPath } from '@/lib/public-paths';
 
 describe('public preview shell isolation', () => {
   it('keeps tokenized public previews outside the operator Control Center shell', () => {
