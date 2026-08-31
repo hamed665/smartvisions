@@ -3,6 +3,7 @@ import { routeAgents } from './router';
 import { checkRelevance, decideCommercialAction, secretaryCompose } from './executor';
 import { deterministicAgentRuntime, type AgentRuntime } from './runtime';
 import { canAutoSend, evaluateHandoff } from '@/lib/handoff/policy';
+import { resolveSmartVisionsCatalogRecommendation } from '@/lib/whatsapp/catalog';
 
 const inferHandoffSignals = (message: string) => {
   const text = message.toLowerCase();
@@ -60,6 +61,10 @@ export async function processInboundMessage(
     ? 'BLOCK'
     : sendGate.delivery;
 
+  const catalogRecommendation = delivery === 'BLOCK'
+    ? null
+    : resolveSmartVisionsCatalogRecommendation({ serviceId: decision.serviceId, message: context.message });
+
   const trace: PipelineTrace = {
     routedAgents,
     agentResults,
@@ -68,6 +73,7 @@ export async function processInboundMessage(
     handoffReasons: handoff.reasons,
     relevancePassed,
     delivery,
+    catalogRecommendation,
   };
 
   return {
@@ -75,5 +81,6 @@ export async function processInboundMessage(
     trace,
     nextAgentMode: handoff.handoff ? 'HUMAN' as const : context.agentMode ?? 'AUTO' as const,
     previewRecommended: decision.action === 'SHOW_PREVIEW',
+    catalogRecommendation,
   };
 }
