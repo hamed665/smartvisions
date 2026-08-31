@@ -10,8 +10,8 @@ This is the operational handoff. Production facts and the current `main` branch 
 - Production branch: `main`
 - Production URL: `https://smartvisions.vercel.app`
 - Supabase project: `pkypexzpyfbikdnkrzvw`
-- Current production main: `732b52fe054a1df9320a668cb10ebcf670096156` (merged PR #58)
-- Vercel deployment for that exact commit: `dpl_EjMba5mN48KwJgcM5VXVxLVPRTtK` — READY, target `production`, alias `smartvisions.vercel.app`, no alias error
+- Current production main: `96289b6ec19f08a5b488b9973a9e170606514613` (merged PR #63)
+- Vercel deployment for that exact commit: `dpl_9SXAtH8qvHkELDb26xwQmDmFmQ8b` — READY, target `production`, alias `smartvisions.vercel.app`, aliasError = null
 
 ## Completed sequence
 
@@ -30,6 +30,11 @@ This is the operational handoff. Production facts and the current `main` branch 
 - #56 ✅ Bridge explicit agent service intent to one fail-closed WhatsApp catalog recommendation
 - #57 ✅ Reconcile the stale production handoff after WhatsApp Catalog work
 - #58 ✅ Bridge reviewable Agent output into the existing WhatsApp Shadow Approval queue
+- #59 ✅ Record production Agent/Shadow Approval state and controlled pilot fixture
+- #60 ✅ Fix real inbound WhatsApp lifecycle idempotency against the existing partial unique index
+- #61 ✅ Add OWNER-only Controlled WhatsApp Agent Pilot action in `/approvals`
+- #62 ✅ Route that pilot to the Growth OS production hostname instead of generic app URL configuration
+- #63 ✅ Fix the actual HTTP 405 root cause by allowing `/api/ai/process-inbound` through the global Supabase session proxy while keeping the endpoint protected by `INTERNAL_API_KEY`
 
 Do not recreate WhatsApp foundations, CRM, pricing, conversations, Cost Guard, provider state, agent framework or catalog storage as parallel systems.
 
@@ -52,19 +57,19 @@ The production panel remains the foundation: Dashboard, Leads/CRM, Hunters/Growt
 
 ## Current verified production runtime state
 
-Queried directly from Growth OS Supabase on 2026-08-31:
+Queried directly from Growth OS Supabase after PR #63:
 
 - `META / WHATSAPP`: enabled = `true`, status = `CONNECTED`, last_error = `null`
 - Global kill switch = `false`
 - WhatsApp AI pause = `false`
 - Agents pause = `false`
 - Shadow Mode = `true`
-- Linked inbound WhatsApp rows in `outreach_messages`: `0`
-- WhatsApp messages currently waiting in Approvals: `1`; that legacy row has no catalog Content ID
-- Latest durable raw inbound WhatsApp event had no matching CRM Business/Lead, explaining why lifecycle linkage stayed at zero
-- One dedicated `WhatsApp Production Pilot` Business plus one AUTO Lead now exists for that latest inbound sender, marked `INTERNAL_TEST`; creation is recorded in `audit_logs` as `CREATE_WHATSAPP_PRODUCTION_PILOT_FIXTURE`
+- Linked inbound WhatsApp rows in `outreach_messages`: `2`
+- WhatsApp messages currently waiting in Approvals: `1`; it is the older non-catalog row
+- Controlled pilot `agent_runs` rows: `0`
+- The latest real linked inbound is durable and the failed 405 attempts did not reach the paid Agent endpoint, so one retry after PR #63 is idempotently safe
 
-Provider `CONNECTED` is now a verified production database fact, not an inference from credentials. Keep the distinction: future status claims must still be queried from production state.
+Provider `CONNECTED` is a verified production database fact, not an inference from credentials.
 
 ## Current safety posture
 
@@ -72,20 +77,23 @@ Provider `CONNECTED` is now a verified production database fact, not an inferenc
 - Catalog support does not enable autonomous outbound.
 - Human approval remains the only path from Agent recommendation to Approved Send.
 - No product card can be attached merely because an internal caller claims the WhatsApp 24-hour window is open.
-- PR #58 derives the latest customer inbound timestamp from durable linked `outreach_messages` and verifies the conversation belongs to the organization, is WhatsApp, is lead-linked, and matches `context.leadId` when supplied.
-- A paid AI result is persisted as `COMPLETED` before Shadow Approval reconciliation. If the queue write fails, replay retries only the idempotent database queue operation and does not call the model again.
-- The pilot fixture does not send anything and does not fabricate inbound timestamps. It only allows the next real webhook message from the same test sender to link deterministically to one Business/Lead.
+- `/api/ai/process-inbound` is exempt from browser-session proxy only because the route independently requires the server-only `INTERNAL_API_KEY` before any AI work.
+- Other unrelated application/API routes remain behind the existing Supabase session proxy.
+- `/api/outreach/approved-send` was not added to this bypass.
+- Paid AI still uses caller idempotency + `agent_runs` claim/replay semantics and runtime safety controls.
+- No provider call was reached by the failed 405 pilot attempts.
 
-Do not turn Shadow Mode off just to make a readiness screen greener. Live autonomous outbound still requires explicit owner launch approval after production pilot evidence.
+Do not turn Shadow Mode off just to make a readiness screen greener. Live autonomous outbound remains a separate explicit owner decision after controlled E2E proof.
 
 ## WhatsApp production continuation
 
 ### Existing verified code path
 
-The production implementation now includes:
+The production implementation includes:
 
 - Meta webhook verification and signature validation
 - durable webhook event/status persistence and idempotency
+- linked Business/Lead/Conversation inbound lifecycle
 - controlled production verification from Integrations
 - deployed credential aliases (`WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`) plus supported `META_*` aliases
 - Agent pipeline recommendation of one allowlisted catalog item when service intent is unambiguous
@@ -94,6 +102,7 @@ The production implementation now includes:
 - provider CONNECTED gate, runtime safety, DNC/human takeover, recipient-local window and Cost Guard checks
 - no blind retry after provider acceptance
 - WhatsApp 24-hour session/template policy enforcement
+- OWNER-only Controlled WhatsApp Agent Pilot for one `INTERNAL_TEST` Business
 
 ### Production WhatsApp Catalog
 
@@ -110,11 +119,7 @@ Canonical Content IDs:
 - `SV-AI-AGENT-001` — AI Agents
 - `SV-SM-001` — Social Media Management
 
-PR #55 extends the existing Meta Cloud provider with single-product interactive messages. Catalog product sends are only allowed through the existing approved-send path and only inside an open 24-hour customer-service window. Unknown Content IDs fail closed. Product sends are journaled as `PRODUCT_SENT` / `SEND_PRODUCT` with the Content ID for audit and reconciliation.
-
-PR #56 adds deterministic agent-to-catalog recommendation without adding provider calls. Existing Growth OS service IDs map to the corresponding catalog item, and explicit English/Arabic/Persian requests can resolve to one catalog item. Ambiguous multi-service requests and vague requests return no recommendation instead of guessing. A blocked agent reply cannot produce a catalog recommendation.
-
-PR #58 completes the review bridge. `/api/ai/process-inbound` can accept an internal WhatsApp delivery context and queue a `REVIEW` result through the existing Shadow Approval primitive. Product Content ID is attached only if durable linked inbound evidence proves the freeform 24-hour window is open. Outside that window an approved template can still be queued without a product attachment; otherwise policy blocks creation of a dead approval row.
+Catalog product sends are only allowed through the existing approved-send path and only inside an open 24-hour customer-service window. Unknown Content IDs fail closed. Product sends are journaled as `PRODUCT_SENT` / `SEND_PRODUCT` with the Content ID for audit and reconciliation.
 
 ## Cost Guard
 
@@ -149,20 +154,22 @@ Large increases require explicit owner confirmation and audit logging.
 - Global kill and Agent pause remain enforced at runtime boundaries.
 - Catalog item selection is allowlisted and ambiguity fails closed.
 - WhatsApp session-window evidence used by the Agent approval bridge comes from durable linked inbound rows, not request payload assertions.
+- Global Supabase session proxy bypasses only exact routes that have their own independent webhook-signature or internal-key authentication.
 
 ## Exact next action
 
-Do not disable Shadow Mode. The next production gate is a **controlled linked-inbound → Agent → Approval → catalog send** pilot.
+Do not disable Shadow Mode.
 
-The deterministic pilot Business/Lead fixture is ready. The only missing evidence is a **new real inbound WhatsApp message from the same test sender**. The previous webhook event happened before the fixture existed and correctly remains unlinked; do not rewrite history to make it look linked.
+The next production gate is one retry of the **Controlled WhatsApp Agent Pilot** against the already-durable latest real inbound. This retry is safe because the prior HTTP 405 attempts created zero `agent_runs` rows and reached neither OpenAI nor Meta.
 
 Proceed in this order:
 
-1. receive one new real inbound WhatsApp message from the prepared test sender and verify webhook → `outreach_messages` + conversation linkage;
-2. invoke the existing idempotent Agent processing path with that conversation delivery context; verify exactly one Shadow Approval row is created and, for one unambiguous service request, contains the expected allowlisted `catalog_content_id`;
-3. owner approves the row in `/approvals`;
-4. execute existing `/api/outreach/approved-send` exactly once and verify provider message ID, `PRODUCT_SENT`, `SEND_PRODUCT`, conversation timestamps and usage ledger reconciliation;
-5. verify delivery/read status webhook evidence;
-6. keep Shadow Mode ON after the pilot. Autonomous launch is a separate explicit owner decision.
+1. OWNER reloads `/approvals` on `smartvisions.vercel.app` and clicks `Process latest inbound into Approval` exactly once;
+2. verify Production creates exactly one `agent_runs` row for the stable inbound-derived request key;
+3. verify exactly one Shadow Approval row is created and the unambiguous website request resolves to `SV-WEB-001` with the real 24-hour window evidence;
+4. do not approve it until DB/runtime evidence is checked;
+5. then owner approves the row and the existing Approved Send path is executed exactly once;
+6. verify provider message ID, `PRODUCT_SENT`, `SEND_PRODUCT`, delivery/read webhook evidence and usage reconciliation;
+7. keep Shadow Mode ON after the pilot.
 
-Do not fabricate test rows or alter production timestamps to manufacture a 24-hour window. The pilot must use a real inbound webhook event.
+Do not fabricate test rows, alter timestamps, broaden auth bypasses, or repeat paid/provider operations to make dashboards look green.
