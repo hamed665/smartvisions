@@ -9,7 +9,7 @@ const SESSION_BYPASS_PATHS = new Set([
 ]);
 
 export function shouldBypassSession(pathname: string) {
-  return SESSION_BYPASS_PATHS.has(pathname);
+  return SESSION_BYPASS_PATHS.has(pathname) || pathname.startsWith('/p/');
 }
 
 export async function updateSession(request: NextRequest) {
