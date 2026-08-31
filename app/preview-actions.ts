@@ -21,6 +21,14 @@ function safeMessage(value: unknown, fallback = 'Controlled Preview production p
     .slice(0, 220);
 }
 
+function payloadBusinessCategory(value: unknown) {
+  const payload = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const metadata = payload.metadata && typeof payload.metadata === 'object' ? payload.metadata as Record<string, unknown> : {};
+  const growth = metadata.growth_source && typeof metadata.growth_source === 'object' ? metadata.growth_source as Record<string, unknown> : {};
+  const business = growth.business && typeof growth.business === 'object' ? growth.business as Record<string, unknown> : {};
+  return String(business.category ?? '');
+}
+
 export async function generateControlledPreviewPilot() {
   const ctx = await getCurrentOrganization(true);
   const db = serviceClient();
@@ -164,5 +172,67 @@ export async function markPreviewSent(formData: FormData) {
   if (!previewId) throw new Error('preview_id is required');
   const { organizationId, userId } = await getCurrentOrganization(true);
   await transitionPreview({ organizationId, previewId, action: 'SEND', actorId: userId, metadata: { source: 'preview_studio', manual_share: true } });
+  revalidatePath('/preview-studio');
+}
+
+export async function markControlledPreviewShared(formData: FormData) {
+  const previewId = String(formData.get('preview_id') ?? '').trim();
+  if (!previewId) throw new Error('preview_id is required');
+  const ctx = await getCurrentOrganization(true);
+  const db = serviceClient();
+
+  const [{ data: preview, error: previewError }, { data: generationAudit, error: auditLookupError }] = await Promise.all([
+    db.from('previews')
+      .select('id,status,payload')
+      .eq('organization_id', ctx.organizationId)
+      .eq('id', previewId)
+      .maybeSingle(),
+    db.from('audit_logs')
+      .select('id')
+      .eq('organization_id', ctx.organizationId)
+      .eq('action', 'CONTROLLED_PREVIEW_PRODUCTION_GENERATION')
+      .eq('entity_id', previewId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  if (previewError || !preview) throw new Error(previewError?.message ?? 'Preview not found');
+  if (auditLookupError) throw auditLookupError;
+  if (!generationAudit || payloadBusinessCategory(preview.payload) !== 'INTERNAL_TEST') {
+    throw new Error('Controlled internal share is allowed only for the verified INTERNAL_TEST Preview pilot');
+  }
+
+  const result = await transitionPreview({
+    organizationId: ctx.organizationId,
+    previewId,
+    action: 'SEND',
+    actorId: ctx.userId,
+    metadata: {
+      source: 'preview_studio',
+      manual_share: true,
+      controlled_internal_share: true,
+      external_recipient: false,
+      provider_calls: 0,
+    },
+  });
+
+  const { error: auditError } = await db.from('audit_logs').insert({
+    organization_id: ctx.organizationId,
+    actor_type: 'USER',
+    actor_id: ctx.userId,
+    action: 'CONTROLLED_PREVIEW_INTERNAL_SHARE_MARKED',
+    entity_type: 'preview',
+    entity_id: previewId,
+    after_data: {
+      previewId,
+      status: result.status,
+      externalRecipient: false,
+      providerCalls: 0,
+      outboundTriggered: false,
+      shadowModePreserved: true,
+    },
+  });
+  if (auditError) throw new Error(`Controlled Preview share audit failed: ${auditError.message}`);
+
   revalidatePath('/preview-studio');
 }
