@@ -5,6 +5,7 @@ const base = {
   messageStatus: 'APPROVED',
   requiresApproval: false,
   shadowMode: false,
+  shadowModeExceptionVerified: false,
   globalKillSwitch: false,
   channelPaused: false,
   agentsPaused: false,
@@ -22,6 +23,31 @@ describe('approved send policy', () => {
     const result = evaluateApprovedSendPolicy({ ...base, shadowMode: true });
     expect(result.allowed).toBe(false);
     expect(result.blocks).toContain('SHADOW_MODE_ENABLED');
+  });
+
+  it('allows only a pre-verified controlled pilot to bypass the shadow-mode block', () => {
+    const result = evaluateApprovedSendPolicy({
+      ...base,
+      messageChannel: 'WHATSAPP',
+      shadowMode: true,
+      shadowModeExceptionVerified: true,
+    });
+    expect(result).toEqual({ allowed: true, blocks: [], channel: 'WHATSAPP' });
+  });
+
+  it('keeps every other safety gate active during a verified shadow-mode exception', () => {
+    const result = evaluateApprovedSendPolicy({
+      ...base,
+      messageChannel: 'WHATSAPP',
+      shadowMode: true,
+      shadowModeExceptionVerified: true,
+      globalKillSwitch: true,
+      doNotContact: true,
+      agentsPaused: true,
+    });
+    expect(result.allowed).toBe(false);
+    expect(result.blocks).toEqual(expect.arrayContaining(['GLOBAL_KILL_SWITCH', 'DO_NOT_CONTACT', 'AGENTS_PAUSED']));
+    expect(result.blocks).not.toContain('SHADOW_MODE_ENABLED');
   });
 
   it('blocks do-not-contact leads', () => {

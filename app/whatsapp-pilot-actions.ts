@@ -3,6 +3,10 @@
 import { revalidatePath } from 'next/cache';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { whatsappPilotRequestKey } from '@/lib/whatsapp/pilot';
+import { verifyControlledWhatsAppCatalogPilot } from '@/lib/outreach/controlled-whatsapp-pilot';
+import { evaluateWhatsAppSendPolicy } from '@/lib/whatsapp/policy';
+import { evaluateLocalWindow, type MarketCode } from '@/lib/outreach/scheduler';
+import { assertPaidOperationAllowed, getCostGuardState } from '@/lib/reliability/cost-guard';
 
 function normalizePhone(value: string | null | undefined) {
   return String(value ?? '').replace(/\D/g, '');
@@ -159,4 +163,150 @@ export async function processLatestWhatsAppInboundPilot() {
 
   revalidatePath('/approvals');
   revalidatePath('/conversations');
+}
+
+export async function sendApprovedWhatsAppCatalogPilot(formData: FormData) {
+  const ctx = await getCurrentOrganization(true);
+  const messageId = String(formData.get('id') ?? '').trim();
+  if (!messageId) throw new Error('Approved pilot message id is required');
+
+  const [{ data: controls, error: controlsError }, { data: message, error: messageError }] = await Promise.all([
+    ctx.supabase
+      .from('system_controls')
+      .select('global_kill_switch,agents_paused,whatsapp_ai_paused,shadow_mode')
+      .eq('organization_id', ctx.organizationId)
+      .maybeSingle(),
+    ctx.supabase
+      .from('conversation_messages')
+      .select('id,lead_id,conversation_id,channel,status,requires_approval,provider_message_id,metadata')
+      .eq('organization_id', ctx.organizationId)
+      .eq('id', messageId)
+      .maybeSingle(),
+  ]);
+
+  if (controlsError || !controls) throw new Error(`Runtime controls unavailable: ${controlsError?.message ?? 'missing row'}`);
+  if (messageError || !message) throw new Error(`Approved pilot message unavailable: ${messageError?.message ?? 'not found'}`);
+  if (!controls.shadow_mode) throw new Error('Controlled catalog pilot requires Shadow Mode to remain ON');
+  if (controls.global_kill_switch) throw new Error('Global kill switch is ON');
+  if (controls.agents_paused) throw new Error('Agents are paused');
+  if (controls.whatsapp_ai_paused) throw new Error('WhatsApp AI is paused');
+  if (!message.lead_id || !message.conversation_id) throw new Error('Approved pilot is missing durable lead/conversation linkage');
+
+  const [{ data: lead, error: leadError }, { data: conversation, error: conversationError }] = await Promise.all([
+    ctx.supabase
+      .from('leads')
+      .select('id,business_id,status,agent_mode')
+      .eq('organization_id', ctx.organizationId)
+      .eq('id', message.lead_id)
+      .maybeSingle(),
+    ctx.supabase
+      .from('sales_conversations')
+      .select('id,lead_id,channel')
+      .eq('organization_id', ctx.organizationId)
+      .eq('id', message.conversation_id)
+      .maybeSingle(),
+  ]);
+  if (leadError || !lead?.business_id) throw new Error(`Pilot lead unavailable: ${leadError?.message ?? 'missing business'}`);
+  if (conversationError || !conversation) throw new Error(`Pilot conversation unavailable: ${conversationError?.message ?? 'not found'}`);
+
+  const [{ data: business, error: businessError }, { data: providerConnection, error: providerError }] = await Promise.all([
+    ctx.supabase
+      .from('businesses')
+      .select('id,category,whatsapp,phone,country_code')
+      .eq('organization_id', ctx.organizationId)
+      .eq('id', lead.business_id)
+      .maybeSingle(),
+    ctx.supabase
+      .from('integration_connections')
+      .select('enabled,status,last_error')
+      .eq('organization_id', ctx.organizationId)
+      .eq('provider', 'META')
+      .eq('channel', 'WHATSAPP')
+      .maybeSingle(),
+  ]);
+  if (businessError || !business) throw new Error(`Pilot business unavailable: ${businessError?.message ?? 'not found'}`);
+  if (providerError || !providerConnection?.enabled || providerConnection.status !== 'CONNECTED') {
+    throw new Error(`WhatsApp provider is not production-verified CONNECTED: ${providerError?.message ?? providerConnection?.status ?? 'missing'}`);
+  }
+
+  const metadata = (message.metadata ?? {}) as Record<string, unknown>;
+  const sendContext = (metadata.send_context ?? {}) as Record<string, unknown>;
+  const verification = verifyControlledWhatsAppCatalogPilot({
+    messageStatus: message.status,
+    requiresApproval: Boolean(message.requires_approval),
+    channel: message.channel,
+    metadataSource: metadata.source,
+    providerMessageId: message.provider_message_id,
+    idempotencyKey: metadata.idempotency_key,
+    catalogContentId: sendContext.catalog_content_id,
+    sendTo: sendContext.to,
+    messageLeadId: message.lead_id,
+    conversationLeadId: conversation.lead_id,
+    conversationChannel: conversation.channel,
+    businessCategory: business.category,
+    businessWhatsapp: business.whatsapp,
+    businessPhone: business.phone,
+  });
+  if (!verification.verified) throw new Error(`Controlled catalog pilot verification failed: ${verification.reason}`);
+
+  const marketCode = String(sendContext.market_code ?? business.country_code ?? '').toUpperCase() as MarketCode;
+  const leadTimezone = typeof sendContext.lead_timezone === 'string' ? sendContext.lead_timezone : undefined;
+  const localWindow = evaluateLocalWindow({ marketCode, leadTimezone });
+  if (!localWindow.allowed) throw new Error('Controlled catalog pilot is outside the recipient local send window');
+
+  const lastCustomerMessageAt = typeof sendContext.last_customer_message_at === 'string'
+    ? sendContext.last_customer_message_at
+    : undefined;
+  const whatsappPolicy = evaluateWhatsAppSendPolicy({ lastCustomerMessageAt });
+  if (!whatsappPolicy.allowed || whatsappPolicy.mode !== 'FREEFORM') {
+    throw new Error('Controlled catalog pilot requires a currently open WhatsApp 24-hour customer service window');
+  }
+
+  const costState = await getCostGuardState(ctx.organizationId);
+  assertPaidOperationAllowed(costState, 'LOW');
+
+  const internalKey = process.env.INTERNAL_API_KEY;
+  if (!internalKey) throw new Error('INTERNAL_API_KEY is not configured');
+
+  const { error: auditError } = await ctx.supabase.from('audit_logs').insert({
+    organization_id: ctx.organizationId,
+    actor_type: 'USER',
+    actor_id: ctx.userId,
+    action: 'REQUEST_WHATSAPP_CONTROLLED_CATALOG_PILOT_SEND',
+    entity_type: 'conversation_message',
+    entity_id: message.id,
+    after_data: {
+      catalog_content_id: verification.catalogContentId,
+      recipient: verification.recipient,
+      shadow_mode_remains_on: true,
+      route: 'APPROVED_SEND',
+    },
+  });
+  if (auditError) throw new Error(`Controlled send audit failed before provider call: ${auditError.message}`);
+
+  const response = await fetch(`${growthOsProductionBaseUrl()}/api/outreach/approved-send`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-internal-api-key': internalKey,
+    },
+    cache: 'no-store',
+    body: JSON.stringify({
+      organizationId: ctx.organizationId,
+      messageId: message.id,
+      priority: 'LOW',
+      controlledShadowPilot: true,
+    }),
+  });
+
+  const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+  if (!response.ok && response.status !== 202) {
+    throw new Error(typeof payload.error === 'string'
+      ? payload.error
+      : `Controlled catalog send failed with HTTP ${response.status}`);
+  }
+
+  revalidatePath('/approvals');
+  revalidatePath('/conversations');
+  revalidatePath('/costs');
 }

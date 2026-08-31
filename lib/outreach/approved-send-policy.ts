@@ -4,6 +4,7 @@ export type ApprovedSendPolicyInput = {
   messageStatus: string;
   requiresApproval: boolean;
   shadowMode: boolean;
+  shadowModeExceptionVerified?: boolean;
   globalKillSwitch: boolean;
   channelPaused: boolean;
   agentsPaused?: boolean;
@@ -17,7 +18,7 @@ export function evaluateApprovedSendPolicy(input: ApprovedSendPolicyInput) {
 
   if (input.messageStatus !== 'APPROVED') blocks.push('MESSAGE_NOT_APPROVED');
   if (input.requiresApproval) blocks.push('APPROVAL_STILL_REQUIRED');
-  if (input.shadowMode) blocks.push('SHADOW_MODE_ENABLED');
+  if (input.shadowMode && !input.shadowModeExceptionVerified) blocks.push('SHADOW_MODE_ENABLED');
   if (input.globalKillSwitch) blocks.push('GLOBAL_KILL_SWITCH');
   if (input.channelPaused) blocks.push('CHANNEL_PAUSED');
   if (input.agentsPaused) blocks.push('AGENTS_PAUSED');
