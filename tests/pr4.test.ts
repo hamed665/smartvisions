@@ -88,24 +88,26 @@ describe('multi-agent pipeline', () => {
 
 describe('smart preview', () => {
   it('does not generate previews for uninterested cold leads', () => {
-    expect(isPreviewEligible({ businessName: 'Cold Lead', vertical: 'dental', countryCode: 'OM', language: 'en', intentScore: 20 }).eligible).toBe(false);
+    expect(isPreviewEligible({ businessName: 'Cold Lead', vertical: 'dental', countryCode: 'OM', language: 'en', languageSource: 'customer', intentScore: 20 }).eligible).toBe(false);
   });
 
-  it('passes curated premium preview through quality gate', () => {
+  it('passes curated 2026 premium preview through the stricter customer gate', () => {
     const preview = generatePreview({
-      businessName: 'Harbour Dental', vertical: 'dental', countryCode: 'OM', language: 'en', city: 'Muscat',
+      businessName: 'Harbour Dental', vertical: 'dental', countryCode: 'OM', language: 'en', languageSource: 'customer', city: 'Muscat',
       services: ['General Dentistry', 'Cosmetic Dentistry', 'Appointments'], explicitRequest: true, intentScore: 70,
     });
     const quality = evaluatePreviewQuality(preview);
     expect(quality.passed).toBe(true);
-    expect(quality.score).toBeGreaterThanOrEqual(85);
+    expect(quality.score).toBeGreaterThanOrEqual(90);
+    expect(preview.design.referenceYear).toBe(2026);
     expect(previewSendGate({ quality, approved: false }).allowed).toBe(false);
     expect(previewSendGate({ quality, approved: true }).allowed).toBe(true);
   });
 
-  it('keeps Arabic previews RTL', () => {
-    const preview = generatePreview({ businessName: 'عيادة النور', vertical: 'dental', countryCode: 'OM', language: 'ar', explicitRequest: true });
+  it('keeps Arabic previews RTL and uses Arabic customer copy', () => {
+    const preview = generatePreview({ businessName: 'عيادة النور', vertical: 'dental', countryCode: 'OM', language: 'ar', languageSource: 'customer', explicitRequest: true });
     expect(preview.direction).toBe('rtl');
+    expect(preview.localized.ar?.headline).toContain('عيادة النور');
     expect(evaluatePreviewQuality(preview).passed).toBe(true);
   });
 });
