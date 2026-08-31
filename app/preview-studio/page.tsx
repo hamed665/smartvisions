@@ -18,11 +18,6 @@ function recordValue(value: unknown) {
   return value && typeof value === 'object' ? value as Record<string, unknown> : {};
 }
 
-function previewExpired(expiresAt: unknown) {
-  const value = new Date(String(expiresAt ?? ''));
-  return !Number.isFinite(value.getTime()) || value.getTime() <= Date.now();
-}
-
 export default async function PreviewStudioPage() {
   const { supabase, organizationId, role } = await getCurrentOrganization();
   const [{ data: templateData }, { data: productionData }] = await Promise.all([
@@ -87,7 +82,7 @@ export default async function PreviewStudioPage() {
 
       <section className="panel">
         <h2>Production previews</h2>
-        <p className="muted">Generation stays proposal-first. Owner approval is required before a public preview can be marked as shared.</p>
+        <p className="muted">Generation stays proposal-first. Owner approval is required before a public preview can be marked as shared. Lifecycle actions independently reject elapsed previews even if a stale browser view still shows a button.</p>
         <div className="settingsList">
           {productionPreviews.length ? productionPreviews.map((item) => {
             const payload = recordValue(item.payload);
@@ -98,29 +93,28 @@ export default async function PreviewStudioPage() {
             const version = Number(metadata.version ?? 1);
             const publicPath = previewPublicPath(String(item.public_token));
             const shareable = item.status === 'SENT' || item.status === 'VIEWED';
-            const expired = previewExpired(item.expires_at);
             const controlledInternal = String(business.category ?? '') === 'INTERNAL_TEST';
             return (
               <div className="settingsRow" key={item.id}>
                 <div>
                   <strong>{lane} · v{version}</strong>
-                  <span className="muted smallText">{item.status} · Quality {item.quality_score}/100{expired && item.status !== 'EXPIRED' && item.status !== 'ARCHIVED' ? ' · TTL expired' : ''}</span>
+                  <span className="muted smallText">{item.status} · Quality {item.quality_score}/100</span>
                   {controlledInternal ? <span className="muted smallText">Controlled INTERNAL_TEST preview · no external recipient</span> : null}
                 </div>
                 <div>
-                  {item.status === 'GENERATED' && editable && !expired ? (
+                  {item.status === 'GENERATED' && editable ? (
                     <form action={approvePreview}>
                       <input type="hidden" name="preview_id" value={item.id}/>
                       <button>Approve</button>
                     </form>
                   ) : null}
-                  {item.status === 'APPROVED' && editable && !expired ? (
+                  {item.status === 'APPROVED' && editable ? (
                     <form action={controlledInternal ? markControlledPreviewShared : markPreviewSent}>
                       <input type="hidden" name="preview_id" value={item.id}/>
                       <button>{controlledInternal ? 'Mark internal test shared' : 'Mark shared'}</button>
                     </form>
                   ) : null}
-                  {shareable && !expired ? <a href={publicPath} target="_blank" rel="noreferrer">Open public preview</a> : null}
+                  {shareable ? <a href={publicPath} target="_blank" rel="noreferrer">Open public preview</a> : null}
                 </div>
               </div>
             );
