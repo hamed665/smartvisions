@@ -1,4 +1,11 @@
-import type { WhatsAppProvider, WhatsAppSendInput, WhatsAppSendResult, WhatsAppTemplateSendInput } from './provider';
+import type {
+  WhatsAppCatalogProductSendInput,
+  WhatsAppProvider,
+  WhatsAppSendInput,
+  WhatsAppSendResult,
+  WhatsAppTemplateSendInput,
+} from './provider';
+import { assertSmartVisionsCatalogContentId, resolveWhatsAppCatalogId } from './catalog';
 
 function resolveMetaWhatsAppToken() {
   return process.env.META_WHATSAPP_ACCESS_TOKEN?.trim()
@@ -20,6 +27,7 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
     private readonly token = resolveMetaWhatsAppToken(),
     private readonly phoneNumberId = resolveMetaPhoneNumberId(),
     private readonly graphVersion = resolveMetaGraphVersion(),
+    private readonly catalogId = resolveWhatsAppCatalogId(),
   ) {}
 
   private assertConfigured() {
@@ -71,6 +79,28 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
         name: input.templateName,
         language: { code: input.languageCode },
       },
+    });
+  }
+
+  async sendCatalogProduct(input: WhatsAppCatalogProductSendInput): Promise<WhatsAppSendResult> {
+    assertSmartVisionsCatalogContentId(input.contentId);
+    if (!this.catalogId) throw new Error('WhatsApp catalog ID is required for catalog product messages');
+    if (!input.bodyText.trim()) throw new Error('WhatsApp catalog product body text is required');
+
+    return this.sendPayload({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: input.to,
+      type: 'interactive',
+      interactive: {
+        type: 'product',
+        body: { text: input.bodyText.trim() },
+        action: {
+          catalog_id: this.catalogId,
+          product_retailer_id: input.contentId,
+        },
+      },
+      ...(input.replyToMessageId ? { context: { message_id: input.replyToMessageId } } : {}),
     });
   }
 
