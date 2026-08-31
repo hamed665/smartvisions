@@ -45,7 +45,9 @@ function ctaFor(vertical: PreviewVertical, locale: PreviewLocale) {
 }
 
 function safeHeadline(input: PreviewInput, locale: PreviewLocale) {
-  const category = input.categoryLabel?.trim() || verticalLabel(input.vertical, locale);
+  const category = locale === 'ar'
+    ? (/\p{Script=Arabic}/u.test(input.categoryLabel ?? '') ? input.categoryLabel!.trim() : verticalLabel(input.vertical, 'ar'))
+    : (input.categoryLabel?.trim() || verticalLabel(input.vertical, 'en'));
   if (locale === 'ar') {
     if (input.vertical === 'restaurant' || input.vertical === 'cafe' || input.vertical === 'hospitality') {
       return `${input.businessName}، تجربة رقمية تضع المكان في الواجهة`;
