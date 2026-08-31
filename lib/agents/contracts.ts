@@ -63,6 +63,13 @@ export type CommercialDecision = {
   reasons: string[];
 };
 
+export type CatalogRecommendation = {
+  contentId: string;
+  serviceKey: string;
+  label: string;
+  source: 'SERVICE_ID' | 'EXPLICIT_MESSAGE';
+};
+
 export type ReplyDraft = {
   text: string;
   language: string;
@@ -77,4 +84,5 @@ export type PipelineTrace = {
   handoffReasons: string[];
   relevancePassed: boolean;
   delivery: 'SEND' | 'REVIEW' | 'BLOCK';
+  catalogRecommendation: CatalogRecommendation | null;
 };
