@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { getCurrentOrganization } from '@/lib/supabase/org';
+import { whatsappPilotRequestKey } from '@/lib/whatsapp/pilot';
 
 function normalizePhone(value: string | null | undefined) {
   return String(value ?? '').replace(/\D/g, '');
@@ -50,7 +51,9 @@ export async function processLatestWhatsAppInboundPilot() {
     : '';
   if (!conversationId) throw new Error('Latest linked inbound has no durable conversation_id');
 
-  const requestKey = `whatsapp-pilot:${inbound.provider_message_id || inbound.id}`;
+  // Use our durable database UUID, not Meta's provider_message_id. Meta IDs may contain
+  // characters (for example '=') that the canonical Agent idempotency contract rejects.
+  const requestKey = whatsappPilotRequestKey(inbound.id);
   const { data: existingRun, error: existingRunError } = await ctx.supabase
     .from('agent_runs')
     .select('id,status')
