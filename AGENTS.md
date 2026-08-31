@@ -20,7 +20,7 @@ If chat history conflicts with repository documentation, verify code, current PR
 
 - Repository: `hamed665/smartvisions`
 - Product: **Smart Visions Growth OS**
-- This repository is separate from DrKhaleej. Never modify DrKhaleej for Smart Visions work.
+- This repository is separate from the Smart Visions Website repository and from DrKhaleej. Never mix their code, databases or deployment state.
 - Frontend/control plane: Next.js on Vercel.
 - Database/Auth: Supabase.
 - Production Supabase ref: `pkypexzpyfbikdnkrzvw`.
@@ -33,7 +33,8 @@ If chat history conflicts with repository documentation, verify code, current PR
 - PR #37 — AI Sales / Conversations / Outreach foundations — COMPLETE.
 - PR #38 — emergency reliability hardening of five real #37 review defects — COMPLETE.
 - PR #39 — Website Demo & Content Production Engine — COMPLETE.
-- PR #40 — Control Center completeness / reliability / final QA / launch gates — final closure PR.
+- PR #40 — Control Center completeness / reliability / final QA / launch gates — COMPLETE foundation; controlled production verification continues under the same launch plan.
+- PRs #49–#69 — provider configuration, WhatsApp controlled E2E, evidence reconciliation and Email inbound reliability/verification work.
 
 The original four-feature-PR plan was shifted by emergency #38. Do not resurrect old numbering by creating duplicate subsystems or reopening completed phases.
 
@@ -59,6 +60,7 @@ The original four-feature-PR plan was shifted by emergency #38. Do not resurrect
 - Voice: media transcription cache with failure/stale-processing recovery policy.
 - Preview/content: stable `brief_hash` + organization/lead/brief uniqueness.
 - Email/WhatsApp send: pre-provider claim; provider acceptance is final for resend safety, with later persistence failures reconciliation-only.
+- Email inbound: signed Resend event identity + stable provider received-email identity; do not call paid AI directly from webhook retry delivery.
 - Global kill switch: enforced before controlled provider operations.
 - Agent pause: enforced from database state before AI execution; caller input cannot override it.
 
@@ -85,14 +87,19 @@ Large budget/quota increases require explicit confirmation and audit logging. Th
 
 ## Current provider launch state
 
+Read `docs/CURRENT_STATE.md` and `docs/INTEGRATION_INVENTORY.md` for the exact evidence IDs. Current production truth after the 2026-08-31 controlled verification is:
+
 - Google Places / Discovery: production-evidenced CONNECTED.
 - OpenAI / AI: production-evidenced CONNECTED.
+- Meta / WhatsApp: production-evidenced CONNECTED. Real inbound → Agent → Shadow Approval → owner approval → canonical Catalog send → SENT → DELIVERED → READ is proven for the INTERNAL_TEST path.
+- Email Provider / Resend: production-evidenced CONNECTED. Real outbound delivery and real custom-domain inbound to `hello@smartvisionsai.com` through Resend Receiving are proven.
+- Email receiving DNS: root MX is configured and Resend-verified; sending DKIM/SPF remain verified; DMARC exists with `p=none`.
 - Crawl4AI / Audit: code-ready but production NOT_CONFIGURED; optional for V1 because deterministic website audit exists.
-- Email Provider / Email: NOT_CONFIGURED and fail-closed.
-- Meta / WhatsApp: NOT_CONFIGURED and fail-closed.
-- Meta / Instagram: NOT_CONFIGURED; keep restricted automation semi-manual/policy-aware.
+- Meta / Instagram: NOT_CONFIGURED; there is no production page-monitoring/DM runtime. Keep restricted automation semi-manual/policy-aware and feed any later permitted source into the existing Hunter/CRM.
 - Redis / Queue: OPTIONAL / NOT_CONFIGURED. Do not add merely because queues are fashionable.
-- Shadow Mode: remains ON until live outbound providers are configured, controlled E2E passes and owner explicitly approves launch level.
+- Shadow Mode: remains ON. Controlled provider proof is not permission for broad autonomous outbound.
+
+Known post-transport Agent gap: Email webhook persistence currently does not itself run paid Agent intelligence, and the canonical AI endpoint does not yet fully hydrate conversation history/Knowledge Base/operator prompt settings. Close those gaps later by wiring existing primitives, not by building another agent stack.
 
 ## Engineering rules
 
@@ -135,4 +142,14 @@ A feature/closure item is complete only when applicable items are satisfied:
 
 At the start of a new chat/session, **do not invent another roadmap**. Read `docs/CURRENT_STATE.md`, verify the referenced commit/PR/deployment/database state, then continue only the listed real gap.
 
-After PR #40, normal next work is not another feature PR by default. It is controlled provider configuration/pilot evidence where required: Email sender/domain, WhatsApp assets/webhooks, one controlled E2E per channel, then an explicit owner decision about Shadow Mode and automation level. New feature work should be justified by production/pilot evidence rather than checklist aesthetics.
+Current controlled launch sequence after the verified WhatsApp and custom-domain Email transport milestones:
+
+1. one real controlled WhatsApp Voice transcription using the existing OpenAI + media-cache path;
+2. Preview generate → share/send → public view E2E;
+3. Crawl4AI only if configured/needed;
+4. smallest safe remaining suppression/bounce/unsubscribe evidence;
+5. five Shadow Mode behavior scenarios;
+6. close the existing Agent intelligence wiring gaps required for safe multi-turn autonomous advisory behavior;
+7. only then an explicit owner decision about a tiny Oman pilot and automation level.
+
+Do not wire provider webhook retries directly to paid Agent execution merely to make a demo feel automatic. Use the existing idempotent internal/owner-controlled boundaries, prove them, then automate only after the behavior is safe.
