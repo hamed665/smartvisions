@@ -1,13 +1,18 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC_WEBHOOK_PATHS = new Set([
+const SESSION_BYPASS_PATHS = new Set([
   '/api/email/webhook',
   '/api/whatsapp/webhook',
+  '/api/ai/process-inbound',
 ]);
 
+export function shouldBypassSession(pathname: string) {
+  return SESSION_BYPASS_PATHS.has(pathname);
+}
+
 export async function updateSession(request: NextRequest) {
-  if (PUBLIC_WEBHOOK_PATHS.has(request.nextUrl.pathname)) {
+  if (shouldBypassSession(request.nextUrl.pathname)) {
     return NextResponse.next({ request });
   }
 
