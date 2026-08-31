@@ -5,6 +5,7 @@ const SESSION_BYPASS_PATHS = new Set([
   '/api/email/webhook',
   '/api/whatsapp/webhook',
   '/api/ai/process-inbound',
+  '/api/outreach/approved-send',
 ]);
 
 export function shouldBypassSession(pathname: string) {

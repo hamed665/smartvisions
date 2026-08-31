@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { approvedSendFailureDisposition, evaluateApprovedSendPolicy } from '@/lib/outreach/approved-send-policy';
+import { verifyControlledWhatsAppCatalogPilot } from '@/lib/outreach/controlled-whatsapp-pilot';
 import { evaluateLocalWindow, type MarketCode } from '@/lib/outreach/scheduler';
 import { evaluateMailboxHealth } from '@/lib/outreach/mailbox-health';
 import { evaluateWhatsAppSendPolicy } from '@/lib/whatsapp/policy';
@@ -35,7 +36,12 @@ export async function POST(request: Request) {
   const authError = requireInternalApiKey(request);
   if (authError) return authError;
 
-  const body = await request.json() as { organizationId?: string; messageId?: string; priority?: 'LOW'|'NORMAL'|'HIGH'|'CRITICAL' };
+  const body = await request.json() as {
+    organizationId?: string;
+    messageId?: string;
+    priority?: 'LOW'|'NORMAL'|'HIGH'|'CRITICAL';
+    controlledShadowPilot?: boolean;
+  };
   if (!body.organizationId || !body.messageId) {
     return NextResponse.json({ error: 'organizationId and messageId are required' }, { status: 400 });
   }
@@ -57,7 +63,7 @@ export async function POST(request: Request) {
 
   const [{ data: controls, error: controlsError }, { data: lead, error: leadError }, providerConnectionResult] = await Promise.all([
     supabase.from('system_controls').select('global_kill_switch,email_paused,whatsapp_ai_paused,agents_paused,shadow_mode').eq('organization_id', body.organizationId).maybeSingle(),
-    message.lead_id ? supabase.from('leads').select('id,status,agent_mode').eq('organization_id', body.organizationId).eq('id', message.lead_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    message.lead_id ? supabase.from('leads').select('id,business_id,status,agent_mode').eq('organization_id', body.organizationId).eq('id', message.lead_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
     providerIdentity
       ? supabase.from('integration_connections')
         .select('enabled,status,last_error')
@@ -70,10 +76,68 @@ export async function POST(request: Request) {
   if (controlsError || !controls) return NextResponse.json({ error: controlsError?.message ?? 'Runtime controls unavailable' }, { status: 409 });
   if (leadError) return NextResponse.json({ error: leadError.message }, { status: 500 });
 
+  const metadata = (message.metadata ?? {}) as Record<string, unknown>;
+  const sendContext = ((metadata.send_context ?? {}) as SendContext);
+  const idempotencyKey = typeof metadata.idempotency_key === 'string' ? metadata.idempotency_key : null;
+  if (!sendContext.to || !sendContext.market_code || !idempotencyKey || !message.original_text) {
+    return NextResponse.json({ error: 'Approved draft is missing persisted send context' }, { status: 409 });
+  }
+
+  let shadowModeExceptionVerified = false;
+  if (body.controlledShadowPilot) {
+    if (!controls.shadow_mode) {
+      return NextResponse.json({ error: 'Controlled shadow pilot requires Shadow Mode to remain ON' }, { status: 409 });
+    }
+    if (!message.lead_id || !message.conversation_id || !lead?.business_id) {
+      return NextResponse.json({ error: 'Controlled shadow pilot is missing durable lead/conversation/business linkage' }, { status: 409 });
+    }
+
+    const [{ data: business, error: businessError }, { data: conversation, error: conversationError }] = await Promise.all([
+      supabase.from('businesses')
+        .select('id,category,whatsapp,phone')
+        .eq('organization_id', body.organizationId)
+        .eq('id', lead.business_id)
+        .maybeSingle(),
+      supabase.from('sales_conversations')
+        .select('id,lead_id,channel')
+        .eq('organization_id', body.organizationId)
+        .eq('id', message.conversation_id)
+        .maybeSingle(),
+    ]);
+    if (businessError || !business) {
+      return NextResponse.json({ error: `Controlled pilot business verification failed: ${businessError?.message ?? 'not found'}` }, { status: 409 });
+    }
+    if (conversationError || !conversation) {
+      return NextResponse.json({ error: `Controlled pilot conversation verification failed: ${conversationError?.message ?? 'not found'}` }, { status: 409 });
+    }
+
+    const verification = verifyControlledWhatsAppCatalogPilot({
+      messageStatus: message.status,
+      requiresApproval: Boolean(message.requires_approval),
+      channel: message.channel,
+      metadataSource: metadata.source,
+      providerMessageId: message.provider_message_id,
+      idempotencyKey,
+      catalogContentId: sendContext.catalog_content_id,
+      sendTo: sendContext.to,
+      messageLeadId: message.lead_id,
+      conversationLeadId: conversation.lead_id,
+      conversationChannel: conversation.channel,
+      businessCategory: business.category,
+      businessWhatsapp: business.whatsapp,
+      businessPhone: business.phone,
+    });
+    if (!verification.verified) {
+      return NextResponse.json({ error: 'Controlled shadow pilot evidence failed closed', reason: verification.reason }, { status: 409 });
+    }
+    shadowModeExceptionVerified = true;
+  }
+
   const policy = evaluateApprovedSendPolicy({
     messageStatus: message.status,
     requiresApproval: Boolean(message.requires_approval),
     shadowMode: Boolean(controls.shadow_mode),
+    shadowModeExceptionVerified,
     globalKillSwitch: Boolean(controls.global_kill_switch),
     channelPaused: message.channel === 'EMAIL' ? Boolean(controls.email_paused) : Boolean(controls.whatsapp_ai_paused),
     agentsPaused: Boolean(controls.agents_paused),
@@ -96,13 +160,6 @@ export async function POST(request: Request) {
       provider: providerIdentity,
       providerStatus: providerConnection?.status ?? 'MISSING',
     }, { status: 409 });
-  }
-
-  const metadata = (message.metadata ?? {}) as Record<string, unknown>;
-  const sendContext = ((metadata.send_context ?? {}) as SendContext);
-  const idempotencyKey = typeof metadata.idempotency_key === 'string' ? metadata.idempotency_key : null;
-  if (!sendContext.to || !sendContext.market_code || !idempotencyKey || !message.original_text) {
-    return NextResponse.json({ error: 'Approved draft is missing persisted send context' }, { status: 409 });
   }
 
   const window = evaluateLocalWindow({ marketCode: sendContext.market_code, leadTimezone: sendContext.lead_timezone ?? undefined });
@@ -239,7 +296,7 @@ export async function POST(request: Request) {
     const conversationUpdate = await supabase.from('sales_conversations').update({ last_outbound_at: new Date().toISOString(), last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('organization_id', body.organizationId).eq('id', message.conversation_id);
     if (conversationUpdate.error) throw new Error(`Conversation reconciliation failed: ${conversationUpdate.error.message}`);
 
-    return NextResponse.json({ sent: true, channel: message.channel, providerMessageId, idempotencyKey });
+    return NextResponse.json({ sent: true, channel: message.channel, providerMessageId, idempotencyKey, controlledShadowPilot: shadowModeExceptionVerified });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Approved send failed';
     const disposition = approvedSendFailureDisposition(providerAccepted);

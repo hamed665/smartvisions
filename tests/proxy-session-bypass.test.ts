@@ -7,13 +7,14 @@ describe('session proxy bypass paths', () => {
     expect(shouldBypassSession('/api/whatsapp/webhook')).toBe(true);
   });
 
-  it('bypasses session auth for the internal-key-protected AI inbound endpoint', () => {
+  it('bypasses session auth only for exact internal-key-protected server endpoints', () => {
     expect(shouldBypassSession('/api/ai/process-inbound')).toBe(true);
+    expect(shouldBypassSession('/api/outreach/approved-send')).toBe(true);
   });
 
-  it('keeps normal application and unrelated API routes behind session auth', () => {
+  it('keeps normal application and non-exact API routes behind session auth', () => {
     expect(shouldBypassSession('/approvals')).toBe(false);
-    expect(shouldBypassSession('/api/outreach/approved-send')).toBe(false);
+    expect(shouldBypassSession('/api/outreach/approved-send/extra')).toBe(false);
     expect(shouldBypassSession('/api/ai/process-inbound/extra')).toBe(false);
   });
 });
