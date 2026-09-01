@@ -1,5 +1,5 @@
 import type { AgentContext, AgentName, AgentResult, PipelineTrace, ReplyDraft } from './contracts';
-import { routeAgents } from './router';
+import { buildSelectiveRoutePlan } from './selective-routing';
 import { checkRelevance, decideCommercialAction, secretaryCompose } from './executor';
 import { deterministicAgentRuntime, type AgentRuntime } from './runtime';
 import { canAutoSend, evaluateHandoff } from '@/lib/handoff/policy';
@@ -15,11 +15,6 @@ const inferHandoffSignals = (message: string) => {
     complaint: /(complaint|unhappy|bad service|شكوى|مشكلة|غير راضي)/i.test(text),
   };
 };
-
-function configuredAgents(context: AgentContext) {
-  const requested = routeAgents(context);
-  return requested.filter((agent) => context.agentSettings?.[agent]?.enabled !== false);
-}
 
 function applyConfidenceThreshold(context: AgentContext, result: AgentResult) {
   const threshold = context.agentSettings?.[result.agent]?.confidenceThreshold;
@@ -45,10 +40,21 @@ export async function processInboundMessage(
   controls?: { agentsPaused?: boolean },
   runtime: AgentRuntime = deterministicAgentRuntime,
 ) {
-  const routedAgents = configuredAgents(context);
+  const routePlan = buildSelectiveRoutePlan(context);
+  const routedAgents = routePlan.agents.filter((agent) => context.agentSettings?.[agent]?.enabled !== false);
   const specialists = routedAgents.filter((agent) => !['decision_orchestrator', 'secretary', 'relevance_checker'].includes(agent));
 
-  const specialistResults = (await Promise.all(specialists.map((agent) => runtime.run(agent, context))))
+  const shouldUsePaidRuntime = (agent: AgentName) => {
+    if (runtime === deterministicAgentRuntime) return false;
+    if (routePlan.tier === 'ZERO_COST') return false;
+    if (routePlan.tier === 'LIGHT') return agent === 'secretary';
+    return true;
+  };
+  const runAgent = (agent: AgentName, agentContext: AgentContext) =>
+    (shouldUsePaidRuntime(agent) ? runtime : deterministicAgentRuntime).run(agent, agentContext);
+
+  const paidAgentCallsPlanned = routedAgents.filter(shouldUsePaidRuntime).length;
+  const specialistResults = (await Promise.all(specialists.map((agent) => runAgent(agent, context))))
     .map((result) => applyConfidenceThreshold(context, result));
 
   const orchestratorContext: AgentContext = {
@@ -56,7 +62,7 @@ export async function processInboundMessage(
     collaboration: { specialistResults },
   };
   const orchestratorResult = routedAgents.includes('decision_orchestrator')
-    ? applyConfidenceThreshold(context, await runtime.run('decision_orchestrator', orchestratorContext))
+    ? applyConfidenceThreshold(context, await runAgent('decision_orchestrator', orchestratorContext))
     : null;
 
   const agentResults: AgentResult[] = orchestratorResult ? [...specialistResults, orchestratorResult] : [...specialistResults];
@@ -79,7 +85,7 @@ export async function processInboundMessage(
     },
   };
   const secretaryResult = routedAgents.includes('secretary')
-    ? applyConfidenceThreshold(context, await runtime.run('secretary', secretaryContext))
+    ? applyConfidenceThreshold(context, await runAgent('secretary', secretaryContext))
     : null;
   if (secretaryResult) agentResults.push(secretaryResult);
 
@@ -96,7 +102,7 @@ export async function processInboundMessage(
     },
   };
   const relevanceResult = routedAgents.includes('relevance_checker')
-    ? applyConfidenceThreshold(context, await runtime.run('relevance_checker', relevanceContext))
+    ? applyConfidenceThreshold(context, await runAgent('relevance_checker', relevanceContext))
     : null;
   if (relevanceResult) agentResults.push(relevanceResult);
 
@@ -126,6 +132,10 @@ export async function processInboundMessage(
     : resolveSmartVisionsCatalogRecommendation({ serviceId: decision.serviceId, message: context.message });
 
   const trace: PipelineTrace = {
+    reasoningTier: routePlan.tier,
+    routeReasons: routePlan.reasons,
+    estimatedLlmCalls: routePlan.estimatedLlmCalls,
+    paidAgentCallsPlanned,
     routedAgents,
     agentResults,
     decision,
