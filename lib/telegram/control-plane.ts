@@ -14,6 +14,42 @@ const now = () => new Date().toISOString();
 const rec = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
+function ownerHelpText() {
+  return [
+    'Smart Visions Owner Assistant',
+    'فارسی، English و جمله‌های ترکیبی را برای دستورهای مدیریتی پشتیبانی می‌کند. هر Write به Typed Command تبدیل می‌شود و قبل از اجرا Before → After + Confirm/Cancel دارد.',
+    '',
+    'مشاهده',
+    '/status · /services · /pricing OM · /leads 10',
+    '/markets · /policy OM · /agents · /budget · /approvals · /campaigns',
+    '',
+    'قیمت و تخفیف',
+    '/price OM business_website 179',
+    '/minimum OM business_website 160',
+    '/discount OM business_website 5 10   ← auto تا 5%، با Owner approval تا 10%',
+    '',
+    'بازار و سبک پیام',
+    '/market OM on|off',
+    '/tone OM friendly_professional · /dialect OM omani · /locale OM ar-OM',
+    '/replywords OM 120 · /window OM 09:00 19:00',
+    'نمونه طبیعی: «لحن عمان رو دوستانه و حرفه‌ای کن» یا “set Oman tone to friendly professional”.',
+    '',
+    'Agent و Cost Guard',
+    '/agent secretary on|off · /threshold secretary 0.75',
+    '/limit monthly 25 · /limit openai 10 · /limit google 5',
+    '/limit email 5 · /limit whatsapp 5 · /limit leads 20 · /limit audits 6 · /limit deepai 4',
+    '',
+    'عملیات',
+    '/hunt OM Muscat "dental clinic" 5',
+    '/pause whatsapp|email|agents · /resume whatsapp|email|agents',
+    '/approve <message-id> · /reject <message-id> · /revert',
+    '/kill on  ← توقف اضطراری فوری',
+    '',
+    'قفل‌های ایمنی',
+    'Secret/Token/API key نمایش یا تغییر نمی‌شود. Shadow Mode از Telegram خاموش نمی‌شود. Kill Switch از Telegram خاموش نمی‌شود. DNC و Approval bypass نمی‌شوند. auto-cold WhatsApp/Instagram فعال نمی‌شود.',
+  ].join('\n');
+}
+
 async function audit(input: { supabase: SupabaseClient; organizationId: string; ownerUserId: string; command: TelegramOwnerCommand; entityType?: string; entityId?: string; before?: unknown; after?: unknown }) {
   const { error } = await input.supabase.from('audit_logs').insert({
     organization_id: input.organizationId,
@@ -50,12 +86,34 @@ async function readPricePolicy(supabase: SupabaseClient, organizationId: string,
 }
 
 export async function executeControlReadCommand(input: { supabase: SupabaseClient; organizationId: string; command: TelegramOwnerCommand }): Promise<CommandExecutionResult> {
+  if (input.command.type === 'HELP') return { title: 'راهنما', text: ownerHelpText() };
   if (input.command.type !== 'SHOW_BUDGET') return core.executeControlReadCommand(input);
-  const { data, error } = await input.supabase.from('cost_guard_settings').select('monthly_total_budget_usd,openai_budget_usd,google_places_budget_usd,email_budget_usd,whatsapp_budget_usd,reserve_budget_usd,daily_new_leads,daily_website_audits,daily_deep_ai_runs,warning_pct,throttle_pct,critical_pct,hard_stop_pct,model_routing_enabled,low_cost_model,high_reasoning_model').eq('organization_id', input.organizationId).maybeSingle();
+
+  const start = new Date();
+  start.setUTCDate(1);
+  start.setUTCHours(0, 0, 0, 0);
+  const [{ data, error }, { data: usage, error: usageError }] = await Promise.all([
+    input.supabase.from('cost_guard_settings').select('monthly_total_budget_usd,openai_budget_usd,google_places_budget_usd,email_budget_usd,whatsapp_budget_usd,reserve_budget_usd,daily_new_leads,daily_website_audits,daily_deep_ai_runs,warning_pct,throttle_pct,critical_pct,hard_stop_pct,model_routing_enabled,low_cost_model,high_reasoning_model').eq('organization_id', input.organizationId).maybeSingle(),
+    input.supabase.from('usage_events').select('provider,cost_usd').eq('organization_id', input.organizationId).gte('created_at', start.toISOString()),
+  ]);
   if (error || !data) throw new Error(`Budget lookup failed: ${error?.message ?? 'not found'}`);
+  if (usageError) throw new Error(`Usage lookup failed: ${usageError.message}`);
+
+  const providerSpend = new Map<string, number>();
+  let totalSpend = 0;
+  for (const event of usage ?? []) {
+    const cost = Math.max(0, Number(event.cost_usd ?? 0));
+    const provider = String(event.provider ?? 'OTHER').toUpperCase();
+    totalSpend += cost;
+    providerSpend.set(provider, (providerSpend.get(provider) ?? 0) + cost);
+  }
+  const pct = Number(data.monthly_total_budget_usd) > 0 ? (totalSpend / Number(data.monthly_total_budget_usd)) * 100 : 0;
+  const spendLine = [...providerSpend.entries()].sort((a,b)=>b[1]-a[1]).map(([provider,cost])=>`${provider} ${cost.toFixed(2)}`).join(' · ') || 'no recorded paid usage';
+
   return { title: 'Cost Guard', text: [
-    `Monthly: ${data.monthly_total_budget_usd} USD · reserve ${data.reserve_budget_usd} USD`,
-    `OpenAI: ${data.openai_budget_usd} · Google Places: ${data.google_places_budget_usd} · Email: ${data.email_budget_usd} · WhatsApp: ${data.whatsapp_budget_usd} USD`,
+    `This month: ${totalSpend.toFixed(2)} / ${data.monthly_total_budget_usd} USD (${pct.toFixed(1)}%) · reserve ${data.reserve_budget_usd} USD`,
+    `Provider spend: ${spendLine}`,
+    `Limits: OpenAI ${data.openai_budget_usd} · Google Places ${data.google_places_budget_usd} · Email ${data.email_budget_usd} · WhatsApp ${data.whatsapp_budget_usd} USD`,
     `Daily: leads ${data.daily_new_leads} · website audits ${data.daily_website_audits} · deep AI ${data.daily_deep_ai_runs}`,
     `Thresholds: warn ${data.warning_pct}% · throttle ${data.throttle_pct}% · critical ${data.critical_pct}% · hard stop ${data.hard_stop_pct}%`,
     `Model routing: ${data.model_routing_enabled ? 'ON' : 'OFF'} · low ${data.low_cost_model ?? '—'} · high ${data.high_reasoning_model ?? '—'}`,
