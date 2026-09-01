@@ -56,9 +56,9 @@ export function buildSelectiveRoutePlan(context: AgentContext): SelectiveRoutePl
 
   const reasons: string[] = [];
   if (asksPrice) reasons.push(hasVerifiedQuote ? 'PRICE_WITH_VERIFIED_QUOTE' : 'PRICE_REQUIRES_CONFIGURED_QUOTE');
-  if (asksMeeting) reasons.push('MEETING_OR_CONSULTATION_INTENT');
-  if (asksPayment) reasons.push('PAYMENT_OR_CONTRACT_INTENT');
-  if (objection) reasons.push('OBJECTION_DISCOUNT_OR_HESITATION');
+  if (asksMeeting) reasons.push('MEETING_INTENT');
+  if (asksPayment) reasons.push('PAYMENT_INTENT');
+  if (objection) reasons.push('OBJECTION_OR_HESITATION');
   if (technical) reasons.push('TECHNICAL_SCOPE');
   if (asksPreview) reasons.push('PREVIEW_REQUEST');
   if (highIntent) reasons.push('HIGH_INTENT_SCORE');
