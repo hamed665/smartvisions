@@ -1,5 +1,5 @@
 import { updateAgent } from '@/app/control-center-actions';
-import { createPromptVersion } from '@/app/management-actions';
+import { createPromptVersion } from '@/app/versioned-intelligence-actions';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 export const dynamic='force-dynamic';
 
