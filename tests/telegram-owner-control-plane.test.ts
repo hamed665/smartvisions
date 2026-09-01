@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { executeAgent } from '@/lib/agents/executor';
 import { evaluateCanonicalMarketWindow } from '@/lib/outreach/canonical-market-window';
+import { evaluateCanonicalQuote } from '@/lib/outreach/canonical-pricing';
 import { MUTATING_COMMANDS } from '@/lib/telegram/contracts';
 import { parseTelegramOwnerCommand } from '@/lib/telegram/parser';
 
@@ -52,6 +53,20 @@ describe('Telegram Owner extended control plane', () => {
     expect(evaluateCanonicalMarketWindow({marketEnabled:false,marketTimezone:'Asia/Muscat',start:'09:00',end:'19:00',nowUtc:atTenMuscat}).reason).toBe('market_disabled');
     expect(evaluateCanonicalMarketWindow({marketEnabled:true,marketTimezone:'Asia/Muscat',start:'09:00',end:'19:00',nowUtc:atTenMuscat}).allowed).toBe(true);
     expect(evaluateCanonicalMarketWindow({marketEnabled:true,marketTimezone:'Asia/Muscat',start:'11:00',end:'18:00',nowUtc:atTenMuscat}).reason).toBe('outside_window');
+  });
+
+  it('quotes from canonical owner price rules and enforces approval ceiling plus hard floor', () => {
+    const allowed = evaluateCanonicalQuote({serviceId:'business_website',serviceName:'Business Website',servicePrice:179,currency:'OMR',minimumPrice:150,maxAutoDiscountPct:5,maxDiscountWithApprovalPct:10,requestedDiscountPct:5});
+    expect(allowed).toMatchObject({allowed:true,requiresHuman:false,finalPrice:170.05,priceSource:'service_prices'});
+
+    const approval = evaluateCanonicalQuote({serviceId:'business_website',serviceName:'Business Website',servicePrice:179,currency:'OMR',minimumPrice:150,maxAutoDiscountPct:5,maxDiscountWithApprovalPct:10,requestedDiscountPct:8});
+    expect(approval).toMatchObject({allowed:true,requiresHuman:true,reason:'human_approval_required'});
+
+    const floorBlocked = evaluateCanonicalQuote({serviceId:'business_website',serviceName:'Business Website',servicePrice:179,currency:'OMR',minimumPrice:170,maxAutoDiscountPct:5,maxDiscountWithApprovalPct:10,requestedDiscountPct:8});
+    expect(floorBlocked).toMatchObject({allowed:false,reason:'discount_below_hard_price_floor'});
+
+    const ceilingBlocked = evaluateCanonicalQuote({serviceId:'business_website',serviceName:'Business Website',servicePrice:179,currency:'OMR',minimumPrice:0,maxAutoDiscountPct:5,maxDiscountWithApprovalPct:10,requestedDiscountPct:11});
+    expect(ceilingBlocked).toMatchObject({allowed:false,reason:'discount_above_configured_ceiling'});
   });
 
   it('classifies all extended writes as confirmation-required mutations', () => {
