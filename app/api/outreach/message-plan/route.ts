@@ -27,13 +27,29 @@ export async function POST(request: Request) {
     recipientRole?: string;
   };
 
-  if (!body.organizationId || !body.marketCode || !body.businessName || !body.recommendedOffer) {
-    return NextResponse.json({ error: 'organizationId, marketCode, businessName and recommendedOffer are required' }, { status: 400 });
+  if (!body.marketCode || !body.businessName || !body.recommendedOffer) {
+    return NextResponse.json({ error: 'marketCode, businessName and recommendedOffer are required' }, { status: 400 });
   }
 
   try {
-    const supabase = serviceClient();
     const marketCode = body.marketCode.toUpperCase() as MarketCode;
+    const basePlan = buildMessagePlan({
+      marketCode,
+      businessName: body.businessName,
+      industry: body.industry,
+      detectedLanguage: body.detectedLanguage,
+      preferredLanguage: body.preferredLanguage,
+      evidence: body.evidence ?? [],
+      recommendedOffer: body.recommendedOffer,
+      recipientRole: body.recipientRole,
+    });
+
+    // Preserve the existing internal API contract. Callers that provide the trusted
+    // organization id receive the live Owner-configured locale/tone overlay; older
+    // callers stay on the existing safe static profile until they are upgraded.
+    if (!body.organizationId) return NextResponse.json({ ...basePlan, ownerMarketStyleApplied: false });
+
+    const supabase = serviceClient();
     const [{ data: market, error: marketError }, { data: locale, error: localeError }] = await Promise.all([
       supabase.from('market_settings')
         .select('enabled')
@@ -50,7 +66,7 @@ export async function POST(request: Request) {
     if (!market?.enabled) return NextResponse.json({ error: `Market ${marketCode} is disabled` }, { status: 409 });
     if (!locale) return NextResponse.json({ error: `Locale profile for ${marketCode} is missing` }, { status: 409 });
 
-    const plan = buildMessagePlan({
+    const canonicalPlan = buildMessagePlan({
       marketCode,
       businessName: body.businessName,
       industry: body.industry,
@@ -62,11 +78,11 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({
-      ...plan,
-      dialect: locale.dialect ?? plan.dialect,
-      tone: locale.tone_profile ?? plan.tone,
-      dialectIntensity: locale.dialect_intensity == null ? plan.dialectIntensity : Number(locale.dialect_intensity),
-      maxWords: locale.max_first_touch_words == null ? plan.maxWords : Number(locale.max_first_touch_words),
+      ...canonicalPlan,
+      dialect: locale.dialect ?? canonicalPlan.dialect,
+      tone: locale.tone_profile ?? canonicalPlan.tone,
+      dialectIntensity: locale.dialect_intensity == null ? canonicalPlan.dialectIntensity : Number(locale.dialect_intensity),
+      maxWords: locale.max_first_touch_words == null ? canonicalPlan.maxWords : Number(locale.max_first_touch_words),
       ownerMarketStyleApplied: true,
     });
   } catch (error) {
