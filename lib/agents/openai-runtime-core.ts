@@ -140,6 +140,10 @@ function extractUsage(response: unknown) {
   };
 }
 
+function isKnownNoUsageHttpStatus(status: number) {
+  return [400, 401, 403, 404, 422, 429].includes(status);
+}
+
 export class OpenAIResponsesAgentRuntime implements AgentRuntime {
   constructor(private readonly apiKey = process.env.OPENAI_API_KEY) {}
 
@@ -226,20 +230,23 @@ export class OpenAIResponsesAgentRuntime implements AgentRuntime {
         body: requestBody,
       });
     } catch (error) {
-      // A network failure can be ambiguous after a request leaves the process.
-      // Keep the conservative reservation until TTL expiry rather than freeing
-      // budget immediately and risking a concurrent overspend.
+      // Network failure is ambiguous once bytes may have left the process. Keep
+      // the conservative ledger reservation; migration 0051 later marks it STALE
+      // for reconciliation while continuing to count it against the budget.
       throw error;
     }
 
     if (!response.ok) {
       const detail = await response.text();
-      await finalizeCostGuardUsage({
-        organizationId: context.organizationId,
-        reservationKey: reservation.key,
-        state: 'RELEASED',
-        metadata: { releaseReason: `OPENAI_HTTP_${response.status}` },
-      }).catch(() => undefined);
+      if (isKnownNoUsageHttpStatus(response.status)) {
+        await finalizeCostGuardUsage({
+          organizationId: context.organizationId,
+          reservationKey: reservation.key,
+          state: 'RELEASED',
+          metadata: { releaseReason: `OPENAI_HTTP_${response.status}` },
+        }).catch(() => undefined);
+      }
+      // Provider 5xx/other ambiguous responses remain conservatively reserved.
       throw new Error(`OpenAI Responses API failed (${response.status}): ${detail.slice(0, 600)}`);
     }
 
