@@ -10,11 +10,10 @@ This is the operational handoff and the first document to read before changing G
 - Branch: `main`
 - Production URL: `https://smartvisions.vercel.app`
 - Supabase project: `pkypexzpyfbikdnkrzvw`
-- Current runtime code baseline: `369d229612dac8a1d4f76d76a6bd643bbf1121f8` — merged PR #88
-- Last runtime-changing Production deployment: `dpl_CkGxRWZYkjCbYK49wxH1PgGnaHUt` — READY, target `production`, canonical alias `smartvisions.vercel.app`, no alias error
+- Runtime baseline: the latest merged runtime PR on `main`; verify the exact Git/Vercel HEAD directly before any operation that depends on a commit/deployment identity.
 - Master Tracker: GitHub Issue #18
 
-Documentation-only commits may advance `main` and produce a runtime-equivalent deployment after this baseline. When an exact live Git/Vercel HEAD matters, verify it directly rather than creating another self-invalidating documentation commit.
+Documentation-only commits may advance `main` and produce a runtime-equivalent deployment. Do not create self-invalidating handoff text by treating an old SHA as permanently current.
 
 ## Non-negotiable protection rules
 
@@ -48,8 +47,10 @@ The V1 foundation remains canonical. The most relevant recent milestones are:
 - #86: Cost Guard aggregation moved into PostgreSQL and existing paid-AI/deep-run quotas made real.
 - #87: provider cost truth added so provisional `$0`/reserve values cannot masquerade as final provider invoices.
 - #88: atomic pre-provider Cost Guard reservations for paid OpenAI Agent and paid Google Places calls, plus explicit least-privilege `usage_events` grants.
+- #89: documentation-only reconciliation of the real Production state through #88.
+- #90: atomic owner-managed Knowledge/Prompt version publishing and the first reviewed Smart Visions Knowledge baseline, without copying Services/Pricing/Locale into a parallel source of truth.
 
-All code PRs above were merged only after exact-head lint, typecheck, tests and build were green. PR #88 additionally had zero unresolved GitHub/Vercel review threads, DB-only reservation proof, Production migration verification and READY deployment proof.
+Runtime-changing PRs are merged only after exact-head lint, typecheck, tests and build are green, required migrations are verified, review threads are clear, and Production deployment is checked.
 
 ## Current verified provider state
 
@@ -135,7 +136,7 @@ Do not create a second Preview/content system.
 
 The Agent architecture is canonical and should not be replaced.
 
-Current runtime wiring now hydrates, before the paid boundary:
+Current runtime wiring hydrates, before the paid boundary:
 
 - the authoritative Lead/Conversation;
 - up to 14 recent inbound/outbound conversation messages;
@@ -150,19 +151,26 @@ Current runtime wiring now hydrates, before the paid boundary:
 
 Specialist outputs feed the real Orchestrator. The Secretary reads specialist consensus, Orchestrator decision, conversation memory and canonical service knowledge. The Relevance Checker evaluates the actual proposed reply rather than only the inbound message.
 
-### Current Production data gap
+### Current Production Knowledge/Prompt baseline
 
-The runtime wiring is no longer the blocker. Production currently has:
+Production now has:
 
-- active Knowledge versions: `0`
+- active Knowledge versions: `2`
 - active Prompt versions: `0`
 - enabled Services: `6`
 - service price rows: `36`
 - locale profiles: `6`
 
-Therefore Services/Pricing/Locale are live canonical data, while optional owner-maintained Knowledge and Prompt corpora are currently empty. Safe code-level Agent instructions remain the fallback.
+Active Knowledge keys:
 
-Next intelligence work should populate only genuinely useful, non-duplicative Knowledge/brand guidance. Do not copy pricing into Knowledge, and do not create a second prompt framework.
+- `smartvisions_brand_positioning`
+- `smartvisions_customer_journey`
+
+The baseline contains only brand/process guidance. It does not copy service prices, market locale configuration or dynamic portfolio evidence. Services/Pricing/Locale remain the canonical commercial source of truth, and approved portfolio evidence remains runtime data.
+
+Owner publication of Knowledge and Prompt versions now uses one atomic PostgreSQL transaction: organization/key lock → next version allocation → old active version deactivation → new active version insertion → audit insertion. Partial unique indexes enforce one active version per Knowledge key or Agent prompt. The RPCs are `SECURITY INVOKER`, OWNER RLS remains authoritative, and `anon`/`service_role` do not have publish execution.
+
+Controlled transactional Production verification proved both Knowledge and Prompt publishers create an active row plus audit row, then rollback cleanly. Verification rows/audits were confirmed absent afterward. No active Prompt was seeded intentionally; hard code-level Agent safety remains the fallback until owner-tunable prompt content has a measured reason to exist.
 
 ## Selective AI routing / token-efficiency — PRODUCTION
 
@@ -274,13 +282,12 @@ Instagram remains deferred and is not a V1 launch blocker.
 
 Do not disable Shadow Mode and do not start broad autonomous prospecting yet.
 
-1. **Knowledge/brand intelligence:** create a small, reviewed active Knowledge corpus for Smart Visions service/brand/process guidance that is not already canonical in Services/Pricing/Locale. Add active Prompt versions only where owner-tunable behavior adds real value over hard code-level safety rules.
-2. **Telegram owner alerts:** produce one controlled real notification-path proof and then cover New Lead / Hot Lead / Discount / Consultation / Human Handoff alert behavior without triggering customer outreach.
-3. **Shadow Mode behavior scenarios:** using test/internal contacts only, prove positive reply, objection, no reply/follow-up, DNC/unsubscribe and human takeover.
-4. **Follow-up cancellation:** prove cancellation with an actual pending follow-up rather than a synthetic state claim.
-5. **Full-path fail-closed checks:** DNC, human takeover, global kill, local time and commercial-price boundaries must remain authoritative through the real path.
-6. **Voice concurrency decision:** before materially higher concurrency, either extend the atomic reservation primitive to Voice with its existing post-provider reconciliation semantics or document why the existing single-call/cache boundary plus small pilot volume is sufficient.
-7. **Tiny Oman pilot:** only after the gates above are green, make an explicit owner decision on permitted automation level and tiny volume. Scale only from measured outcomes.
+1. **Telegram owner alerts:** produce one controlled real notification-path proof and then cover New Lead / Hot Lead / Discount / Consultation / Human Handoff alert behavior without triggering customer outreach.
+2. **Shadow Mode behavior scenarios:** using test/internal contacts only, prove positive reply, objection, no reply/follow-up, DNC/unsubscribe and human takeover.
+3. **Follow-up cancellation:** prove cancellation with an actual pending follow-up rather than a synthetic state claim.
+4. **Full-path fail-closed checks:** DNC, human takeover, global kill, local time and commercial-price boundaries must remain authoritative through the real path.
+5. **Voice concurrency decision:** before materially higher concurrency, either extend the atomic reservation primitive to Voice with its existing post-provider reconciliation semantics or document why the existing single-call/cache boundary plus small pilot volume is sufficient.
+6. **Tiny Oman pilot:** only after the gates above are green, make an explicit owner decision on permitted automation level and tiny volume. Scale only from measured outcomes.
 
 Crawl4AI, Redis and Instagram are not current launch blockers unless a measured use case proves otherwise.
 
