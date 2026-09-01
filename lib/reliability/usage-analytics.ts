@@ -3,6 +3,7 @@ export type UsageAnalyticsRow = {
   operation?: string | null;
   cost_usd?: number | string | null;
   lead_id?: string | null;
+  units?: number | string | null;
   metadata?: Record<string, unknown> | null;
   created_at: string;
 };
@@ -19,6 +20,14 @@ function add(target: Record<string, number>, key: string, value: number) {
   target[key] = (target[key] ?? 0) + value;
 }
 
+function pricingClass(row: UsageAnalyticsRow): 'RECONCILED' | 'CONSERVATIVE' | 'PENDING' | 'UNCLASSIFIED' {
+  const status = String(row.metadata?.pricing_status ?? '').trim().toUpperCase();
+  if (status.startsWith('PENDING_') || status === 'PENDING_RECONCILIATION') return 'PENDING';
+  if (status.startsWith('CONSERVATIVE_')) return 'CONSERVATIVE';
+  if (status.startsWith('FINAL_') || status.startsWith('TOKEN_METERED_') || status.startsWith('RECONCILED_')) return 'RECONCILED';
+  return 'UNCLASSIFIED';
+}
+
 export function buildUsageAnalytics(
   rows: UsageAnalyticsRow[],
   leads: LeadOutcomeRow[],
@@ -30,17 +39,38 @@ export function buildUsageAnalytics(
   const daySpend: Record<string, number> = {};
   const leadSpend: Record<string, number> = {};
   const campaignSpend: Record<string, number> = {};
+  const pendingByProvider: Record<string, number> = {};
   let totalSpend = 0;
+  let reconciledEvents = 0;
+  let conservativeEvents = 0;
+  let conservativeSpend = 0;
+  let pendingEvents = 0;
+  let pendingUnits = 0;
+  let unclassifiedEvents = 0;
 
   for (const row of rows) {
     const cost = Math.max(0, Number(row.cost_usd ?? 0));
+    const provider = String(row.provider ?? 'OTHER').toUpperCase();
     totalSpend += cost;
-    add(providerSpend, String(row.provider ?? 'OTHER').toUpperCase(), cost);
+    add(providerSpend, provider, cost);
     add(operationSpend, String(row.operation ?? 'UNKNOWN'), cost);
     add(daySpend, row.created_at.slice(0, 10), cost);
     if (row.lead_id) add(leadSpend, row.lead_id, cost);
     const campaignId = String(row.metadata?.campaign_id ?? '').trim();
     if (campaignId) add(campaignSpend, campaignId, cost);
+
+    const quality = pricingClass(row);
+    if (quality === 'RECONCILED') reconciledEvents += 1;
+    else if (quality === 'CONSERVATIVE') {
+      conservativeEvents += 1;
+      conservativeSpend += cost;
+    } else if (quality === 'PENDING') {
+      pendingEvents += 1;
+      pendingUnits += Math.max(1, Number(row.units ?? 1) || 1);
+      add(pendingByProvider, provider, 1);
+    } else {
+      unclassifiedEvents += 1;
+    }
   }
 
   const qualifiedStatuses = new Set(['QUALIFIED','READY_TO_CONTACT','CONTACTED','REPLIED','INTERESTED','HOT','HUMAN','WON']);
@@ -83,6 +113,15 @@ export function buildUsageAnalytics(
     campaignSpend,
     counts,
     costPer,
+    costQuality: {
+      reconciledEvents,
+      conservativeEvents,
+      conservativeSpend,
+      pendingEvents,
+      pendingUnits,
+      pendingByProvider,
+      unclassifiedEvents,
+    },
     anomalies: {
       spendSpike,
       noOutcomeSpend,
