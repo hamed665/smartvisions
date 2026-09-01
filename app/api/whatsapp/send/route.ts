@@ -69,6 +69,9 @@ export async function POST(request: Request) {
     : await provider.sendText({ to: body.to, text: body.text!, replyToMessageId: body.replyToMessageId });
 
   if (body.organizationId) {
+    const pricingStatus = whatsappPolicy.mode === 'FREEFORM'
+      ? 'FINAL_FREE_SERVICE_WINDOW'
+      : 'PENDING_TEMPLATE_CATEGORY_RECONCILIATION';
     await recordUsage({
       organizationId: body.organizationId,
       provider: 'WHATSAPP',
@@ -76,7 +79,14 @@ export async function POST(request: Request) {
       costUsd: 0,
       units: 1,
       leadId: body.leadId,
-      metadata: { pricing_status: 'PENDING_RECONCILIATION', whatsapp_mode: whatsappPolicy.mode },
+      metadata: {
+        pricing_status: pricingStatus,
+        whatsapp_mode: whatsappPolicy.mode,
+        ...(whatsappPolicy.mode === 'TEMPLATE' ? {
+          pricing_note: 'Template charge depends on Meta template category and destination market; zero is not asserted as final invoice cost',
+          template_name: body.templateName,
+        } : {}),
+      },
     });
   }
   return NextResponse.json({ ...result, whatsappPolicy });
