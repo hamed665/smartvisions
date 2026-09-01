@@ -25,12 +25,12 @@ describe('human sales consensus', () => {
           expect(context.collaboration?.commercialDecision?.action).toBe('ANSWER');
           expect(context.conversationHistory?.at(-1)?.body).toContain('website');
           return result(agent, {
-            customer_reply: 'Sure. The website service can be tailored around the clinic. Which part matters most to you?',
+            customer_reply: 'Sure. The website service can include booking integration for the clinic. Which booking flow do you use now?',
             customer_reply_language: 'English',
           });
         }
         if (agent === 'relevance_checker') {
-          expect(context.collaboration?.proposedReply?.text).toContain('website service');
+          expect(context.collaboration?.proposedReply?.text).toContain('booking integration');
           return result(agent);
         }
         return result(agent);
@@ -44,7 +44,7 @@ describe('human sales consensus', () => {
       countryCode: 'OM',
       language: 'en',
       industry: 'clinic',
-      message: 'Can you explain the website service?',
+      message: 'Can you explain the website service and booking integration?',
       conversationSummary: 'The customer previously asked about a website.',
       conversationHistory: [
         { direction: 'INBOUND', body: 'I need help with my clinic website.' },
@@ -55,12 +55,37 @@ describe('human sales consensus', () => {
       agentMode: 'AUTO',
     }, undefined, runtime);
 
+    expect(output.trace.reasoningTier).toBe('FULL');
     expect(seen.has('decision_orchestrator')).toBe(true);
     expect(seen.has('secretary')).toBe(true);
     expect(seen.has('relevance_checker')).toBe(true);
     expect(output.trace.relevancePassed).toBe(true);
     expect(output.trace.humanStylePassed).toBe(true);
     expect(output.trace.delivery).toBe('REVIEW');
+  });
+
+  it('uses only one paid agent call for routine LIGHT replies', async () => {
+    const paidCalls: AgentName[] = [];
+    const runtime: AgentRuntime = {
+      async run(agent) {
+        paidCalls.push(agent);
+        return result(agent, agent === 'secretary' ? {
+          customer_reply: 'Sure. We can tailor the website around what the business actually needs.',
+          customer_reply_language: 'English',
+        } : {});
+      },
+    };
+
+    const output = await processInboundMessage({
+      message: 'Tell me about your website service',
+      countryCode: 'OM',
+      agentMode: 'AUTO',
+      shadowMode: true,
+    }, undefined, runtime);
+
+    expect(output.trace.reasoningTier).toBe('LIGHT');
+    expect(output.trace.paidAgentCallsPlanned).toBe(1);
+    expect(paidCalls).toEqual(['secretary']);
   });
 
   it('routes discount objections through psychology and hands them to a human', async () => {
