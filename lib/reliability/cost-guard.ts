@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { assertRuntimeOperationAllowed } from './runtime-safety';
 
@@ -40,6 +41,13 @@ export type AiRunQuotaDecision = {
   reason?: 'MAX_AI_RUNS_PER_LEAD' | 'DAILY_DEEP_AI_RUNS';
   limit?: number;
   used?: number;
+};
+
+export type CostUsageReservation = {
+  key: string;
+  eventId: string;
+  reservedUsd: number;
+  replayed: boolean;
 };
 
 export function evaluateBudgetMode(spendUsd: number, settings: Pick<CostGuardSettings,'monthly_total_budget_usd'|'warning_pct'|'throttle_pct'|'critical_pct'|'hard_stop_pct'>): { percentUsed: number; mode: BudgetMode } {
@@ -132,6 +140,74 @@ export async function getCostGuardState(organizationId?: string): Promise<CostGu
   const settings = settingsData as CostGuardSettings;
   const { percentUsed, mode } = evaluateBudgetMode(monthSpendUsd, settings);
   return { settings, monthSpendUsd, providerSpendUsd, percentUsed, mode };
+}
+
+export async function reserveCostGuardUsage(input: {
+  organizationId: string;
+  provider: string;
+  operation: string;
+  reservedUsd: number;
+  leadId?: string;
+  metadata?: Record<string, unknown>;
+  reservationKey?: string;
+  ttlSeconds?: number;
+}): Promise<CostUsageReservation> {
+  const reservedUsd = Math.max(0, Number(input.reservedUsd));
+  if (!(reservedUsd > 0)) throw new Error('A positive conservative cost estimate is required before a paid provider call');
+
+  const key = input.reservationKey?.trim() || randomUUID();
+  const supabase = serviceClient();
+  const { data, error } = await supabase.rpc('reserve_cost_guard_usage', {
+    p_organization_id: input.organizationId,
+    p_provider: input.provider.toUpperCase(),
+    p_operation: input.operation,
+    p_reservation_key: key,
+    p_reserved_usd: reservedUsd,
+    p_lead_id: input.leadId ?? null,
+    p_metadata: input.metadata ?? {},
+    p_ttl_seconds: input.ttlSeconds ?? 900,
+  });
+  if (error) throw new Error(`Cost reservation blocked: ${error.message}`);
+  const row = data?.[0];
+  if (!row?.event_id) throw new Error('Cost reservation did not return a ledger row; paid operation blocked');
+
+  return {
+    key,
+    eventId: String(row.event_id),
+    reservedUsd: Math.max(0, Number(row.reserved_usd ?? reservedUsd)),
+    replayed: Boolean(row.replayed),
+  };
+}
+
+export async function finalizeCostGuardUsage(input: {
+  organizationId: string;
+  reservationKey: string;
+  state: 'SETTLED' | 'RELEASED';
+  actualCostUsd?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  units?: number;
+  metadata?: Record<string, unknown>;
+}) {
+  const supabase = serviceClient();
+  const { data, error } = await supabase.rpc('finalize_cost_guard_usage', {
+    p_organization_id: input.organizationId,
+    p_reservation_key: input.reservationKey,
+    p_state: input.state,
+    p_actual_cost_usd: Math.max(0, Number(input.actualCostUsd ?? 0)),
+    p_input_tokens: input.inputTokens ?? null,
+    p_output_tokens: input.outputTokens ?? null,
+    p_units: input.units ?? null,
+    p_metadata: input.metadata ?? {},
+  });
+  if (error) throw new Error(`Cost reservation finalization failed: ${error.message}`);
+  const row = data?.[0];
+  if (!row?.event_id) throw new Error('Cost reservation finalization returned no ledger row');
+  return {
+    eventId: String(row.event_id),
+    finalCostUsd: Math.max(0, Number(row.final_cost_usd ?? 0)),
+    replayed: Boolean(row.replayed),
+  };
 }
 
 export async function recordUsage(input: {
