@@ -54,6 +54,12 @@ describe('Telegram owner assistant safety boundaries', () => {
     });
   });
 
+  it('only accepts the owner alert self-test as an explicit slash command', () => {
+    expect(parseTelegramOwnerCommand('/alerttest')).toEqual({ type: 'TEST_OWNER_ALERT' });
+    expect(parseTelegramOwnerCommand('/alert_test@SmartVisionsOwnerBot')).toEqual({ type: 'TEST_OWNER_ALERT' });
+    expect(parseTelegramOwnerCommand('تست هشدار').type).not.toBe('TEST_OWNER_ALERT');
+  });
+
   it('requires both configured Telegram owner identity dimensions', () => {
     expect(isAuthorizedTelegramOwner({ userId: 123, chatId: 456 }, config)).toBe(true);
     expect(isAuthorizedTelegramOwner({ userId: 999, chatId: 456 }, config)).toBe(false);
@@ -71,12 +77,13 @@ describe('Telegram owner assistant safety boundaries', () => {
     expect(isSafeServiceOptionKey('access-token')).toBe(false);
   });
 
-  it('classifies every write command as mutating', () => {
+  it('classifies every write command as mutating while keeping the alert self-test read-only', () => {
     for (const type of [
       'SET_PRICE','SET_SERVICE_ENABLED','SET_SERVICE_OPTION','CREATE_HUNTER_CAMPAIGN',
       'SET_MARKET_ENABLED','SET_PAUSE','APPROVE_MESSAGE','REJECT_MESSAGE','REVERT_LAST_CHANGE',
     ] as const) expect(MUTATING_COMMANDS.has(type)).toBe(true);
     expect(MUTATING_COMMANDS.has('SHOW_STATUS')).toBe(false);
+    expect(MUTATING_COMMANDS.has('TEST_OWNER_ALERT')).toBe(false);
   });
 
   it('builds safe WhatsApp links and compact confirmation callback payloads', () => {
