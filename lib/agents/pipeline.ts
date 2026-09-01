@@ -44,12 +44,9 @@ export async function processInboundMessage(
   const routedAgents = routePlan.agents.filter((agent) => context.agentSettings?.[agent]?.enabled !== false);
   const specialists = routedAgents.filter((agent) => !['decision_orchestrator', 'secretary', 'relevance_checker'].includes(agent));
 
-  const shouldUsePaidRuntime = (agent: AgentName) => {
-    if (runtime === deterministicAgentRuntime) return false;
-    if (routePlan.tier === 'ZERO_COST') return false;
-    if (routePlan.tier === 'LIGHT') return agent === 'secretary';
-    return true;
-  };
+  const shouldUsePaidRuntime = (agent: AgentName) =>
+    runtime !== deterministicAgentRuntime && routePlan.paidAgents.includes(agent);
+
   const runAgent = (agent: AgentName, agentContext: AgentContext) =>
     (shouldUsePaidRuntime(agent) ? runtime : deterministicAgentRuntime).run(agent, agentContext);
 
