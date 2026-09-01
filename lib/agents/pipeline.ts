@@ -11,6 +11,7 @@ const inferHandoffSignals = (message: string) => {
     asksHuman: /(human|person|manager|someone|موظف|شخص|مدير|مسؤول)/i.test(text),
     asksMeeting: /(meeting|call|zoom|meet|consultation|consult|مكالمة|اجتماع|استشارة|نتكلم)/i.test(text),
     asksPayment: /(payment|pay|invoice|deposit|contract|دفع|فاتورة|عربون|عقد)/i.test(text),
+    specialDiscount: /(discount|better price|best price|reduce the price|cheaper|خصم|تخفيض|سعر أفضل|آخر سعر|ارخص|أرخص)/i.test(text),
     complaint: /(complaint|unhappy|bad service|شكوى|مشكلة|غير راضي)/i.test(text),
   };
 };
