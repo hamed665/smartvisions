@@ -105,14 +105,15 @@ export async function executeReadCommand(input: {
   if (command.type === 'HELP') return { title: 'راهنما', text: helpText() };
 
   if (command.type === 'SHOW_STATUS') {
-    const [controls, integrations, hotLeads, approvals, runningCampaigns] = await Promise.all([
-      supabase.from('system_controls').select('global_kill_switch,email_paused,whatsapp_ai_paused,agents_paused,shadow_mode,monthly_budget_usd').eq('organization_id', organizationId).maybeSingle(),
+    const [controls, costGuard, integrations, hotLeads, approvals, runningCampaigns] = await Promise.all([
+      supabase.from('system_controls').select('global_kill_switch,email_paused,whatsapp_ai_paused,agents_paused,shadow_mode').eq('organization_id', organizationId).maybeSingle(),
+      supabase.from('cost_guard_settings').select('monthly_total_budget_usd').eq('organization_id', organizationId).maybeSingle(),
       supabase.from('integration_connections').select('provider,channel,status,enabled').eq('organization_id', organizationId).order('provider'),
       supabase.from('leads').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId).in('status', ['INTERESTED','HOT','HUMAN']),
       supabase.from('conversation_messages').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId).eq('requires_approval', true).in('status', ['APPROVAL_REQUIRED','READY']),
       supabase.from('campaigns').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId).eq('status', 'RUNNING'),
     ]);
-    const firstError = [controls.error, integrations.error, hotLeads.error, approvals.error, runningCampaigns.error].find(Boolean);
+    const firstError = [controls.error, costGuard.error, integrations.error, hotLeads.error, approvals.error, runningCampaigns.error].find(Boolean);
     if (firstError) throw new Error(`Status lookup failed: ${firstError.message}`);
     const c = controls.data;
     const connected = (integrations.data ?? []).filter((row) => row.enabled && row.status === 'CONNECTED').map((row) => row.provider);
@@ -128,7 +129,7 @@ export async function executeReadCommand(input: {
         `Hot / interested / human leads: ${hotLeads.count ?? 0}`,
         `Approvals waiting: ${approvals.count ?? 0}`,
         `Running hunter campaigns: ${runningCampaigns.count ?? 0}`,
-        `Monthly budget: ${c?.monthly_budget_usd ?? '—'} USD`,
+        `Monthly budget: ${costGuard.data?.monthly_total_budget_usd ?? '—'} USD`,
       ].join('\n'),
     };
   }
@@ -285,7 +286,6 @@ export async function prepareMutation(input: {
     if (last.error) throw new Error(`Revert lookup failed: ${last.error.message}`);
     if (!last.data) throw new Error('تغییر قابل برگشتی در تاریخچه Telegram پیدا نشد.');
     const originalResult = asRecord(last.data.result);
-    const originalCommand = asRecord(last.data.command_payload) as TelegramOwnerCommand;
     command = { type: 'REVERT_LAST_CHANGE', targetRunId: String(last.data.id) };
     return { command, preview: { title: 'Revert آخرین تغییر', text: `قرار است ${String(last.data.command_type)} برگردانده شود.\nBefore revert: ${JSON.stringify(originalResult.after ?? null)}\nAfter revert: ${JSON.stringify(originalResult.before ?? null)}`, before: originalResult.after, after: originalResult.before, entityType: String(originalResult.entityType ?? 'telegram_change'), entityId: String(originalResult.entityId ?? ''), requiresConfirmation: true } };
   }
