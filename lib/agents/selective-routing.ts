@@ -78,7 +78,13 @@ export function buildSelectiveRoutePlan(context: AgentContext): SelectiveRoutePl
   // every complex message.
   const paidAgents = new Set<AgentName>(['decision_orchestrator', 'secretary']);
   if (objection) paidAgents.add('conversation_psychology');
-  if ((asksPrice && !hasVerifiedQuote) || technical || asksPreview) paidAgents.add('business_analyst');
+  if ((asksPrice && !hasVerifiedQuote) || technical || asksPreview) {
+    paidAgents.add('business_analyst');
+    // Complex scope/price/preview claims need a real evidence judgment. The
+    // deterministic checker remains sufficient when a canonical quote already
+    // answers the question or no unsupported claim is being introduced.
+    paidAgents.add('evidence_checker');
+  }
   if (asksPrice || asksMeeting || asksPayment || objection || technical || asksPreview || highIntent) {
     paidAgents.add('relevance_checker');
   }
