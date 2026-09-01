@@ -128,7 +128,11 @@ export async function POST(request: Request) {
     costUsd: 0,
     units: 1,
     leadId: body.leadId,
-    metadata: { provider: 'RESEND', pricing_status: 'PENDING_RECONCILIATION' },
+    metadata: {
+      provider: 'RESEND',
+      pricing_status: 'PENDING_PLAN_RECONCILIATION',
+      pricing_note: 'Marginal send cost depends on the active Resend subscription/quota; zero here is not asserted as final invoice cost',
+    },
   });
 
   return NextResponse.json({ ...result, duplicate: false, mailboxHealth });
