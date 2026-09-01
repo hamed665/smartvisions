@@ -37,6 +37,7 @@ as $$
       else count(*) filter (
         where ar.lead_id = p_lead_id
           and ar.status in ('PROCESSING', 'COMPLETED')
+          and ar.trace ->> 'reasoningTier' in ('LIGHT', 'FULL')
       )
     end as lead_run_count,
     count(*) filter (
