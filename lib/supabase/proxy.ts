@@ -6,6 +6,8 @@ const SESSION_BYPASS_PATHS = new Set([
   '/api/whatsapp/webhook',
   '/api/ai/process-inbound',
   '/api/outreach/approved-send',
+  '/api/telegram/webhook',
+  '/api/telegram/notify',
 ]);
 
 export function shouldBypassSession(pathname: string) {
