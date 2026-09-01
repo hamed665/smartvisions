@@ -19,8 +19,10 @@ const token = (value: string) => clean(value).toLowerCase().replace(/[،,:؛]/g,
 export function normalizeCountryCode(value: string | undefined) {
   if (!value) return undefined;
   const normalized = token(value);
+  const alias = COUNTRY_ALIASES[normalized];
+  if (alias) return alias;
   if (/^[a-z]{2}$/.test(normalized)) return normalized.toUpperCase();
-  return COUNTRY_ALIASES[normalized];
+  return undefined;
 }
 
 function numberValue(value: string | undefined) {
