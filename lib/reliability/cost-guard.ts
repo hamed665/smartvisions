@@ -35,6 +35,13 @@ export type CostGuardState = {
   mode: BudgetMode;
 };
 
+export type AiRunQuotaDecision = {
+  allowed: boolean;
+  reason?: 'MAX_AI_RUNS_PER_LEAD' | 'DAILY_DEEP_AI_RUNS';
+  limit?: number;
+  used?: number;
+};
+
 export function evaluateBudgetMode(spendUsd: number, settings: Pick<CostGuardSettings,'monthly_total_budget_usd'|'warning_pct'|'throttle_pct'|'critical_pct'|'hard_stop_pct'>): { percentUsed: number; mode: BudgetMode } {
   const budget = Math.max(0, Number(settings.monthly_total_budget_usd));
   if (budget === 0) return { percentUsed: spendUsd > 0 ? 100 : 0, mode: spendUsd > 0 ? 'HARD_STOP' : 'NORMAL' };
@@ -60,6 +67,31 @@ export function assertPaidOperationAllowed(state: CostGuardState | null, priorit
   }
 }
 
+export function evaluateAiRunQuota(input: {
+  reasoningTier: 'ZERO_COST' | 'LIGHT' | 'FULL';
+  leadRunCount?: number | null;
+  dailyDeepRunCount: number;
+  settings: Pick<CostGuardSettings, 'max_ai_runs_per_lead' | 'daily_deep_ai_runs'>;
+}): AiRunQuotaDecision {
+  // Deterministic ZERO_COST handling does not consume provider tokens and should
+  // remain available even after a lead has reached its paid-AI allowance.
+  if (input.reasoningTier === 'ZERO_COST') return { allowed: true };
+
+  if (input.leadRunCount != null) {
+    const limit = Math.max(0, Number(input.settings.max_ai_runs_per_lead) || 0);
+    const used = Math.max(0, Math.floor(Number(input.leadRunCount) || 0));
+    if (used >= limit) return { allowed: false, reason: 'MAX_AI_RUNS_PER_LEAD', limit, used };
+  }
+
+  if (input.reasoningTier === 'FULL') {
+    const limit = Math.max(0, Number(input.settings.daily_deep_ai_runs) || 0);
+    const used = Math.max(0, Math.floor(Number(input.dailyDeepRunCount) || 0));
+    if (used >= limit) return { allowed: false, reason: 'DAILY_DEEP_AI_RUNS', limit, used };
+  }
+
+  return { allowed: true };
+}
+
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serverKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -80,7 +112,10 @@ export async function getCostGuardState(organizationId?: string): Promise<CostGu
 
   const [{ data: settingsData, error: settingsError }, { data: usageData, error: usageError }] = await Promise.all([
     supabase.from('cost_guard_settings').select('*').eq('organization_id', organizationId).maybeSingle(),
-    supabase.from('usage_events').select('provider,cost_usd').eq('organization_id', organizationId).gte('created_at', start.toISOString()),
+    supabase.rpc('get_cost_guard_monthly_usage', {
+      p_organization_id: organizationId,
+      p_start: start.toISOString(),
+    }),
   ]);
   if (settingsError) throw new Error(`cost guard settings unavailable: ${settingsError.message}`);
   if (usageError) throw new Error(`usage totals unavailable: ${usageError.message}`);
@@ -88,11 +123,11 @@ export async function getCostGuardState(organizationId?: string): Promise<CostGu
 
   const providerSpendUsd: Record<string, number> = {};
   let monthSpendUsd = 0;
-  for (const event of usageData ?? []) {
-    const cost = Number(event.cost_usd ?? 0);
+  for (const row of usageData ?? []) {
+    const cost = Math.max(0, Number(row.cost_usd ?? 0));
+    const provider = String(row.provider ?? 'OTHER').toUpperCase();
+    providerSpendUsd[provider] = cost;
     monthSpendUsd += cost;
-    const provider = String(event.provider ?? 'OTHER').toUpperCase();
-    providerSpendUsd[provider] = (providerSpendUsd[provider] ?? 0) + cost;
   }
   const settings = settingsData as CostGuardSettings;
   const { percentUsed, mode } = evaluateBudgetMode(monthSpendUsd, settings);
