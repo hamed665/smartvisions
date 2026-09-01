@@ -11,7 +11,7 @@ export type TelegramOwnerCommand =
   | { type: 'SET_PAUSE'; target: 'AGENTS' | 'EMAIL' | 'WHATSAPP'; paused: boolean }
   | { type: 'APPROVE_MESSAGE'; messageId: string }
   | { type: 'REJECT_MESSAGE'; messageId: string; reason?: string }
-  | { type: 'REVERT_LAST_CHANGE' }
+  | { type: 'REVERT_LAST_CHANGE'; targetRunId?: string }
   | { type: 'HELP' };
 
 export type TelegramMessage = {
@@ -43,6 +43,8 @@ export type CommandExecutionResult = {
   entityId?: string;
   requiresConfirmation?: boolean;
 };
+
+export type TelegramNotificationType = 'NEW_LEAD' | 'SALES_HANDOFF' | 'DISCOUNT_REQUEST' | 'CONSULTATION_REQUEST' | 'SYSTEM_ALERT';
 
 export const MUTATING_COMMANDS = new Set<TelegramOwnerCommand['type']>([
   'SET_PRICE',
