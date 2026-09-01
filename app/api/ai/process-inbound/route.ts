@@ -5,8 +5,10 @@ import type { AgentContext } from '@/lib/agents/contracts';
 import { hydrateAgentContext, type HydratedRuntimeEvidence } from '@/lib/agents/context-hydrator';
 import { deterministicAgentRuntime } from '@/lib/agents/runtime';
 import { getConfiguredAgentRuntime } from '@/lib/agents/openai-runtime';
+import { buildSelectiveRoutePlan } from '@/lib/agents/selective-routing';
 import { agentRunReplayState, normalizeIdempotencyKey } from '@/lib/agents/idempotency';
 import { queueAgentWhatsAppShadowApproval, type AgentShadowResult, type WhatsAppShadowDeliveryContext } from '@/lib/agents/shadow-delivery';
+import { evaluateAiRunQuota, getCostGuardState } from '@/lib/reliability/cost-guard';
 import { assertRuntimeControlsAllow, getRuntimeSafetyControls } from '@/lib/reliability/runtime-safety';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { notifyTelegramOwner } from '@/lib/telegram/notifications';
@@ -195,6 +197,43 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Agent context hydration failed' }, { status: 409 });
   }
 
+  const routePlan = buildSelectiveRoutePlan(effectiveContext);
+  if (routePlan.tier !== 'ZERO_COST') {
+    const dayStart = new Date();
+    dayStart.setUTCHours(0, 0, 0, 0);
+    try {
+      const [costState, quotaResult] = await Promise.all([
+        getCostGuardState(organizationId),
+        supabase.rpc('get_ai_run_quota_usage', {
+          p_organization_id: organizationId,
+          p_lead_id: effectiveContext.leadId ?? null,
+          p_day_start: dayStart.toISOString(),
+        }),
+      ]);
+      if (!costState) throw new Error('Cost Guard settings are unavailable');
+      if (quotaResult.error) throw new Error(`AI quota usage unavailable: ${quotaResult.error.message}`);
+      const quotaRow = quotaResult.data?.[0] as { lead_run_count?: number | string; daily_deep_run_count?: number | string } | undefined;
+      const quota = evaluateAiRunQuota({
+        reasoningTier: routePlan.tier,
+        leadRunCount: effectiveContext.leadId ? Number(quotaRow?.lead_run_count ?? 0) : null,
+        dailyDeepRunCount: Number(quotaRow?.daily_deep_run_count ?? 0),
+        settings: costState.settings,
+      });
+      if (!quota.allowed) {
+        return NextResponse.json({
+          error: `Paid AI run blocked by configured quota (${quota.reason})`,
+          quota,
+          reasoningTier: routePlan.tier,
+          automaticRetry: false,
+        }, { status: 429 });
+      }
+    } catch (error) {
+      return NextResponse.json({
+        error: error instanceof Error ? error.message : 'AI quota preflight unavailable; paid operation blocked',
+      }, { status: 503 });
+    }
+  }
+
   const promptVersion = maxVersion(Object.values(runtimeEvidence.promptVersions));
   const knowledgeVersion = maxVersion(Object.values(runtimeEvidence.knowledgeVersions));
 
@@ -205,7 +244,12 @@ export async function POST(request: Request) {
     input_message: effectiveContext.message,
     routed_agents: [],
     status: 'PROCESSING',
-    trace: {},
+    trace: {
+      reasoningTier: routePlan.tier,
+      routeReasons: routePlan.reasons,
+      estimatedLlmCalls: routePlan.estimatedLlmCalls,
+      quotaPreflight: routePlan.tier !== 'ZERO_COST',
+    },
     prompt_version: promptVersion,
     knowledge_version: knowledgeVersion,
     request_key: requestKey,
