@@ -131,6 +131,10 @@ export type CatalogRecommendation = {
 };
 
 export type PipelineTrace = {
+  reasoningTier?: 'ZERO_COST' | 'LIGHT' | 'FULL';
+  routeReasons?: string[];
+  estimatedLlmCalls?: number;
+  paidAgentCallsPlanned?: number;
   routedAgents: AgentName[];
   agentResults: AgentResult[];
   decision: CommercialDecision;
