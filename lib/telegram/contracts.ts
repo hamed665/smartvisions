@@ -2,9 +2,14 @@ export type TelegramCostLimitKey =
   | 'monthly_total_budget_usd'
   | 'openai_budget_usd'
   | 'google_places_budget_usd'
+  | 'email_budget_usd'
+  | 'whatsapp_budget_usd'
+  | 'daily_new_leads'
+  | 'daily_website_audits'
+  | 'daily_deep_ai_runs'
+  // Compatibility-only legacy parser keys. The live control plane rejects them.
   | 'resend_budget_usd'
   | 'meta_budget_usd'
-  | 'daily_new_leads'
   | 'daily_outreach_limit';
 
 export type TelegramMarketStyleField =
@@ -86,21 +91,5 @@ export type TelegramNotificationType =
   | 'SYSTEM_ALERT';
 
 export const MUTATING_COMMANDS = new Set<TelegramOwnerCommand['type']>([
-  'SET_PRICE',
-  'SET_DISCOUNT_POLICY',
-  'SET_MINIMUM_PRICE',
-  'SET_SERVICE_ENABLED',
-  'SET_SERVICE_OPTION',
-  'CREATE_HUNTER_CAMPAIGN',
-  'SET_MARKET_ENABLED',
-  'SET_MARKET_STYLE',
-  'SET_MARKET_SEND_WINDOW',
-  'SET_AGENT_ENABLED',
-  'SET_AGENT_THRESHOLD',
-  'SET_COST_LIMIT',
-  'ACTIVATE_KILL_SWITCH',
-  'SET_PAUSE',
-  'APPROVE_MESSAGE',
-  'REJECT_MESSAGE',
-  'REVERT_LAST_CHANGE',
+  'SET_PRICE','SET_DISCOUNT_POLICY','SET_MINIMUM_PRICE','SET_SERVICE_ENABLED','SET_SERVICE_OPTION','CREATE_HUNTER_CAMPAIGN','SET_MARKET_ENABLED','SET_MARKET_STYLE','SET_MARKET_SEND_WINDOW','SET_AGENT_ENABLED','SET_AGENT_THRESHOLD','SET_COST_LIMIT','ACTIVATE_KILL_SWITCH','SET_PAUSE','APPROVE_MESSAGE','REJECT_MESSAGE','REVERT_LAST_CHANGE',
 ]);

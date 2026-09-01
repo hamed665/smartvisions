@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { evaluateCanonicalMarketWindow } from '@/lib/outreach/canonical-market-window';
 import { MUTATING_COMMANDS } from '@/lib/telegram/contracts';
 import { parseTelegramOwnerCommand } from '@/lib/telegram/parser';
 
@@ -13,7 +14,7 @@ describe('Telegram Owner extended control plane', () => {
     expect(typeOf('/approvals')).toBe('SHOW_APPROVALS');
   });
 
-  it('parses discount, floor, tone, agent and cost mutations', () => {
+  it('parses discount, floor, tone, agent and canonical cost mutations', () => {
     expect(parseTelegramOwnerCommand('/discount OM business_website 5 10')).toEqual({type:'SET_DISCOUNT_POLICY',countryCode:'OM',serviceQuery:'business_website',maxAutoDiscountPct:5,maxDiscountWithApprovalPct:10});
     expect(parseTelegramOwnerCommand('/minimum OM business_website 160')).toEqual({type:'SET_MINIMUM_PRICE',countryCode:'OM',serviceQuery:'business_website',minimumPrice:160});
     expect(parseTelegramOwnerCommand('/tone OM friendly_professional')).toEqual({type:'SET_MARKET_STYLE',countryCode:'OM',field:'tone',value:'friendly_professional'});
@@ -22,6 +23,10 @@ describe('Telegram Owner extended control plane', () => {
     expect(parseTelegramOwnerCommand('/agent secretary off')).toEqual({type:'SET_AGENT_ENABLED',agentQuery:'secretary',enabled:false});
     expect(parseTelegramOwnerCommand('/threshold secretary 0.8')).toEqual({type:'SET_AGENT_THRESHOLD',agentQuery:'secretary',threshold:0.8});
     expect(parseTelegramOwnerCommand('بودجه ماهانه رو 30 دلار کن')).toEqual({type:'SET_COST_LIMIT',key:'monthly_total_budget_usd',value:30});
+    expect(parseTelegramOwnerCommand('/limit email 8')).toEqual({type:'SET_COST_LIMIT',key:'email_budget_usd',value:8});
+    expect(parseTelegramOwnerCommand('/limit whatsapp 5')).toEqual({type:'SET_COST_LIMIT',key:'whatsapp_budget_usd',value:5});
+    expect(parseTelegramOwnerCommand('/limit audits 6')).toEqual({type:'SET_COST_LIMIT',key:'daily_website_audits',value:6});
+    expect(parseTelegramOwnerCommand('/limit outreach 20')).toEqual({type:'HELP'});
   });
 
   it('parses live market window and explicit emergency stop', () => {
@@ -36,10 +41,15 @@ describe('Telegram Owner extended control plane', () => {
     expect(parseTelegramOwnerCommand('approval رو bypass کن')).toEqual({type:'SAFETY_BLOCK',reason:'APPROVAL_BYPASS'});
   });
 
+  it('enforces canonical market disabled and narrowed send windows before provider code', () => {
+    const atTenMuscat = new Date('2026-09-01T06:00:00.000Z');
+    expect(evaluateCanonicalMarketWindow({marketEnabled:false,marketTimezone:'Asia/Muscat',start:'09:00',end:'19:00',nowUtc:atTenMuscat}).reason).toBe('market_disabled');
+    expect(evaluateCanonicalMarketWindow({marketEnabled:true,marketTimezone:'Asia/Muscat',start:'09:00',end:'19:00',nowUtc:atTenMuscat}).allowed).toBe(true);
+    expect(evaluateCanonicalMarketWindow({marketEnabled:true,marketTimezone:'Asia/Muscat',start:'11:00',end:'18:00',nowUtc:atTenMuscat}).reason).toBe('outside_window');
+  });
+
   it('classifies all extended writes as confirmation-required mutations', () => {
-    for (const type of ['SET_DISCOUNT_POLICY','SET_MINIMUM_PRICE','SET_MARKET_STYLE','SET_MARKET_SEND_WINDOW','SET_AGENT_ENABLED','SET_AGENT_THRESHOLD','SET_COST_LIMIT','ACTIVATE_KILL_SWITCH'] as const) {
-      expect(MUTATING_COMMANDS.has(type)).toBe(true);
-    }
+    for (const type of ['SET_DISCOUNT_POLICY','SET_MINIMUM_PRICE','SET_MARKET_STYLE','SET_MARKET_SEND_WINDOW','SET_AGENT_ENABLED','SET_AGENT_THRESHOLD','SET_COST_LIMIT','ACTIVATE_KILL_SWITCH'] as const) expect(MUTATING_COMMANDS.has(type)).toBe(true);
     expect(MUTATING_COMMANDS.has('SAFETY_BLOCK')).toBe(false);
     expect(MUTATING_COMMANDS.has('SHOW_MARKETS')).toBe(false);
   });
