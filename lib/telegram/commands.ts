@@ -11,6 +11,7 @@ import {
   prepareControlMutation,
   revertTargetsControlMutation,
 } from './control-plane';
+import { normalizePersistedPreview } from './persisted-preview';
 import { assertTelegramRevertFresh } from './revert-guard';
 
 export type { ExecutedMutation, PreparedMutation } from './commands-core';
@@ -54,6 +55,12 @@ export async function executePreparedMutation(input: {
     if (await revertTargetsControlMutation(input)) return executeControlRevert(input);
     return core.executePreparedMutation(input);
   }
-  if (isControlMutation(input.command.type)) return executeControlMutation(input);
-  return core.executePreparedMutation(input);
+
+  const normalizedInput = {
+    ...input,
+    preview: normalizePersistedPreview(input.command, input.preview),
+  };
+
+  if (isControlMutation(input.command.type)) return executeControlMutation(normalizedInput);
+  return core.executePreparedMutation(normalizedInput);
 }
