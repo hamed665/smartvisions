@@ -44,7 +44,13 @@ export type CommandExecutionResult = {
   requiresConfirmation?: boolean;
 };
 
-export type TelegramNotificationType = 'NEW_LEAD' | 'SALES_HANDOFF' | 'DISCOUNT_REQUEST' | 'CONSULTATION_REQUEST' | 'SYSTEM_ALERT';
+export type TelegramNotificationType =
+  | 'NEW_LEAD'
+  | 'HOT_LEAD'
+  | 'SALES_HANDOFF'
+  | 'DISCOUNT_REQUEST'
+  | 'CONSULTATION_REQUEST'
+  | 'SYSTEM_ALERT';
 
 export const MUTATING_COMMANDS = new Set<TelegramOwnerCommand['type']>([
   'SET_PRICE',
