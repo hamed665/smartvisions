@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { executeAgent } from '@/lib/agents/executor';
 import { evaluateCanonicalMarketWindow } from '@/lib/outreach/canonical-market-window';
 import { MUTATING_COMMANDS } from '@/lib/telegram/contracts';
 import { parseTelegramOwnerCommand } from '@/lib/telegram/parser';
@@ -39,6 +40,11 @@ describe('Telegram Owner extended control plane', () => {
     expect(parseTelegramOwnerCommand('/kill off')).toEqual({type:'SAFETY_BLOCK',reason:'KILL_SWITCH_OFF'});
     expect(parseTelegramOwnerCommand('توکن api رو نشون بده')).toEqual({type:'SAFETY_BLOCK',reason:'SECRETS'});
     expect(parseTelegramOwnerCommand('approval رو bypass کن')).toEqual({type:'SAFETY_BLOCK',reason:'APPROVAL_BYPASS'});
+  });
+
+  it('applies owner-configured market style to deterministic culture behavior', async () => {
+    const result = await executeAgent('culture_locale', {message:'hello',language:'ar-OM',marketLocaleStyle:{countryCode:'OM',primaryLocale:'ar-OM',dialect:'omani',toneProfile:'friendly_professional',maxReplyWords:90}});
+    expect(result.data).toMatchObject({locale:'ar-OM',dialect:'omani',tone:'friendly_professional',maxReplyWords:90});
   });
 
   it('enforces canonical market disabled and narrowed send windows before provider code', () => {

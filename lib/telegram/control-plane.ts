@@ -12,6 +12,7 @@ const REAL_COST_KEYS = new Set<TelegramCostLimitKey>([
 const INTEGER_COST_KEYS = new Set<TelegramCostLimitKey>(['daily_new_leads','daily_website_audits','daily_deep_ai_runs']);
 const now = () => new Date().toISOString();
 const rec = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 async function audit(input: { supabase: SupabaseClient; organizationId: string; ownerUserId: string; command: TelegramOwnerCommand; entityType?: string; entityId?: string; before?: unknown; after?: unknown }) {
   const { error } = await input.supabase.from('audit_logs').insert({
@@ -32,6 +33,20 @@ async function readCostValue(supabase: SupabaseClient, organizationId: string, k
   const { data, error } = await supabase.from('cost_guard_settings').select(key).eq('organization_id', organizationId).maybeSingle();
   if (error || !data) throw new Error(`Cost Guard lookup failed: ${error?.message ?? 'not found'}`);
   return Number(rec(data)[key] ?? 0);
+}
+
+async function readPricePolicy(supabase: SupabaseClient, organizationId: string, serviceId: string, countryCode: string) {
+  const { data, error } = await supabase.from('service_prices')
+    .select('service_id,country_code,minimum_price,max_auto_discount_pct,max_discount_with_approval_pct')
+    .eq('organization_id', organizationId).eq('service_id', serviceId).eq('country_code', countryCode).maybeSingle();
+  if (error || !data) throw new Error(`Price policy lookup failed: ${error?.message ?? 'not found'}`);
+  return {
+    serviceId: String(data.service_id),
+    countryCode: String(data.country_code),
+    minimumPrice: Number(data.minimum_price ?? 0),
+    maxAutoDiscountPct: Number(data.max_auto_discount_pct ?? 0),
+    maxDiscountWithApprovalPct: Number(data.max_discount_with_approval_pct ?? 0),
+  };
 }
 
 export async function executeControlReadCommand(input: { supabase: SupabaseClient; organizationId: string; command: TelegramOwnerCommand }): Promise<CommandExecutionResult> {
@@ -62,43 +77,51 @@ export async function prepareControlMutation(input: { supabase: SupabaseClient; 
     const after = { key: command.key, value: normalizedValue };
     return { command: normalizedCommand, preview: { title:'Cost Guard limit', text:`${command.key}\nBefore: ${beforeValue}\nAfter: ${normalizedValue}`, before, after, entityType:'cost_guard_settings', entityId:input.organizationId, requiresConfirmation:true } };
   }
-  if (command.type === 'SET_MARKET_SEND_WINDOW') {
-    if (command.start < '09:00' || command.end > '19:00') throw new Error('برای Safety، Telegram فقط می‌تواند پنجره ارسال را داخل بازه سخت 09:00–19:00 محدودتر کند.');
+  if (command.type === 'SET_MARKET_SEND_WINDOW' && (command.start < '09:00' || command.end > '19:00')) {
+    throw new Error('برای Safety، Telegram فقط می‌تواند پنجره ارسال را داخل بازه سخت 09:00–19:00 محدودتر کند.');
   }
   return core.prepareControlMutation(input);
 }
 
-async function assertCostStillMatches(input: { supabase: SupabaseClient; organizationId: string; command: Extract<TelegramOwnerCommand,{type:'SET_COST_LIMIT'}>; before: unknown }) {
-  const before = rec(input.before);
-  const current = await readCostValue(input.supabase, input.organizationId, input.command.key);
-  if (Number(before.value) !== current) throw new Error('Cost Guard بعد از preview تغییر کرده؛ دوباره دستور را بفرست.');
+async function assertFreshPreview(input: { supabase: SupabaseClient; organizationId: string; command: TelegramOwnerCommand; before: unknown }) {
+  const expected = rec(input.before);
+  if (input.command.type === 'SET_COST_LIMIT') {
+    const current = await readCostValue(input.supabase, input.organizationId, input.command.key);
+    if (!same({key:input.command.key,value:current}, expected)) throw new Error('Cost Guard بعد از preview تغییر کرده؛ دوباره دستور را بفرست.');
+  } else if (input.command.type === 'SET_DISCOUNT_POLICY') {
+    const current = await readPricePolicy(input.supabase,input.organizationId,input.command.serviceQuery,input.command.countryCode);
+    const comparable = {serviceId:current.serviceId,countryCode:current.countryCode,maxAutoDiscountPct:current.maxAutoDiscountPct,maxDiscountWithApprovalPct:current.maxDiscountWithApprovalPct};
+    if (!same(comparable, expected)) throw new Error('Discount policy بعد از preview تغییر کرده؛ دوباره دستور را بفرست.');
+  } else if (input.command.type === 'SET_MINIMUM_PRICE') {
+    const current = await readPricePolicy(input.supabase,input.organizationId,input.command.serviceQuery,input.command.countryCode);
+    const comparable = {serviceId:current.serviceId,countryCode:current.countryCode,minimumPrice:current.minimumPrice};
+    if (!same(comparable, expected)) throw new Error('Price floor بعد از preview تغییر کرده؛ دوباره دستور را بفرست.');
+  }
 }
 
 export async function executeControlMutation(input: { supabase: SupabaseClient; organizationId: string; ownerUserId: string; command: TelegramOwnerCommand; preview: CommandExecutionResult }): Promise<ExecutedMutation> {
   const { supabase, organizationId, ownerUserId, command, preview } = input;
+  if (!['SET_COST_LIMIT','SET_DISCOUNT_POLICY','SET_MINIMUM_PRICE'].includes(command.type)) return core.executeControlMutation(input);
+  await assertFreshPreview({supabase,organizationId,command,before:preview.before});
+
+  let text: string;
   if (command.type === 'SET_COST_LIMIT') {
-    await assertCostStillMatches({supabase,organizationId,command,before:preview.before});
     const { error } = await supabase.from('cost_guard_settings').update({ [command.key]:command.value, updated_at:now() }).eq('organization_id',organizationId);
     if (error) throw new Error(`Cost Guard update failed: ${error.message}`);
-    const result: ExecutedMutation = { title:preview.title, text:`${command.key} روی ${command.value} تنظیم شد.`, before:preview.before, after:preview.after, entityType:preview.entityType, entityId:preview.entityId, command, reversible:true };
-    await audit({supabase,organizationId,ownerUserId,command,entityType:result.entityType,entityId:result.entityId,before:result.before,after:result.after});
-    return result;
-  }
-  if (command.type === 'SET_DISCOUNT_POLICY') {
+    text = `${command.key} روی ${command.value} تنظیم شد.`;
+  } else if (command.type === 'SET_DISCOUNT_POLICY') {
     const { error } = await supabase.from('service_prices').update({ max_auto_discount_pct:command.maxAutoDiscountPct, max_discount_with_approval_pct:command.maxDiscountWithApprovalPct }).eq('organization_id',organizationId).eq('service_id',command.serviceQuery).eq('country_code',command.countryCode);
     if (error) throw new Error(`Discount policy update failed: ${error.message}`);
-    const result: ExecutedMutation = { title:preview.title, text:`قانون تخفیف ${command.serviceQuery}/${command.countryCode} به auto ${command.maxAutoDiscountPct}% و approval ${command.maxDiscountWithApprovalPct}% تغییر کرد.`, before:preview.before, after:preview.after, entityType:preview.entityType, entityId:preview.entityId, command, reversible:true };
-    await audit({supabase,organizationId,ownerUserId,command,entityType:result.entityType,entityId:result.entityId,before:result.before,after:result.after});
-    return result;
-  }
-  if (command.type === 'SET_MINIMUM_PRICE') {
+    text = `قانون تخفیف ${command.serviceQuery}/${command.countryCode} به auto ${command.maxAutoDiscountPct}% و approval ${command.maxDiscountWithApprovalPct}% تغییر کرد.`;
+  } else {
     const { error } = await supabase.from('service_prices').update({ minimum_price:command.minimumPrice }).eq('organization_id',organizationId).eq('service_id',command.serviceQuery).eq('country_code',command.countryCode);
     if (error) throw new Error(`Minimum price update failed: ${error.message}`);
-    const result: ExecutedMutation = { title:preview.title, text:`Price floor ${command.serviceQuery}/${command.countryCode} روی ${command.minimumPrice} تنظیم شد.`, before:preview.before, after:preview.after, entityType:preview.entityType, entityId:preview.entityId, command, reversible:true };
-    await audit({supabase,organizationId,ownerUserId,command,entityType:result.entityType,entityId:result.entityId,before:result.before,after:result.after});
-    return result;
+    text = `Price floor ${command.serviceQuery}/${command.countryCode} روی ${command.minimumPrice} تنظیم شد.`;
   }
-  return core.executeControlMutation(input);
+
+  const result: ExecutedMutation = { title:preview.title, text, before:preview.before, after:preview.after, entityType:preview.entityType, entityId:preview.entityId, command, reversible:true };
+  await audit({supabase,organizationId,ownerUserId,command,entityType:result.entityType,entityId:result.entityId,before:result.before,after:result.after});
+  return result;
 }
 
 export const revertTargetsControlMutation = core.revertTargetsControlMutation;
@@ -114,13 +137,20 @@ export async function executeControlRevert(input: { supabase: SupabaseClient; or
   const journalResult = rec(data.result);
   if (journalResult.reversible !== true) throw new Error('این تغییر قابل برگشت نیست.');
   const before = rec(journalResult.before);
+  const after = rec(journalResult.after);
 
   if (original.type === 'SET_COST_LIMIT') {
     if (!REAL_COST_KEYS.has(original.key)) throw new Error('Cost Guard key قدیمی/نامعتبر است و Revert خودکار نمی‌شود.');
+    const current = await readCostValue(input.supabase,input.organizationId,original.key);
+    if (!same({key:original.key,value:current}, after)) throw new Error('مقدار فعلی با تغییر ثبت‌شده یکی نیست؛ Revert برای جلوگیری از overwrite متوقف شد.');
     const { error:e } = await input.supabase.from('cost_guard_settings').update({[original.key]:before.value,updated_at:now()}).eq('organization_id',input.organizationId); if(e)throw e;
   } else if (original.type === 'SET_DISCOUNT_POLICY') {
+    const current = await readPricePolicy(input.supabase,input.organizationId,original.serviceQuery,original.countryCode);
+    if (!same({serviceId:current.serviceId,countryCode:current.countryCode,maxAutoDiscountPct:current.maxAutoDiscountPct,maxDiscountWithApprovalPct:current.maxDiscountWithApprovalPct}, after)) throw new Error('Discount policy فعلی با تغییر ثبت‌شده یکی نیست؛ Revert متوقف شد.');
     const { error:e } = await input.supabase.from('service_prices').update({max_auto_discount_pct:before.maxAutoDiscountPct,max_discount_with_approval_pct:before.maxDiscountWithApprovalPct}).eq('organization_id',input.organizationId).eq('service_id',original.serviceQuery).eq('country_code',original.countryCode); if(e)throw e;
   } else if (original.type === 'SET_MINIMUM_PRICE') {
+    const current = await readPricePolicy(input.supabase,input.organizationId,original.serviceQuery,original.countryCode);
+    if (!same({serviceId:current.serviceId,countryCode:current.countryCode,minimumPrice:current.minimumPrice}, after)) throw new Error('Price floor فعلی با تغییر ثبت‌شده یکی نیست؛ Revert متوقف شد.');
     const { error:e } = await input.supabase.from('service_prices').update({minimum_price:before.minimumPrice}).eq('organization_id',input.organizationId).eq('service_id',original.serviceQuery).eq('country_code',original.countryCode); if(e)throw e;
   }
 
