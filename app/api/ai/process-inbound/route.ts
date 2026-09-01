@@ -9,6 +9,8 @@ import { agentRunReplayState, normalizeIdempotencyKey } from '@/lib/agents/idemp
 import { queueAgentWhatsAppShadowApproval, type AgentShadowResult, type WhatsAppShadowDeliveryContext } from '@/lib/agents/shadow-delivery';
 import { assertRuntimeControlsAllow, getRuntimeSafetyControls } from '@/lib/reliability/runtime-safety';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
+import { notifyTelegramOwner } from '@/lib/telegram/notifications';
+import { buildSalesTelegramAlert } from '@/lib/telegram/sales-alerts';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -238,6 +240,15 @@ export async function POST(request: Request) {
     }).eq('organization_id', organizationId).eq('id', claimed.id).eq('status', 'PROCESSING');
     if (completeError) {
       return NextResponse.json({ error: 'AI processing completed but result persistence requires reconciliation', runId: claimed.id, reconciliationRequired: true }, { status: 202 });
+    }
+
+    // Telegram is an owner-side operational notification only. A Telegram failure must never
+    // fail the already-completed Agent run, trigger an AI retry, or change customer delivery.
+    try {
+      const alert = buildSalesTelegramAlert({ context: effectiveContext, trace: result.trace, runId: claimed.id });
+      if (alert) await notifyTelegramOwner({ ...alert, supabase });
+    } catch {
+      // Notification journal is fail-closed/no-auto-retry; the sales run remains authoritative.
     }
 
     // The paid/AI boundary is complete before queueing. A queue failure must never turn a
