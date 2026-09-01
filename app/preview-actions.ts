@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { generateProductionAsset } from '@/lib/preview/production-service';
+import { isSiteLanguage } from '@/lib/preview/production';
 import { verifyControlledPreviewPilot } from '@/lib/preview/controlled-pilot';
 import { transitionPreview } from '@/lib/preview/persistence';
 
@@ -29,13 +30,18 @@ function payloadBusinessCategory(value: unknown) {
   return String(business.category ?? '');
 }
 
-export async function generateControlledPreviewPilot() {
+export async function generateControlledPreviewPilot(formData: FormData) {
   const ctx = await getCurrentOrganization(true);
   const db = serviceClient();
   let destination = '/preview-studio';
   let sourceLeadId: string | null = null;
+  const siteLanguageValue = String(formData.get('site_language') ?? '').trim();
 
   try {
+    if (!isSiteLanguage(siteLanguageValue)) {
+      throw new Error('Choose the customer-confirmed website language: Arabic, English, or Bilingual');
+    }
+
     const { data: pilotBusinesses, error: businessError } = await db
       .from('businesses')
       .select('id,category,leads(id,status,agent_mode)')
@@ -106,6 +112,8 @@ export async function generateControlledPreviewPilot() {
       leadId: pilotLead.id,
       explicitRequest: true,
       ownerApprovedHeavyGeneration: false,
+      siteLanguage: siteLanguageValue,
+      siteLanguageSource: 'owner',
     });
     if (!result.eligible) throw new Error(`Controlled Preview generation blocked: ${result.eligibility.reasons.join(',')}`);
 
@@ -124,6 +132,8 @@ export async function generateControlledPreviewPilot() {
         previewId: result.previewId,
         status: result.status,
         reused: result.reused,
+        siteLanguage: siteLanguageValue,
+        siteLanguageSource: 'owner',
         generationCostUsd: 0,
         providerCalls: 0,
         outboundTriggered: false,
@@ -133,7 +143,7 @@ export async function generateControlledPreviewPilot() {
     });
     if (auditError) throw new Error(`Controlled Preview audit failed: ${auditError.message}`);
 
-    destination = `/preview-studio?pilot=generated&previewId=${encodeURIComponent(result.previewId)}&previewStatus=${encodeURIComponent(result.status)}&reused=${result.reused ? '1' : '0'}`;
+    destination = `/preview-studio?pilot=generated&previewId=${encodeURIComponent(result.previewId)}&previewStatus=${encodeURIComponent(result.status)}&reused=${result.reused ? '1' : '0'}&siteLanguage=${encodeURIComponent(siteLanguageValue)}`;
   } catch (error) {
     const message = safeMessage(error);
     await db.from('audit_logs').insert({
@@ -145,6 +155,7 @@ export async function generateControlledPreviewPilot() {
       entity_id: sourceLeadId ?? ctx.organizationId,
       after_data: {
         leadId: sourceLeadId,
+        siteLanguage: isSiteLanguage(siteLanguageValue) ? siteLanguageValue : null,
         error: message,
         generationCostUsd: 0,
         providerCalls: 0,

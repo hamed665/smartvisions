@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { generatePreview } from './engine';
 import { evaluatePreviewQuality } from './quality';
+import type { SiteLanguage, SiteLanguageSource } from './types';
 import { matchPortfolio, type PortfolioItem } from '@/lib/portfolio/matcher';
 import { recordUsage } from '@/lib/reliability/cost-guard';
 import {
@@ -24,11 +25,18 @@ function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
 
+function brandHintFromPriceLevel(value: unknown) {
+  const normalized = String(value ?? '').toUpperCase();
+  return normalized.includes('EXPENSIVE') || normalized === '4' ? 'luxury premium' : undefined;
+}
+
 export async function generateProductionAsset(input: {
   organizationId: string;
   leadId: string;
   explicitRequest?: boolean;
   ownerApprovedHeavyGeneration?: boolean;
+  siteLanguage?: SiteLanguage;
+  siteLanguageSource?: SiteLanguageSource;
 }) {
   const supabase = serviceClient();
   const [{ data: lead, error: leadError }, { data: previewDirector, error: agentError }] = await Promise.all([
@@ -40,7 +48,7 @@ export async function generateProductionAsset(input: {
   if (previewDirector && !previewDirector.enabled) throw new Error('Preview Director is disabled');
 
   const [{ data: business, error: businessError }, { data: opportunity, error: opportunityError }, { data: portfolioRows, error: portfolioError }] = await Promise.all([
-    supabase.from('businesses').select('id,name,country_code,city,category,phone,international_phone,whatsapp,instagram,official_website').eq('organization_id', input.organizationId).eq('id', lead.business_id).maybeSingle(),
+    supabase.from('businesses').select('id,name,country_code,city,category,phone,international_phone,whatsapp,instagram,official_website,formatted_address,google_rating,google_user_rating_count,google_primary_type_display_name,google_price_level').eq('organization_id', input.organizationId).eq('id', lead.business_id).maybeSingle(),
     supabase.from('growth_opportunities').select('sales_lane,overall_sales_score,recommended_services,offer_bundle,recommended_angle,personalization_fingerprint,digital_presence_evidence').eq('organization_id', input.organizationId).eq('business_id', lead.business_id).maybeSingle(),
     supabase.from('portfolio_items').select('id,title,service_id,industry,country_code,approved,tags,public_url,summary').eq('organization_id', input.organizationId).eq('approved', true),
   ]);
@@ -65,6 +73,9 @@ export async function generateProductionAsset(input: {
     threshold,
   });
   if (!eligibility.eligible || !lane) return { eligible: false as const, eligibility };
+  if (lane === 'WEBSITE' && (!input.siteLanguage || !input.siteLanguageSource)) {
+    throw new Error('SITE_LANGUAGE_REQUIRED_BEFORE_WEBSITE_PREVIEW');
+  }
 
   const portfolioItems: PortfolioItem[] = (portfolioRows ?? []).map((row) => ({
     id: String(row.id),
@@ -86,8 +97,21 @@ export async function generateProductionAsset(input: {
   const brief = {
     leadId: input.leadId,
     lane,
-    business: { id: business.id, name: business.name, countryCode: business.country_code, city: business.city, category: business.category },
-    services,
+    siteLanguage: lane === 'WEBSITE' ? input.siteLanguage : null,
+    siteLanguageSource: lane === 'WEBSITE' ? input.siteLanguageSource : null,
+    business: {
+      id: business.id,
+      name: business.name,
+      countryCode: business.country_code,
+      city: business.city,
+      category: business.category,
+      categoryLabel: business.google_primary_type_display_name,
+      address: business.formatted_address,
+      rating: business.google_rating,
+      reviewCount: business.google_user_rating_count,
+    },
+    // These are Smart Visions offer recommendations, not claims about the target business's own services.
+    recommendedSmartVisionsServices: services,
     offerBundle: stringArray(opportunity.offer_bundle),
     recommendedAngle: opportunity.recommended_angle,
     fingerprint: stringArray(opportunity.personalization_fingerprint),
@@ -168,11 +192,19 @@ export async function generateProductionAsset(input: {
       businessName: business.name,
       category: business.category,
       countryCode: business.country_code,
+      siteLanguage: input.siteLanguage!,
+      languageSource: input.siteLanguageSource!,
       city: business.city,
       phone: business.international_phone || business.phone,
       whatsapp: business.whatsapp,
       instagram: business.instagram,
-      services,
+      // Never pass Growth OS sales recommendations as the prospect's own service list.
+      verifiedServices: undefined,
+      categoryLabel: business.google_primary_type_display_name,
+      address: business.formatted_address,
+      rating: business.google_rating === null ? undefined : Number(business.google_rating),
+      reviewCount: business.google_user_rating_count,
+      brandHint: brandHintFromPriceLevel(business.google_price_level),
       explicitRequest: input.explicitRequest,
       intentScore: lead.intent_score,
     });
@@ -209,6 +241,8 @@ export async function generateProductionAsset(input: {
       heavy_generation_allowed: heavyGenerationAllowed,
       portfolio_matches: portfolioMatches,
       growth_source: brief,
+      site_language: lane === 'WEBSITE' ? input.siteLanguage : null,
+      site_language_source: lane === 'WEBSITE' ? input.siteLanguageSource : null,
     },
   };
 
@@ -248,7 +282,7 @@ export async function generateProductionAsset(input: {
     organization_id: input.organizationId,
     preview_id: created.id,
     event_type: status === 'QUALITY_FAILED' ? 'QUALITY_FAILED' : 'GENERATED',
-    metadata: { lane, version, brief_hash: briefHash, generation_cost_usd: 0 },
+    metadata: { lane, version, brief_hash: briefHash, generation_cost_usd: 0, site_language: input.siteLanguage ?? null },
   });
   reconciliationRequired = reconciliationRequired || Boolean(eventError);
 
@@ -260,7 +294,7 @@ export async function generateProductionAsset(input: {
       costUsd: 0,
       units: 1,
       leadId: input.leadId,
-      metadata: { preview_id: created.id, lane, version, brief_hash: briefHash, generation_mode: 'DETERMINISTIC_PROPOSAL' },
+      metadata: { preview_id: created.id, lane, version, brief_hash: briefHash, generation_mode: 'DETERMINISTIC_PROPOSAL', site_language: input.siteLanguage ?? null },
     });
   } catch {
     reconciliationRequired = true;

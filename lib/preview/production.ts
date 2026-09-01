@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { PreviewInput } from './types';
+import type { PreviewInput, SiteLanguage, SiteLanguageSource } from './types';
 
 export type ProductionLane = 'WEBSITE' | 'MUSCAT_LOCAL_CONTENT' | 'OMAN_REMOTE_CONTENT' | 'INTERNATIONAL_AI_CONTENT';
 
@@ -14,6 +14,16 @@ export type GenerationEligibilityInput = {
 };
 
 const blockedLeadStatuses = new Set(['DO_NOT_CONTACT','LOST']);
+const siteLanguages = new Set<SiteLanguage>(['ar','en','bilingual']);
+const languageSources = new Set<SiteLanguageSource>(['customer','owner','internal_test']);
+
+export function isSiteLanguage(value: unknown): value is SiteLanguage {
+  return typeof value === 'string' && siteLanguages.has(value as SiteLanguage);
+}
+
+export function isSiteLanguageSource(value: unknown): value is SiteLanguageSource {
+  return typeof value === 'string' && languageSources.has(value as SiteLanguageSource);
+}
 
 export function isPreviewExpiredAt(expiresAt: string | Date | null | undefined, now = new Date()) {
   if (!expiresAt) return true;
@@ -64,37 +74,66 @@ export function previewBriefHash(input: Record<string, unknown>) {
   return createHash('sha256').update(stable).digest('hex');
 }
 
+function verticalForCategory(rawCategory?: string | null): PreviewInput['vertical'] {
+  const category = String(rawCategory ?? '').toLowerCase();
+  if (category.includes('dental') || category.includes('dentist')) return 'dental';
+  if (category.includes('medical') || category.includes('clinic') || category.includes('doctor') || category.includes('health')) return 'clinic';
+  if (category.includes('beauty') || category.includes('aesthetic') || category.includes('spa')) return 'beauty';
+  if (category.includes('salon') || category.includes('barber') || category.includes('hair')) return 'salon';
+  if (category.includes('restaurant') || category.includes('dining')) return 'restaurant';
+  if (category.includes('cafe') || category.includes('coffee')) return 'cafe';
+  if (category.includes('hotel') || category.includes('resort') || category.includes('hospitality')) return 'hospitality';
+  if (category.includes('pet') || category.includes('veter')) return 'pet_clinic';
+  if (category.includes('real estate') || category.includes('property')) return 'real_estate';
+  if (category.includes('auto') || category.includes('car') || category.includes('garage')) return 'automotive';
+  if (category.includes('gym') || category.includes('fitness')) return 'fitness';
+  if (category.includes('law') || category.includes('consult') || category.includes('account') || category.includes('professional')) return 'professional';
+  if (category.includes('corporate') || category.includes('business') || category.includes('agency')) return 'corporate';
+  return 'general';
+}
+
 export function buildWebsitePreviewInput(input: {
   businessName: string;
   category?: string | null;
   countryCode: string;
+  siteLanguage: SiteLanguage;
+  languageSource: SiteLanguageSource;
   city?: string | null;
   phone?: string | null;
   whatsapp?: string | null;
   instagram?: string | null;
-  services?: string[];
+  verifiedServices?: string[];
+  logoUrl?: string | null;
+  imageUrls?: string[];
+  brandHint?: string | null;
+  address?: string | null;
+  rating?: number | null;
+  reviewCount?: number | null;
+  categoryLabel?: string | null;
   explicitRequest?: boolean;
   intentScore?: number | null;
 }): PreviewInput {
-  const category = String(input.category ?? '').toLowerCase();
-  const vertical: PreviewInput['vertical'] = category.includes('dental') ? 'dental'
-    : category.includes('beauty') ? 'beauty'
-    : category.includes('salon') ? 'salon'
-    : category.includes('restaurant') ? 'restaurant'
-    : category.includes('cafe') || category.includes('coffee') ? 'cafe'
-    : category.includes('pet') || category.includes('veter') ? 'pet_clinic'
-    : category.includes('real estate') ? 'real_estate'
-    : 'general';
+  if (!isSiteLanguage(input.siteLanguage)) throw new Error('SITE_LANGUAGE_REQUIRED');
+  if (!isSiteLanguageSource(input.languageSource)) throw new Error('SITE_LANGUAGE_SOURCE_REQUIRED');
+
   return {
     businessName: input.businessName,
-    vertical,
+    vertical: verticalForCategory(input.category),
     countryCode: input.countryCode,
-    language: ['OM','AE','SA','QA'].includes(input.countryCode.toUpperCase()) ? 'ar' : 'en',
+    language: input.siteLanguage,
+    languageSource: input.languageSource,
     city: input.city ?? undefined,
     phone: input.phone ?? undefined,
     whatsapp: input.whatsapp ?? undefined,
     instagram: input.instagram ?? undefined,
-    services: input.services,
+    services: input.verifiedServices,
+    logoUrl: input.logoUrl ?? undefined,
+    imageUrls: input.imageUrls,
+    brandHint: input.brandHint ?? undefined,
+    address: input.address ?? undefined,
+    rating: input.rating ?? undefined,
+    reviewCount: input.reviewCount ?? undefined,
+    categoryLabel: input.categoryLabel ?? input.category ?? undefined,
     explicitRequest: input.explicitRequest,
     intentScore: input.intentScore ?? undefined,
   };

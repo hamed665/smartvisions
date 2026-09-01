@@ -40,10 +40,32 @@ describe('production preview planning', () => {
     expect(isPreviewExpiredAt(null, now)).toBe(true);
   });
 
-  it('builds market-appropriate website preview input from existing business facts', () => {
-    const preview = buildWebsitePreviewInput({ businessName: 'Pearl Dental', category: 'Dental Clinic', countryCode: 'OM', city: 'Muscat' });
-    expect(preview.vertical).toBe('dental');
-    expect(preview.language).toBe('ar');
+  it('uses the confirmed website language instead of inferring it from country', () => {
+    const english = buildWebsitePreviewInput({
+      businessName: 'Pearl Dental',
+      category: 'Dental Clinic',
+      countryCode: 'OM',
+      siteLanguage: 'en',
+      languageSource: 'customer',
+      city: 'Muscat',
+    });
+    const bilingual = buildWebsitePreviewInput({
+      businessName: 'Pearl Dental',
+      category: 'Dental Clinic',
+      countryCode: 'OM',
+      siteLanguage: 'bilingual',
+      languageSource: 'owner',
+      city: 'Muscat',
+    });
+    expect(english.vertical).toBe('dental');
+    expect(english.language).toBe('en');
+    expect(bilingual.language).toBe('bilingual');
+  });
+
+  it('maps broader industries to a curated customer-grade vertical', () => {
+    expect(buildWebsitePreviewInput({ businessName: 'A', category: 'Medical Clinic', countryCode: 'OM', siteLanguage: 'ar', languageSource: 'customer' }).vertical).toBe('clinic');
+    expect(buildWebsitePreviewInput({ businessName: 'B', category: 'Auto Garage', countryCode: 'OM', siteLanguage: 'en', languageSource: 'customer' }).vertical).toBe('automotive');
+    expect(buildWebsitePreviewInput({ businessName: 'C', category: 'Hotel', countryCode: 'OM', siteLanguage: 'bilingual', languageSource: 'owner' }).vertical).toBe('hospitality');
   });
 
   it('creates proposal-level content before any heavy media generation', () => {

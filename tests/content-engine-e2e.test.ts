@@ -12,7 +12,7 @@ import {
 import { nextPreviewStatus, previewPublicPath } from '@/lib/preview/lifecycle';
 
 describe('content engine controlled E2E fixtures', () => {
-  it('takes a website opportunity through proposal, quality, version identity and share lifecycle', () => {
+  it('takes a website opportunity through premium proposal, quality, version identity and share lifecycle', () => {
     const lane = normalizeProductionLane('MUSCAT_LOCAL_GROWTH', ['WEBSITE']);
     expect(lane).toBe('WEBSITE');
     const eligibility = evaluateGenerationEligibility({ leadStatus: 'QUALIFIED', opportunityScore: 82, lane });
@@ -22,16 +22,21 @@ describe('content engine controlled E2E fixtures', () => {
       businessName: 'Pearl Dental',
       category: 'Dental Clinic',
       countryCode: 'OM',
+      siteLanguage: 'bilingual',
+      languageSource: 'customer',
       city: 'Muscat',
       whatsapp: '+96890000000',
-      services: ['Dental Cleaning', 'General Dentistry'],
+      verifiedServices: ['Dental Cleaning', 'General Dentistry'],
       intentScore: 72,
     });
     const preview = generatePreview(input);
     const quality = evaluatePreviewQuality(preview);
     expect(quality.passed).toBe(true);
+    expect(preview.design.referenceYear).toBe(2026);
+    expect(preview.availableLocales).toEqual(['en', 'ar']);
+    expect(preview.templateId).not.toBe('general-modern-v1');
 
-    const briefHash = previewBriefHash({ lane, business: { name: 'Pearl Dental', city: 'Muscat' }, services: input.services });
+    const briefHash = previewBriefHash({ lane, siteLanguage: input.language, business: { name: 'Pearl Dental', city: 'Muscat' }, services: input.services });
     expect(briefHash).toHaveLength(64);
     expect(nextPreviewStatus('GENERATED', 'APPROVE')).toBe('APPROVED');
     expect(nextPreviewStatus('APPROVED', 'SEND')).toBe('SENT');
