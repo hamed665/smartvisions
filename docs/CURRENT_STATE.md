@@ -1,8 +1,8 @@
 # Smart Visions Growth OS — Current Production State
 
-**Reconciled:** 2026-08-31 (Oman, UTC+4)
+**Reconciled:** 2026-09-02 (Oman, UTC+4)
 
-This is the operational handoff. Production evidence and current `main` override older planning text. Preserve the existing Control Center and extend only verified gaps.
+This is the operational handoff and the first document to read before changing Growth OS. Verified Production evidence and current `main` override older planning text. Preserve the existing architecture and extend only proven gaps.
 
 ## Production identity
 
@@ -10,33 +10,44 @@ This is the operational handoff. Production evidence and current `main` override
 - Branch: `main`
 - Production URL: `https://smartvisions.vercel.app`
 - Supabase project: `pkypexzpyfbikdnkrzvw`
-- Current production main: `227f0d4948ba5512751d1b98d2603e4717f509a6` — merged PR #76
-- Current Vercel production deployment: `dpl_4FPTwhW9uTr63FNLwkvKxhcDQ9f1` — READY, target `production`, alias `smartvisions.vercel.app`
+- Current production main: `369d229612dac8a1d4f76d76a6bd643bbf1121f8` — merged PR #88
+- Current Vercel production deployment: `dpl_CkGxRWZYkjCbYK49wxH1PgGnaHUt` — READY, target `production`, canonical alias `smartvisions.vercel.app`, no alias error
+- Master Tracker: GitHub Issue #18
 
-## Protection rules
+## Non-negotiable protection rules
 
 - Shadow Mode remains ON.
 - Global kill switch remains OFF.
 - Agents pause remains OFF.
+- Email pause remains OFF.
 - WhatsApp AI pause remains OFF.
-- Do not create parallel CRM, Lead, Conversation, Pricing, Cost Guard, Integration, Agent, Preview or Catalog subsystems.
-- Do not repeat paid smoke tests for behavior already proven by durable production evidence.
+- Do not create parallel CRM, Lead, Conversation, Pricing, Cost Guard, Integration, Agent, Preview, Catalog or notification subsystems.
+- Do not repeat paid smoke tests when durable Production evidence already proves the behavior.
+- Deterministic logic/cached evidence must run before paid AI/provider work where possible.
+- A successful provider call must never be blindly retried because local persistence failed.
+- No broad autonomous prospecting until the remaining behavior gates below are explicitly closed.
 
-## Completed production hardening / verification sequence
+## Recent production closure sequence
 
-The existing V1 architecture remains canonical. Recent production closure milestones include:
+The V1 foundation remains canonical. The most relevant recent milestones are:
 
 - #55–#68: WhatsApp Catalog, Agent recommendation, Shadow Approval, inbound idempotency, controlled pilot, Approved Send and production evidence reconciliation.
-- #69: Email inbound partial-index/idempotency hardening.
-- #70: branded Email production evidence reconciliation.
-- #71: controlled WhatsApp Voice production pilot.
-- #72: least-required Voice transcription service-role grants restored.
-- #73: Preview production readiness, grants, stale identity and expiry hardening.
-- #74: controlled Preview production pilot and terminal lifecycle event alignment.
-- #75: tokenized `/p/[token]` Preview routes made genuinely accessible without an operator session.
-- #76: public Preview isolated from the internal Control Center shell/navigation.
+- #69–#70: Email inbound idempotency/hardening and branded Resend production reconciliation.
+- #71–#72: controlled WhatsApp Voice production pilot and least-required Voice transcription grants.
+- #73–#76: Preview production readiness, controlled pilot, public-token access and isolation from internal Control Center navigation.
+- #78: premium mobile-first 2026 Preview path.
+- #79: human multi-agent sales consensus, conversation memory and specialist-to-orchestrator/secretary collaboration.
+- #80: Telegram Owner Assistant and typed command journal.
+- #81: complete Telegram Lead alert context, including first-class HOT_LEAD and canonical Lead/service/pricing/WhatsApp context.
+- #82: Telegram runtime read grants restored after least-privilege hardening.
+- #83: Telegram owner control plane completed.
+- #84: Telegram confirmation comparison made JSONB-order safe.
+- #85: AI cost-efficiency hardening, selective paid-agent routing, context/output/reasoning controls and current OpenAI pricing/cached-input accounting.
+- #86: Cost Guard aggregation moved into PostgreSQL and existing paid-AI/deep-run quotas made real.
+- #87: provider cost truth added so provisional `$0`/reserve values cannot masquerade as final provider invoices.
+- #88: atomic pre-provider Cost Guard reservations for paid OpenAI Agent and paid Google Places calls, plus explicit least-privilege `usage_events` grants.
 
-All merged code PRs above were merged only after exact-head lint, typecheck, tests and build were green.
+All code PRs above were merged only after exact-head lint, typecheck, tests and build were green. PR #88 additionally had zero unresolved GitHub/Vercel review threads, DB-only reservation proof, Production migration verification and READY deployment proof.
 
 ## Current verified provider state
 
@@ -44,9 +55,14 @@ All merged code PRs above were merged only after exact-head lint, typecheck, tes
 - `OPENAI / AI`: CONNECTED, enabled
 - `META / WHATSAPP`: CONNECTED, enabled
 - `EMAIL_PROVIDER / EMAIL`: CONNECTED, enabled
-- `CRAWL4AI / AUDIT`: NOT_CONFIGURED, disabled, optional for V1 while deterministic audit remains sufficient
+- WhatsApp Voice transcription: production-proven
+- Preview public delivery: production-proven
+- Telegram command webhook/control plane: production-proven for real owner commands
+- `CRAWL4AI / AUDIT`: NOT_CONFIGURED, disabled, optional while deterministic audit is sufficient
 - `META / INSTAGRAM`: NOT_CONFIGURED, disabled, intentionally deferred
 - `REDIS / QUEUE`: NOT_CONFIGURED, disabled, optional
+
+Provider status must not be upgraded merely because a secret exists. Durable success evidence remains authoritative.
 
 ## WhatsApp Catalog E2E — PRODUCTION VERIFIED
 
@@ -55,10 +71,6 @@ Verified controlled path:
 `real inbound → linked Lead/Conversation → Agent → deterministic Catalog recommendation → Shadow Approval → owner approval → canonical Approved Send → Meta product message → SENT → DELIVERED → READ`
 
 Canonical Catalog ID: `1773319100642340`.
-
-Verified website Content ID: `SV-WEB-001`.
-
-No duplicate provider send occurred and Shadow Mode remained ON throughout.
 
 Current Catalog Content IDs:
 
@@ -69,136 +81,112 @@ Current Catalog Content IDs:
 - `SV-AI-AGENT-001` — AI Agents
 - `SV-SM-001` — Social Media Management
 
+No duplicate provider send occurred and Shadow Mode remained ON throughout the proof.
+
 ## Email / Resend — OUTBOUND + BRANDED INBOUND PRODUCTION VERIFIED
 
 Provider: Resend.
 
-### Outbound
+Verified outbound:
 
-- Sender: `hello@smartvisionsai.com`
-- durable `email.sent` and `email.delivered` evidence exists
-- mailbox/provider integration is CONNECTED and enabled
+- sender `hello@smartvisionsai.com`
+- durable `email.sent` and `email.delivered` evidence
+- provider/mailbox integration CONNECTED and enabled
 
-### Receiving
-
-- domain: `smartvisionsai.com`
-- DNS provider: Cloudflare
-- Receiving region: `ap-northeast-1`
-- root MX: `@ → inbound-smtp.ap-northeast-1.amazonaws.com`, priority `10`
-- Receiving state: Verified
-- DKIM/SPF remain Verified
-- DMARC exists as `v=DMARC1; p=none;`
-- webhook: `https://smartvisions.vercel.app/api/email/webhook`
-
-Real branded inbound proof:
+Verified inbound:
 
 `Gmail → hello@smartvisionsai.com → Resend Receiving → signed email.received → content retrieval → exact INTERNAL_TEST Business/Lead match → EMAIL conversation → inbound outreach_messages → Lead REPLIED`
 
-The controlled inbound persisted exactly once. Email transport is green.
+The controlled inbound persisted exactly once.
 
-### Known Email intelligence distinction
-
-The provider webhook intentionally does not directly invoke paid AI because provider retries must not duplicate paid Agent calls. Email transport success therefore does not prove multi-turn Agent intelligence. Future completion must reuse the existing idempotent `agent_runs`, conversation intelligence and Shadow Approval primitives through a controlled boundary.
+Important distinction: the provider webhook deliberately does not invoke paid AI directly because provider retries must not duplicate Agent calls. Email transport is green; broad autonomous Email conversation behavior still requires the Shadow Mode behavior scenarios below.
 
 ## WhatsApp Voice — PRODUCTION VERIFIED
 
-A real WhatsApp voice note from the linked INTERNAL_TEST contact was received through Meta and transcribed through the existing OpenAI Voice path.
+A real WhatsApp voice note from the linked INTERNAL_TEST contact was downloaded from Meta and transcribed once through OpenAI.
 
-Real transcript:
+Durable evidence includes:
 
-`I need a website for my clinic. Can you show me your website services?`
-
-Evidence:
-
-- real Meta `provider_message_id` and `media_id`
-- exactly one logical `voice_transcriptions` row
-- model: `gpt-4o-mini-transcribe`
-- status: `SUCCEEDED`
-- one paid OpenAI Voice usage event for the first transcription
-- controlled accounting estimate recorded at `$0.009`
-- second identical logical request returned the cached transcription with `cached=true` and `openAiCalls=0`
-- no second OpenAI usage/cost event was created
-- no outbound message was triggered
+- real Meta provider message/media identity
+- one logical `voice_transcriptions` row
+- model `gpt-4o-mini-transcribe`
+- status `SUCCEEDED`
+- one paid OpenAI Voice usage event for the first logical transcription
+- repeated identical logical request returned cached transcription with `openAiCalls=0`
+- no second usage/cost event
+- no outbound message triggered
 - Shadow Mode remained ON
 
-The Voice path is green, including cache/idempotency proof.
+Voice already has cache/idempotency and crash-recovery semantics. PR #88 intentionally did not mix Voice into the new atomic pre-call reservation mechanism; this is a bounded hardening option before larger concurrency, not a reason to rebuild the Voice path.
 
 ## Preview E2E — PRODUCTION VERIFIED
-
-Controlled Preview ID: `9f962982-a25d-4d66-8f80-3fc4c9791948`.
-
-Public token: `dcf27c1b-cffe-4e0d-affe-df234ce0bb6d`.
-
-Linked evidence uses the same real INTERNAL_TEST WhatsApp voice Lead and Website intent.
 
 Verified lifecycle:
 
 `real voice Website request → deterministic zero-provider-cost Preview → GENERATED → owner APPROVED → controlled internal share → SENT → public token view → VIEWED`
 
-Evidence:
+Evidence includes quality `100/100`, zero provider calls for generation/share, zero generation cost, single lifecycle events and public unauthenticated access without exposing the internal Control Center shell.
 
-- Quality: `100/100`
-- generation cost: `0`
-- provider calls during Preview generation/share: `0`
-- outbound triggered: `false`
-- `GENERATED` event count: 1
-- `APPROVED` event count: 1
-- `SENT` event count: 1
-- `VIEWED` event count: 1
-- repeated public reads do not create duplicate `VIEWED` events
-- Preview remains `VIEWED`
-- Shadow Mode remained ON
-- no outbound message was created after Preview generation
+Do not create a second Preview/content system.
 
-### Public Preview boundary hardening
+## Multi-Agent sales intelligence — CURRENT TRUTH
 
-The first authenticated owner view exposed two real launch bugs that were fixed before calling the gate complete:
+The Agent architecture is canonical and should not be replaced.
 
-1. The global Supabase session proxy redirected unauthenticated `/p/[token]` visitors to `/login`. PR #75 now permits only tokenized `/p/...` public Preview routes to bypass operator session enforcement while `/preview-studio`, CRM and other operator routes remain protected.
-2. The public Preview still inherited the internal Control Center sidebar/navigation. PR #76 isolates `/p/...` from the operator AppShell.
+Current runtime wiring now hydrates, before the paid boundary:
 
-Unauthenticated production fetch now returns HTTP 200 with the Preview content and no internal Control Center sidebar/navigation. The public Preview gate is green.
+- the authoritative Lead/Conversation;
+- up to 14 recent inbound/outbound conversation messages;
+- conversation summary/stage/mode/language/dialect;
+- active `knowledge_versions`;
+- active `prompt_versions`;
+- per-Agent settings/model/confidence/config;
+- enabled canonical Services;
+- market-specific canonical `service_prices` including floor/discount boundaries;
+- market locale/tone profile;
+- approved evidence/portfolio context passed through the existing Agent contract.
 
-## Agent / Knowledge intelligence status
+Specialist outputs feed the real Orchestrator. The Secretary reads specialist consensus, Orchestrator decision, conversation memory and canonical service knowledge. The Relevance Checker evaluates the actual proposed reply rather than only the inbound message.
 
-The multi-agent architecture exists and remains the foundation. Do not build another Agent framework.
+### Current Production data gap
 
-Known quality gaps before broad autonomous advisory conversations:
+The runtime wiring is no longer the blocker. Production currently has:
 
-- `/api/ai/process-inbound` does not yet fully hydrate recent conversation history by itself.
-- Knowledge Base UI/versioning exists, but Production has no complete active service-knowledge corpus and runtime does not yet consume `knowledge_versions` as canonical service knowledge.
-- Agent prompt/version controls exist in the Control Center, but current OpenAI instructions are still primarily code-level rather than active DB prompt versions.
-- structured Services/Pricing and the WhatsApp Catalog are not yet fully reconciled as one commercial source of truth.
-- natural Smart Visions brand voice needs explicit runtime examples/rules before broad autonomous sales use.
+- active Knowledge versions: `0`
+- active Prompt versions: `0`
+- enabled Services: `6`
+- service price rows: `36`
+- locale profiles: `6`
 
-These are runtime-wiring/knowledge tasks, not permission to redesign the system.
+Therefore Services/Pricing/Locale are live canonical data, while optional owner-maintained Knowledge and Prompt corpora are currently empty. Safe code-level Agent instructions remain the fallback.
 
-## Hunter / Instagram status
+Next intelligence work should populate only genuinely useful, non-duplicative Knowledge/brand guidance. Do not copy pricing into Knowledge, and do not create a second prompt framework.
 
-Business Hunter remains intact and must not be rebuilt.
+## Selective AI routing / token-efficiency — PRODUCTION
 
-Canonical acquisition behavior still includes:
+PR #85 established the intended paid boundary:
 
-- Google Places IDs-first discovery
-- dedupe and minimum qualification
-- no standalone website → strong Website opportunity
-- social/contact-only URL without standalone site → priority Website opportunity
-- standalone website → low Website-opportunity score while other growth routes may remain valid
-- Muscat/Oman/international lane routing
-- no automatic outreach from qualification itself
+- `ZERO_COST`: zero paid Agent calls.
+- `LIGHT`: one paid Secretary call for routine replies.
+- `FULL`: deterministic specialists still contribute, but only specialists that materially need model reasoning are paid; Orchestrator/Secretary and high-risk relevance/evidence checks remain where justified.
+- Typical complex FULL work is roughly 3–6 paid calls instead of paying the entire 7–10 Agent committee.
+- context history limits are enforced in the actual Responses payload.
+- task-specific output ceilings and GPT-5 reasoning effort are explicit.
+- cached input tokens are accounted separately.
+- configured per-Agent model selection is honored.
 
-Instagram is not currently a production Hunter provider. `META / INSTAGRAM` remains NOT_CONFIGURED and there is no production Instagram monitoring/cold-DM engine. Any later permitted Instagram integration must feed the existing Hunter/Lead/Conversation/Cost Guard model rather than create a second system.
+Do not optimize cost by removing evidence/pricing/handoff safety. The objective is fewer unnecessary calls, not cheaper bad decisions.
 
-## Cost Guard
+## Cost Guard / accounting — PRODUCTION
 
-Canonical monthly budget remains:
+Canonical monthly guardrails remain:
 
-- total: `$25`
-- OpenAI: `$10`
-- Google Places: `$5`
-- Email: `$4`
-- WhatsApp: `$3`
-- reserve: `$3`
+- total `$25`
+- OpenAI `$10`
+- Google Places `$5`
+- Email `$4`
+- WhatsApp `$3`
+- reserve `$3`
 - warning / throttle / critical / hard-stop: `70 / 85 / 95 / 100%`
 - daily new leads: `50`
 - daily website audits: `15`
@@ -207,19 +195,97 @@ Canonical monthly budget remains:
 - max voice seconds: `180`
 - max automatic retries: `1`
 
-## Remaining launch gates
+Current hardening:
 
-Do not disable Shadow Mode and do not begin broad autonomous prospecting yet.
+- monthly provider totals are aggregated in PostgreSQL rather than downloading the month's usage history for each serverless preflight;
+- `max_ai_runs_per_lead` is enforced for paid LIGHT/FULL AI work;
+- `daily_deep_ai_runs` is enforced for FULL reasoning;
+- ZERO_COST deterministic work remains available without consuming paid-AI quota;
+- OpenAI usage uses current official model pricing and cached-input accounting;
+- Dashboard distinguishes reconciled/token-metered, conservative reserve, pending reconciliation and legacy/unclassified records;
+- paid OpenAI Agent + paid Google Places work reserves budget atomically in canonical `usage_events` before the provider call;
+- successful calls settle that same row, avoiding double accounting;
+- network/5xx ambiguity remains conservatively counted and becomes reconciliation-required rather than disappearing after a timeout;
+- no active/stale reservation remained after the PR #88 DB-only verification transaction.
 
-Provider connectivity for Google Places, OpenAI, WhatsApp, Email, Voice and Preview is now production-proven. The remaining launch work is behavior/policy evidence rather than reconnecting providers.
+### `usage_events` least privilege
 
-Prioritized next work:
+Production verification exposed older broad/default grants and PR #88 explicitly corrected them:
 
-1. verify the Project Hunter source inventory uses only public/official/licensed/permitted sources actually intended for V1; do not add a parallel lead system;
-2. run the controlled Shadow Mode scenarios using test contacts only: positive reply, no reply/follow-up, objection, DNC/unsubscribe and human takeover;
-3. prove follow-up cancellation with an actual pending follow-up, not a synthetic claim;
-4. verify DNC/human takeover/global kill/local-time/commercial-price boundaries remain fail-closed in the full path;
-5. close the Agent intelligence gaps needed before broad autonomous advice: conversation hydration, Knowledge Base runtime wiring, prompt/settings runtime wiring, service source-of-truth reconciliation and natural brand voice;
-6. only after the gates are green, make an explicit owner decision on a tiny Oman pilot and permitted automation level.
+- authenticated: SELECT + INSERT only; no table UPDATE/DELETE/TRUNCATE;
+- service_role: SELECT + INSERT, no table-wide UPDATE/DELETE/TRUNCATE;
+- service_role UPDATE only on `cost_usd`, `input_tokens`, `output_tokens`, `units`, `metadata`;
+- service_role cannot mutate provider identity;
+- reservation/finalization RPC execute: service_role only; authenticated/anon denied.
 
-Crawl4AI, Redis and Instagram are not current V1 launch blockers unless the owner explicitly chooses a V1 use case that requires them.
+## Telegram Owner Assistant — CURRENT PRODUCTION EVIDENCE
+
+Telegram is no longer merely code/deployment-ready. Real owner command journal evidence exists.
+
+Production journal currently contains successful executions for read/control flows including:
+
+- status
+- services
+- pricing
+- leads
+- markets
+- budget
+- help
+- reversible market-style mutation
+- confirmation callback
+- revert-last-change
+
+The stale-preview/changed-state confirmation path also failed closed as designed. An earlier status lookup failure is superseded by a later successful `SHOW_STATUS` run.
+
+### Telegram gap still not proven
+
+`telegram_notification_events` currently has `0` rows. Therefore do **not** claim real Production E2E yet for outbound owner alerts such as:
+
+- New Lead
+- Hot Lead
+- Discount request
+- Consultation request
+- Human handoff
+
+The alert code/context is implemented, but the real Telegram notification send/journal path still needs one controlled proof without manufacturing a fake customer event.
+
+## Business Hunter — CURRENT TRUTH
+
+Business Hunter remains intact and must not be rebuilt.
+
+Canonical behavior:
+
+- Google Places IDs-first discovery;
+- dedupe/minimum qualification before paid enrichment;
+- paid Details only when value justifies it;
+- standalone website absence/social-only contact can strengthen Website opportunity;
+- having a website does not eliminate other growth/content opportunities;
+- Muscat/Oman/international routing remains canonical;
+- qualification itself does not trigger outreach;
+- paid Google calls now atomically reserve Cost Guard budget before provider invocation.
+
+Project/marketplace Hunter remains a future source-expansion lane only if sources are public/official/licensed/permitted and feed the existing Lead/Intent model. No second CRM.
+
+Instagram remains deferred and is not a V1 launch blocker.
+
+## Remaining launch gates — prioritized
+
+Do not disable Shadow Mode and do not start broad autonomous prospecting yet.
+
+1. **Knowledge/brand intelligence:** create a small, reviewed active Knowledge corpus for Smart Visions service/brand/process guidance that is not already canonical in Services/Pricing/Locale. Add active Prompt versions only where owner-tunable behavior adds real value over hard code-level safety rules.
+2. **Telegram owner alerts:** produce one controlled real notification-path proof and then cover New Lead / Hot Lead / Discount / Consultation / Human Handoff alert behavior without triggering customer outreach.
+3. **Shadow Mode behavior scenarios:** using test/internal contacts only, prove positive reply, objection, no reply/follow-up, DNC/unsubscribe and human takeover.
+4. **Follow-up cancellation:** prove cancellation with an actual pending follow-up rather than a synthetic state claim.
+5. **Full-path fail-closed checks:** DNC, human takeover, global kill, local time and commercial-price boundaries must remain authoritative through the real path.
+6. **Voice concurrency decision:** before materially higher concurrency, either extend the atomic reservation primitive to Voice with its existing post-provider reconciliation semantics or document why the existing single-call/cache boundary plus small pilot volume is sufficient.
+7. **Tiny Oman pilot:** only after the gates above are green, make an explicit owner decision on permitted automation level and tiny volume. Scale only from measured outcomes.
+
+Crawl4AI, Redis and Instagram are not current launch blockers unless a measured use case proves otherwise.
+
+## Definition of next clean work
+
+Prefer evidence over architecture tourism:
+
+`current canonical data → deterministic/cache gate → Cost Guard → minimum paid reasoning/provider work → Shadow Approval/control → durable outcome evidence → only then tune/scale`
+
+If a future chat proposes rebuilding Hunter, adding another Agent framework, duplicating pricing/knowledge, running paid smoke tests for already-proven paths, or disabling Shadow Mode before behavior proof, stop and reconcile against this document and Issue #18 first.
