@@ -11,7 +11,7 @@ import {
   prepareControlMutation,
   revertTargetsControlMutation,
 } from './control-plane';
-import { assertControlRevertFresh } from './revert-guard';
+import { assertTelegramRevertFresh } from './revert-guard';
 
 export type { ExecutedMutation, PreparedMutation } from './commands-core';
 export { isSafeServiceOptionKey } from './commands-core';
@@ -44,14 +44,15 @@ export async function executePreparedMutation(input: {
   command: TelegramOwnerCommand;
   preview: CommandExecutionResult;
 }): Promise<ExecutedMutation> {
-  if (input.command.type === 'REVERT_LAST_CHANGE' && await revertTargetsControlMutation(input)) {
+  if (input.command.type === 'REVERT_LAST_CHANGE') {
     if (!input.command.targetRunId) throw new Error('Revert target is missing');
-    await assertControlRevertFresh({
+    await assertTelegramRevertFresh({
       supabase: input.supabase,
       organizationId: input.organizationId,
       targetRunId: input.command.targetRunId,
     });
-    return executeControlRevert(input);
+    if (await revertTargetsControlMutation(input)) return executeControlRevert(input);
+    return core.executePreparedMutation(input);
   }
   if (isControlMutation(input.command.type)) return executeControlMutation(input);
   return core.executePreparedMutation(input);
