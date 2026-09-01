@@ -28,18 +28,31 @@ export default async function CostUsagePage() {
   const editable = role === 'OWNER';
   const campaignNames=new Map((campaigns??[]).map(c=>[String(c.id),String(c.name)]));
   const topEntries=(record:Record<string,number>,limit=8)=>Object.entries(record).sort((a,b)=>b[1]-a[1]).slice(0,limit);
+  const pendingProviders=topEntries(analytics.costQuality.pendingByProvider);
 
   return <div>
     <div className="headerRow"><div><h1>Cost & Usage</h1><p className="muted">Canonical budget guard, provider/operation attribution, outcome cost and anomaly visibility.</p></div><span className={`status ${mode === 'HARD_STOP' || mode === 'CRITICAL' ? 'dangerStatus' : ''}`}>{mode}</span></div>
 
-    {(analytics.anomalies.spendSpike||analytics.anomalies.noOutcomeSpend)?<section className="panel dangerPanel"><h2>Cost anomaly warning</h2>{analytics.anomalies.spendSpike?<p className="muted">Today spend ${analytics.anomalies.todaySpend.toFixed(2)} is above the configured spend-pace tolerance derived from your monthly budget and warning/hard-stop thresholds.</p>:null}{analytics.anomalies.noOutcomeSpend?<p className="muted">Paid usage exists this month but no lead has reached a qualified state yet. Review acquisition quality before increasing spend.</p>:null}</section>:null}
+    {(analytics.anomalies.spendSpike||analytics.anomalies.noOutcomeSpend)?<section className="panel dangerPanel"><h2>Cost anomaly warning</h2>{analytics.anomalies.spendSpike?<p className="muted">Today recorded spend ${analytics.anomalies.todaySpend.toFixed(2)} is above the configured spend-pace tolerance derived from your monthly budget and warning/hard-stop thresholds.</p>:null}{analytics.anomalies.noOutcomeSpend?<p className="muted">Recorded paid usage exists this month but no lead has reached a qualified state yet. Review acquisition quality before increasing spend.</p>:null}</section>:null}
 
     <section className="grid">
-      <div className="card"><span className="muted">Month spend</span><div className="value">${analytics.totalSpend.toFixed(2)}</div><span className="muted smallText">{percentUsed.toFixed(1)}% of ${Number(s.monthly_total_budget_usd).toFixed(2)}</span></div>
+      <div className="card"><span className="muted">Recorded spend</span><div className="value">${analytics.totalSpend.toFixed(2)}</div><span className="muted smallText">{percentUsed.toFixed(1)}% of ${Number(s.monthly_total_budget_usd).toFixed(2)} guardrail</span></div>
       <div className="card"><span className="muted">Cost / Qualified</span><div className="value">{analytics.costPer.qualified===null?'—':`$${analytics.costPer.qualified.toFixed(2)}`}</div><span className="muted smallText">{analytics.counts.qualified} qualified+</span></div>
       <div className="card"><span className="muted">Cost / Reply</span><div className="value">{analytics.costPer.replied===null?'—':`$${analytics.costPer.replied.toFixed(2)}`}</div><span className="muted smallText">{analytics.counts.replied} replied+</span></div>
       <div className="card"><span className="muted">Cost / Won</span><div className="value">{analytics.costPer.won===null?'—':`$${analytics.costPer.won.toFixed(2)}`}</div><span className="muted smallText">{analytics.counts.won} won</span></div>
       <div className="card"><span className="muted">AI tokens</span><div className="value">{totalTokens.toLocaleString()}</div><span className="muted smallText">metered this month</span></div>
+    </section>
+
+    <section className="panel">
+      <h2>Cost data quality</h2>
+      <p className="muted">Recorded spend is the Cost Guard source of truth, but not every provider charge is immediately final. Pending events stay visibly pending instead of being presented as a fake $0 bill.</p>
+      <div className="settingsList">
+        <div className="settingsRow"><strong>Reconciled / token-metered</strong><span>{analytics.costQuality.reconciledEvents} events</span></div>
+        <div className="settingsRow"><strong>Conservative reserves</strong><span>{analytics.costQuality.conservativeEvents} events · ${analytics.costQuality.conservativeSpend.toFixed(4)}</span></div>
+        <div className="settingsRow"><strong>Pending provider reconciliation</strong><span>{analytics.costQuality.pendingEvents} events · {analytics.costQuality.pendingUnits} units</span></div>
+        <div className="settingsRow"><strong>Legacy / unclassified</strong><span>{analytics.costQuality.unclassifiedEvents} events</span></div>
+      </div>
+      {pendingProviders.length?<div className="settingsList">{pendingProviders.map(([provider,count])=><div className="settingsRow" key={provider}><strong>{provider}</strong><span>{count} pending events</span></div>)}</div>:<p className="muted">No current provider event is waiting for pricing reconciliation.</p>}
     </section>
 
     <section className="twoCol"><div className="panel"><h2>Spend by provider</h2><div className="settingsList">{topEntries(analytics.providerSpend).map(([key,value])=><div className="settingsRow" key={key}><strong>{key}</strong><span>${value.toFixed(4)}</span></div>)}</div></div><div className="panel"><h2>Spend by operation</h2><div className="settingsList">{topEntries(analytics.operationSpend).map(([key,value])=><div className="settingsRow" key={key}><strong>{key}</strong><span>${value.toFixed(4)}</span></div>)}</div></div></section>
