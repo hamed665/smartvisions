@@ -87,6 +87,17 @@ export type ServiceKnowledgeSnapshot = {
   };
 };
 
+export type MarketLocaleStyleSnapshot = {
+  countryCode: string;
+  primaryLocale: string;
+  fallbackLocale?: string;
+  dialect?: string;
+  toneProfile?: string;
+  dialectIntensity?: number;
+  maxFirstTouchWords?: number;
+  maxReplyWords?: number;
+};
+
 export type AgentCollaboration = {
   specialistResults?: AgentResult[];
   orchestratorResult?: AgentResult | null;
@@ -102,6 +113,7 @@ export type AgentContext = {
   countryCode?: string;
   language?: string;
   dialect?: string;
+  marketLocaleStyle?: MarketLocaleStyleSnapshot;
   industry?: string;
   message: string;
   conversationSummary?: string;
