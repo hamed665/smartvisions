@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { processInboundMessage } from '@/lib/agents/pipeline';
 import type { AgentContext } from '@/lib/agents/contracts';
+import { hydrateAgentContext, type HydratedRuntimeEvidence } from '@/lib/agents/context-hydrator';
 import { deterministicAgentRuntime } from '@/lib/agents/runtime';
 import { getConfiguredAgentRuntime } from '@/lib/agents/openai-runtime';
 import { agentRunReplayState, normalizeIdempotencyKey } from '@/lib/agents/idempotency';
@@ -88,6 +89,11 @@ function isAgentShadowResult(value: unknown): value is AgentShadowResult {
   );
 }
 
+function maxVersion(values: Array<number | undefined>) {
+  const usable = values.filter((value): value is number => Number.isFinite(value) && Number(value) > 0);
+  return usable.length ? Math.max(...usable) : null;
+}
+
 export async function POST(request: Request) {
   const authError = requireInternalApiKey(request);
   if (authError) return authError;
@@ -116,6 +122,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'AI runtime controls blocked processing' }, { status: 423 });
   }
   const trustedContext: AgentContext = { ...body.context, shadowMode: controls.shadow_mode };
+  let effectiveContext = trustedContext;
 
   let deliveryContext: WhatsAppShadowDeliveryContext | null;
   try {
@@ -136,7 +143,7 @@ export async function POST(request: Request) {
     }
     try {
       return await queueAgentWhatsAppShadowApproval({
-        context: trustedContext,
+        context: effectiveContext,
         result,
         deliveryContext,
         requestKey,
@@ -173,13 +180,32 @@ export async function POST(request: Request) {
   if (existingError) return NextResponse.json({ error: `Agent run lookup failed: ${existingError.message}` }, { status: 500 });
   if (existing) return (await respondExisting(existing))!;
 
+  let runtimeEvidence: HydratedRuntimeEvidence;
+  try {
+    const hydrated = await hydrateAgentContext({
+      supabase,
+      context: trustedContext,
+      trustedConversationId: deliveryContext?.conversationId ?? requestedDeliveryContext?.conversationId,
+    });
+    effectiveContext = { ...hydrated.context, shadowMode: controls.shadow_mode };
+    runtimeEvidence = hydrated.evidence;
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Agent context hydration failed' }, { status: 409 });
+  }
+
+  const promptVersion = maxVersion(Object.values(runtimeEvidence.promptVersions));
+  const knowledgeVersion = maxVersion(Object.values(runtimeEvidence.knowledgeVersions));
+
   const { data: claimed, error: claimError } = await supabase.from('agent_runs').insert({
     organization_id: organizationId,
-    lead_id: trustedContext.leadId ?? null,
-    input_message: trustedContext.message,
+    lead_id: effectiveContext.leadId ?? null,
+    conversation_id: effectiveContext.conversationId ?? null,
+    input_message: effectiveContext.message,
     routed_agents: [],
     status: 'PROCESSING',
     trace: {},
+    prompt_version: promptVersion,
+    knowledge_version: knowledgeVersion,
     request_key: requestKey,
   }).select('id,status,result_payload,started_at,completed_at').single();
 
@@ -196,8 +222,12 @@ export async function POST(request: Request) {
   const runtimeName = runtime === deterministicAgentRuntime ? 'deterministic' : 'openai_responses';
 
   try {
-    const result = await processInboundMessage(trustedContext, { agentsPaused: controls.agents_paused }, runtime);
-    const payload = { ...result, runtime: runtimeName };
+    const result = await processInboundMessage(effectiveContext, { agentsPaused: controls.agents_paused }, runtime);
+    const payload = {
+      ...result,
+      runtime: runtimeName,
+      runtimeContext: runtimeEvidence,
+    };
     const completedAt = new Date().toISOString();
     const { error: completeError } = await supabase.from('agent_runs').update({
       status: 'COMPLETED',
@@ -222,7 +252,7 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message.slice(0, 600) : 'Inbound AI processing failed';
     await supabase.from('agent_runs').update({
       status: 'FAILED',
-      trace: { error: message, automatic_retry: false },
+      trace: { error: message, automatic_retry: false, runtimeContext: runtimeEvidence },
       completed_at: new Date().toISOString(),
     }).eq('organization_id', organizationId).eq('id', claimed.id).eq('status', 'PROCESSING');
     return NextResponse.json({ error: message, runId: claimed.id, automaticRetry: false }, { status: 502 });
