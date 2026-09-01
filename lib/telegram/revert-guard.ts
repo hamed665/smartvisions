@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { TelegramMarketStyleField, TelegramOwnerCommand } from './contracts';
+import { jsonValueEqual } from './json-value-equality';
 
 const STYLE_COLUMNS: Record<TelegramMarketStyleField, string> = {
   tone: 'tone_profile',
@@ -13,7 +14,6 @@ const STYLE_COLUMNS: Record<TelegramMarketStyleField, string> = {
 
 const rec = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 function stale(label: string): never {
   throw new Error(`${label} فعلی با snapshot تغییر ثبت‌شده یکی نیست؛ Revert برای جلوگیری از overwrite متوقف شد.`);
@@ -45,7 +45,7 @@ export async function assertTelegramRevertFresh(input: {
         .eq('organization_id', input.organizationId).eq('service_id', original.serviceQuery).eq('country_code', original.countryCode).maybeSingle();
       if (rowError || !row) throw new Error(rowError?.message ?? 'Price not found');
       const current = { serviceId:String(row.service_id), countryCode:String(row.country_code), currency:String(row.currency), price:Number(row.price), minimumPrice:row.minimum_price == null ? null : Number(row.minimum_price) };
-      if (!same(current, after)) stale('Price');
+      if (!jsonValueEqual(current, after)) stale('Price');
       return;
     }
     case 'SET_SERVICE_ENABLED': {
@@ -53,7 +53,7 @@ export async function assertTelegramRevertFresh(input: {
         .select('id,name,enabled').eq('organization_id', input.organizationId).eq('id', original.serviceQuery).maybeSingle();
       if (rowError || !row) throw new Error(rowError?.message ?? 'Service not found');
       const current = { id:String(row.id), name:String(row.name), enabled:Boolean(row.enabled) };
-      if (!same(current, after)) stale('Service state');
+      if (!jsonValueEqual(current, after)) stale('Service state');
       return;
     }
     case 'SET_SERVICE_OPTION': {
@@ -61,7 +61,7 @@ export async function assertTelegramRevertFresh(input: {
         .select('id,config').eq('organization_id', input.organizationId).eq('id', original.serviceQuery).maybeSingle();
       if (rowError || !row) throw new Error(rowError?.message ?? 'Service not found');
       const current = { serviceId:String(row.id), optionKey:original.optionKey, value:rec(row.config)[original.optionKey] ?? null };
-      if (!same(current, after)) stale('Service option');
+      if (!jsonValueEqual(current, after)) stale('Service option');
       return;
     }
     case 'SET_MARKET_ENABLED': {
@@ -69,7 +69,7 @@ export async function assertTelegramRevertFresh(input: {
         .select('country_code,enabled').eq('organization_id', input.organizationId).eq('country_code', original.countryCode).maybeSingle();
       if (rowError || !row) throw new Error(rowError?.message ?? 'Market not found');
       const current = { countryCode:String(row.country_code), enabled:Boolean(row.enabled) };
-      if (!same(current, after)) stale('Market state');
+      if (!jsonValueEqual(current, after)) stale('Market state');
       return;
     }
     case 'SET_PAUSE': {
@@ -78,7 +78,7 @@ export async function assertTelegramRevertFresh(input: {
       if (rowError || !row) throw new Error(rowError?.message ?? 'System controls not found');
       const paused = original.target === 'AGENTS' ? row.agents_paused : original.target === 'EMAIL' ? row.email_paused : row.whatsapp_ai_paused;
       const current = { target:original.target, paused:Boolean(paused) };
-      if (!same(current, after)) stale('Pause state');
+      if (!jsonValueEqual(current, after)) stale('Pause state');
       return;
     }
     case 'SET_COST_LIMIT': {
@@ -86,7 +86,7 @@ export async function assertTelegramRevertFresh(input: {
         .select(original.key).eq('organization_id', input.organizationId).maybeSingle();
       if (rowError || !row) throw new Error(rowError?.message ?? 'Cost Guard not found');
       const current = { key:original.key, value:Number(rec(row)[original.key] ?? 0) };
-      if (!same(current, after)) stale('Cost Guard');
+      if (!jsonValueEqual(current, after)) stale('Cost Guard');
       return;
     }
     case 'SET_DISCOUNT_POLICY': {
@@ -95,7 +95,7 @@ export async function assertTelegramRevertFresh(input: {
         .eq('organization_id', input.organizationId).eq('service_id', original.serviceQuery).eq('country_code', original.countryCode).maybeSingle();
       if (rowError || !row) throw new Error(rowError?.message ?? 'Price policy not found');
       const current = { serviceId:String(row.service_id), countryCode:String(row.country_code), maxAutoDiscountPct:Number(row.max_auto_discount_pct ?? 0), maxDiscountWithApprovalPct:Number(row.max_discount_with_approval_pct ?? 0) };
-      if (!same(current, after)) stale('Discount policy');
+      if (!jsonValueEqual(current, after)) stale('Discount policy');
       return;
     }
     case 'SET_MINIMUM_PRICE': {
@@ -104,7 +104,7 @@ export async function assertTelegramRevertFresh(input: {
         .eq('organization_id', input.organizationId).eq('service_id', original.serviceQuery).eq('country_code', original.countryCode).maybeSingle();
       if (rowError || !row) throw new Error(rowError?.message ?? 'Price floor not found');
       const current = { serviceId:String(row.service_id), countryCode:String(row.country_code), minimumPrice:Number(row.minimum_price ?? 0) };
-      if (!same(current, after)) stale('Price floor');
+      if (!jsonValueEqual(current, after)) stale('Price floor');
       return;
     }
     case 'SET_MARKET_STYLE': {
@@ -113,7 +113,7 @@ export async function assertTelegramRevertFresh(input: {
         .select(`country_code,${column}`).eq('organization_id', input.organizationId).eq('country_code', original.countryCode).maybeSingle();
       if (rowError || !row) throw new Error(rowError?.message ?? 'Locale profile not found');
       const current = { countryCode:String(rec(row).country_code), field:original.field, value:rec(row)[column] ?? null };
-      if (!same(current, after)) stale('Market style');
+      if (!jsonValueEqual(current, after)) stale('Market style');
       return;
     }
     case 'SET_MARKET_SEND_WINDOW': {
@@ -121,7 +121,7 @@ export async function assertTelegramRevertFresh(input: {
         .select('country_code,send_window_start,send_window_end').eq('organization_id', input.organizationId).eq('country_code', original.countryCode).maybeSingle();
       if (rowError || !row) throw new Error(rowError?.message ?? 'Market settings not found');
       const current = { countryCode:String(row.country_code), start:String(row.send_window_start).slice(0,5), end:String(row.send_window_end).slice(0,5) };
-      if (!same(current, after)) stale('Send window');
+      if (!jsonValueEqual(current, after)) stale('Send window');
       return;
     }
     case 'SET_AGENT_ENABLED': {
@@ -129,7 +129,7 @@ export async function assertTelegramRevertFresh(input: {
         .select('agent_name,enabled').eq('organization_id', input.organizationId).eq('agent_name', original.agentQuery).maybeSingle();
       if (rowError || !row) throw new Error(rowError?.message ?? 'Agent setting not found');
       const current = { agentName:String(row.agent_name), enabled:Boolean(row.enabled) };
-      if (!same(current, after)) stale('Agent state');
+      if (!jsonValueEqual(current, after)) stale('Agent state');
       return;
     }
     case 'SET_AGENT_THRESHOLD': {
@@ -137,7 +137,7 @@ export async function assertTelegramRevertFresh(input: {
         .select('agent_name,confidence_threshold').eq('organization_id', input.organizationId).eq('agent_name', original.agentQuery).maybeSingle();
       if (rowError || !row) throw new Error(rowError?.message ?? 'Agent setting not found');
       const current = { agentName:String(row.agent_name), threshold:Number(row.confidence_threshold ?? 0) };
-      if (!same(current, after)) stale('Agent threshold');
+      if (!jsonValueEqual(current, after)) stale('Agent threshold');
       return;
     }
     case 'APPROVE_MESSAGE':
