@@ -73,6 +73,10 @@ export function evaluateAiRunQuota(input: {
   dailyDeepRunCount: number;
   settings: Pick<CostGuardSettings, 'max_ai_runs_per_lead' | 'daily_deep_ai_runs'>;
 }): AiRunQuotaDecision {
+  // Deterministic ZERO_COST handling does not consume provider tokens and should
+  // remain available even after a lead has reached its paid-AI allowance.
+  if (input.reasoningTier === 'ZERO_COST') return { allowed: true };
+
   if (input.leadRunCount != null) {
     const limit = Math.max(0, Number(input.settings.max_ai_runs_per_lead) || 0);
     const used = Math.max(0, Math.floor(Number(input.leadRunCount) || 0));
