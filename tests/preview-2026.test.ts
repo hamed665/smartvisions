@@ -2,15 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { generatePreview, isPreviewEligible } from '@/lib/preview/engine';
 import { evaluatePreviewQuality } from '@/lib/preview/quality';
 import { buildWebsitePreviewInput } from '@/lib/preview/production';
-import { PREVIEW_TEMPLATES } from '@/lib/preview/templates';
+import { PREVIEW_TEMPLATE_LIBRARY } from '@/lib/preview/templates';
 
 describe('2026 premium website previews', () => {
-  it('uses premium mobile-first design tokens for every built-in template', () => {
-    for (const template of Object.values(PREVIEW_TEMPLATES)) {
+  it('uses customer-facing mobile-first 2026 design tokens for every built-in template', () => {
+    for (const template of PREVIEW_TEMPLATE_LIBRARY) {
       expect(template.maxWidth).toBeGreaterThanOrEqual(1120);
       expect(template.heroMinHeight).toBeGreaterThanOrEqual(600);
       expect(template.mobileCta).toMatch(/sticky|inline/);
-      expect(template.generationCostUsd).toBe(0);
+      expect(template.customerFacing).toBe(true);
+      expect(template.referenceYear).toBe(2026);
     }
   });
 
@@ -20,8 +21,9 @@ describe('2026 premium website previews', () => {
       category: 'Dental Clinic',
       countryCode: 'OM',
       city: 'Muscat',
-      language: 'bilingual',
+      siteLanguage: 'bilingual',
       languageSource: 'owner',
+      explicitRequest: true,
     });
     expect(input.language).toBe('bilingual');
     expect(input.languageSource).toBe('owner');
@@ -48,16 +50,16 @@ describe('2026 premium website previews', () => {
     expect(quality.score).toBeGreaterThanOrEqual(90);
   });
 
-  it('does not present Smart Visions recommended services as customer services', () => {
+  it('keeps unverified opportunity services out of customer-facing service copy', () => {
     const input = buildWebsitePreviewInput({
       businessName: 'Example Clinic',
       category: 'Clinic',
       countryCode: 'OM',
-      language: 'en',
+      siteLanguage: 'en',
       languageSource: 'internal_test',
-      recommendedSmartVisionsServices: ['WEBSITE', 'AI_CONTENT'],
+      verifiedServices: undefined,
+      explicitRequest: true,
     });
     expect(input.services).toBeUndefined();
-    expect(input.recommendedSmartVisionsServices).toEqual(['WEBSITE', 'AI_CONTENT']);
   });
 });
