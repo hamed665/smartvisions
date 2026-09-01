@@ -6,8 +6,10 @@ import {
 import type { BusinessDiscoveryQuery, DiscoveredBusiness } from './types';
 import {
   assertPaidOperationAllowed,
+  finalizeCostGuardUsage,
   getCostGuardState,
   recordUsage,
+  reserveCostGuardUsage,
   type CostGuardState,
 } from '@/lib/reliability/cost-guard';
 import { assertRuntimeOperationAllowed } from '@/lib/reliability/runtime-safety';
@@ -80,17 +82,28 @@ export async function controlledGooglePlaceQualification(input: {
   city: string;
 }): Promise<DiscoveredBusiness> {
   await preflight(input.organizationId, GOOGLE_PLACES_QUALIFICATION_BUDGET_RESERVE_USD, 'LOW');
+  const reservation = await reserveCostGuardUsage({
+    organizationId: input.organizationId,
+    provider: 'GOOGLE_PLACES',
+    operation: 'PLACE_DETAILS_PRIORITY_QUALIFICATION',
+    reservedUsd: GOOGLE_PLACES_QUALIFICATION_BUDGET_RESERVE_USD,
+    metadata: {
+      sku: 'Places API Place Details Enterprise',
+      placeId: input.placeId,
+      reservationBasis: 'conservative_global_list_price',
+    },
+  });
   const startedAt = Date.now();
   const business = await client().getPriorityQualification(input.placeId, {
     countryCode: input.countryCode,
     city: input.city,
   });
   const latencyMs = Date.now() - startedAt;
-  await recordUsage({
+  await finalizeCostGuardUsage({
     organizationId: input.organizationId,
-    provider: 'GOOGLE_PLACES',
-    operation: 'PLACE_DETAILS_PRIORITY_QUALIFICATION',
-    costUsd: GOOGLE_PLACES_QUALIFICATION_BUDGET_RESERVE_USD,
+    reservationKey: reservation.key,
+    state: 'SETTLED',
+    actualCostUsd: GOOGLE_PLACES_QUALIFICATION_BUDGET_RESERVE_USD,
     units: 1,
     metadata: {
       sku: 'Places API Place Details Enterprise',
@@ -102,6 +115,7 @@ export async function controlledGooglePlaceQualification(input: {
       fieldMask: GOOGLE_PRIORITY_QUALIFICATION_FIELD_MASK,
       hasWebsite: Boolean(business.officialWebsite),
       businessStatus: business.businessStatus ?? null,
+      reservedCostUsd: reservation.reservedUsd,
     },
   });
   return business;
@@ -114,17 +128,28 @@ export async function controlledGooglePlaceDetails(input: {
   city: string;
 }): Promise<DiscoveredBusiness> {
   await preflight(input.organizationId, GOOGLE_PLACES_DETAILS_BUDGET_RESERVE_USD, 'NORMAL');
+  const reservation = await reserveCostGuardUsage({
+    organizationId: input.organizationId,
+    provider: 'GOOGLE_PLACES',
+    operation: 'PLACE_DETAILS_BUSINESS_INTELLIGENCE',
+    reservedUsd: GOOGLE_PLACES_DETAILS_BUDGET_RESERVE_USD,
+    metadata: {
+      sku: 'Places API Place Details Enterprise + Atmosphere',
+      placeId: input.placeId,
+      reservationBasis: 'conservative_global_list_price',
+    },
+  });
   const startedAt = Date.now();
   const business = await client().getBusiness(input.placeId, {
     countryCode: input.countryCode,
     city: input.city,
   });
   const latencyMs = Date.now() - startedAt;
-  await recordUsage({
+  await finalizeCostGuardUsage({
     organizationId: input.organizationId,
-    provider: 'GOOGLE_PLACES',
-    operation: 'PLACE_DETAILS_BUSINESS_INTELLIGENCE',
-    costUsd: GOOGLE_PLACES_DETAILS_BUDGET_RESERVE_USD,
+    reservationKey: reservation.key,
+    state: 'SETTLED',
+    actualCostUsd: GOOGLE_PLACES_DETAILS_BUDGET_RESERVE_USD,
     units: 1,
     metadata: {
       sku: 'Places API Place Details Enterprise + Atmosphere',
@@ -137,6 +162,7 @@ export async function controlledGooglePlaceDetails(input: {
       reviewCountReturned: business.reviews?.length ?? 0,
       rating: business.rating ?? null,
       userRatingCount: business.userRatingCount ?? null,
+      reservedCostUsd: reservation.reservedUsd,
     },
   });
   return business;
