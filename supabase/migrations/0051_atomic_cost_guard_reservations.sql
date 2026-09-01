@@ -55,12 +55,15 @@ begin
   -- insertion atomic across concurrent serverless invocations.
   perform pg_advisory_xact_lock(hashtextextended(p_organization_id::text, 0));
 
-  -- Expire abandoned provisional rows before computing remaining budget.
+  -- An abandoned provider reservation is ambiguous: the request may have left
+  -- the process and still incurred provider cost. Mark it STALE for operations,
+  -- but deliberately keep the reserved amount counted until explicit settlement
+  -- or release. Fail-closed accounting is safer than silently under-counting.
   update public.usage_events
-     set cost_usd = 0,
-         metadata = (metadata - 'reservation_expires_at') || jsonb_build_object(
-           'accounting_state', 'EXPIRED',
-           'expired_at', now()
+     set metadata = (metadata - 'reservation_expires_at') || jsonb_build_object(
+           'accounting_state', 'STALE',
+           'stale_at', now(),
+           'reconciliation_required', true
          )
    where organization_id = p_organization_id
      and metadata ->> 'accounting_state' = 'RESERVED'
@@ -181,6 +184,10 @@ begin
     return query select v_event.id, v_event.cost_usd, true;
     return;
   end if;
+  if v_event.metadata ->> 'accounting_state' = 'RELEASED' and v_state = 'RELEASED' then
+    return query select v_event.id, v_event.cost_usd, true;
+    return;
+  end if;
 
   v_cost := case when v_state = 'SETTLED' then greatest(0, coalesce(p_actual_cost_usd, 0)) else 0 end;
 
@@ -189,7 +196,7 @@ begin
          input_tokens = case when v_state = 'SETTLED' then p_input_tokens else input_tokens end,
          output_tokens = case when v_state = 'SETTLED' then p_output_tokens else output_tokens end,
          units = case when v_state = 'SETTLED' then p_units else units end,
-         metadata = (metadata - 'reservation_expires_at')
+         metadata = (metadata - 'reservation_expires_at' - 'stale_at' - 'reconciliation_required')
            || coalesce(p_metadata, '{}'::jsonb)
            || jsonb_build_object(
              'accounting_state', v_state,
@@ -203,8 +210,8 @@ begin
 end;
 $$;
 
--- Cost Guard reads must not count an abandoned reservation after its TTL even
--- before the next reservation call performs physical cleanup.
+-- The canonical monthly aggregate includes RESERVED and STALE conservative cost.
+-- Ambiguous provider calls therefore remain budgeted until explicit reconciliation.
 create or replace function public.get_cost_guard_monthly_usage(
   p_organization_id uuid,
   p_start timestamptz
@@ -216,14 +223,7 @@ security invoker
 set search_path = public
 as $$
   select upper(coalesce(u.provider, 'OTHER')) as provider,
-         coalesce(sum(
-           case
-             when u.metadata ->> 'accounting_state' = 'RESERVED'
-              and (u.metadata ->> 'reservation_expires_at')::timestamptz <= now()
-             then 0
-             else u.cost_usd
-           end
-         ), 0)::numeric as cost_usd
+         coalesce(sum(u.cost_usd), 0)::numeric as cost_usd
     from public.usage_events u
    where u.organization_id = p_organization_id
      and u.created_at >= p_start
