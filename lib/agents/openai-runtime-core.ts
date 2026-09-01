@@ -225,6 +225,7 @@ export class OpenAIResponsesAgentRuntime implements AgentRuntime {
         reasoningEffort: supportsReasoningControls ? reasoningEffort : null,
         cachedInputTokens: usage.cachedInputTokens,
         pricing: 'official_standard_2026-09-02',
+        pricing_status: 'TOKEN_METERED_OFFICIAL',
       },
     });
 
