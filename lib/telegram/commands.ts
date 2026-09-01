@@ -57,13 +57,19 @@ async function auditTelegramChange(input: {
 }) {
   const { error } = await input.supabase.from('audit_logs').insert({
     organization_id: input.organizationId,
-    actor_type: 'TELEGRAM_OWNER',
-    actor_id: input.ownerUserId,
+    actor_type: 'SYSTEM',
+    actor_id: null,
     action: `TELEGRAM_${input.command.type}`,
-    entity_type: input.entityType ?? null,
-    entity_id: input.entityId ?? null,
+    entity_type: 'telegram_command',
+    entity_id: null,
     before_data: input.before ?? null,
-    after_data: input.after ?? null,
+    after_data: {
+      telegram_owner_user_id: input.ownerUserId,
+      command_type: input.command.type,
+      source_entity_type: input.entityType ?? null,
+      source_entity_id: input.entityId ?? null,
+      value: input.after ?? null,
+    },
   });
   if (error) throw new Error(`Audit log failed: ${error.message}`);
 }
