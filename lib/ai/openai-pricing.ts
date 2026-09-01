@@ -44,3 +44,15 @@ export function estimateOpenAiCostUsd(model: string, usage: TokenUsage): number 
     + outputTokens / 1_000_000 * rate.outputPerMillion
   );
 }
+
+export function estimateOpenAiReservationUsd(model: string, serializedRequestBytes: number, maxOutputTokens: number): number {
+  // A token cannot encode less than one byte of the UTF-8 request. Treat every
+  // serialized request byte as one uncached input token and every allowed output
+  // token as consumed. This deliberately over-reserves before the call, then the
+  // reservation is settled down to the provider-reported token usage afterward.
+  return estimateOpenAiCostUsd(model, {
+    inputTokens: Math.max(1, Math.ceil(serializedRequestBytes)),
+    outputTokens: Math.max(1, Math.ceil(maxOutputTokens)),
+    cachedInputTokens: 0,
+  });
+}
