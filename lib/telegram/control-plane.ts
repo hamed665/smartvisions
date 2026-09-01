@@ -113,10 +113,12 @@ export async function executeControlMutation(input: { supabase: SupabaseClient; 
     const { error } = await supabase.from('service_prices').update({ max_auto_discount_pct:command.maxAutoDiscountPct, max_discount_with_approval_pct:command.maxDiscountWithApprovalPct }).eq('organization_id',organizationId).eq('service_id',command.serviceQuery).eq('country_code',command.countryCode);
     if (error) throw new Error(`Discount policy update failed: ${error.message}`);
     text = `قانون تخفیف ${command.serviceQuery}/${command.countryCode} به auto ${command.maxAutoDiscountPct}% و approval ${command.maxDiscountWithApprovalPct}% تغییر کرد.`;
-  } else {
+  } else if (command.type === 'SET_MINIMUM_PRICE') {
     const { error } = await supabase.from('service_prices').update({ minimum_price:command.minimumPrice }).eq('organization_id',organizationId).eq('service_id',command.serviceQuery).eq('country_code',command.countryCode);
     if (error) throw new Error(`Minimum price update failed: ${error.message}`);
     text = `Price floor ${command.serviceQuery}/${command.countryCode} روی ${command.minimumPrice} تنظیم شد.`;
+  } else {
+    return core.executeControlMutation(input);
   }
 
   const result: ExecutedMutation = { title:preview.title, text, before:preview.before, after:preview.after, entityType:preview.entityType, entityId:preview.entityId, command, reversible:true };
