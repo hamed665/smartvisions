@@ -60,6 +60,8 @@ function realCostCommand(input: string): TelegramOwnerCommand | null {
 export function parseTelegramOwnerCommand(rawInput: string): TelegramOwnerCommand {
   const input = clean(rawInput);
   if (!input) return { type: 'HELP' };
+  // Deliberately slash-only: an owner alert self-test must never be inferred from casual language.
+  if (/^\/alert_?test(?:@[A-Za-z0-9_]+)?$/i.test(input)) return { type: 'TEST_OWNER_ALERT' };
   const safety = explicitSafetyBlock(input);
   if (safety) return safety;
   const cost = realCostCommand(input);

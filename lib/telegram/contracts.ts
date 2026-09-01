@@ -32,6 +32,7 @@ export type TelegramOwnerCommand =
   | { type: 'SHOW_BUDGET' }
   | { type: 'SHOW_APPROVALS'; limit?: number }
   | { type: 'SHOW_CAMPAIGNS'; limit?: number }
+  | { type: 'TEST_OWNER_ALERT' }
   | { type: 'SAFETY_BLOCK'; reason: 'SHADOW_MODE' | 'KILL_SWITCH_OFF' | 'SECRETS' | 'DNC_BYPASS' | 'AUTO_COLD_CHANNEL' | 'APPROVAL_BYPASS' }
   | { type: 'SET_PRICE'; countryCode: string; serviceQuery: string; price: number }
   | { type: 'SET_DISCOUNT_POLICY'; countryCode: string; serviceQuery: string; maxAutoDiscountPct: number; maxDiscountWithApprovalPct: number }
