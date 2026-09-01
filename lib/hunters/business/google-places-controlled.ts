@@ -61,6 +61,7 @@ export async function controlledGooglePlacesIdSearch(input: {
     units: 1,
     metadata: {
       sku: 'Places API Text Search Essentials (IDs Only)',
+      pricing_status: 'FINAL_FREE_IDS_ONLY',
       countryCode: input.query.countryCode,
       city: input.query.city,
       industry: input.query.industry,
@@ -93,6 +94,8 @@ export async function controlledGooglePlaceQualification(input: {
     units: 1,
     metadata: {
       sku: 'Places API Place Details Enterprise',
+      pricing_status: 'CONSERVATIVE_LIST_PRICE_RESERVE',
+      pricing_note: 'Free monthly SKU cap intentionally ignored by Cost Guard reserve',
       purpose: 'operational + website qualification; reviews deliberately excluded',
       placeId: input.placeId,
       latencyMs,
@@ -125,6 +128,8 @@ export async function controlledGooglePlaceDetails(input: {
     units: 1,
     metadata: {
       sku: 'Places API Place Details Enterprise + Atmosphere',
+      pricing_status: 'CONSERVATIVE_LIST_PRICE_RESERVE',
+      pricing_note: 'Free monthly SKU cap intentionally ignored by Cost Guard reserve',
       purpose: 'explicit full intelligence only; includes review subset',
       placeId: input.placeId,
       latencyMs,
