@@ -14,7 +14,6 @@ function serviceClient() {
 
 const rec = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
-
 type AddonCatalog = Record<string, { name: string; prices: Partial<Record<MarketCode, number>> }>;
 
 export async function POST(request: Request) {
@@ -28,23 +27,36 @@ export async function POST(request: Request) {
     requestedDiscountPct?: number;
     addons?: string[];
   };
-
-  if (!body.organizationId || !body.serviceId || !body.marketCode) {
-    return NextResponse.json({ error: 'organizationId, serviceId and marketCode are required' }, { status: 400 });
+  if (!body.serviceId || !body.marketCode) {
+    return NextResponse.json({ error: 'serviceId and marketCode are required' }, { status: 400 });
   }
 
   try {
     const supabase = serviceClient();
     const countryCode = String(body.marketCode).toUpperCase();
+    let organizationId = body.organizationId?.trim();
+
+    if (!organizationId) {
+      const { data: candidates, error: candidateError } = await supabase.from('service_prices')
+        .select('organization_id')
+        .eq('service_id', body.serviceId)
+        .eq('country_code', countryCode)
+        .limit(2);
+      if (candidateError) throw new Error(candidateError.message);
+      const organizations = [...new Set((candidates ?? []).map((row) => String(row.organization_id)).filter(Boolean))];
+      if (organizations.length !== 1) throw new Error('organizationId is required when canonical price ownership is ambiguous');
+      organizationId = organizations[0];
+    }
+
     const [{ data: service, error: serviceError }, { data: price, error: priceError }] = await Promise.all([
       supabase.from('services')
         .select('id,name,enabled,config')
-        .eq('organization_id', body.organizationId)
+        .eq('organization_id', organizationId)
         .eq('id', body.serviceId)
         .maybeSingle(),
       supabase.from('service_prices')
         .select('service_id,country_code,currency,price,minimum_price,max_auto_discount_pct,max_discount_with_approval_pct')
-        .eq('organization_id', body.organizationId)
+        .eq('organization_id', organizationId)
         .eq('service_id', body.serviceId)
         .eq('country_code', countryCode)
         .maybeSingle(),
