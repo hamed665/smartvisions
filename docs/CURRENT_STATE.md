@@ -10,9 +10,11 @@ This is the operational handoff and the first document to read before changing G
 - Branch: `main`
 - Production URL: `https://smartvisions.vercel.app`
 - Supabase project: `pkypexzpyfbikdnkrzvw`
-- Current production main: `369d229612dac8a1d4f76d76a6bd643bbf1121f8` — merged PR #88
-- Current Vercel production deployment: `dpl_CkGxRWZYkjCbYK49wxH1PgGnaHUt` — READY, target `production`, canonical alias `smartvisions.vercel.app`, no alias error
+- Current runtime code baseline: `369d229612dac8a1d4f76d76a6bd643bbf1121f8` — merged PR #88
+- Last runtime-changing Production deployment: `dpl_CkGxRWZYkjCbYK49wxH1PgGnaHUt` — READY, target `production`, canonical alias `smartvisions.vercel.app`, no alias error
 - Master Tracker: GitHub Issue #18
+
+Documentation-only commits may advance `main` and produce a runtime-equivalent deployment after this baseline. When an exact live Git/Vercel HEAD matters, verify it directly rather than creating another self-invalidating documentation commit.
 
 ## Non-negotiable protection rules
 
