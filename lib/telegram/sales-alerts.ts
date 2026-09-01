@@ -8,8 +8,10 @@ export function classifySalesTelegramAlert(trace: PipelineTrace, context?: Agent
   const reasons = new Set(trace.handoffReasons);
   if (reasons.has('SPECIAL_DISCOUNT')) return 'DISCOUNT_REQUEST';
   if (reasons.has('MEETING_REQUEST')) return 'CONSULTATION_REQUEST';
-  if (trace.decision.requiresHuman || reasons.size > 0) return 'SALES_HANDOFF';
+  const explicitHandoffReasons = trace.handoffReasons.filter((reason) => reason !== 'HIGH_INTENT');
+  if (explicitHandoffReasons.length > 0) return 'SALES_HANDOFF';
   if (context?.stage === 'HOT') return 'HOT_LEAD';
+  if (trace.decision.requiresHuman || reasons.has('HIGH_INTENT')) return 'SALES_HANDOFF';
   return null;
 }
 
@@ -53,6 +55,7 @@ export function buildSalesTelegramAlert(input: {
   const marketPrice = service?.marketPrice;
   const currentPrice = marketPrice?.price ?? input.context.quotedPrice;
   const currency = marketPrice?.currency ?? input.context.quotedCurrency ?? '';
+  const hasCanonicalLeadContext = Boolean(input.context.leadId);
   const title = notificationType === 'DISCOUNT_REQUEST' ? '💬 درخواست تخفیف'
     : notificationType === 'CONSULTATION_REQUEST' ? '📞 درخواست مشاوره / تماس'
     : notificationType === 'HOT_LEAD' ? '🔥 Hot Lead'
@@ -60,7 +63,7 @@ export function buildSalesTelegramAlert(input: {
 
   const text = [
     title,
-    !input.context.leadId && input.context.businessName ? `Business: ${input.context.businessName}` : '',
+    !hasCanonicalLeadContext && input.context.businessName ? `Business: ${input.context.businessName}` : '',
     input.context.countryCode || input.context.industry
       ? `Market/Industry: ${[input.context.countryCode, input.context.industry].filter(Boolean).join(' · ')}`
       : '',
@@ -73,8 +76,8 @@ export function buildSalesTelegramAlert(input: {
     marketPrice ? `Rule: floor ${marketPrice.minimumPrice} · auto ≤ ${marketPrice.maxAutoDiscountPct}% · approval ≤ ${marketPrice.maxDiscountWithApprovalPct}%` : '',
     requestedPrice ? `Customer requested price/budget: ${requestedPrice}${currency ? ` ${currency}` : ''}` : '',
     requestedDiscount ? `Customer requested discount: ${requestedDiscount}` : '',
-    `آخرین پیام مشتری: ${input.context.message.slice(0, 1000)}`,
-    persianSummary ? `خلاصه فارسی: ${persianSummary.slice(0, 900)}` : '',
+    !hasCanonicalLeadContext ? `آخرین پیام مشتری: ${input.context.message.slice(0, 700)}` : '',
+    !hasCanonicalLeadContext && persianSummary ? `خلاصه فارسی: ${persianSummary.slice(0, 600)}` : '',
     persianIntent ? `Intent: ${persianIntent.slice(0, 300)}` : '',
     reasons ? `Reason: ${reasons}` : notificationType === 'HOT_LEAD' ? 'Reason: canonical conversation stage is HOT' : '',
     `Decision: ${input.trace.decision.action}`,
