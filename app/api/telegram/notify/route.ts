@@ -3,7 +3,7 @@ import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { notifyTelegramOwner, notifyTelegramOwnerNewLead } from '@/lib/telegram/notifications';
 import type { TelegramNotificationType } from '@/lib/telegram/contracts';
 
-const ALLOWED_TYPES = new Set<TelegramNotificationType>(['NEW_LEAD','SALES_HANDOFF','DISCOUNT_REQUEST','CONSULTATION_REQUEST','SYSTEM_ALERT']);
+const ALLOWED_TYPES = new Set<TelegramNotificationType>(['NEW_LEAD','HOT_LEAD','SALES_HANDOFF','DISCOUNT_REQUEST','CONSULTATION_REQUEST','SYSTEM_ALERT']);
 
 export async function POST(request: Request) {
   const denied = requireInternalApiKey(request);
