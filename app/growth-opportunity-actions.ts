@@ -7,7 +7,7 @@ import {
   buildGrowthOpportunity,
   buildGrowthOpportunityPersistenceRow,
 } from '@/lib/hunters/business/growth-routing';
-import { buildPrecisionLeadPersistenceRow, type SocialAssessment } from '@/lib/hunters/business/service-fit';
+import { buildOwnerSocialAssessment, buildPrecisionLeadPersistenceRow, type SocialAssessment } from '@/lib/hunters/business/service-fit';
 import { deriveWhatsappCandidate } from '@/lib/hunters/business/selective-enrichment';
 import type { DiscoveredBusiness } from '@/lib/hunters/business/types';
 
@@ -51,7 +51,10 @@ const socialAssessmentFromEvidence=(value:unknown):SocialAssessment|null=>{
   const social=record(record(value).socialAssessment);
   const quality=String(social.quality??'').toUpperCase();
   if(social.status!=='VERIFIED'||!['WEAK','INACTIVE','GOOD'].includes(quality))return null;
-  return {status:'VERIFIED',quality:quality as SocialAssessment['quality'],source:(social.source as SocialAssessment['source'])??'OTHER',assessedAt:String(social.assessedAt??''),reasons:Array.isArray(social.reasons)?social.reasons.map(String).slice(0,5):[]};
+  const source=(social.source as SocialAssessment['source'])??'OTHER';
+  const reasons=Array.isArray(social.reasons)?social.reasons.map(String).map(reason=>reason.trim()).filter(Boolean).slice(0,5):[];
+  if(source==='OWNER_REVIEW'&&!reasons.some(reason=>reason.length>=8))return null;
+  return {status:'VERIFIED',quality:quality as SocialAssessment['quality'],source,assessedAt:String(social.assessedAt??''),reasons};
 };
 const countryCatalog=(catalog:CountryCatalog,countryCode:string|null|undefined)=>catalog.get(String(countryCode??'').toUpperCase())??new Set<string>();
 
@@ -126,9 +129,8 @@ export async function routeCachedGrowthOpportunities(){
 export async function recordGrowthSocialAssessment(form:FormData){
   const ctx=await getCurrentOrganization(true);
   const opportunityId=String(form.get('opportunityId')??'').trim();
-  const quality=String(form.get('quality')??'').trim().toUpperCase();
-  const note=String(form.get('note')??'').trim().slice(0,300);
-  if(!opportunityId||!['WEAK','INACTIVE','GOOD'].includes(quality))throw new Error('Invalid social assessment');
+  if(!opportunityId)throw new Error('Invalid social assessment');
+  const socialAssessment=buildOwnerSocialAssessment({quality:form.get('quality'),note:form.get('note')});
   const{data:opportunity,error:opportunityError}=await ctx.supabase.from('growth_opportunities').select('id,business_id,digital_presence_evidence').eq('organization_id',ctx.organizationId).eq('id',opportunityId).maybeSingle();
   if(opportunityError)throw opportunityError;if(!opportunity)throw new Error('Growth opportunity not found');
   const[{data:businessRow,error:businessError},{data:audit,error:auditError},catalogByCountry]=await Promise.all([
@@ -137,8 +139,6 @@ export async function recordGrowthSocialAssessment(form:FormData){
     configuredServiceIdsByCountry(ctx),
   ]);
   if(businessError)throw businessError;if(auditError)throw auditError;
-  const assessedAt=new Date().toISOString();
-  const socialAssessment:SocialAssessment={status:'VERIFIED',quality:quality as SocialAssessment['quality'],source:'OWNER_REVIEW',assessedAt,reasons:note?[note]:[]};
   const business=withAuditInstagram(toDiscovered(businessRow as CachedBusiness),audit as FreshAudit|null);
   const growth=buildGrowthOpportunity(business,{websiteAudit:auditEvidence(audit as FreshAudit|null),socialAssessment,enabledServiceIds:countryCatalog(catalogByCountry,business.countryCode)});
   const persistence=buildGrowthOpportunityPersistenceRow(ctx.organizationId,String(opportunity.business_id),growth);

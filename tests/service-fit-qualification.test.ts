@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildServiceFitQualification } from '../lib/hunters/business/service-fit';
+import { buildOwnerSocialAssessment, buildServiceFitQualification } from '../lib/hunters/business/service-fit';
 
 const base = {
   sourceType: 'google_places' as const,
@@ -17,6 +17,19 @@ const base = {
 const catalog = new Set(['business_website','premium_bilingual_website','custom_website','ai_reels_4','whatsapp_ai_setup']);
 
 describe('high-precision service-fit qualification', () => {
+  it('requires a specific note before owner social evidence can become VERIFIED', () => {
+    expect(() => buildOwnerSocialAssessment({ quality: 'WEAK', note: '' })).toThrow(/evidence note/i);
+    expect(() => buildOwnerSocialAssessment({ quality: 'INACTIVE', note: 'short' })).toThrow(/evidence note/i);
+    expect(() => buildOwnerSocialAssessment({ quality: 'UNKNOWN', note: 'No posts for 90 days' })).toThrow(/quality/i);
+    expect(buildOwnerSocialAssessment({ quality: 'weak', note: '  No posts for 90 days  ', assessedAt: '2026-09-02T00:00:00.000Z' })).toEqual({
+      status: 'VERIFIED',
+      quality: 'WEAK',
+      source: 'OWNER_REVIEW',
+      assessedAt: '2026-09-02T00:00:00.000Z',
+      reasons: ['No posts for 90 days'],
+    });
+  });
+
   it('promotes a direct-contact no-website business as Tier A website fit', () => {
     const result = buildServiceFitQualification({ business: base, region: 'MUSCAT_LOCAL', websiteClass: 'NONE', enabledServiceIds: catalog });
     expect(result.prospectTier).toBe('A');
@@ -82,7 +95,7 @@ describe('high-precision service-fit qualification', () => {
       business: { ...base, officialWebsite: 'https://example.om', instagram: 'https://instagram.com/example' },
       region: 'MUSCAT_LOCAL', websiteClass: 'STANDALONE',
       websiteAudit: { seoQuality: 'GOOD', mobileQuality: 'GOOD', ctaQuality: 'GOOD', hasArabic: true, hasBooking: true },
-      socialAssessment: { status: 'VERIFIED', quality: 'GOOD', source: 'OWNER_REVIEW' },
+      socialAssessment: { status: 'VERIFIED', quality: 'GOOD', source: 'OWNER_REVIEW', reasons: ['posting quality is consistently strong'] },
       enabledServiceIds: new Set([...catalog, 'muscat_content_production']),
     });
     expect(result.serviceFits.some(item => item.family === 'MUSCAT_CONTENT_GROWTH')).toBe(false);
@@ -94,7 +107,7 @@ describe('high-precision service-fit qualification', () => {
       business: { ...base, countryCode: 'AE', city: 'Dubai', officialWebsite: 'https://example.ae', instagram: 'https://instagram.com/example' },
       region: 'INTERNATIONAL_REMOTE', websiteClass: 'STANDALONE',
       websiteAudit: { seoQuality: 'GOOD', mobileQuality: 'GOOD', ctaQuality: 'GOOD', hasArabic: true, hasBooking: true },
-      socialAssessment: { status: 'VERIFIED', quality: 'INACTIVE', source: 'OWNER_REVIEW' },
+      socialAssessment: { status: 'VERIFIED', quality: 'INACTIVE', source: 'OWNER_REVIEW', reasons: ['no posts in the last three months'] },
       enabledServiceIds: catalog,
     });
     expect(result.primaryOfferFamily).toBe('AI_REELS');

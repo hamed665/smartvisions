@@ -66,7 +66,7 @@ export default async function GrowthOpportunitiesPage(){
       <span>No standalone website <strong>strong website-design evidence</strong>, but only with direct contact.</span>
       <span>Standalone website <strong>no website/SEO pitch until deterministic audit evidence exists</strong>.</span>
       <span>Poor SEO audit <strong>SEO_GROWTH fit</strong>; no invented “new site” claim without site-age evidence.</span>
-      <span>Muscat + known Instagram <strong>content/filming only after WEAK or INACTIVE is verified</strong>.</span>
+      <span>Muscat + known Instagram <strong>content/filming only after WEAK or INACTIVE is verified with a specific evidence note</strong>.</span>
       <span>Good Instagram <strong>content pitch suppressed</strong>.</span>
       <span>WhatsApp AI <strong>requires stronger evidence than merely having a phone number</strong>.</span>
       <span>Maximum pitch focus <strong>one primary + at most one evidence-backed secondary service</strong>.</span>
@@ -101,7 +101,7 @@ export default async function GrowthOpportunitiesPage(){
               <div className="muted">Contact {row.contactability_score} · Need {row.need_score}</div>
               <div className="muted">Fit {row.service_fit_score} · Revenue {row.revenue_potential_score}</div>
               {row.cheapest_next_action==='WEBSITE_EVIDENCE'&&business?.id?<form action={runDeterministicWebsiteAudit}><input type="hidden" name="businessId" value={business.id}/><button disabled={!editable}>Run website evidence</button></form>:null}
-              {row.cheapest_next_action==='SOCIAL_CHECK'&&business?.instagram?<form action={recordGrowthSocialAssessment} className="settingsCreate"><input type="hidden" name="opportunityId" value={row.id}/><label>Instagram review<select name="quality" defaultValue="WEAK"><option value="WEAK">Weak</option><option value="INACTIVE">Inactive</option><option value="GOOD">Good</option></select></label><label>Evidence note<input name="note" maxLength={300} placeholder="e.g. inconsistent posting / weak creative / inactive"/></label><button disabled={!editable}>Record verified review</button></form>:null}
+              {row.cheapest_next_action==='SOCIAL_CHECK'&&business?.instagram?<form action={recordGrowthSocialAssessment} className="settingsCreate"><input type="hidden" name="opportunityId" value={row.id}/><label>Instagram review<select name="quality" defaultValue="WEAK"><option value="WEAK">Weak</option><option value="INACTIVE">Inactive</option><option value="GOOD">Good</option></select></label><label>Evidence note<input name="note" required minLength={8} maxLength={300} placeholder="Specific observation, e.g. no posts for 90 days"/></label><button disabled={!editable}>Record verified review</button></form>:null}
             </div>
           </div>;
         })}</div>

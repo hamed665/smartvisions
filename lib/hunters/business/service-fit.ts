@@ -46,6 +46,21 @@ const clean = (value: unknown) => String(value ?? '').trim();
 const upper = (value: unknown) => clean(value).toUpperCase();
 const clamp = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
 const bad = (value: unknown) => ['POOR','BAD','WEAK','FAIL','FAILED','LOW'].includes(upper(value));
+const VERIFIED_SOCIAL_QUALITIES = new Set<SocialQuality>(['WEAK','INACTIVE','GOOD']);
+
+export function buildOwnerSocialAssessment(input: { quality: unknown; note: unknown; assessedAt?: string }): SocialAssessment {
+  const quality = upper(input.quality) as SocialQuality;
+  const note = clean(input.note).slice(0, 300);
+  if (!VERIFIED_SOCIAL_QUALITIES.has(quality)) throw new Error('Invalid social assessment quality');
+  if (note.length < 8) throw new Error('Verified social assessment requires a specific evidence note');
+  return {
+    status: 'VERIFIED',
+    quality,
+    source: 'OWNER_REVIEW',
+    assessedAt: input.assessedAt ?? new Date().toISOString(),
+    reasons: [note],
+  };
+}
 
 function directContactability(business: DiscoveredBusiness) {
   const hasPhone = Boolean(clean(business.internationalPhone) || clean(business.phone));
