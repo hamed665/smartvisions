@@ -34,10 +34,18 @@ const toDiscovered=(row:CachedBusiness):DiscoveredBusiness=>({
   userRatingCount:row.google_user_rating_count==null?undefined:Number(row.google_user_rating_count),businessStatus:row.google_business_status??undefined,
   primaryTypeDisplayName:row.google_primary_type_display_name??undefined,retrievedAt:new Date().toISOString(),
 });
-const auditEvidence=(audit:FreshAudit|undefined)=>audit?({
+const auditEvidence=(audit:FreshAudit|null|undefined)=>audit?({
   seoQuality:audit.seo_quality,mobileQuality:audit.mobile_quality,ctaQuality:audit.cta_quality,hasArabic:audit.has_arabic,
   hasEnglish:audit.has_english,hasBooking:audit.has_booking,hasWhatsapp:audit.has_whatsapp,brokenLinks:audit.broken_links,
 }):null;
+const auditInstagram=(audit:FreshAudit|null|undefined)=>{
+  const value=String(record(audit?.social_links).instagram??'').trim();
+  return /^https?:\/\/(?:www\.)?instagram\.com\//i.test(value)?value:undefined;
+};
+const withAuditInstagram=(business:DiscoveredBusiness,audit:FreshAudit|null|undefined):DiscoveredBusiness=>({
+  ...business,
+  instagram:business.instagram??auditInstagram(audit),
+});
 const socialAssessmentFromEvidence=(value:unknown):SocialAssessment|null=>{
   const social=record(record(value).socialAssessment);
   const quality=String(social.quality??'').toUpperCase();
@@ -69,12 +77,20 @@ export async function routeCachedGrowthOpportunities(){
     for(const audit of(freshAudits??[]) as FreshAudit[])if(!auditByBusiness.has(String(audit.business_id)))auditByBusiness.set(String(audit.business_id),audit);
     const evidenceByBusiness=new Map((storedRows??[] as StoredEvidence[]).map(row=>[String(row.business_id),row.digital_presence_evidence]));
 
-    let routed=0,skipped=0,contactReady=0,evidenceReused=0,tierA=0,tierB=0,catalogBlocked=0,socialChecks=0;
+    let routed=0,skipped=0,contactReady=0,evidenceReused=0,socialLinksReused=0,tierA=0,tierB=0,catalogBlocked=0,socialChecks=0;
     for(const row of(businessRows??[] as CachedBusiness[])){
-      const business=toDiscovered(row);
-      if(String(business.businessStatus??'').toUpperCase()!=='OPERATIONAL'){skipped+=1;continue;}
       const freshAudit=auditByBusiness.get(row.id);
+      const auditedInstagram=auditInstagram(freshAudit);
+      const business=withAuditInstagram(toDiscovered(row),freshAudit);
+      if(String(business.businessStatus??'').toUpperCase()!=='OPERATIONAL'){skipped+=1;continue;}
       if(freshAudit)evidenceReused+=1;
+      if(auditedInstagram){
+        socialLinksReused+=1;
+        if(!row.instagram){
+          const{error:instagramUpdateError}=await ctx.supabase.from('businesses').update({instagram:auditedInstagram,updated_at:new Date().toISOString()}).eq('organization_id',ctx.organizationId).eq('id',row.id).is('instagram',null);
+          if(instagramUpdateError)throw instagramUpdateError;
+        }
+      }
       const socialAssessment=socialAssessmentFromEvidence(evidenceByBusiness.get(row.id));
       const opportunity=buildGrowthOpportunity(business,{websiteAudit:auditEvidence(freshAudit),socialAssessment,enabledServiceIds:catalog});
       if(opportunity.qualification.prospectTier==='A')tierA+=1;
@@ -87,7 +103,7 @@ export async function routeCachedGrowthOpportunities(){
       const{error:upsertError}=await ctx.supabase.from('growth_opportunities').upsert({...rowToPersist,digital_presence_evidence:digitalPresence},{onConflict:'organization_id,business_id'});
       if(upsertError)throw upsertError;routed+=1;
     }
-    const{error:auditError}=await ctx.supabase.from('audit_logs').insert({organization_id:ctx.organizationId,actor_type:'USER',actor_id:ctx.userId,action:'ROUTE_CACHED_GROWTH_OPPORTUNITIES',entity_type:'growth_opportunity',entity_id:ctx.organizationId,after_data:{routed,skipped,tierA,tierB,contactReady,catalogBlocked,socialChecks,evidenceReused,auditCacheDays,providerCalls:0,llmCalls:0,socialApiCalls:0,reviewsFetched:false,outreachTriggered:false,qualificationMode:'HIGH_PRECISION_VERIFIED_EVIDENCE',automaticLeadPromotion:false}});if(auditError)throw auditError;
+    const{error:auditError}=await ctx.supabase.from('audit_logs').insert({organization_id:ctx.organizationId,actor_type:'USER',actor_id:ctx.userId,action:'ROUTE_CACHED_GROWTH_OPPORTUNITIES',entity_type:'growth_opportunity',entity_id:ctx.organizationId,after_data:{routed,skipped,tierA,tierB,contactReady,catalogBlocked,socialChecks,evidenceReused,socialLinksReused,auditCacheDays,providerCalls:0,llmCalls:0,socialApiCalls:0,reviewsFetched:false,outreachTriggered:false,qualificationMode:'HIGH_PRECISION_VERIFIED_EVIDENCE',automaticLeadPromotion:false}});if(auditError)throw auditError;
     destination=`/hunters/growth-opportunities?routed=${routed}&a=${tierA}&b=${tierB}&contactReady=${contactReady}&socialChecks=${socialChecks}&catalogBlocked=${catalogBlocked}`;
   }catch(error){const message=error instanceof Error?error.message.slice(0,200):'Cached growth routing failed';destination=`/hunters/growth-opportunities?error=${encodeURIComponent(message)}`;}
   revalidatePath('/hunters/growth-opportunities');revalidatePath('/hunters');redirect(destination);
@@ -109,7 +125,7 @@ export async function recordGrowthSocialAssessment(form:FormData){
   if(businessError)throw businessError;if(auditError)throw auditError;
   const assessedAt=new Date().toISOString();
   const socialAssessment:SocialAssessment={status:'VERIFIED',quality:quality as SocialAssessment['quality'],source:'OWNER_REVIEW',assessedAt,reasons:note?[note]:[]};
-  const growth=buildGrowthOpportunity(toDiscovered(businessRow as CachedBusiness),{websiteAudit:auditEvidence(audit as FreshAudit|undefined),socialAssessment,enabledServiceIds:catalog});
+  const growth=buildGrowthOpportunity(withAuditInstagram(toDiscovered(businessRow as CachedBusiness),audit as FreshAudit|null),{websiteAudit:auditEvidence(audit as FreshAudit|null),socialAssessment,enabledServiceIds:catalog});
   const persistence=buildGrowthOpportunityPersistenceRow(ctx.organizationId,String(opportunity.business_id),growth);
   const previous=record(opportunity.digital_presence_evidence);
   const {error:updateError}=await ctx.supabase.from('growth_opportunities').update({...persistence,digital_presence_evidence:{...previous,...record(persistence.digital_presence_evidence),socialAssessment}}).eq('organization_id',ctx.organizationId).eq('id',opportunityId);
