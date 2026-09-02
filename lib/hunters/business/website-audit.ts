@@ -1,3 +1,5 @@
+export type WebsiteAuditQuality = 'GOOD' | 'FAIR' | 'POOR' | 'UNKNOWN';
+
 export type WebsiteAuditResult = {
   title: string | null;
   detectedLanguages: string[];
@@ -9,9 +11,9 @@ export type WebsiteAuditResult = {
   hasEnglish: boolean;
   hasBooking: boolean;
   hasWhatsapp: boolean;
-  mobileQuality: 'GOOD' | 'WEAK' | 'UNKNOWN';
-  seoQuality: 'GOOD' | 'WEAK' | 'UNKNOWN';
-  ctaQuality: 'GOOD' | 'WEAK' | 'UNKNOWN';
+  mobileQuality: WebsiteAuditQuality;
+  seoQuality: WebsiteAuditQuality;
+  ctaQuality: WebsiteAuditQuality;
   evidence: Array<{ key: string; value: string }>;
 };
 
@@ -93,9 +95,9 @@ export function analyzeWebsiteHtml(html: string): WebsiteAuditResult {
     hasEnglish,
     hasBooking,
     hasWhatsapp,
-    mobileQuality: hasViewport ? 'GOOD' : 'WEAK',
-    seoQuality: hasDescription && hasH1 && title ? 'GOOD' : 'WEAK',
-    ctaQuality: hasCta ? 'GOOD' : 'WEAK',
+    mobileQuality: hasViewport ? 'GOOD' : 'POOR',
+    seoQuality: hasDescription && hasH1 && title ? 'GOOD' : 'POOR',
+    ctaQuality: hasCta ? 'GOOD' : 'POOR',
     evidence,
   };
 }

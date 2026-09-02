@@ -34,4 +34,14 @@ describe('website audit helpers', () => {
     expect(result.contactEmails).toContain('hello@example.com');
     expect(result.socialLinks.instagram).toContain('instagram.com/example');
   });
+
+  it('uses the database quality vocabulary for negative deterministic signals', () => {
+    const result = analyzeWebsiteHtml('<!doctype html><html><head></head><body><p>Welcome to our dental clinic.</p></body></html>');
+    expect(result.mobileQuality).toBe('POOR');
+    expect(result.seoQuality).toBe('POOR');
+    expect(result.ctaQuality).toBe('POOR');
+    for (const quality of [result.mobileQuality, result.seoQuality, result.ctaQuality]) {
+      expect(['GOOD', 'FAIR', 'POOR', 'UNKNOWN']).toContain(quality);
+    }
+  });
 });
