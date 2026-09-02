@@ -55,7 +55,7 @@ jobs:
           set -euo pipefail
           (
             sleep 8
-            node -e 'const base=process.env.CANDIDATE_URL; const paths=["/login","/","/p/__cloudflare_notfound_probe__",`/p/cloudflare-migration-missing-${Date.now()}`]; for (const path of paths) { try { const r=await fetch(base+path,{redirect:"manual"}); console.error(`[probe] ${path} -> ${r.status}`); } catch (error) { console.error(`[probe] ${path} -> request-error`, error); } }'
+            node -e 'const base=process.env.CANDIDATE_URL; const paths=["/login","/","/__migration/not-found","/p/__cloudflare_notfound_probe__",`/p/cloudflare-migration-missing-${Date.now()}`]; for (const path of paths) { try { const r=await fetch(base+path,{redirect:"manual"}); console.error(`[probe] ${path} -> ${r.status}`); } catch (error) { console.error(`[probe] ${path} -> request-error`, error); } }'
           ) &
           traffic_pid=$!
           set +e
