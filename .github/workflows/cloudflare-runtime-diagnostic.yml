@@ -8,7 +8,7 @@ on:
     paths:
       - .github/workflows/cloudflare-runtime-diagnostic.yml
       - 'app/p/**/page.tsx'
-      - 'app/api/__migration/**'
+      - 'app/p/__migration/**'
 
 permissions:
   contents: read
@@ -57,7 +57,7 @@ jobs:
           set -euo pipefail
           (
             sleep 8
-            node -e 'const base=process.env.CANDIDATE_URL; const paths=["/login","/","/api/__migration/supabase-probe","/p/__migration-ok","/p/__migration-not-found"]; for (const path of paths) { try { const r=await fetch(base+path,{redirect:"manual"}); const body=path.includes("__migration/supabase-probe") ? await r.text() : ""; console.error(`[probe] ${path} -> ${r.status}${body ? ` ${body}` : ""}`); } catch (error) { console.error(`[probe] ${path} -> request-error`, error); } }'
+            node -e 'const base=process.env.CANDIDATE_URL; const paths=["/login","/","/p/__migration/supabase-probe","/p/__migration-ok","/p/__migration-not-found"]; for (const path of paths) { try { const r=await fetch(base+path,{redirect:"manual"}); const body=path.includes("__migration/supabase-probe") ? await r.text() : ""; console.error(`[probe] ${path} -> ${r.status}${body ? ` ${body}` : ""}`); } catch (error) { console.error(`[probe] ${path} -> request-error`, error); } }'
           ) &
           traffic_pid=$!
           set +e
