@@ -1,4 +1,5 @@
 import type { TelegramCostLimitKey, TelegramOwnerCommand } from './contracts';
+import { PANEL_PARITY_ACTION_NAMES, type PanelParityActionName, type PanelParityArgs } from './panel-parity-types';
 import { normalizeCountryCode as normalizeCountryCodeCore, parseTelegramOwnerCommand as parseCore } from './parser-core';
 
 export const normalizeCountryCode = normalizeCountryCodeCore;
@@ -14,6 +15,11 @@ const REAL_COST_ALIASES: Record<string, TelegramCostLimitKey> = {
   deepai: 'daily_deep_ai_runs', deep_ai: 'daily_deep_ai_runs', 'دیپ': 'daily_deep_ai_runs',
 };
 
+const PANEL_ACTION_SET = new Set<string>(PANEL_PARITY_ACTION_NAMES);
+const PANEL_BOOLEAN_KEYS = new Set([
+  'enabled','requires_approval','cold_email_enabled','whatsapp_cold_enabled','instagram_auto_cold_enabled',
+  'manual_review_required','is_default','approved','active','requires_human','model_routing_enabled','confirm_large_change',
+]);
 const toLatinDigits = (value: string) => value
   .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
   .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
@@ -24,6 +30,17 @@ const numeric = (value: string | undefined) => {
   const number = Number(toLatinDigits(value).replace(/,/g, ''));
   return Number.isFinite(number) ? number : undefined;
 };
+const stripQuotes = (value: string) => {
+  const trimmed = value.trim();
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) return trimmed.slice(1,-1);
+  return trimmed;
+};
+const panelBoolean = (value: string) => {
+  const normalized = token(value);
+  if (['true','1','yes','on','enable','enabled','فعال','روشن'].includes(normalized)) return 'on';
+  if (['false','0','no','off','disable','disabled','غیرفعال','خاموش'].includes(normalized)) return 'off';
+  return value;
+};
 
 function explicitSafetyBlock(input: string): TelegramOwnerCommand | null {
   if (/(shadow\s*mode|شدو\s*مود|حالت\s*سایه)/i.test(input) && /(off|خاموش|غیرفعال|disable)/i.test(input)) return { type: 'SAFETY_BLOCK', reason: 'SHADOW_MODE' };
@@ -32,6 +49,44 @@ function explicitSafetyBlock(input: string): TelegramOwnerCommand | null {
   if (/(dnc|do.?not.?contact|عدم تماس|suppression)/i.test(input) && /(دور بزن|bypass|disable|خاموش|حذف)/i.test(input)) return { type: 'SAFETY_BLOCK', reason: 'DNC_BYPASS' };
   if (/(approval|تایید|تأیید)/i.test(input) && /(bypass|دور بزن|خاموش|disable)/i.test(input)) return { type: 'SAFETY_BLOCK', reason: 'APPROVAL_BYPASS' };
   if (/(whatsapp|واتساپ|instagram|اینستاگرام)/i.test(input) && /(auto cold|cold auto|ارسال خودکار سرد|اتو سرد)/i.test(input)) return { type: 'SAFETY_BLOCK', reason: 'AUTO_COLD_CHANNEL' };
+  return null;
+}
+
+function panelArgs(input: string): PanelParityArgs {
+  const args: PanelParityArgs = {};
+  const pattern = /([A-Za-z0-9_.-]+)=("([^"]*)"|'([^']*)'|([^\s]+))/g;
+  for (const match of input.matchAll(pattern)) {
+    const key = match[1];
+    const raw = toLatinDigits(match[3] ?? match[4] ?? match[5] ?? '');
+    args[key] = PANEL_BOOLEAN_KEYS.has(key) ? panelBoolean(raw) : raw;
+  }
+  return args;
+}
+
+function panelCommand(rawInput: string): TelegramOwnerCommand | null {
+  const normalized = toLatinDigits(rawInput).trim();
+  if (/^\/panel(?:@[A-Za-z0-9_]+)?\s*$/i.test(normalized) || /^(panel capabilities|قابلیت(?:‌| )?های پنل|دستورهای پنل)$/i.test(clean(normalized))) {
+    return { type:'SHOW_PANEL_CAPABILITIES' };
+  }
+  const panelMatch = normalized.match(/^\/panel(?:@[A-Za-z0-9_]+)?\s+([a-z0-9_.-]+)([\s\S]*)$/i);
+  if (panelMatch) {
+    const action = panelMatch[1] as PanelParityActionName;
+    if (!PANEL_ACTION_SET.has(action)) return { type:'SHOW_PANEL_CAPABILITIES' };
+    return { type:'PANEL_ACTION', action, args:panelArgs(panelMatch[2] ?? '') };
+  }
+  if (/^\/rescore(?:@[A-Za-z0-9_]+)?$/i.test(normalized)) return { type:'PANEL_ACTION', action:'growth.rescore', args:{} };
+  const promote = normalized.match(/^\/promote(?:@[A-Za-z0-9_]+)?(?:\s+(\d+))?$/i);
+  if (promote) return { type:'PANEL_ACTION', action:'growth.promote', args:promote[1]?{limit:promote[1]}:{} };
+  const social = normalized.match(/^\/socialreview(?:@[A-Za-z0-9_]+)?\s+(\S+)\s+(WEAK|INACTIVE|GOOD)\s+([\s\S]+)$/i);
+  if (social) return { type:'PANEL_ACTION', action:'growth.social_review', args:{opportunityId:social[1],quality:social[2].toUpperCase(),note:stripQuotes(social[3])} };
+  const website = normalized.match(/^\/webaudit(?:@[A-Za-z0-9_]+)?\s+(lead|business)\s+(\S+)$/i);
+  if (website) return { type:'PANEL_ACTION', action:'website.audit', args:website[1].toLowerCase()==='lead'?{leadId:website[2]}:{businessId:website[2]} };
+
+  const natural = clean(normalized);
+  if (/(بیزنس|کسب.?و.?کار|business).*(کش|cached).*(دوباره|re.?score|امتیاز)/i.test(natural) || /(دوباره.*امتیاز.*بیزنس|re.?score cached businesses)/i.test(natural)) {
+    return { type:'PANEL_ACTION', action:'growth.rescore', args:{} };
+  }
+  if (/(قابلیت|کارهای).*(پنل|control center).*(تلگرام|telegram)/i.test(natural)) return { type:'SHOW_PANEL_CAPABILITIES' };
   return null;
 }
 
@@ -64,6 +119,8 @@ export function parseTelegramOwnerCommand(rawInput: string): TelegramOwnerComman
   if (/^\/alert_?test(?:@[A-Za-z0-9_]+)?$/i.test(input)) return { type: 'TEST_OWNER_ALERT' };
   const safety = explicitSafetyBlock(input);
   if (safety) return safety;
+  const panel = panelCommand(rawInput);
+  if (panel) return panel;
   const cost = realCostCommand(input);
   if (cost) return cost;
   return parseCore(input);
