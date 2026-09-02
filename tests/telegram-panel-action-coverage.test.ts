@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PANEL_PARITY_ACTION_NAMES } from '../lib/telegram/panel-parity-types';
 
@@ -62,7 +62,22 @@ function exportedAsyncFunctions(path: string) {
   return [...source.matchAll(/export\s+async\s+function\s+([A-Za-z0-9_]+)/g)].map(match => match[1]).sort();
 }
 
+function actionFiles(directory: string): string[] {
+  const root = resolve(process.cwd(), directory);
+  const walk = (current: string): string[] => readdirSync(current, { withFileTypes:true }).flatMap(entry => {
+    const full = join(current, entry.name);
+    if (entry.isDirectory()) return walk(full);
+    if (!entry.isFile() || !entry.name.endsWith('-actions.ts')) return [];
+    return [relative(process.cwd(), full).replaceAll('\\','/')];
+  });
+  return walk(root).sort();
+}
+
 describe('Control Center ↔ Telegram action coverage', () => {
+  it('classifies every app *-actions.ts module so future panel actions cannot silently drift away from Telegram', () => {
+    expect(Object.keys(CLASSIFICATION).sort()).toEqual(actionFiles('app'));
+  });
+
   for (const [path, classified] of Object.entries(CLASSIFICATION)) {
     it(`classifies every exported Server Action in ${path}`, () => {
       expect(Object.keys(classified).sort()).toEqual(exportedAsyncFunctions(path));
