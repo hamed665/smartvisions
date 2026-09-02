@@ -28,6 +28,7 @@ jobs:
       NEXT_PUBLIC_SUPABASE_URL: https://pkypexzpyfbikdnkrzvw.supabase.co
       CANDIDATE_URL: https://smartvisions-growth-os-release-candidate.hamedarezoo900.workers.dev
       PRODUCTION_URL: https://app.smartvisionsai.com
+      LEGACY_VERCEL_URL: https://smartvisions.vercel.app
       EMAIL_PROVIDER: RESEND
       GLOBAL_KILL_SWITCH: false
       SHADOW_MODE: true
@@ -42,7 +43,7 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Cutover credential and permission preflight
+      - name: Credential and Cloudflare permission preflight
         shell: bash
         run: |
           set -euo pipefail
@@ -52,7 +53,10 @@ jobs:
           require CLOUDFLARE_ACCOUNT_ID
           require NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
           require GROWTH_PRODUCTION_SECRETS_JSON
-          if [ -z "${SUPABASE_SECRET_KEY:-}" ] && [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then echo "::error::Missing Growth Supabase server credential"; missing=1; fi
+          if [ -z "${SUPABASE_SECRET_KEY:-}" ] && [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            echo "::error::Missing Growth Supabase server credential"
+            missing=1
+          fi
           [ "$missing" -eq 0 ] || exit 1
           node <<'NODE'
           const token=process.env.CLOUDFLARE_API_TOKEN;
@@ -60,26 +64,42 @@ jobs:
           const headers={Authorization:`Bearer ${token}`};
           async function cf(path){const r=await fetch(api+path,{headers});const j=await r.json().catch(()=>({}));return {r,j};}
           const z=await cf('/zones?name=smartvisionsai.com&status=active&per_page=50');
-          if(!z.r.ok||z.j.success===false||(z.j.result||[]).length!==1)throw new Error('Cloudflare zone read permission unavailable');
+          if(!z.r.ok||z.j.success===false||(z.j.result||[]).length!==1)throw new Error('Cloudflare zone read unavailable');
           const zone=z.j.result[0];
           const dns=await cf(`/zones/${zone.id}/dns_records?name=app.smartvisionsai.com&per_page=100`);
-          if(!dns.r.ok||dns.j.success===false)throw new Error('Cloudflare DNS Read/Edit permission is required for safe snapshot');
+          if(!dns.r.ok||dns.j.success===false)throw new Error('Cloudflare DNS permission unavailable');
           const routes=await cf(`/zones/${zone.id}/workers/routes`);
-          if(!routes.r.ok||routes.j.success===false)throw new Error('Cloudflare Workers Routes Read/Edit permission is required');
-          console.log('Cloudflare cutover permissions validated without printing credentials.');
+          if(!routes.r.ok||routes.j.success===false)throw new Error('Cloudflare Workers Routes permission unavailable');
+          console.log('Cloudflare cutover permissions validated; values not printed.');
           NODE
 
-      - name: Validate production secret bundle
+      - name: Validate production secret bundle names only
+        shell: bash
         run: |
+          set -euo pipefail
           node <<'NODE'
           const s=JSON.parse(process.env.GROWTH_PRODUCTION_SECRETS_JSON||'{}');
-          const required=['OPENAI_API_KEY','GOOGLE_PLACES_API_KEY','INTERNAL_API_KEY','META_APP_SECRET','META_WEBHOOK_VERIFY_TOKEN','EMAIL_PROVIDER_API_KEY','EMAIL_WEBHOOK_SECRET','TELEGRAM_BOT_TOKEN','TELEGRAM_WEBHOOK_SECRET','TELEGRAM_OWNER_USER_ID','TELEGRAM_OWNER_CHAT_ID','TELEGRAM_ORGANIZATION_ID'];
+          const required=[
+            'OPENAI_API_KEY','GOOGLE_PLACES_API_KEY','INTERNAL_API_KEY',
+            'META_APP_SECRET','META_WEBHOOK_VERIFY_TOKEN',
+            'EMAIL_PROVIDER_API_KEY','EMAIL_WEBHOOK_SECRET',
+            'TELEGRAM_BOT_TOKEN','TELEGRAM_WEBHOOK_SECRET',
+            'TELEGRAM_OWNER_USER_ID','TELEGRAM_OWNER_CHAT_ID','TELEGRAM_ORGANIZATION_ID'
+          ];
           const missing=required.filter(k=>!String(s[k]??'').trim());
           if(!String(s.META_WHATSAPP_ACCESS_TOKEN??s.META_WHATSAPP_TOKEN??s.WHATSAPP_ACCESS_TOKEN??'').trim())missing.push('WhatsApp access token alias');
           if(!String(s.META_WHATSAPP_PHONE_NUMBER_ID??s.WHATSAPP_PHONE_NUMBER_ID??'').trim())missing.push('WhatsApp phone-number ID alias');
-          if(missing.length)throw new Error(`Production secret bundle missing required key(s): ${missing.join(', ')}`);
-          console.log(`Production secret bundle validated: ${Object.keys(s).length} key(s); values not printed.`);
+          if(missing.length)throw new Error(`Production secret bundle missing: ${missing.join(', ')}`);
+          console.log(`Production secret bundle validated: ${Object.keys(s).length} key name(s); values not printed.`);
           NODE
+
+      - name: Verify legacy Vercel rollback before any mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl --silent --show-error --max-time 30 --output /dev/null --write-out '%{http_code}' "$LEGACY_VERCEL_URL/login")"
+          [ "$code" = "200" ] || { echo "::error::Legacy Vercel rollback /login returned HTTP $code"; exit 1; }
+          echo "Legacy Vercel rollback is healthy at its existing production URL."
 
       - name: Validate Growth Supabase credential read-only
         shell: bash
@@ -96,103 +116,136 @@ jobs:
           npx vinext check
           npm run build:vinext
 
-      - name: Prepare ephemeral runtime secrets file
+      - name: Prepare ephemeral Worker secret bindings
+        shell: bash
         run: |
+          set -euo pipefail
           node <<'NODE'
           const fs=require('node:fs');
           const bundle=JSON.parse(process.env.GROWTH_PRODUCTION_SECRETS_JSON||'{}');
-          const allowed=new Set(['OPENAI_API_KEY','OPENAI_AGENT_MODEL','GOOGLE_PLACES_API_KEY','META_WHATSAPP_ACCESS_TOKEN','META_WHATSAPP_TOKEN','META_WHATSAPP_PHONE_NUMBER_ID','META_WHATSAPP_CATALOG_ID','WHATSAPP_ACCESS_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_CATALOG_ID','META_GRAPH_VERSION','META_APP_SECRET','META_WEBHOOK_VERIFY_TOKEN','EMAIL_PROVIDER_API_KEY','EMAIL_WEBHOOK_SECRET','REDIS_URL','CRAWL4AI_URL','INTERNAL_API_KEY','TELEGRAM_BOT_TOKEN','TELEGRAM_WEBHOOK_SECRET','TELEGRAM_OWNER_USER_ID','TELEGRAM_OWNER_CHAT_ID','TELEGRAM_ORGANIZATION_ID']);
+          const allowed=new Set([
+            'OPENAI_API_KEY','OPENAI_AGENT_MODEL','GOOGLE_PLACES_API_KEY',
+            'META_WHATSAPP_ACCESS_TOKEN','META_WHATSAPP_TOKEN','META_WHATSAPP_PHONE_NUMBER_ID','META_WHATSAPP_CATALOG_ID',
+            'WHATSAPP_ACCESS_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_CATALOG_ID','META_GRAPH_VERSION',
+            'META_APP_SECRET','META_WEBHOOK_VERIFY_TOKEN','EMAIL_PROVIDER_API_KEY','EMAIL_WEBHOOK_SECRET',
+            'REDIS_URL','CRAWL4AI_URL','INTERNAL_API_KEY','TELEGRAM_BOT_TOKEN','TELEGRAM_WEBHOOK_SECRET',
+            'TELEGRAM_OWNER_USER_ID','TELEGRAM_OWNER_CHAT_ID','TELEGRAM_ORGANIZATION_ID'
+          ]);
           const out={};
           for(const [k,v] of Object.entries(bundle))if(allowed.has(k)&&String(v??'').length)out[k]=String(v);
           out.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
           if(process.env.SUPABASE_SECRET_KEY)out.SUPABASE_SECRET_KEY=process.env.SUPABASE_SECRET_KEY;
           if(process.env.SUPABASE_SERVICE_ROLE_KEY)out.SUPABASE_SERVICE_ROLE_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY;
           fs.writeFileSync('.growth-runtime-secrets.json',JSON.stringify(out),{mode:0o600});
-          console.log(`Prepared ${Object.keys(out).length} runtime secret binding(s); values not printed.`);
+          console.log(`Prepared ${Object.keys(out).length} Worker secret binding(s); values not printed.`);
+          NODE
+
+      - name: Prepare production-shaped isolated candidate config
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('node:fs');
+          const f='dist/server/wrangler.json';
+          const c=JSON.parse(fs.readFileSync(f,'utf8'));
+          c.name='smartvisions-growth-os-release-candidate';
+          c.workers_dev=true;
+          c.vars={...(c.vars||{}),DEPLOYMENT_ENV:'production',NEXT_PUBLIC_APP_NAME:'Smart Visions Growth OS',NEXT_PUBLIC_SUPABASE_URL:'https://pkypexzpyfbikdnkrzvw.supabase.co',APP_BASE_URL:'https://app.smartvisionsai.com',EMAIL_PROVIDER:'RESEND',GLOBAL_KILL_SWITCH:'false',SHADOW_MODE:'true'};
+          c.limits={...(c.limits||{}),cpu_ms:100};
+          delete c.routes; delete c.route;
+          fs.writeFileSync(f,JSON.stringify(c,null,2)+'\n');
           NODE
 
       - name: Deploy and smoke isolated release candidate
         shell: bash
         run: |
           set -euo pipefail
-          node <<'NODE'
-          const fs=require('node:fs'); const f='dist/server/wrangler.json'; const c=JSON.parse(fs.readFileSync(f,'utf8'));
-          c.name='smartvisions-growth-os-release-candidate'; c.workers_dev=true;
-          c.vars={...(c.vars||{}),DEPLOYMENT_ENV:'production',NEXT_PUBLIC_APP_NAME:'Smart Visions Growth OS',NEXT_PUBLIC_SUPABASE_URL:'https://pkypexzpyfbikdnkrzvw.supabase.co',APP_BASE_URL:'https://app.smartvisionsai.com',EMAIL_PROVIDER:'RESEND',GLOBAL_KILL_SWITCH:'false',SHADOW_MODE:'true'};
-          c.limits={...(c.limits||{}),cpu_ms:100}; delete c.routes; delete c.route; fs.writeFileSync(f,JSON.stringify(c,null,2)+'\n');
-          NODE
-          npx wrangler deploy --secrets-file .growth-runtime-secrets.json --config dist/server/wrangler.json
+          npx wrangler deploy --config dist/server/wrangler.json
+          npx wrangler secret bulk .growth-runtime-secrets.json --config dist/server/wrangler.json >/dev/null
           node scripts/cloudflare-safe-smoke.mjs
 
-      - name: Deploy same validated bundle to unrouted production Worker
+      - name: Promote exact validated bundle to unrouted production Worker
         shell: bash
         run: |
           set -euo pipefail
           node <<'NODE'
-          const fs=require('node:fs'); const f='dist/server/wrangler.json'; const c=JSON.parse(fs.readFileSync(f,'utf8'));
-          c.name='smartvisions-growth-os-production'; if(c.limits?.cpu_ms!==100)throw new Error('CPU guard drifted'); if(c.routes||c.route)throw new Error('Cutover bundle must not carry routes');
+          const fs=require('node:fs');
+          const f='dist/server/wrangler.json';
+          const c=JSON.parse(fs.readFileSync(f,'utf8'));
+          c.name='smartvisions-growth-os-production';
+          if(c.limits?.cpu_ms!==100)throw new Error('CPU guard drifted');
+          if(c.routes||c.route)throw new Error('Production bundle must not carry routes');
           fs.writeFileSync(f,JSON.stringify(c,null,2)+'\n');
           NODE
-          npx wrangler deploy --secrets-file .growth-runtime-secrets.json --config dist/server/wrangler.json
+          npx wrangler deploy --config dist/server/wrangler.json
+          npx wrangler secret bulk .growth-runtime-secrets.json --config dist/server/wrangler.json >/dev/null
 
-      - name: Snapshot DNS and Worker Route state
+      - name: Snapshot exact app DNS and Worker Route state
         shell: bash
         run: |
           set -euo pipefail
           node <<'NODE'
-          const fs=require('node:fs'); const token=process.env.CLOUDFLARE_API_TOKEN; const api='https://api.cloudflare.com/client/v4'; const headers={Authorization:`Bearer ${token}`};
+          const fs=require('node:fs');
+          const token=process.env.CLOUDFLARE_API_TOKEN;
+          const api='https://api.cloudflare.com/client/v4';
+          const headers={Authorization:`Bearer ${token}`};
           async function cf(path){const r=await fetch(api+path,{headers});const j=await r.json();if(!r.ok||j.success===false)throw new Error(`Cloudflare read failed: ${path}`);return j;}
-          const zones=(await cf('/zones?name=smartvisionsai.com&status=active&per_page=50')).result||[]; if(zones.length!==1)throw new Error('Zone lookup mismatch'); const zone=zones[0];
+          const zones=(await cf('/zones?name=smartvisionsai.com&status=active&per_page=50')).result||[];
+          if(zones.length!==1)throw new Error('Zone lookup mismatch');
+          const zone=zones[0];
           const dns=(await cf(`/zones/${zone.id}/dns_records?name=app.smartvisionsai.com&per_page=100`)).result||[];
           const routes=(await cf(`/zones/${zone.id}/workers/routes`)).result||[];
-          const snapshot={zoneId:zone.id,dns:dns.map(r=>({id:r.id,type:r.type,name:r.name,content:r.content,proxied:r.proxied,ttl:r.ttl})),routes:routes.filter(r=>r.pattern==='app.smartvisionsai.com/*').map(r=>({id:r.id,pattern:r.pattern,script:r.script||null}))};
+          const exactRoutes=routes.filter(r=>r.pattern==='app.smartvisionsai.com/*');
+          if(dns.length>1||exactRoutes.length>1)throw new Error('Ambiguous existing app DNS/route state; refusing cutover');
+          const snapshot={
+            zoneId:zone.id,
+            dns:dns.map(r=>({type:r.type,name:r.name,content:r.content,proxied:r.proxied,ttl:r.ttl})),
+            routes:exactRoutes.map(r=>({pattern:r.pattern,script:r.script||null}))
+          };
           fs.writeFileSync('cutover-snapshot.json',JSON.stringify(snapshot,null,2));
-          console.log(`Snapshot captured: DNS records=${snapshot.dns.length}, exact routes=${snapshot.routes.length}.`);
+          console.log(`Cutover snapshot captured: DNS=${snapshot.dns.length}, exact routes=${snapshot.routes.length}.`);
           NODE
 
-      - name: Establish proxied Vercel fallback origin
+      - name: Create proxied app DNS bridge
         shell: bash
         run: |
           set -euo pipefail
           node <<'NODE'
-          const fs=require('node:fs'); const s=JSON.parse(fs.readFileSync('cutover-snapshot.json','utf8')); const token=process.env.CLOUDFLARE_API_TOKEN; const api='https://api.cloudflare.com/client/v4';
+          const fs=require('node:fs');
+          const s=JSON.parse(fs.readFileSync('cutover-snapshot.json','utf8'));
+          const token=process.env.CLOUDFLARE_API_TOKEN;
+          const api='https://api.cloudflare.com/client/v4';
           const headers={Authorization:`Bearer ${token}`,'Content-Type':'application/json'};
           async function call(method,path,body){const r=await fetch(api+path,{method,headers,body:body?JSON.stringify(body):undefined});const j=await r.json();if(!r.ok||j.success===false)throw new Error(`Cloudflare write failed: ${method} ${path}`);return j;}
-          if(s.dns.length>1)throw new Error('Multiple app.smartvisionsai.com DNS records exist; refusing mutation');
-          const desired={type:'CNAME',name:'app',content:'cname.vercel-dns-0.com',ttl:1,proxied:true};
-          if(!s.dns.length){await call('POST',`/zones/${s.zoneId}/dns_records`,desired);console.log('Created proxied app fallback CNAME.');}
-          else {const r=s.dns[0];if(r.type!=='CNAME')throw new Error(`Existing app DNS type is ${r.type}; refusing overwrite`);await call('PUT',`/zones/${s.zoneId}/dns_records/${r.id}`,desired);console.log('Updated existing app CNAME to proxied Vercel fallback target.');}
+          const list=await call('GET',`/zones/${s.zoneId}/dns_records?name=app.smartvisionsai.com&per_page=100`);
+          const current=list.result||[];
+          if(current.length>1)throw new Error('Multiple app DNS records appeared; refusing mutation');
+          const desired={type:'CNAME',name:'app',content:'smartvisions.vercel.app',ttl:1,proxied:true};
+          if(!current.length){await call('POST',`/zones/${s.zoneId}/dns_records`,desired);console.log('Created proxied app DNS bridge.');}
+          else {
+            if(current[0].type!=='CNAME')throw new Error(`Existing app DNS type is ${current[0].type}; refusing overwrite`);
+            await call('PUT',`/zones/${s.zoneId}/dns_records/${current[0].id}`,desired);
+            console.log('Updated existing app CNAME to the rollback bridge target.');
+          }
           NODE
 
-      - name: Verify Vercel fallback before attaching Worker Route
-        shell: bash
-        run: |
-          set -euo pipefail
-          ok=0
-          for attempt in $(seq 1 20); do
-            tmp="$(mktemp -d)"
-            code="$(curl --silent --show-error --noproxy '*' --doh-url https://cloudflare-dns.com/dns-query --max-time 20 --dump-header "$tmp/h" --output "$tmp/b" --write-out '%{http_code}' "$PRODUCTION_URL/login" || printf '000')"
-            server="$(awk 'BEGIN{IGNORECASE=1} /^server:/{gsub(/\r/,"");print $2;exit}' "$tmp/h" || true)"
-            rm -rf "$tmp"
-            echo "Vercel fallback probe attempt $attempt -> HTTP $code server=${server:-unknown}"
-            if [ "$code" = "200" ] && [[ "${server,,}" == *vercel* ]]; then ok=1; break; fi
-            sleep 3
-          done
-          [ "$ok" -eq 1 ] || { echo "::error::Vercel fallback is not ready on app.smartvisionsai.com; Worker Route will not be attached."; exit 1; }
-
-      - name: Attach Growth Worker Route
+      - name: Attach Growth production Worker Route
         shell: bash
         run: |
           set -euo pipefail
           node <<'NODE'
-          const fs=require('node:fs'); const s=JSON.parse(fs.readFileSync('cutover-snapshot.json','utf8')); const token=process.env.CLOUDFLARE_API_TOKEN; const api='https://api.cloudflare.com/client/v4'; const headers={Authorization:`Bearer ${token}`,'Content-Type':'application/json'};
+          const fs=require('node:fs');
+          const s=JSON.parse(fs.readFileSync('cutover-snapshot.json','utf8'));
+          const token=process.env.CLOUDFLARE_API_TOKEN;
+          const api='https://api.cloudflare.com/client/v4';
+          const headers={Authorization:`Bearer ${token}`,'Content-Type':'application/json'};
           async function call(method,path,body){const r=await fetch(api+path,{method,headers,body:body?JSON.stringify(body):undefined});const j=await r.json();if(!r.ok||j.success===false)throw new Error(`Cloudflare route write failed: ${method} ${path}`);return j;}
-          if(s.routes.length>1)throw new Error('Multiple exact app Worker Routes exist; refusing mutation');
-          const body={pattern:'app.smartvisionsai.com/*',script:'smartvisions-growth-os-production'};
-          if(!s.routes.length)await call('POST',`/zones/${s.zoneId}/workers/routes`,body);
-          else if(s.routes[0].script==='smartvisions-growth-os-production')console.log('Growth Worker Route already points to production Worker.');
-          else throw new Error(`Existing app route points to ${s.routes[0].script||'no script'}; refusing overwrite`);
-          console.log('Growth Worker Route attached.');
+          const list=await call('GET',`/zones/${s.zoneId}/workers/routes`);
+          const exact=(list.result||[]).filter(r=>r.pattern==='app.smartvisionsai.com/*');
+          if(exact.length>1)throw new Error('Multiple exact app Worker Routes exist; refusing mutation');
+          if(exact.length===1&&exact[0].script!=='smartvisions-growth-os-production')throw new Error(`Existing app route points to ${exact[0].script||'no script'}; refusing overwrite`);
+          if(!exact.length)await call('POST',`/zones/${s.zoneId}/workers/routes`,{pattern:'app.smartvisionsai.com/*',script:'smartvisions-growth-os-production'});
+          console.log('Growth production Worker Route is attached.');
           NODE
 
       - name: Routed production smoke
@@ -200,37 +253,53 @@ jobs:
         run: |
           set -euo pipefail
           tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
-          check(){ path="$1"; expected="$2"; name="$(printf '%s' "$path"|tr '/?' '__')"; code="$(curl --silent --show-error --noproxy '*' --doh-url https://cloudflare-dns.com/dns-query --max-time 30 --dump-header "$tmp/$name.h" --output "$tmp/$name.b" --write-out '%{http_code}' "$PRODUCTION_URL$path" || printf '000')"; ray="$(grep -i '^cf-ray:' "$tmp/$name.h" || true)"; echo "$path -> HTTP $code cf-ray=$([ -n "$ray" ]&&echo yes||echo no)"; [[ "$code" =~ ^($expected)$ ]]&&[ -n "$ray" ]; }
-          check "/login" "200"
+          check(){
+            path="$1"; expected="$2"; name="$(printf '%s' "$path"|tr '/?' '__')";
+            code="$(curl --silent --show-error --noproxy '*' --doh-url https://cloudflare-dns.com/dns-query --max-time 30 --dump-header "$tmp/$name.h" --output "$tmp/$name.b" --write-out '%{http_code}' "$PRODUCTION_URL$path" || printf '000')";
+            ray="$(grep -i '^cf-ray:' "$tmp/$name.h" || true)";
+            echo "$path -> HTTP $code cf-ray=$([ -n "$ray" ]&&echo yes||echo no)";
+            [[ "$code" =~ ^($expected)$ ]]&&[ -n "$ray" ];
+          }
+          for attempt in $(seq 1 20); do
+            if check "/login" "200"; then ready=1; break; fi
+            sleep 3
+          done
+          [ "${ready:-0}" = "1" ] || { echo "::error::Production route did not become healthy"; exit 1; }
           check "/" "301|302|303|307|308"
           check "/p/cloudflare-cutover-missing-$GITHUB_RUN_ID" "404"
           CANDIDATE_URL="$PRODUCTION_URL" node scripts/cloudflare-safe-smoke.mjs
 
-      - name: Roll back DNS and route on failed cutover
+      - name: Roll back app DNS and route on failed cutover
         if: failure() && hashFiles('cutover-snapshot.json') != ''
         shell: bash
         run: |
           set +e
           node <<'NODE'
-          const fs=require('node:fs'); const s=JSON.parse(fs.readFileSync('cutover-snapshot.json','utf8')); const token=process.env.CLOUDFLARE_API_TOKEN; const api='https://api.cloudflare.com/client/v4'; const headers={Authorization:`Bearer ${token}`,'Content-Type':'application/json'};
+          const fs=require('node:fs');
+          const s=JSON.parse(fs.readFileSync('cutover-snapshot.json','utf8'));
+          const token=process.env.CLOUDFLARE_API_TOKEN;
+          const api='https://api.cloudflare.com/client/v4';
+          const headers={Authorization:`Bearer ${token}`,'Content-Type':'application/json'};
           async function call(method,path,body){const r=await fetch(api+path,{method,headers,body:body?JSON.stringify(body):undefined});const j=await r.json().catch(()=>({}));return {ok:r.ok&&j.success!==false,j};}
-          const currentRoutes=await call('GET',`/zones/${s.zoneId}/workers/routes`); if(currentRoutes.ok){for(const r of currentRoutes.j.result||[]){if(r.pattern==='app.smartvisionsai.com/*')await call('DELETE',`/zones/${s.zoneId}/workers/routes/${r.id}`);}}
-          for(const r of s.routes){await call('POST',`/zones/${s.zoneId}/workers/routes`,{pattern:r.pattern,script:r.script});}
-          const currentDns=await call('GET',`/zones/${s.zoneId}/dns_records?name=app.smartvisionsai.com&per_page=100`); if(currentDns.ok){for(const r of currentDns.j.result||[])await call('DELETE',`/zones/${s.zoneId}/dns_records/${r.id}`);}
-          for(const r of s.dns){await call('POST',`/zones/${s.zoneId}/dns_records`,{type:r.type,name:r.name,content:r.content,proxied:r.proxied,ttl:r.ttl});}
-          console.log('Rollback attempted to restore the exact pre-cutover app DNS and Worker Route shape.');
-          NODE
 
-      - name: Cleanup ephemeral secret file
-        if: always()
-        run: rm -f .growth-runtime-secrets.json
+          const routes=await call('GET',`/zones/${s.zoneId}/workers/routes`);
+          for(const r of (routes.j.result||[]).filter(x=>x.pattern==='app.smartvisionsai.com/*'))await call('DELETE',`/zones/${s.zoneId}/workers/routes/${r.id}`);
+          for(const r of s.routes)await call('POST',`/zones/${s.zoneId}/workers/routes`,{pattern:r.pattern,script:r.script});
+
+          const dns=await call('GET',`/zones/${s.zoneId}/dns_records?name=app.smartvisionsai.com&per_page=100`);
+          for(const r of (dns.j.result||[]))await call('DELETE',`/zones/${s.zoneId}/dns_records/${r.id}`);
+          for(const r of s.dns)await call('POST',`/zones/${s.zoneId}/dns_records`,{type:r.type,name:r.name,content:r.content,proxied:r.proxied,ttl:r.ttl});
+          console.log('Rollback attempt completed. Existing Vercel production URL was never modified.');
+          NODE
+          curl --silent --show-error --max-time 30 --output /dev/null --write-out 'legacy-vercel-login HTTP %{http_code}\n' "$LEGACY_VERCEL_URL/login" || true
 
       - name: Cutover summary
         if: always()
         run: |
+          rm -f .growth-runtime-secrets.json cutover-snapshot.json
           echo "Production Worker: smartvisions-growth-os-production"
-          echo "Production hostname: app.smartvisionsai.com"
-          echo "Fallback origin: Vercel CNAME behind Cloudflare proxy"
-          echo "Rollback snapshot: cutover-snapshot.json (runner-local during cutover)"
+          echo "Production URL: https://app.smartvisionsai.com"
+          echo "Legacy rollback URL retained: https://smartvisions.vercel.app"
           echo "CPU guard: 100ms"
-          echo "Real outreach/provider sends invoked: none"
+          echo "Website apex/www routes: not modified"
+          echo "Real outreach/provider sends: none"
