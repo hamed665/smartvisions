@@ -46,38 +46,33 @@ await check('/', {}, [301, 302, 303, 307, 308], 'unauthenticated app redirect');
 await check('/p/__cloudflare_notfound_probe__', {}, [404], 'candidate direct notFound probe');
 await check(`/p/cloudflare-migration-missing-${Date.now()}`, {}, [404], 'Supabase-backed public preview miss');
 
-if (secret('INTERNAL_API_KEY')) {
-  const guardedPosts = [
-    '/api/ai/process-inbound',
-    '/api/email/send',
-    '/api/hunters/business/audit',
-    '/api/hunters/business/discover',
-    '/api/outreach/approved-send',
-    '/api/outreach/message-plan',
-    '/api/whatsapp/send',
-    '/api/whatsapp/voice/transcribe',
-  ];
-  for (const path of guardedPosts) {
-    await check(path, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}',
-    }, [401], `${path} internal-auth guard`);
-  }
-} else {
-  console.log('Provider/API guard smoke skipped: INTERNAL_API_KEY not present.');
+const guardedPosts = [
+  '/api/ai/process-inbound',
+  '/api/email/send',
+  '/api/hunters/business/audit',
+  '/api/hunters/business/discover',
+  '/api/outreach/approved-send',
+  '/api/outreach/message-plan',
+  '/api/whatsapp/send',
+  '/api/whatsapp/voice/transcribe',
+];
+for (const path of guardedPosts) {
+  await check(path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+  }, [401], `${path} internal-auth guard`);
 }
 
-const metaSecret = secret('META_APP_SECRET');
-const metaVerifyToken = secret('META_WEBHOOK_VERIFY_TOKEN');
-if (metaSecret && metaVerifyToken) {
-  await check('/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=cloudflare-invalid-fixture&hub.challenge=safe', {}, [403], 'WhatsApp verification reject path');
-  await check('/api/whatsapp/webhook', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-hub-signature-256': 'sha256=invalid-fixture' },
-    body: '{}',
-  }, [401], 'WhatsApp signature reject path');
+await check('/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=cloudflare-invalid-fixture&hub.challenge=safe', {}, [403], 'WhatsApp verification reject path');
+await check('/api/whatsapp/webhook', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', 'x-hub-signature-256': 'sha256=invalid-fixture' },
+  body: '{}',
+}, [401], 'WhatsApp signature reject path');
 
+const metaSecret = secret('META_APP_SECRET');
+if (metaSecret) {
   const rawBody = '{}';
   const signature = `sha256=${createHmac('sha256', metaSecret).update(rawBody, 'utf8').digest('hex')}`;
   await check('/api/whatsapp/webhook', {
@@ -86,22 +81,22 @@ if (metaSecret && metaVerifyToken) {
     body: rawBody,
   }, [200], 'WhatsApp valid-signature empty-event path');
 } else {
-  console.log('WhatsApp signed smoke skipped: provider secrets not present.');
+  console.log('WhatsApp valid-signature no-op smoke skipped: META_APP_SECRET not locally available.');
 }
+
+await check('/api/email/webhook', {
+  method: 'POST',
+  headers: {
+    'content-type': 'application/json',
+    'svix-id': 'cloudflare-invalid-fixture',
+    'svix-timestamp': String(Math.floor(Date.now() / 1000)),
+    'svix-signature': 'v1,invalid-fixture',
+  },
+  body: '{}',
+}, [401], 'Email signature reject path');
 
 const emailSecret = secret('EMAIL_WEBHOOK_SECRET');
 if (emailSecret) {
-  await check('/api/email/webhook', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'svix-id': 'cloudflare-invalid-fixture',
-      'svix-timestamp': String(Math.floor(Date.now() / 1000)),
-      'svix-signature': 'v1,invalid-fixture',
-    },
-    body: '{}',
-  }, [401], 'Email signature reject path');
-
   const rawBody = '{}';
   const id = `cf_${randomUUID()}`;
   const timestamp = String(Math.floor(Date.now() / 1000));
@@ -119,18 +114,14 @@ if (emailSecret) {
     body: rawBody,
   }, [200], 'Email valid-signature ignored-event path');
 } else {
-  console.log('Email signed smoke skipped: provider secret not present.');
+  console.log('Email valid-signature no-op smoke skipped: EMAIL_WEBHOOK_SECRET not locally available.');
 }
 
-if (secret('TELEGRAM_WEBHOOK_SECRET')) {
-  await check('/api/telegram/webhook', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: '{}',
-  }, [401], 'Telegram secret-token reject path');
-} else {
-  console.log('Telegram webhook smoke skipped: provider secret not present.');
-}
+await check('/api/telegram/webhook', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: '{}',
+}, [401], 'Telegram secret-token reject path');
 
 if (failures) throw new Error(`Cloudflare safe smoke failed with ${failures} check(s)`);
 console.log('Cloudflare safe smoke passed. No outbound provider send was invoked.');
