@@ -21,6 +21,7 @@ async function check(path, init, expected, label) {
 
 await check('/login', {}, [200], 'login page');
 await check('/', {}, [301, 302, 303, 307, 308], 'unauthenticated app redirect');
+await check('/p/__cloudflare_notfound_probe__', {}, [404], 'candidate direct notFound probe');
 await check(`/p/cloudflare-migration-missing-${Date.now()}`, {}, [404], 'Supabase-backed public preview miss');
 
 if (process.env.INTERNAL_API_KEY) {
