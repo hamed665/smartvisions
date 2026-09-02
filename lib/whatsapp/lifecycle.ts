@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { isDoNotContactReply, persistCustomerDoNotContact } from '@/lib/conversations/sales-lifecycle';
 import type { NormalizedWhatsAppInbound, NormalizedWhatsAppStatus } from './webhook';
 
 function serviceClient() {
@@ -117,6 +118,18 @@ export async function applyWhatsAppInboundLifecycle(organizationId: string, even
   });
   if (messageError && !isWhatsAppInboundDuplicateError(messageError.code)) {
     throw new Error(`WhatsApp inbound message persistence failed: ${messageError.message}`);
+  }
+
+  if (isDoNotContactReply(body)) {
+    await persistCustomerDoNotContact({
+      supabase,
+      organizationId,
+      leadId: lead.id,
+      conversationId: conversation.id,
+      phone: event.from,
+      source: 'WHATSAPP_INBOUND',
+    });
+    return { linked: true as const, leadId: lead.id, conversationId: conversation.id, agentMode: 'PAUSED' as const, doNotContact: true as const };
   }
 
   const terminal = new Set(['WON','LOST','DO_NOT_CONTACT','HUMAN']);
