@@ -1,8 +1,8 @@
-import { lookup } from 'node:dns/promises';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Crawl4AiAuditor } from '@/lib/audit/crawl4ai';
-import { isPrivateIp, normalizeAuditUrl } from '@/lib/hunters/business/website-audit';
+import { assertPublicHostname } from '@/lib/hunters/business/public-dns';
+import { normalizeAuditUrl } from '@/lib/hunters/business/website-audit';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
 
@@ -15,9 +15,7 @@ function serviceClient() {
 
 async function assertPublicUrl(value: string) {
   const url = normalizeAuditUrl(value);
-  if (isPrivateIp(url.hostname)) throw new Error('Private/local audit targets are blocked');
-  const addresses = await lookup(url.hostname, { all: true, verbatim: true });
-  if (!addresses.length || addresses.some((entry) => isPrivateIp(entry.address))) throw new Error('Website resolved to a blocked/private address');
+  await assertPublicHostname(url.hostname);
   return url.toString();
 }
 
