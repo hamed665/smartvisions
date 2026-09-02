@@ -3,6 +3,17 @@ import { createHmac, randomUUID } from 'node:crypto';
 const base = String(process.env.CANDIDATE_URL || '').replace(/\/$/, '');
 if (!base) throw new Error('CANDIDATE_URL is required');
 
+let bundledSecrets = {};
+if (process.env.GROWTH_PRODUCTION_SECRETS_JSON) {
+  try {
+    const parsed = JSON.parse(process.env.GROWTH_PRODUCTION_SECRETS_JSON);
+    if (parsed && !Array.isArray(parsed) && typeof parsed === 'object') bundledSecrets = parsed;
+  } catch {
+    throw new Error('GROWTH_PRODUCTION_SECRETS_JSON is not valid JSON');
+  }
+}
+
+const secret = (key) => String(process.env[key] ?? bundledSecrets[key] ?? '').trim();
 let failures = 0;
 
 async function check(path, init, expected, label) {
@@ -12,7 +23,7 @@ async function check(path, init, expected, label) {
     console.log(`${label}: HTTP ${response.status} ${ok ? 'PASS' : 'FAIL'}`);
     if (!ok) failures += 1;
     return response;
-  } catch (error) {
+  } catch {
     console.error(`${label}: request failed`);
     failures += 1;
     return null;
@@ -24,7 +35,7 @@ await check('/', {}, [301, 302, 303, 307, 308], 'unauthenticated app redirect');
 await check('/p/__cloudflare_notfound_probe__', {}, [404], 'candidate direct notFound probe');
 await check(`/p/cloudflare-migration-missing-${Date.now()}`, {}, [404], 'Supabase-backed public preview miss');
 
-if (process.env.INTERNAL_API_KEY) {
+if (secret('INTERNAL_API_KEY')) {
   const guardedPosts = [
     '/api/ai/process-inbound',
     '/api/email/send',
@@ -43,11 +54,11 @@ if (process.env.INTERNAL_API_KEY) {
     }, [401], `${path} internal-auth guard`);
   }
 } else {
-  console.log('Provider/API guard smoke skipped: INTERNAL_API_KEY not present in minimal candidate.');
+  console.log('Provider/API guard smoke skipped: INTERNAL_API_KEY not present.');
 }
 
-const metaSecret = process.env.META_APP_SECRET;
-const metaVerifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
+const metaSecret = secret('META_APP_SECRET');
+const metaVerifyToken = secret('META_WEBHOOK_VERIFY_TOKEN');
 if (metaSecret && metaVerifyToken) {
   await check('/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=cloudflare-invalid-fixture&hub.challenge=safe', {}, [403], 'WhatsApp verification reject path');
   await check('/api/whatsapp/webhook', {
@@ -64,10 +75,10 @@ if (metaSecret && metaVerifyToken) {
     body: rawBody,
   }, [200], 'WhatsApp valid-signature empty-event path');
 } else {
-  console.log('WhatsApp signed smoke skipped: provider secrets not present in minimal candidate.');
+  console.log('WhatsApp signed smoke skipped: provider secrets not present.');
 }
 
-const emailSecret = process.env.EMAIL_WEBHOOK_SECRET;
+const emailSecret = secret('EMAIL_WEBHOOK_SECRET');
 if (emailSecret) {
   await check('/api/email/webhook', {
     method: 'POST',
@@ -97,17 +108,17 @@ if (emailSecret) {
     body: rawBody,
   }, [200], 'Email valid-signature ignored-event path');
 } else {
-  console.log('Email signed smoke skipped: provider secret not present in minimal candidate.');
+  console.log('Email signed smoke skipped: provider secret not present.');
 }
 
-if (process.env.TELEGRAM_WEBHOOK_SECRET) {
+if (secret('TELEGRAM_WEBHOOK_SECRET')) {
   await check('/api/telegram/webhook', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: '{}',
   }, [401], 'Telegram secret-token reject path');
 } else {
-  console.log('Telegram webhook smoke skipped: provider secret not present in minimal candidate.');
+  console.log('Telegram webhook smoke skipped: provider secret not present.');
 }
 
 if (failures) throw new Error(`Cloudflare safe smoke failed with ${failures} check(s)`);
