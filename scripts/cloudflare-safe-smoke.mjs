@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { createHmac, randomUUID } from 'node:crypto';
 
 const base = String(process.env.CANDIDATE_URL || '').replace(/\/$/, '');
@@ -13,7 +14,17 @@ if (process.env.GROWTH_PRODUCTION_SECRETS_JSON) {
   }
 }
 
-const secret = (key) => String(process.env[key] ?? bundledSecrets[key] ?? '').trim();
+let fileSecrets = {};
+if (process.env.RUNTIME_SECRETS_FILE) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(process.env.RUNTIME_SECRETS_FILE, 'utf8'));
+    if (parsed && !Array.isArray(parsed) && typeof parsed === 'object') fileSecrets = parsed;
+  } catch {
+    throw new Error('RUNTIME_SECRETS_FILE is not valid readable JSON');
+  }
+}
+
+const secret = (key) => String(process.env[key] ?? bundledSecrets[key] ?? fileSecrets[key] ?? '').trim();
 let failures = 0;
 
 async function check(path, init, expected, label) {
