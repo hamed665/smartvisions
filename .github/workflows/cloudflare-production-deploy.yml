@@ -1,0 +1,230 @@
+name: Cloudflare Production Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-growth-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GROWTH_PRODUCTION_SECRETS_JSON: ${{ secrets.GROWTH_PRODUCTION_SECRETS_JSON }}
+      NEXT_PUBLIC_APP_NAME: Smart Visions Growth OS
+      NEXT_PUBLIC_SUPABASE_URL: https://pkypexzpyfbikdnkrzvw.supabase.co
+      CANDIDATE_URL: https://smartvisions-growth-os-release-candidate.hamedarezoo900.workers.dev
+      PRODUCTION_URL: https://app.smartvisionsai.com
+      EMAIL_PROVIDER: RESEND
+      GLOBAL_KILL_SWITCH: false
+      SHADOW_MODE: true
+
+    steps:
+      - name: Checkout exact green main commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Production credential preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          require(){ if [ -z "${!1:-}" ]; then echo "::error::Missing GitHub Actions secret: $1"; missing=1; fi; }
+          require CLOUDFLARE_API_TOKEN
+          require CLOUDFLARE_ACCOUNT_ID
+          require NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+          if [ -z "${SUPABASE_SECRET_KEY:-}" ] && [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            echo "::error::Missing Growth Supabase server credential"
+            missing=1
+          fi
+          require GROWTH_PRODUCTION_SECRETS_JSON
+          [ "$missing" -eq 0 ] || exit 1
+          node <<'NODE'
+          const raw=process.env.GROWTH_PRODUCTION_SECRETS_JSON||'';
+          let s;
+          try{s=JSON.parse(raw)}catch{throw new Error('GROWTH_PRODUCTION_SECRETS_JSON is not valid JSON')}
+          if(!s||Array.isArray(s)||typeof s!=='object')throw new Error('Production secret bundle must be a JSON object');
+          const required=['OPENAI_API_KEY','GOOGLE_PLACES_API_KEY','INTERNAL_API_KEY','META_APP_SECRET','META_WEBHOOK_VERIFY_TOKEN','EMAIL_PROVIDER_API_KEY','EMAIL_WEBHOOK_SECRET','TELEGRAM_BOT_TOKEN','TELEGRAM_WEBHOOK_SECRET','TELEGRAM_OWNER_USER_ID','TELEGRAM_OWNER_CHAT_ID','TELEGRAM_ORGANIZATION_ID'];
+          const missing=required.filter(k=>!String(s[k]??'').trim());
+          if(!String(s.META_WHATSAPP_ACCESS_TOKEN??s.META_WHATSAPP_TOKEN??s.WHATSAPP_ACCESS_TOKEN??'').trim())missing.push('WhatsApp access token alias');
+          if(!String(s.META_WHATSAPP_PHONE_NUMBER_ID??s.WHATSAPP_PHONE_NUMBER_ID??'').trim())missing.push('WhatsApp phone-number ID alias');
+          if(missing.length)throw new Error(`Production secret bundle missing required key(s): ${missing.join(', ')}`);
+          console.log(`Production secret bundle validated: ${Object.keys(s).length} key(s); values not printed.`);
+          NODE
+
+      - name: Validate Growth Supabase credential read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          key="${SUPABASE_SECRET_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}"
+          status="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' \
+            "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/" \
+            -H "apikey: $key" \
+            -H "Accept: application/json")"
+          [ "$status" = "200" ] || { echo "::error::Growth Supabase validation failed with HTTP $status"; exit 1; }
+          echo "Growth Supabase server credential validated read-only against pkypexzpyfbikdnkrzvw."
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Vinext compatibility gate
+        run: npx vinext check
+
+      - name: Build exact Cloudflare Workers bundle
+        run: npm run build:vinext
+
+      - name: Prepare ephemeral runtime secrets file
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('node:fs');
+          const bundle=JSON.parse(process.env.GROWTH_PRODUCTION_SECRETS_JSON||'{}');
+          const allowed=new Set([
+            'OPENAI_API_KEY','OPENAI_AGENT_MODEL','GOOGLE_PLACES_API_KEY',
+            'META_WHATSAPP_ACCESS_TOKEN','META_WHATSAPP_TOKEN','META_WHATSAPP_PHONE_NUMBER_ID','META_WHATSAPP_CATALOG_ID',
+            'WHATSAPP_ACCESS_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_CATALOG_ID','META_GRAPH_VERSION',
+            'META_APP_SECRET','META_WEBHOOK_VERIFY_TOKEN','EMAIL_PROVIDER_API_KEY','EMAIL_WEBHOOK_SECRET',
+            'REDIS_URL','CRAWL4AI_URL','INTERNAL_API_KEY',
+            'TELEGRAM_BOT_TOKEN','TELEGRAM_WEBHOOK_SECRET','TELEGRAM_OWNER_USER_ID','TELEGRAM_OWNER_CHAT_ID','TELEGRAM_ORGANIZATION_ID'
+          ]);
+          const out={};
+          for(const [k,v] of Object.entries(bundle)) if(allowed.has(k)&&String(v??'').length) out[k]=String(v);
+          out.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+          if(process.env.SUPABASE_SECRET_KEY)out.SUPABASE_SECRET_KEY=process.env.SUPABASE_SECRET_KEY;
+          if(process.env.SUPABASE_SERVICE_ROLE_KEY)out.SUPABASE_SERVICE_ROLE_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY;
+          fs.writeFileSync('.growth-runtime-secrets.json',JSON.stringify(out),{mode:0o600});
+          console.log(`Prepared ${Object.keys(out).length} runtime secret binding(s); values not printed.`);
+          NODE
+
+      - name: Prepare isolated production-shaped release candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('node:fs');
+          const file='dist/server/wrangler.json';
+          const c=JSON.parse(fs.readFileSync(file,'utf8'));
+          c.name='smartvisions-growth-os-release-candidate';
+          c.workers_dev=true;
+          c.vars={...(c.vars||{}),DEPLOYMENT_ENV:'production',NEXT_PUBLIC_APP_NAME:'Smart Visions Growth OS',NEXT_PUBLIC_SUPABASE_URL:'https://pkypexzpyfbikdnkrzvw.supabase.co',APP_BASE_URL:'https://app.smartvisionsai.com',EMAIL_PROVIDER:'RESEND',GLOBAL_KILL_SWITCH:'false',SHADOW_MODE:'true'};
+          c.limits={...(c.limits||{}),cpu_ms:100};
+          delete c.routes; delete c.route;
+          fs.writeFileSync(file,JSON.stringify(c,null,2)+'\n');
+          NODE
+          node -e "const c=require('./dist/server/wrangler.json'); if(c.name!=='smartvisions-growth-os-release-candidate'||c.limits?.cpu_ms!==100||c.routes||c.route)process.exit(1)"
+          echo "Release candidate config validated: no production route, CPU guard=100ms."
+
+      - name: Deploy exact release candidate with production secrets
+        run: npx wrangler deploy --secrets-file .growth-runtime-secrets.json --config dist/server/wrangler.json
+
+      - name: Safe release-candidate smoke
+        run: node scripts/cloudflare-safe-smoke.mjs
+
+      - name: Controlled SSR load
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const base=process.env.CANDIDATE_URL;
+          const paths=Array.from({length:40},(_,i)=>i%4===0?'/':'/login');
+          let failed=0;
+          for(let i=0;i<paths.length;i+=5){
+            const results=await Promise.all(paths.slice(i,i+5).map(async path=>{try{return (await fetch(base+path,{redirect:'manual'})).status}catch{return 0}}));
+            for(const status of results)if(![200,301,302,303,307,308].includes(status))failed++;
+          }
+          console.log(`Controlled load requests=${paths.length} unexpected=${failed}`);
+          if(failed)process.exit(1);
+          NODE
+
+      - name: Promote exact validated bundle to production Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('node:fs');
+          const file='dist/server/wrangler.json';
+          const c=JSON.parse(fs.readFileSync(file,'utf8'));
+          c.name='smartvisions-growth-os-production';
+          if(c.limits?.cpu_ms!==100)throw new Error('CPU guard drifted before promotion');
+          if(c.routes||c.route)throw new Error('Production deploy must not mutate Worker Routes');
+          fs.writeFileSync(file,JSON.stringify(c,null,2)+'\n');
+          NODE
+          npx wrangler deploy --secrets-file .growth-runtime-secrets.json --config dist/server/wrangler.json
+
+      - name: Verify production Worker Route remains attached
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const token=process.env.CLOUDFLARE_API_TOKEN;
+          const api='https://api.cloudflare.com/client/v4';
+          const headers={Authorization:`Bearer ${token}`};
+          async function cf(path){const r=await fetch(api+path,{headers});const j=await r.json();if(!r.ok||j.success===false)throw new Error(`Cloudflare read failed: ${path}`);return j;}
+          const zones=(await cf('/zones?name=smartvisionsai.com&status=active&per_page=50')).result||[];
+          if(zones.length!==1)throw new Error('smartvisionsai.com zone lookup mismatch');
+          const routes=(await cf(`/zones/${zones[0].id}/workers/routes`)).result||[];
+          const pattern='app.smartvisionsai.com/*';
+          if(!routes.some(r=>r.pattern===pattern&&r.script==='smartvisions-growth-os-production'))throw new Error(`Production Worker Route missing: ${pattern}`);
+          console.log('Production Growth Worker Route is attached.');
+          NODE
+
+      - name: Immediate routed production smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+          check(){
+            path="$1"; expected="$2"; name="$(printf '%s' "$path"|tr '/?' '__')"
+            code="$(curl --silent --show-error --noproxy '*' --doh-url https://cloudflare-dns.com/dns-query --max-time 30 --dump-header "$tmp/$name.h" --output "$tmp/$name.b" --write-out '%{http_code}' "$PRODUCTION_URL$path" || printf '000')"
+            ray="$(grep -i '^cf-ray:' "$tmp/$name.h" || true)"
+            echo "$path -> HTTP $code cf-ray=$([ -n "$ray" ] && echo yes || echo no)"
+            [[ "$code" =~ ^($expected)$ ]] && [ -n "$ray" ]
+          }
+          check "/login" "200"
+          check "/" "301|302|303|307|308"
+          check "/p/cloudflare-production-missing-$GITHUB_RUN_ID" "404"
+
+      - name: Safe production API/webhook smoke
+        env:
+          CANDIDATE_URL: https://app.smartvisionsai.com
+        run: node scripts/cloudflare-safe-smoke.mjs
+
+      - name: Cleanup ephemeral secret file
+        if: always()
+        run: rm -f .growth-runtime-secrets.json
+
+      - name: Deployment summary
+        if: always()
+        run: |
+          echo "Source gate: successful push-based CI on main"
+          echo "Candidate Worker: smartvisions-growth-os-release-candidate"
+          echo "Production Worker: smartvisions-growth-os-production"
+          echo "Production hostname: app.smartvisionsai.com"
+          echo "CPU guard: 100ms"
+          echo "DNS/Worker Route mutation by normal deploy: none"
+          echo "Vercel fallback deletion/disable: none"
+          echo "Outbound provider sends invoked by smoke: none"
