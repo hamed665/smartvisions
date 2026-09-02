@@ -106,20 +106,62 @@ jobs:
           JSON
           echo "Vercel project metadata bound locally; no remote mutation performed."
 
-      - name: Export Vercel Production runtime secrets without logging values
+      - name: Transfer Production secrets through an unaliased temporary Vercel deployment
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes vercel@latest env run --token "$VERCEL_TOKEN" -e production -- node scripts/export-vercel-runtime-secrets.mjs
+          migration_token="$(openssl rand -hex 32)"
+          deployment_url=""
+          cleanup_temp(){
+            if [ -n "${deployment_url:-}" ]; then
+              npx --yes vercel@latest remove "$deployment_url" --yes --token "$VERCEL_TOKEN" >/dev/null 2>&1 || true
+            fi
+          }
+          trap cleanup_temp EXIT
+
+          deploy_output="$(npx --yes vercel@latest deploy --prod --skip-domain --yes --token "$VERCEL_TOKEN" \
+            --env MIGRATION_EXPORT_ENABLED=1 \
+            --env MIGRATION_EXPORT_TOKEN="$migration_token")"
+          deployment_url="$(printf '%s\n' "$deploy_output" | grep -Eo 'https://[^[:space:]]+\.vercel\.app' | tail -n1)"
+          [ -n "$deployment_url" ] || { echo "::error::Temporary Vercel deployment URL was not returned"; exit 1; }
+          [ "$deployment_url" != "$LEGACY_VERCEL_URL" ] || { echo "::error::Temporary deployment unexpectedly matched the legacy production URL"; exit 1; }
+          printf '%s' "$deployment_url" > .temp-vercel-deployment-url
+          echo "Temporary Production-target Vercel deployment created with domain assignment skipped."
+
+          tmp="$(mktemp)"
+          status=000
+          for attempt in $(seq 1 30); do
+            status="$(curl --silent --show-error --max-time 30 --output "$tmp" --write-out '%{http_code}' \
+              -H "x-migration-token: $migration_token" \
+              "$deployment_url/p/__migration/runtime-secrets" || printf '000')"
+            if [ "$status" = "200" ]; then break; fi
+            if [ "$status" = "503" ]; then
+              node -e 'const fs=require("node:fs");try{const j=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));console.error(`::error::Temporary runtime is missing required key name(s): ${(j.keys||[]).join(", ")}`)}catch{}' "$tmp"
+              exit 1
+            fi
+            sleep 2
+          done
+          [ "$status" = "200" ] || { echo "::error::Temporary secret bridge did not become healthy; HTTP $status"; exit 1; }
+          mv "$tmp" .growth-runtime-secrets.json
+          chmod 600 .growth-runtime-secrets.json
+
           node <<'NODE'
           const fs=require('node:fs');
           const out=JSON.parse(fs.readFileSync('.growth-runtime-secrets.json','utf8'));
+          const forbidden=['MIGRATION_EXPORT_TOKEN','MIGRATION_EXPORT_ENABLED'];
+          for(const key of forbidden)if(key in out)throw new Error(`Forbidden migration key leaked into bundle: ${key}`);
           out.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
           if(process.env.SUPABASE_SECRET_KEY)out.SUPABASE_SECRET_KEY=process.env.SUPABASE_SECRET_KEY;
           if(process.env.SUPABASE_SERVICE_ROLE_KEY)out.SUPABASE_SERVICE_ROLE_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY;
           fs.writeFileSync('.growth-runtime-secrets.json',JSON.stringify(out),{mode:0o600});
           console.log(`Prepared ${Object.keys(out).length} Worker secret binding(s); values not printed.`);
           NODE
+
+          code="$(curl --silent --show-error --max-time 30 --output /dev/null --write-out '%{http_code}' "$LEGACY_VERCEL_URL/login")"
+          [ "$code" = "200" ] || { echo "::error::Legacy Vercel rollback changed during temporary transfer"; exit 1; }
+          cleanup_temp
+          deployment_url=""
+          echo "Temporary Vercel deployment removed; legacy production alias remained healthy."
 
       - name: Prepare production-shaped isolated candidate config
         shell: bash
@@ -277,12 +319,16 @@ jobs:
       - name: Cutover summary
         if: always()
         run: |
-          rm -f .growth-runtime-secrets.json cutover-snapshot.json
+          if [ -f .temp-vercel-deployment-url ]; then
+            temp_url="$(cat .temp-vercel-deployment-url)"
+            [ -z "$temp_url" ] || npx --yes vercel@latest remove "$temp_url" --yes --token "$VERCEL_TOKEN" >/dev/null 2>&1 || true
+          fi
+          rm -f .temp-vercel-deployment-url .growth-runtime-secrets.json cutover-snapshot.json
           echo "Production Worker: smartvisions-growth-os-production"
           echo "Production URL: https://app.smartvisionsai.com"
           echo "Production workers.dev exposure: disabled"
           echo "Legacy rollback URL retained: https://smartvisions.vercel.app"
-          echo "Provider secrets were copied runner-to-Cloudflare and never printed"
+          echo "Temporary secret-transfer deployment cleanup attempted"
           echo "CPU guard: 100ms"
           echo "Website apex/www routes: not modified"
           echo "Real outreach/provider sends: none"
