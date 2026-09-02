@@ -1,18 +1,17 @@
 'use server';
 
-import { lookup } from 'node:dns/promises';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getCurrentOrganization } from '@/lib/supabase/org';
-import { analyzeWebsiteHtml, isPrivateIp, normalizeAuditUrl } from '@/lib/hunters/business/website-audit';
+import { analyzeWebsiteHtml, normalizeAuditUrl } from '@/lib/hunters/business/website-audit';
+import { assertPublicHostname } from '@/lib/hunters/business/public-dns';
 
 const MAX_BYTES = 1_000_000;
 const TIMEOUT_MS = 8_000;
 const MAX_REDIRECTS = 5;
 
 async function assertPublicHost(url: URL) {
-  const addresses = await lookup(url.hostname, { all: true, verbatim: true });
-  if (!addresses.length || addresses.some((entry) => isPrivateIp(entry.address))) throw new Error('Website resolved to a blocked/private address');
+  await assertPublicHostname(url.hostname);
 }
 
 function safeErrorMessage(error: unknown, fallback = 'Website audit failed') {
