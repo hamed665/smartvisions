@@ -12,7 +12,6 @@ import {
   prepareControlMutation,
   revertTargetsControlMutation,
 } from './control-plane';
-import { executePanelAction, panelParityHelpText, preparePanelAction } from './panel-parity';
 import { normalizePersistedPreview } from './persisted-preview';
 import { assertTelegramRevertFresh } from './revert-guard';
 import { notifyTelegramOwner } from './notifications';
@@ -25,7 +24,10 @@ export async function executeReadCommand(input: {
   organizationId: string;
   command: TelegramOwnerCommand;
 }): Promise<CommandExecutionResult> {
-  if (input.command.type === 'SHOW_PANEL_CAPABILITIES') return { title:'Control Center ↔ Telegram', text:panelParityHelpText() };
+  if (input.command.type === 'SHOW_PANEL_CAPABILITIES') {
+    const { panelParityHelpText } = await import('./panel-parity');
+    return { title:'Control Center ↔ Telegram', text:panelParityHelpText() };
+  }
 
   if (input.command.type === 'TEST_OWNER_ALERT') {
     const notification = await notifyTelegramOwner({
@@ -81,7 +83,10 @@ export async function prepareMutation(input: {
   ownerUserId: string;
   command: TelegramOwnerCommand;
 }): Promise<PreparedMutation> {
-  if (input.command.type === 'PANEL_ACTION') return preparePanelAction({ ...input, command:input.command });
+  if (input.command.type === 'PANEL_ACTION') {
+    const { preparePanelAction } = await import('./panel-parity');
+    return preparePanelAction({ ...input, command:input.command });
+  }
   if (input.command.type !== 'REVERT_LAST_CHANGE' && isControlMutation(input.command.type)) {
     return prepareControlMutation(input);
   }
@@ -107,6 +112,7 @@ export async function executePreparedMutation(input: {
   }
 
   if (input.command.type === 'PANEL_ACTION') {
+    const { executePanelAction } = await import('./panel-parity');
     return executePanelAction({ ...input, command:input.command });
   }
 
