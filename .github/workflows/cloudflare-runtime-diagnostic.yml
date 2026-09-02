@@ -1,0 +1,95 @@
+name: Cloudflare Runtime Diagnostic
+
+on:
+  push:
+    branches:
+      - feat/cloudflare-runtime-readiness
+    paths:
+      - .github/workflows/cloudflare-runtime-diagnostic.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      NEXT_PUBLIC_SUPABASE_URL: https://pkypexzpyfbikdnkrzvw.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      CANDIDATE_URL: https://smartvisions-growth-os-release-candidate.hamedarezoo900.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build exact candidate
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build:vinext
+          node <<'NODE'
+          const fs=require('node:fs');
+          const file='dist/server/wrangler.json';
+          const config=JSON.parse(fs.readFileSync(file,'utf8'));
+          config.name='smartvisions-growth-os-release-candidate';
+          config.workers_dev=true;
+          config.vars={...(config.vars||{}),DEPLOYMENT_ENV:'candidate',NEXT_PUBLIC_SUPABASE_URL:'https://pkypexzpyfbikdnkrzvw.supabase.co',GLOBAL_KILL_SWITCH:'false',SHADOW_MODE:'true'};
+          config.limits={...(config.limits||{}),cpu_ms:100};
+          delete config.routes; delete config.route;
+          fs.writeFileSync(file,JSON.stringify(config,null,2)+'\n');
+          NODE
+      - name: Deploy and reassert minimal secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config dist/server/wrangler.json
+          printf '%s' "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" | npx wrangler secret put NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY --config dist/server/wrangler.json >/dev/null
+          printf '%s' "$SUPABASE_SECRET_KEY" | npx wrangler secret put SUPABASE_SECRET_KEY --config dist/server/wrangler.json >/dev/null
+      - name: Capture foreground Tail during diagnostic requests
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > tail.jsonl
+          : > tail.stderr
+          (
+            sleep 8
+            node <<'NODE'
+            const base=process.env.CANDIDATE_URL;
+            for (const path of ['/login','/','/p/__cloudflare_notfound_probe__',`/p/cloudflare-migration-missing-${Date.now()}`]) {
+              try {
+                const r=await fetch(base+path,{redirect:'manual'});
+                console.log(`${path} -> ${r.status}`);
+              } catch (e) {
+                console.log(`${path} -> request-error`);
+              }
+            }
+            NODE
+          ) > request.log 2>&1 &
+          traffic_pid=$!
+          set +e
+          timeout 25s npx wrangler tail smartvisions-growth-os-release-candidate --format json > tail.jsonl 2>tail.stderr
+          tail_code=$?
+          set -e
+          wait "$traffic_pid"
+          cat request.log
+          if [ -s tail.stderr ]; then sed -n '1,120p' tail.stderr; fi
+          echo "tail_exit=$tail_code"
+          node <<'NODE'
+          const fs=require('node:fs');
+          const text=fs.readFileSync('tail.jsonl','utf8');
+          const rows=[];
+          for(const line of text.split(/\n+/)){try{rows.push(JSON.parse(line));}catch{}}
+          console.log(`tail_events=${rows.length}`);
+          for(const r of rows){
+            const url=r?.event?.request?.url ?? '';
+            const status=r?.event?.response?.status ?? null;
+            const exceptions=(r.exceptions||[]).map(e=>({name:e.name,message:e.message,stack:e.stack}));
+            if(status===500 || exceptions.length || /__cloudflare_notfound_probe__|cloudflare-migration-missing/.test(url)) {
+              console.log(JSON.stringify({outcome:r.outcome,status,url,cpuTimeMs:r.cpuTimeMs,exceptions}));
+            }
+          }
+          if(!rows.length) process.exit(2);
+          NODE
