@@ -27,8 +27,8 @@ export default async function ReportsPage(){
   const firstError=[leadError,businessError,messageError,replyError].find(Boolean);if(firstError)throw firstError;
   const l=leads??[],m=messages??[],r=replies??[],p=previews??[],pe=previewEvents??[],v=variants??[],ar=runs??[];
   const contactedLeadIds=new Set(m.filter(x=>x.direction==='OUTBOUND'&&Boolean(x.sent_at)&&x.lead_id).map(x=>String(x.lead_id)));
-  const repliedLeadIds=new Set(r.filter(x=>x.lead_id).map(x=>String(x.lead_id)));
-  const hotLeadIds=new Set(r.filter(x=>x.lead_id&&x.hot===true).map(x=>String(x.lead_id)));
+  const repliedLeadIds=new Set(r.filter(x=>x.lead_id&&contactedLeadIds.has(String(x.lead_id))).map(x=>String(x.lead_id)));
+  const hotLeadIds=new Set(r.filter(x=>x.lead_id&&contactedLeadIds.has(String(x.lead_id))&&x.hot===true).map(x=>String(x.lead_id)));
   const won=l.filter(x=>x.status==='WON').length;
   const sent=m.filter(x=>x.direction==='OUTBOUND'&&Boolean(x.sent_at)).length;
   const industry=buildIndustryPerformance({
@@ -60,7 +60,7 @@ export default async function ReportsPage(){
     <div className="grid">{metrics.map(([label,value])=><div className="card" key={label}><div className="muted">{label}</div><div className="value">{value}</div></div>)}</div>
 
     <section className="panel">
-      <div className="headerRow"><div><h2>Industry response efficiency</h2><p className="muted">Rates use distinct contacted prospects, not message count. Contacted is derived from durable sent_at evidence, so later delivery/read status changes cannot corrupt the denominator.</p></div><span className="pill">{best?`Best actionable: ${best.industry}`:'Learning phase'}</span></div>
+      <div className="headerRow"><div><h2>Industry response efficiency</h2><p className="muted">Rates use the same distinct outbound-contact cohort throughout. Contacted is derived from durable sent_at evidence, so later delivery/read status changes cannot corrupt the denominator.</p></div><span className="pill">{best?`Best actionable: ${best.industry}`:'Learning phase'}</span></div>
       {industry.length?<div className="tableWrap"><table className="dataTable"><thead><tr><th>Industry</th><th>Sample</th><th>Contacted</th><th>Reply %</th><th>Positive %</th><th>Engaged %</th><th>HOT %</th><th>Won %</th><th>Score</th><th>Top offer</th></tr></thead><tbody>{industry.map(row=><tr key={row.industry}><td>{row.industry}</td><td>{row.sampleStatus}</td><td>{row.contacted}</td><td>{row.replyRate}%</td><td>{row.positiveRate}%</td><td>{row.engagedRate}%</td><td>{row.hotRate}%</td><td>{row.winRate}%</td><td>{row.performanceScore}</td><td>{row.topOffer??'—'}</td></tr>)}</tbody></table></div>:<p className="muted">No contacted prospects yet. Industry ranking starts only after real outreach/replies exist.</p>}
       <div className="healthList"><span>INSUFFICIENT <strong>1–2 contacted prospects; never scale from this.</strong></span><span>LEARNING <strong>3–9; useful direction, still cautious.</strong></span><span>ACTIONABLE <strong>10+; eligible to influence future industry allocation.</strong></span></div>
     </section>
