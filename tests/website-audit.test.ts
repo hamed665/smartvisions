@@ -7,6 +7,11 @@ describe('website audit helpers', () => {
     expect(() => normalizeAuditUrl('http://localhost:3000')).toThrow(/private/);
   });
 
+  it('removes tracking parameters but preserves functional query parameters', () => {
+    const url = normalizeAuditUrl('http://www.example.com/path?utm_source=google&utm_campaign=test&lang=en#section');
+    expect(url.toString()).toBe('http://www.example.com/path?lang=en');
+  });
+
   it('detects private IP ranges', () => {
     expect(isPrivateIp('127.0.0.1')).toBe(true);
     expect(isPrivateIp('10.0.0.2')).toBe(true);
