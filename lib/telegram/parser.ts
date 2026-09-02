@@ -16,6 +16,10 @@ const REAL_COST_ALIASES: Record<string, TelegramCostLimitKey> = {
 };
 
 const PANEL_ACTION_SET = new Set<string>(PANEL_PARITY_ACTION_NAMES);
+const PANEL_BOOLEAN_KEYS = new Set([
+  'enabled','requires_approval','cold_email_enabled','whatsapp_cold_enabled','instagram_auto_cold_enabled',
+  'manual_review_required','is_default','approved','active','requires_human','model_routing_enabled','confirm_large_change',
+]);
 const toLatinDigits = (value: string) => value
   .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
   .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
@@ -31,6 +35,12 @@ const stripQuotes = (value: string) => {
   if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) return trimmed.slice(1,-1);
   return trimmed;
 };
+const panelBoolean = (value: string) => {
+  const normalized = token(value);
+  if (['true','1','yes','on','enable','enabled','فعال','روشن'].includes(normalized)) return 'on';
+  if (['false','0','no','off','disable','disabled','غیرفعال','خاموش'].includes(normalized)) return 'off';
+  return value;
+};
 
 function explicitSafetyBlock(input: string): TelegramOwnerCommand | null {
   if (/(shadow\s*mode|شدو\s*مود|حالت\s*سایه)/i.test(input) && /(off|خاموش|غیرفعال|disable)/i.test(input)) return { type: 'SAFETY_BLOCK', reason: 'SHADOW_MODE' };
@@ -45,7 +55,11 @@ function explicitSafetyBlock(input: string): TelegramOwnerCommand | null {
 function panelArgs(input: string): PanelParityArgs {
   const args: PanelParityArgs = {};
   const pattern = /([A-Za-z0-9_.-]+)=("([^"]*)"|'([^']*)'|([^\s]+))/g;
-  for (const match of input.matchAll(pattern)) args[match[1]] = toLatinDigits(match[3] ?? match[4] ?? match[5] ?? '');
+  for (const match of input.matchAll(pattern)) {
+    const key = match[1];
+    const raw = toLatinDigits(match[3] ?? match[4] ?? match[5] ?? '');
+    args[key] = PANEL_BOOLEAN_KEYS.has(key) ? panelBoolean(raw) : raw;
+  }
   return args;
 }
 
