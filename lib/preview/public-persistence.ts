@@ -22,6 +22,7 @@ function dataApiConfig() {
 function dataApiHeaders(key: string, extra?: HeadersInit): Headers {
   const headers = new Headers(extra);
   headers.set('apikey', key);
+  headers.set('authorization', `Bearer ${key}`);
   headers.set('accept', 'application/json');
   return headers;
 }
