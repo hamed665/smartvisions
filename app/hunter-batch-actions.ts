@@ -55,14 +55,21 @@ export async function qualifyGooglePlacesPriorityBatch(form: FormData) {
     if(integrationError)throw integrationError;
     if(integration?.status!=='CONNECTED'||integration.enabled!==true)throw new Error('Google Places must be CONNECTED before batch qualification');
 
-    const [{data:discoveries,error:discoveryError},{data:markets,error:marketError},{data:services,error:serviceError}] = await Promise.all([
+    const [{data:discoveries,error:discoveryError},{data:markets,error:marketError},{data:services,error:serviceError},{data:prices,error:priceError}] = await Promise.all([
       ctx.supabase.from('discovery_records').select('id,source_id,raw_payload,discovered_at').eq('organization_id',ctx.organizationId).eq('source_type','google_places').order('discovered_at',{ascending:false}).limit(100),
       ctx.supabase.from('market_settings').select('country_code').eq('organization_id',ctx.organizationId).eq('enabled',true),
       ctx.supabase.from('services').select('id').eq('organization_id',ctx.organizationId).eq('enabled',true),
+      ctx.supabase.from('service_prices').select('service_id,country_code,price').eq('organization_id',ctx.organizationId),
     ]);
-    if(discoveryError)throw discoveryError;if(marketError)throw marketError;if(serviceError)throw serviceError;
+    if(discoveryError)throw discoveryError;if(marketError)throw marketError;if(serviceError)throw serviceError;if(priceError)throw priceError;
     const enabledMarkets=new Set((markets??[]).map(row=>String(row.country_code).toUpperCase()));
-    const enabledServiceIds=new Set((services??[]).map(row=>String(row.id)));
+    const enabledServices=new Set((services??[]).map(row=>String(row.id)));
+    const serviceCatalogByCountry=new Map<string,Set<string>>();
+    for(const price of prices??[]){
+      const serviceId=String(price.service_id??'');const country=String(price.country_code??'').toUpperCase();const amount=Number(price.price);
+      if(!enabledServices.has(serviceId)||!country||!Number.isFinite(amount)||amount<0)continue;
+      const set=serviceCatalogByCountry.get(country)??new Set<string>();set.add(serviceId);serviceCatalogByCountry.set(country,set);
+    }
     const candidates=(discoveries??[]).filter(row=>{const raw=row.raw_payload&&typeof row.raw_payload==='object'?row.raw_payload as Record<string,unknown>:{};const countryCode=String(raw.countryCode??'OM').toUpperCase();return Boolean(row.source_id)&&!raw.enrichedAt&&enabledMarkets.has(countryCode);}).slice(0,maxChecks);
 
     if(!candidates.length){destination='/hunters/google-places?batch=empty';}
@@ -91,12 +98,13 @@ export async function qualifyGooglePlacesPriorityBatch(form: FormData) {
           business={...business,whatsapp:rowToPersist.whatsapp??undefined};
         }
 
-        const growth=buildGrowthOpportunity(business,{enabledServiceIds});
+        const marketCatalog=serviceCatalogByCountry.get(String(business.countryCode??countryCode).toUpperCase())??new Set<string>();
+        const growth=buildGrowthOpportunity(business,{enabledServiceIds:marketCatalog});
         const p=growth.personalization;const q=growth.qualification;
         const{error:growthError}=await ctx.supabase.from('growth_opportunities').upsert(buildGrowthOpportunityPersistenceRow(ctx.organizationId,businessId,growth),{onConflict:'organization_id,business_id'});
         if(growthError)throw growthError;growthRouted+=1;
 
-        const priorityQualified=q.shouldContact&&q.prospectTier==='A'&&Boolean(q.primaryServiceId);
+        const priorityQualified=q.shouldContact&&q.prospectTier==='A'&&Boolean(q.primaryServiceId)&&marketCatalog.has(String(q.primaryServiceId));
         const qualificationReason=priorityQualified
           ? `TIER_A_${q.primaryOfferFamily}`
           : q.cheapestNextAction==='WEBSITE_EVIDENCE'||q.cheapestNextAction==='SOCIAL_CHECK'
@@ -125,12 +133,12 @@ export async function qualifyGooglePlacesPriorityBatch(form: FormData) {
           overallSalesScore:growth.overallSalesScore,contentCheckStatus:growth.contentCheckStatus,personalizationPriorityScore:p.personalizationPriorityScore,
           personalizationFingerprint:p.fingerprint,offerBundle:p.offerBundle,cheapestNextAction:p.cheapestNextAction,nextActionCanSpendMoney:p.nextActionCanSpendMoney,
           digitalPresenceEvidence:growth.digitalEvidence,qualificationTier:providerCallAttempted?'ENTERPRISE_NO_REVIEWS':'CACHE_REUSE',fullIntelligenceFetched:false,
-          batchQualification:true,
+          batchQualification:true,marketPriceRequired:true,
         }}).eq('organization_id',ctx.organizationId).eq('id',row.id);
         if(updateError)throw updateError;
       }
 
-      const{error:auditError}=await ctx.supabase.from('audit_logs').insert({organization_id:ctx.organizationId,actor_type:'USER',actor_id:ctx.userId,action:'GOOGLE_PLACES_PRIORITY_BATCH_QUALIFICATION',entity_type:'integration',entity_id:ctx.organizationId,after_data:{maxChecks,targetLeads,checked,providerCalls,reusedBusinesses,prioritiesFound,leadsCreated,rejected,evidenceOnly,growthRouted,enabledMarkets:[...enabledMarkets],qualificationMode:'HIGH_PRECISION_TIER_A_ONLY',personalizationMode:'DETERMINISTIC_ZERO_COST',digitalEvidenceMode:'KNOWN_FACTS_ONLY',whatsappLinksDerivedLocally:true,socialAnalysisTriggered:false,reviewsFetched:false,outreachTriggered:false}});
+      const{error:auditError}=await ctx.supabase.from('audit_logs').insert({organization_id:ctx.organizationId,actor_type:'USER',actor_id:ctx.userId,action:'GOOGLE_PLACES_PRIORITY_BATCH_QUALIFICATION',entity_type:'integration',entity_id:ctx.organizationId,after_data:{maxChecks,targetLeads,checked,providerCalls,reusedBusinesses,prioritiesFound,leadsCreated,rejected,evidenceOnly,growthRouted,enabledMarkets:[...enabledMarkets],qualificationMode:'HIGH_PRECISION_TIER_A_ONLY',personalizationMode:'DETERMINISTIC_ZERO_COST',digitalEvidenceMode:'KNOWN_FACTS_ONLY',whatsappLinksDerivedLocally:true,socialAnalysisTriggered:false,reviewsFetched:false,outreachTriggered:false,marketPriceRequired:true}});
       if(auditError)throw auditError;
       destination=`/hunters/google-places?batch=success&checked=${checked}&calls=${providerCalls}&priority=${prioritiesFound}&created=${leadsCreated}&rejected=${rejected}&evidence=${evidenceOnly}&routed=${growthRouted}`;
     }
