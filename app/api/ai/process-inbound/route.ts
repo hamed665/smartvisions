@@ -8,6 +8,7 @@ import { getConfiguredAgentRuntime } from '@/lib/agents/openai-runtime';
 import { buildSelectiveRoutePlan } from '@/lib/agents/selective-routing';
 import { agentRunReplayState, normalizeIdempotencyKey } from '@/lib/agents/idempotency';
 import { queueAgentWhatsAppShadowApproval, type AgentShadowResult, type WhatsAppShadowDeliveryContext } from '@/lib/agents/shadow-delivery';
+import { humanHandoffReasons, persistHumanHandoff, shouldPersistHumanHandoff } from '@/lib/conversations/sales-lifecycle';
 import { evaluateAiRunQuota, getCostGuardState } from '@/lib/reliability/cost-guard';
 import { assertRuntimeControlsAllow, getRuntimeSafetyControls } from '@/lib/reliability/runtime-safety';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
@@ -22,6 +23,11 @@ function serviceClient() {
 }
 
 type RequestedWhatsAppDeliveryContext = Omit<WhatsAppShadowDeliveryContext, 'lastCustomerMessageAt'>;
+
+type DurableAgentLinkage = {
+  leadId?: string | null;
+  conversationId?: string | null;
+};
 
 function parseDeliveryContext(value: unknown): RequestedWhatsAppDeliveryContext | null {
   if (value == null) return null;
@@ -161,9 +167,29 @@ export async function POST(request: Request) {
     }
   };
 
+  const reconcileHandoff = async (result: unknown, linkage: DurableAgentLinkage) => {
+    if (!shouldPersistHumanHandoff(result)) return undefined;
+    try {
+      const state = await persistHumanHandoff({
+        supabase,
+        organizationId,
+        leadId: linkage.leadId,
+        conversationId: linkage.conversationId,
+        reasons: humanHandoffReasons(result),
+      });
+      return { ...state, reconciliationRequired: false as const };
+    } catch (error) {
+      return {
+        persisted: false as const,
+        reconciliationRequired: true as const,
+        error: error instanceof Error ? error.message.slice(0, 600) : 'Human handoff reconciliation failed',
+      };
+    }
+  };
+
   const readExisting = async () => supabase
     .from('agent_runs')
-    .select('id,status,result_payload,started_at,completed_at')
+    .select('id,status,result_payload,started_at,completed_at,lead_id,conversation_id')
     .eq('organization_id', organizationId)
     .eq('request_key', requestKey)
     .maybeSingle();
@@ -172,8 +198,20 @@ export async function POST(request: Request) {
     const state = agentRunReplayState(run);
     if (state === 'REPLAY') {
       const stored = (run?.result_payload ?? {}) as Record<string, unknown>;
+      const handoffState = await reconcileHandoff(stored, {
+        leadId: run?.lead_id,
+        conversationId: run?.conversation_id,
+      });
+      if (handoffState?.reconciliationRequired) {
+        return NextResponse.json({ ...stored, handoffState, replayed: true, reconciliationRequired: true }, { status: 202 });
+      }
       const approvalQueue = await reconcileApproval(stored);
-      return NextResponse.json({ ...stored, ...(approvalQueue ? { approvalQueue } : {}), replayed: true });
+      return NextResponse.json({
+        ...stored,
+        ...(handoffState ? { handoffState } : {}),
+        ...(approvalQueue ? { approvalQueue } : {}),
+        replayed: true,
+      });
     }
     if (state === 'IN_PROGRESS') return NextResponse.json({ error: 'This logical AI request is already processing; automatic retry is blocked', runId: run?.id }, { status: 409 });
     if (state === 'FAILED_LOCKED') return NextResponse.json({ error: 'This logical AI request previously failed; use a new explicit idempotency key only after review', runId: run?.id }, { status: 409 });
@@ -195,6 +233,30 @@ export async function POST(request: Request) {
     runtimeEvidence = hydrated.evidence;
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Agent context hydration failed' }, { status: 409 });
+  }
+
+  if (effectiveContext.leadId) {
+    const { data: leadSafety, error: leadSafetyError } = await supabase.from('leads')
+      .select('status,agent_mode')
+      .eq('organization_id', organizationId)
+      .eq('id', effectiveContext.leadId)
+      .maybeSingle();
+    if (leadSafetyError) {
+      return NextResponse.json({ error: `Lead automation safety lookup failed: ${leadSafetyError.message}` }, { status: 503 });
+    }
+    if (!leadSafety) return NextResponse.json({ error: 'Lead automation safety state is unavailable' }, { status: 409 });
+    if (leadSafety.status === 'DO_NOT_CONTACT') {
+      return NextResponse.json({ error: 'AI processing blocked because the lead is DO_NOT_CONTACT', automaticRetry: false }, { status: 423 });
+    }
+    if (leadSafety.agent_mode === 'PAUSED' || effectiveContext.agentMode === 'PAUSED') {
+      return NextResponse.json({ error: 'AI processing blocked because lead automation is paused', automaticRetry: false }, { status: 423 });
+    }
+    if (leadSafety.agent_mode === 'HUMAN' || effectiveContext.agentMode === 'HUMAN') {
+      return NextResponse.json({ error: 'AI processing blocked because the conversation is in human takeover', automaticRetry: false }, { status: 423 });
+    }
+    effectiveContext = { ...effectiveContext, agentMode: leadSafety.agent_mode ?? effectiveContext.agentMode };
+  } else if (effectiveContext.agentMode === 'PAUSED' || effectiveContext.agentMode === 'HUMAN') {
+    return NextResponse.json({ error: 'AI processing blocked by conversation agent mode', automaticRetry: false }, { status: 423 });
   }
 
   const routePlan = buildSelectiveRoutePlan(effectiveContext);
@@ -286,6 +348,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'AI processing completed but result persistence requires reconciliation', runId: claimed.id, reconciliationRequired: true }, { status: 202 });
     }
 
+    const handoffState = await reconcileHandoff(payload, {
+      leadId: effectiveContext.leadId,
+      conversationId: effectiveContext.conversationId,
+    });
+
     // Telegram is an owner-side operational notification only. A Telegram failure must never
     // fail the already-completed Agent run, trigger an AI retry, or change customer delivery.
     try {
@@ -295,10 +362,26 @@ export async function POST(request: Request) {
       // Notification journal is fail-closed/no-auto-retry; the sales run remains authoritative.
     }
 
+    if (handoffState?.reconciliationRequired) {
+      return NextResponse.json({
+        ...payload,
+        handoffState,
+        replayed: false,
+        runId: claimed.id,
+        reconciliationRequired: true,
+      }, { status: 202 });
+    }
+
     // The paid/AI boundary is complete before queueing. A queue failure must never turn a
     // successfully completed AI run into FAILED or cause the model to be called again.
     const approvalQueue = await reconcileApproval(payload);
-    const responsePayload = { ...payload, ...(approvalQueue ? { approvalQueue } : {}), replayed: false, runId: claimed.id };
+    const responsePayload = {
+      ...payload,
+      ...(handoffState ? { handoffState } : {}),
+      ...(approvalQueue ? { approvalQueue } : {}),
+      replayed: false,
+      runId: claimed.id,
+    };
     if (approvalQueue && 'reconciliationRequired' in approvalQueue && approvalQueue.reconciliationRequired) {
       return NextResponse.json(responsePayload, { status: 202 });
     }
