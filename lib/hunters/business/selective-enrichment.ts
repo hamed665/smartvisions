@@ -40,12 +40,18 @@ export function deriveWhatsappCandidate(internationalPhone:string|null|undefined
   return `https://wa.me/${digits}`;
 }
 
+export function officialWhatsappContact(value:string|null|undefined) {
+  const raw=String(value??'').trim();
+  return classifyWebsiteUri(raw)==='CONTACT_ONLY' && /(?:^|\/\/)(?:www\.)?(?:wa\.me|(?:api\.)?whatsapp\.com)(?:\/|$)/i.test(raw) ? raw : undefined;
+}
+
 export function hasDirectProspectContact(business: DiscoveredBusiness) {
   return Boolean(
     String(business.phone ?? '').trim()
     || String(business.internationalPhone ?? '').trim()
     || String(business.email ?? '').trim()
     || String(business.whatsapp ?? '').trim()
+    || officialWhatsappContact(business.officialWebsite)
     || deriveWhatsappCandidate(business.internationalPhone,business.phone,business.countryCode),
   );
 }
@@ -62,11 +68,12 @@ export function calculateNoWebsiteOpportunityScore(business:DiscoveredBusiness) 
   const websiteClass = classifyWebsiteUri(business.officialWebsite);
   const operational = String(business.businessStatus ?? '').toUpperCase() === 'OPERATIONAL';
   const directContact = hasDirectProspectContact(business);
+  const whatsappContact = business.whatsapp || officialWhatsappContact(business.officialWebsite) || deriveWhatsappCandidate(business.internationalPhone,business.phone,business.countryCode);
   if (operational) { score += 30; reasons.push('Google marks the business as operational'); }
   if (websiteClass === 'NONE') { score += 40; reasons.push('No official website returned by Google'); }
   else if (websiteClass === 'CONTACT_ONLY') { score += 36; reasons.push('Only a social/contact/directory link is present; no official standalone website'); }
   if (business.phone || business.internationalPhone) { score += 15; reasons.push('Direct phone contact is available'); }
-  if (business.whatsapp || deriveWhatsappCandidate(business.internationalPhone,business.phone,business.countryCode)) { score += 8; reasons.push('WhatsApp candidate link is available without another API call'); }
+  if (whatsappContact) { score += 8; reasons.push('WhatsApp contact is available without another API call'); }
   if (business.email) { score += 6; reasons.push('Direct email contact is available'); }
   const reviewCount = Math.max(0,Number(business.userRatingCount ?? 0));
   if (reviewCount >= 100) { score += 7; reasons.push('Strong Google activity with 100+ ratings'); }
@@ -79,9 +86,8 @@ export function calculateNoWebsiteOpportunityScore(business:DiscoveredBusiness) 
 
 export function buildBusinessPersistenceRow(organizationId:string,business:DiscoveredBusiness) {
   const whatsapp = business.whatsapp
-    ?? (classifyWebsiteUri(business.officialWebsite) === 'CONTACT_ONLY' && /(?:wa\.me|whatsapp\.com)/i.test(String(business.officialWebsite ?? ''))
-      ? business.officialWebsite
-      : deriveWhatsappCandidate(business.internationalPhone,business.phone,business.countryCode));
+    ?? officialWhatsappContact(business.officialWebsite)
+    ?? deriveWhatsappCandidate(business.internationalPhone,business.phone,business.countryCode);
   return {
     organization_id:organizationId,name:business.name,country_code:business.countryCode,city:business.city??null,category:business.category??null,
     google_place_id:business.googlePlaceId??null,official_website:business.officialWebsite??null,phone:business.phone??null,
