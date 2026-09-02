@@ -1,4 +1,4 @@
-# Migration-only workflow. Dynamic-route isolation diagnostic. Delete before merging PR A.
+# Migration-only workflow. Force-dynamic isolation diagnostic. Delete before merging PR A.
 name: Cloudflare Runtime Diagnostic
 
 on:
