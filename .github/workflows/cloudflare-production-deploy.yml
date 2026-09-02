@@ -179,8 +179,10 @@ jobs:
           const file='dist/server/wrangler.json';
           const c=JSON.parse(fs.readFileSync(file,'utf8'));
           c.name='smartvisions-growth-os-production';
+          c.workers_dev=false;
           if(c.limits?.cpu_ms!==100)throw new Error('CPU guard drifted before promotion');
           if(c.routes||c.route)throw new Error('Production deploy must not mutate Worker Routes');
+          if(c.workers_dev!==false)throw new Error('Production workers.dev must be disabled');
           fs.writeFileSync(file,JSON.stringify(c,null,2)+'\n');
           NODE
           npx wrangler deploy --config dist/server/wrangler.json
@@ -243,6 +245,7 @@ jobs:
           echo "Candidate Worker: smartvisions-growth-os-release-candidate"
           echo "Production Worker: smartvisions-growth-os-production"
           echo "Production hostname: app.smartvisionsai.com"
+          echo "Production workers.dev exposure: disabled"
           echo "CPU guard: 100ms"
           echo "Provider secret values read by permanent deploy: none"
           echo "DNS/Worker Route mutation by normal deploy: none"
