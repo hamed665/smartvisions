@@ -1,4 +1,4 @@
-# Migration-only workflow. Minimal public-preview isolation diagnostic. Delete before merging PR A.
+# Migration-only workflow. Public-preview persistence isolation diagnostic. Delete before merging PR A.
 name: Cloudflare Runtime Diagnostic
 
 on:
