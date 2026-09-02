@@ -1,4 +1,4 @@
-# Migration-only workflow. Nested preview boundary removed for this diagnostic. Delete before merging PR A.
+# Migration-only workflow. Dynamic-route isolation diagnostic. Delete before merging PR A.
 name: Cloudflare Runtime Diagnostic
 
 on:
@@ -55,7 +55,7 @@ jobs:
           set -euo pipefail
           (
             sleep 8
-            node -e 'const base=process.env.CANDIDATE_URL; const paths=["/login","/","/login/__migration-not-found","/login/__definitely-missing-child","/p/__migration-not-found","/p/__cloudflare_notfound_probe__",`/p/cloudflare-migration-missing-${Date.now()}`]; for (const path of paths) { try { const r=await fetch(base+path,{redirect:"manual"}); console.error(`[probe] ${path} -> ${r.status}`); } catch (error) { console.error(`[probe] ${path} -> request-error`, error); } }'
+            node -e 'const base=process.env.CANDIDATE_URL; const paths=["/login","/","/login/dynamic-not-found-probe","/login/__migration-not-found","/p/__migration-ok","/p/__migration-not-found","/p/__cloudflare_notfound_probe__",`/p/cloudflare-migration-missing-${Date.now()}`]; for (const path of paths) { try { const r=await fetch(base+path,{redirect:"manual"}); console.error(`[probe] ${path} -> ${r.status}`); } catch (error) { console.error(`[probe] ${path} -> request-error`, error); } }'
           ) &
           traffic_pid=$!
           set +e
