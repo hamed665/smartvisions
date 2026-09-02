@@ -48,22 +48,16 @@ const required = [
 const token = String(process.env.VERCEL_TOKEN ?? '').trim();
 if (!token) throw new Error('VERCEL_TOKEN is required');
 
-const endpoint = new URL(`${VERCEL_API}/v10/projects/${PROJECT_ID}/env`);
-endpoint.searchParams.set('teamId', TEAM_ID);
-endpoint.searchParams.set('decrypt', 'true');
+const headers = {
+  authorization: `Bearer ${token}`,
+  accept: 'application/json',
+};
 
-const response = await fetch(endpoint, {
-  headers: {
-    authorization: `Bearer ${token}`,
-    accept: 'application/json',
-  },
-});
-if (!response.ok) {
-  throw new Error(`Vercel environment API request failed with HTTP ${response.status}`);
+async function getJson(url) {
+  const response = await fetch(url, { headers });
+  if (!response.ok) return { ok: false, status: response.status, body: null };
+  return { ok: true, status: response.status, body: await response.json() };
 }
-
-const payload = await response.json();
-const rows = Array.isArray(payload) ? payload : Array.isArray(payload?.envs) ? payload.envs : [];
 
 function targetsProduction(row) {
   const target = row?.target;
@@ -71,17 +65,44 @@ function targetsProduction(row) {
   return target === 'production';
 }
 
-const byKey = new Map();
+const listEndpoint = new URL(`${VERCEL_API}/v10/projects/${PROJECT_ID}/env`);
+listEndpoint.searchParams.set('teamId', TEAM_ID);
+const listed = await getJson(listEndpoint);
+if (!listed.ok) throw new Error(`Vercel environment list API failed with HTTP ${listed.status}`);
+
+const rows = Array.isArray(listed.body) ? listed.body : Array.isArray(listed.body?.envs) ? listed.body.envs : [];
+const selected = new Map();
 for (const row of rows) {
   const key = String(row?.key ?? '');
-  if (!allowed.includes(key) || !targetsProduction(row)) continue;
-  if (row?.gitBranch) continue;
-  const value = typeof row?.value === 'string' ? row.value : '';
-  if (!value) continue;
-  byKey.set(key, value);
+  if (!allowed.includes(key) || !targetsProduction(row) || row?.gitBranch) continue;
+  if (!row?.id) continue;
+  selected.set(key, row);
 }
 
-const out = Object.fromEntries([...byKey.entries()]);
+async function readDecrypted(row) {
+  const projectUrl = new URL(`${VERCEL_API}/v1/projects/${PROJECT_ID}/env/${encodeURIComponent(row.id)}`);
+  projectUrl.searchParams.set('teamId', TEAM_ID);
+  const projectResult = await getJson(projectUrl);
+  if (projectResult.ok && typeof projectResult.body?.value === 'string' && projectResult.body.value) {
+    return projectResult.body.value;
+  }
+
+  const sharedUrl = new URL(`${VERCEL_API}/v1/env/${encodeURIComponent(row.id)}`);
+  sharedUrl.searchParams.set('teamId', TEAM_ID);
+  const sharedResult = await getJson(sharedUrl);
+  if (sharedResult.ok && typeof sharedResult.body?.value === 'string' && sharedResult.body.value) {
+    return sharedResult.body.value;
+  }
+
+  return '';
+}
+
+const out = {};
+for (const [key, row] of selected) {
+  const value = await readDecrypted(row);
+  if (value) out[key] = value;
+}
+
 const missing = required.filter((key) => !String(out[key] ?? '').trim());
 if (!String(out.META_WHATSAPP_ACCESS_TOKEN ?? out.META_WHATSAPP_TOKEN ?? out.WHATSAPP_ACCESS_TOKEN ?? '').trim()) {
   missing.push('WhatsApp access token alias');
@@ -91,8 +112,8 @@ if (!String(out.META_WHATSAPP_PHONE_NUMBER_ID ?? out.WHATSAPP_PHONE_NUMBER_ID ??
 }
 
 if (missing.length) {
-  throw new Error(`Vercel Production environment API did not return decrypted required key name(s): ${missing.join(', ')}`);
+  throw new Error(`Vercel Production decrypt API did not return required key name(s): ${missing.join(', ')}`);
 }
 
 fs.writeFileSync('.growth-runtime-secrets.json', JSON.stringify(out), { mode: 0o600 });
-console.log(`Vercel Production API export prepared ${Object.keys(out).length} binding(s); values were not printed.`);
+console.log(`Vercel Production decrypt export prepared ${Object.keys(out).length} binding(s); values were not printed.`);
