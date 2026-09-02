@@ -221,26 +221,6 @@ jobs:
           for key in OPENAI_API_KEY GOOGLE_PLACES_API_KEY META_WHATSAPP_ACCESS_TOKEN META_WHATSAPP_TOKEN META_WHATSAPP_PHONE_NUMBER_ID META_WHATSAPP_CATALOG_ID WHATSAPP_CATALOG_ID META_APP_SECRET META_WEBHOOK_VERIFY_TOKEN EMAIL_PROVIDER_API_KEY EMAIL_WEBHOOK_SECRET REDIS_URL CRAWL4AI_URL INTERNAL_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET TELEGRAM_OWNER_USER_ID TELEGRAM_OWNER_CHAT_ID TELEGRAM_ORGANIZATION_ID; do put_if_present "$key"; done
           echo "Available runtime secrets attached without printing values."
 
-      - name: Start bounded live Tail
-        id: tail
-        shell: bash
-        run: |
-          set -euo pipefail
-          : > tail.jsonl
-          : > tail.stderr
-          timeout 100s npx wrangler tail smartvisions-growth-os-release-candidate --format json > tail.jsonl 2>tail.stderr &
-          pid=$!
-          echo "$pid" > tail.pid
-          sleep 8
-          if ! kill -0 "$pid" 2>/dev/null; then
-            code=0
-            wait "$pid" || code=$?
-            echo "::error::wrangler tail exited before candidate smoke (exit $code)"
-            sed -n '1,120p' tail.stderr
-            exit 1
-          fi
-          echo "Live Tail connected process is running."
-
       - name: Safe API webhook auth and Supabase smoke
         id: smoke
         continue-on-error: true
@@ -266,37 +246,72 @@ jobs:
           if(failed) process.exit(1);
           NODE
 
-      - name: Evaluate Tail CPU and runtime outcomes
+      - name: Foreground live Tail runtime guard
         id: tail_eval
-        if: ${{ always() && steps.tail.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
-          sleep 8
-          if [ -f tail.pid ]; then kill "$(cat tail.pid)" 2>/dev/null || true; fi
+          : > tail.jsonl
+          : > tail.stderr
+          (
+            sleep 6
+            node <<'NODE'
+          const base=process.env.CANDIDATE_URL;
+          const stamp=Date.now();
+          const paths=Array.from({length:24},(_,i)=>i%4===0?`/p/cloudflare-tail-miss-${stamp}-${i}`:i%4===1?'/':'/login');
+          let failed=0;
+          for(let i=0;i<paths.length;i+=4){
+            const results=await Promise.all(paths.slice(i,i+4).map(async path=>{
+              try{const r=await fetch(base+path,{redirect:'manual'}); return r.status;}catch{return 0;}
+            }));
+            for(const status of results) if(![200,301,302,303,307,308,404].includes(status)) failed++;
+          }
+          console.error(`Tail-load requests=${paths.length} unexpected=${failed}`);
+          if(failed) process.exit(1);
+          NODE
+          ) &
+          traffic_pid=$!
+          set +e
+          timeout 30s npx wrangler tail smartvisions-growth-os-release-candidate --format json >tail.jsonl 2>tail.stderr
+          tail_code=$?
+          set -e
+          wait "$traffic_pid"
+          if [ "$tail_code" -ne 124 ] && [ "$tail_code" -ne 0 ]; then
+            echo "::error::wrangler tail exited unexpectedly with $tail_code"
+            sed -n '1,120p' tail.stderr
+            exit 1
+          fi
           if [ -s tail.stderr ]; then
             echo "wrangler tail diagnostics:"
             sed -n '1,120p' tail.stderr
           fi
           node <<'NODE'
           const fs=require('node:fs');
-          const text=fs.existsSync('tail.jsonl')?fs.readFileSync('tail.jsonl','utf8'):'';
+          const text=fs.readFileSync('tail.jsonl','utf8');
           const rows=[];
           for(const line of text.split(/\n+/)){
             try{rows.push(JSON.parse(line));}catch{}
           }
           const bad=rows.filter(r=>['exceededCpu','exceededMemory','exception'].includes(r.outcome)||((r.exceptions||[]).length>0));
-          const cpu=rows.map(r=>Number(r.cpuTimeMs??r.cpuTime??r.cpu_time_ms)).filter(Number.isFinite);
+          const cpu=rows.flatMap(r=>[
+            r.cpuTimeMs,
+            r.cpuTime,
+            r.cpu_time_ms,
+            r?.event?.cpuTimeMs,
+            r?.event?.cpuTime,
+            r?.event?.cpu_time_ms
+          ]).map(Number).filter(Number.isFinite);
           const max=cpu.length?Math.max(...cpu):null;
           console.log(`Tail events=${rows.length} bad_outcomes=${bad.length} max_cpu_ms=${max===null?'unavailable':max}`);
           for (const row of bad.slice(0,5)) {
             const status=row?.event?.response?.status ?? 'unknown';
             const url=row?.event?.request?.url ?? 'unknown';
-            const exceptions=(row.exceptions||[]).map(e=>({name:e.name,message:e.message,stack:e.stack}));
+            const exceptions=(row.exceptions||[]).map(e=>({name:e.name,message:e.message}));
             console.log(JSON.stringify({outcome:row.outcome,status,url,exceptions}));
           }
-          if(!rows.length) throw new Error('No live Tail events captured');
+          if(!rows.length) throw new Error('Foreground live Tail captured no events');
           if(bad.length) throw new Error('Live Tail captured unexpected runtime outcomes');
+          if(max!==null && max>100) throw new Error(`Observed CPU ${max}ms exceeds candidate guard`);
           NODE
 
       - name: Candidate gate
@@ -304,10 +319,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "smoke=${{ steps.smoke.outcome }} load=${{ steps.load.outcome }} tail=${{ steps.tail.outcome }} tail_eval=${{ steps.tail_eval.outcome }}"
+          echo "smoke=${{ steps.smoke.outcome }} load=${{ steps.load.outcome }} tail_eval=${{ steps.tail_eval.outcome }}"
           [ "${{ steps.smoke.outcome }}" = "success" ] || exit 1
           [ "${{ steps.load.outcome }}" = "success" ] || exit 1
-          [ "${{ steps.tail.outcome }}" = "success" ] || exit 1
           [ "${{ steps.tail_eval.outcome }}" = "success" ] || exit 1
 
       - name: Candidate summary
