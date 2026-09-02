@@ -56,17 +56,7 @@ jobs:
           : > tail.stderr
           (
             sleep 8
-            node <<'NODE'
-            const base=process.env.CANDIDATE_URL;
-            for (const path of ['/login','/','/p/__cloudflare_notfound_probe__',`/p/cloudflare-migration-missing-${Date.now()}`]) {
-              try {
-                const r=await fetch(base+path,{redirect:'manual'});
-                console.log(`${path} -> ${r.status}`);
-              } catch (e) {
-                console.log(`${path} -> request-error`);
-              }
-            }
-            NODE
+            node -e 'const base=process.env.CANDIDATE_URL; const paths=["/login","/","/p/__cloudflare_notfound_probe__",`/p/cloudflare-migration-missing-${Date.now()}`]; for (const path of paths) { try { const r=await fetch(base+path,{redirect:"manual"}); console.log(`${path} -> ${r.status}`); } catch { console.log(`${path} -> request-error`); } }'
           ) > request.log 2>&1 &
           traffic_pid=$!
           set +e
