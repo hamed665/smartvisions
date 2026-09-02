@@ -3,7 +3,7 @@ import type { DiscoveredBusiness } from './types';
 export type PersonalizationRegion = 'MUSCAT_LOCAL' | 'OMAN_REMOTE' | 'INTERNATIONAL_REMOTE';
 export type WebsitePresenceClass = 'NONE' | 'CONTACT_ONLY' | 'STANDALONE';
 export type IndustrySegment = 'DENTAL' | 'BEAUTY' | 'RESTAURANT' | 'SALON' | 'VET' | 'CLINIC' | 'GENERIC';
-export type CheapestNextAction = 'SKIP' | 'CONTACT_READY' | 'SOCIAL_CHECK' | 'WEBSITE_EVIDENCE' | 'EVIDENCE_READY';
+export type CheapestNextAction = 'SKIP' | 'CONTACT_READY' | 'SOCIAL_CHECK' | 'WEBSITE_EVIDENCE' | 'EVIDENCE_READY' | 'CATALOG_SETUP';
 
 const INDUSTRY_RULES: Array<{ segment: IndustrySegment; needles: string[]; angle: string }> = [
   { segment: 'DENTAL', needles: ['dental','dentist','orthodont','teeth','oral','اسنان','أسنان'], angle: 'trust, bookings, before/after proof and local patient acquisition' },
