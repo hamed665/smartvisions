@@ -15,6 +15,17 @@ export type WebsiteAuditResult = {
   evidence: Array<{ key: string; value: string }>;
 };
 
+const TRACKING_PARAMS = new Set([
+  'utm_source',
+  'utm_medium',
+  'utm_campaign',
+  'utm_term',
+  'utm_content',
+  'gclid',
+  'fbclid',
+  'msclkid',
+]);
+
 const unique = (items: string[]) => [...new Set(items.map((item) => item.trim()).filter(Boolean))];
 const stripTags = (value: string) => value.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
@@ -23,6 +34,10 @@ export function normalizeAuditUrl(value: string) {
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Only HTTP(S) websites can be audited');
   const host = url.hostname.toLowerCase();
   if (!host || host === 'localhost' || host.endsWith('.local')) throw new Error('Local/private hosts are blocked');
+  for (const key of [...url.searchParams.keys()]) {
+    if (TRACKING_PARAMS.has(key.toLowerCase())) url.searchParams.delete(key);
+  }
+  url.hash = '';
   return url;
 }
 
