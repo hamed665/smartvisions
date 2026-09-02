@@ -1,3 +1,5 @@
+import type { PanelParityCommand } from './panel-parity-types';
+
 export type TelegramCostLimitKey =
   | 'monthly_total_budget_usd'
   | 'openai_budget_usd'
@@ -32,6 +34,7 @@ export type TelegramOwnerCommand =
   | { type: 'SHOW_BUDGET' }
   | { type: 'SHOW_APPROVALS'; limit?: number }
   | { type: 'SHOW_CAMPAIGNS'; limit?: number }
+  | { type: 'SHOW_PANEL_CAPABILITIES' }
   | { type: 'TEST_OWNER_ALERT' }
   | { type: 'SAFETY_BLOCK'; reason: 'SHADOW_MODE' | 'KILL_SWITCH_OFF' | 'SECRETS' | 'DNC_BYPASS' | 'AUTO_COLD_CHANNEL' | 'APPROVAL_BYPASS' }
   | { type: 'SET_PRICE'; countryCode: string; serviceQuery: string; price: number }
@@ -50,6 +53,7 @@ export type TelegramOwnerCommand =
   | { type: 'SET_PAUSE'; target: 'AGENTS' | 'EMAIL' | 'WHATSAPP'; paused: boolean }
   | { type: 'APPROVE_MESSAGE'; messageId: string }
   | { type: 'REJECT_MESSAGE'; messageId: string; reason?: string }
+  | PanelParityCommand
   | { type: 'REVERT_LAST_CHANGE'; targetRunId?: string }
   | { type: 'HELP' };
 
@@ -92,5 +96,5 @@ export type TelegramNotificationType =
   | 'SYSTEM_ALERT';
 
 export const MUTATING_COMMANDS = new Set<TelegramOwnerCommand['type']>([
-  'SET_PRICE','SET_DISCOUNT_POLICY','SET_MINIMUM_PRICE','SET_SERVICE_ENABLED','SET_SERVICE_OPTION','CREATE_HUNTER_CAMPAIGN','SET_MARKET_ENABLED','SET_MARKET_STYLE','SET_MARKET_SEND_WINDOW','SET_AGENT_ENABLED','SET_AGENT_THRESHOLD','SET_COST_LIMIT','ACTIVATE_KILL_SWITCH','SET_PAUSE','APPROVE_MESSAGE','REJECT_MESSAGE','REVERT_LAST_CHANGE',
+  'SET_PRICE','SET_DISCOUNT_POLICY','SET_MINIMUM_PRICE','SET_SERVICE_ENABLED','SET_SERVICE_OPTION','CREATE_HUNTER_CAMPAIGN','SET_MARKET_ENABLED','SET_MARKET_STYLE','SET_MARKET_SEND_WINDOW','SET_AGENT_ENABLED','SET_AGENT_THRESHOLD','SET_COST_LIMIT','ACTIVATE_KILL_SWITCH','SET_PAUSE','APPROVE_MESSAGE','REJECT_MESSAGE','PANEL_ACTION','REVERT_LAST_CHANGE',
 ]);
