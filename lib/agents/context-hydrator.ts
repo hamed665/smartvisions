@@ -1,15 +1,91 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AgentContext, MarketLocaleStyleSnapshot } from './contracts';
-import { hydrateAgentContext as hydrateCore } from './context-hydrator-core';
+import { resolveCanonicalLeadQuote } from './canonical-quote';
+import { hydrateAgentContext as hydrateCore, type HydratedRuntimeEvidence } from './context-hydrator-core';
 
 export type { HydratedRuntimeEvidence } from './context-hydrator-core';
+
+type HydratedAgentContext = {
+  context: AgentContext;
+  evidence: HydratedRuntimeEvidence;
+};
+
+async function hydrateCanonicalLeadQuote(input: {
+  supabase: SupabaseClient;
+  hydrated: HydratedAgentContext;
+}) {
+  const { context } = input.hydrated;
+  const organizationId = String(context.organizationId ?? '').trim();
+  const leadId = String(context.leadId ?? '').trim();
+  const countryCode = String(context.countryCode ?? '').trim().toUpperCase();
+  if (!organizationId || !leadId || !countryCode) return input.hydrated;
+
+  const { data: lead, error: leadError } = await input.supabase
+    .from('leads')
+    .select('business_id,recommended_offer')
+    .eq('organization_id', organizationId)
+    .eq('id', leadId)
+    .maybeSingle();
+  if (leadError) throw new Error(`Canonical quote lead hydration failed: ${leadError.message}`);
+  if (!lead) return input.hydrated;
+
+  let quote = resolveCanonicalLeadQuote({
+    countryCode,
+    serviceKnowledge: context.serviceKnowledge,
+    leadRecommendedOffer: lead.recommended_offer,
+  });
+
+  if (!quote && lead.business_id) {
+    const { data: opportunity, error: opportunityError } = await input.supabase
+      .from('growth_opportunities')
+      .select('primary_service_id,catalog_ready')
+      .eq('organization_id', organizationId)
+      .eq('business_id', lead.business_id)
+      .maybeSingle();
+    if (opportunityError) throw new Error(`Canonical quote opportunity hydration failed: ${opportunityError.message}`);
+
+    quote = resolveCanonicalLeadQuote({
+      countryCode,
+      serviceKnowledge: context.serviceKnowledge,
+      growthOpportunityServiceId: opportunity?.primary_service_id,
+      growthOpportunityCatalogReady: opportunity?.catalog_ready,
+    });
+  }
+
+  if (!quote) return input.hydrated;
+
+  return {
+    ...input.hydrated,
+    context: {
+      ...context,
+      quotedService: quote.serviceId,
+      quotedPrice: quote.price,
+      quotedCurrency: quote.currency,
+      knowledgeContext: [
+        ...(context.knowledgeContext ?? []),
+        {
+          key: '_canonical_quote',
+          version: 1,
+          payload: {
+            serviceId: quote.serviceId,
+            price: quote.price,
+            currency: quote.currency,
+            source: 'service_prices',
+            resolvedFrom: quote.source,
+          },
+        },
+      ],
+    },
+  };
+}
 
 export async function hydrateAgentContext(input: {
   supabase: SupabaseClient;
   context: AgentContext;
   trustedConversationId?: string;
 }) {
-  const hydrated = await hydrateCore(input);
+  const coreHydrated = await hydrateCore(input);
+  const hydrated = await hydrateCanonicalLeadQuote({ supabase: input.supabase, hydrated: coreHydrated });
   const countryCode = String(hydrated.context.countryCode ?? '').trim().toUpperCase();
   if (!countryCode) return hydrated;
 
