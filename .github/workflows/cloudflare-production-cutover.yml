@@ -156,8 +156,10 @@ jobs:
           const f='dist/server/wrangler.json';
           const c=JSON.parse(fs.readFileSync(f,'utf8'));
           c.name='smartvisions-growth-os-production';
+          c.workers_dev=false;
           if(c.limits?.cpu_ms!==100)throw new Error('CPU guard drifted');
           if(c.routes||c.route)throw new Error('Production bundle must not carry routes');
+          if(c.workers_dev!==false)throw new Error('Production workers.dev must be disabled');
           fs.writeFileSync(f,JSON.stringify(c,null,2)+'\n');
           NODE
           npx wrangler deploy --config dist/server/wrangler.json
@@ -180,11 +182,7 @@ jobs:
           const routes=(await cf(`/zones/${zone.id}/workers/routes`)).result||[];
           const exactRoutes=routes.filter(r=>r.pattern==='app.smartvisionsai.com/*');
           if(dns.length>1||exactRoutes.length>1)throw new Error('Ambiguous existing app DNS/route state; refusing cutover');
-          const snapshot={
-            zoneId:zone.id,
-            dns:dns.map(r=>({type:r.type,name:r.name,content:r.content,proxied:r.proxied,ttl:r.ttl})),
-            routes:exactRoutes.map(r=>({pattern:r.pattern,script:r.script||null}))
-          };
+          const snapshot={zoneId:zone.id,dns:dns.map(r=>({type:r.type,name:r.name,content:r.content,proxied:r.proxied,ttl:r.ttl})),routes:exactRoutes.map(r=>({pattern:r.pattern,script:r.script||null}))};
           fs.writeFileSync('cutover-snapshot.json',JSON.stringify(snapshot,null,2));
           console.log(`Cutover snapshot captured: DNS=${snapshot.dns.length}, exact routes=${snapshot.routes.length}.`);
           NODE
@@ -266,11 +264,9 @@ jobs:
           const api='https://api.cloudflare.com/client/v4';
           const headers={Authorization:`Bearer ${token}`,'Content-Type':'application/json'};
           async function call(method,path,body){const r=await fetch(api+path,{method,headers,body:body?JSON.stringify(body):undefined});const j=await r.json().catch(()=>({}));return {ok:r.ok&&j.success!==false,j};}
-
           const routes=await call('GET',`/zones/${s.zoneId}/workers/routes`);
           for(const r of (routes.j.result||[]).filter(x=>x.pattern==='app.smartvisionsai.com/*'))await call('DELETE',`/zones/${s.zoneId}/workers/routes/${r.id}`);
           for(const r of s.routes)await call('POST',`/zones/${s.zoneId}/workers/routes`,{pattern:r.pattern,script:r.script});
-
           const dns=await call('GET',`/zones/${s.zoneId}/dns_records?name=app.smartvisionsai.com&per_page=100`);
           for(const r of (dns.j.result||[]))await call('DELETE',`/zones/${s.zoneId}/dns_records/${r.id}`);
           for(const r of s.dns)await call('POST',`/zones/${s.zoneId}/dns_records`,{type:r.type,name:r.name,content:r.content,proxied:r.proxied,ttl:r.ttl});
@@ -284,6 +280,7 @@ jobs:
           rm -f .growth-runtime-secrets.json cutover-snapshot.json
           echo "Production Worker: smartvisions-growth-os-production"
           echo "Production URL: https://app.smartvisionsai.com"
+          echo "Production workers.dev exposure: disabled"
           echo "Legacy rollback URL retained: https://smartvisions.vercel.app"
           echo "Provider secrets were copied runner-to-Cloudflare and never printed"
           echo "CPU guard: 100ms"
