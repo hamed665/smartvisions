@@ -1,0 +1,112 @@
+import { describe, expect, it } from 'vitest';
+import { buildServiceFitQualification } from '../lib/hunters/business/service-fit';
+
+const base = {
+  sourceType: 'google_places' as const,
+  name: 'Example Dental Clinic',
+  category: 'dental clinic',
+  countryCode: 'OM',
+  city: 'Muscat',
+  businessStatus: 'OPERATIONAL',
+  phone: '91234567',
+  rating: 4.5,
+  userRatingCount: 40,
+  retrievedAt: new Date().toISOString(),
+};
+
+const catalog = new Set(['business_website','premium_bilingual_website','custom_website','ai_reels_4','whatsapp_ai_setup']);
+
+describe('high-precision service-fit qualification', () => {
+  it('promotes a direct-contact no-website business as Tier A website fit', () => {
+    const result = buildServiceFitQualification({ business: base, region: 'MUSCAT_LOCAL', websiteClass: 'NONE', enabledServiceIds: catalog });
+    expect(result.prospectTier).toBe('A');
+    expect(result.primaryOfferFamily).toBe('WEBSITE_BUILD');
+    expect(result.primaryServiceId).toBe('business_website');
+    expect(result.shouldContact).toBe(true);
+    expect(result.cheapestNextAction).toBe('CONTACT_READY');
+  });
+
+  it('recognizes audited poor SEO but blocks outreach until SEO exists in the canonical service catalog', () => {
+    const result = buildServiceFitQualification({
+      business: { ...base, officialWebsite: 'https://example.om' }, region: 'MUSCAT_LOCAL', websiteClass: 'STANDALONE',
+      websiteAudit: { seoQuality: 'POOR', mobileQuality: 'GOOD', ctaQuality: 'GOOD', hasArabic: true, hasBooking: true, hasWhatsapp: false },
+      enabledServiceIds: catalog,
+    });
+    expect(result.prospectTier).toBe('A');
+    expect(result.primaryOfferFamily).toBe('SEO_GROWTH');
+    expect(result.primarySuggestedServiceId).toBe('seo_growth');
+    expect(result.primaryServiceId).toBeNull();
+    expect(result.shouldContact).toBe(false);
+    expect(result.cheapestNextAction).toBe('CATALOG_SETUP');
+  });
+
+  it('makes audited SEO fit contact-ready once the canonical SEO service is enabled', () => {
+    const result = buildServiceFitQualification({
+      business: { ...base, officialWebsite: 'https://example.om' }, region: 'MUSCAT_LOCAL', websiteClass: 'STANDALONE',
+      websiteAudit: { seoQuality: 'POOR', mobileQuality: 'GOOD', ctaQuality: 'GOOD', hasArabic: true, hasBooking: true, hasWhatsapp: false },
+      enabledServiceIds: new Set([...catalog, 'seo_growth']),
+    });
+    expect(result.primaryServiceId).toBe('seo_growth');
+    expect(result.shouldContact).toBe(true);
+    expect(result.cheapestNextAction).toBe('CONTACT_READY');
+  });
+
+  it('never claims weak Instagram content from a known profile alone', () => {
+    const result = buildServiceFitQualification({
+      business: { ...base, officialWebsite: 'https://example.om', instagram: 'https://instagram.com/example' },
+      region: 'MUSCAT_LOCAL', websiteClass: 'STANDALONE',
+      websiteAudit: { seoQuality: 'GOOD', mobileQuality: 'GOOD', ctaQuality: 'GOOD', hasArabic: true, hasBooking: true },
+      enabledServiceIds: catalog,
+    });
+    expect(result.serviceFits.some(item => item.family === 'MUSCAT_CONTENT_GROWTH')).toBe(false);
+    expect(result.evidenceGaps).toContain('SOCIAL_QUALITY_CHECK_REQUIRED');
+    expect(result.cheapestNextAction).toBe('SOCIAL_CHECK');
+  });
+
+  it('promotes verified weak Muscat Instagram content only when the matching catalog service exists', () => {
+    const result = buildServiceFitQualification({
+      business: { ...base, officialWebsite: 'https://example.om', instagram: 'https://instagram.com/example' },
+      region: 'MUSCAT_LOCAL', websiteClass: 'STANDALONE',
+      websiteAudit: { seoQuality: 'GOOD', mobileQuality: 'GOOD', ctaQuality: 'GOOD', hasArabic: true, hasBooking: true },
+      socialAssessment: { status: 'VERIFIED', quality: 'WEAK', source: 'OWNER_REVIEW', reasons: ['posting is inconsistent'] },
+      enabledServiceIds: new Set([...catalog, 'muscat_content_production']),
+    });
+    expect(result.primaryOfferFamily).toBe('MUSCAT_CONTENT_GROWTH');
+    expect(result.primaryServiceId).toBe('muscat_content_production');
+    expect(result.prospectTier).toBe('A');
+    expect(result.shouldContact).toBe(true);
+  });
+
+  it('suppresses a content pitch when Instagram is verified good', () => {
+    const result = buildServiceFitQualification({
+      business: { ...base, officialWebsite: 'https://example.om', instagram: 'https://instagram.com/example' },
+      region: 'MUSCAT_LOCAL', websiteClass: 'STANDALONE',
+      websiteAudit: { seoQuality: 'GOOD', mobileQuality: 'GOOD', ctaQuality: 'GOOD', hasArabic: true, hasBooking: true },
+      socialAssessment: { status: 'VERIFIED', quality: 'GOOD', source: 'OWNER_REVIEW' },
+      enabledServiceIds: new Set([...catalog, 'muscat_content_production']),
+    });
+    expect(result.serviceFits.some(item => item.family === 'MUSCAT_CONTENT_GROWTH')).toBe(false);
+    expect(result.shouldContact).toBe(false);
+  });
+
+  it('routes verified remote social weakness to AI reels instead of Muscat filming', () => {
+    const result = buildServiceFitQualification({
+      business: { ...base, countryCode: 'AE', city: 'Dubai', officialWebsite: 'https://example.ae', instagram: 'https://instagram.com/example' },
+      region: 'INTERNATIONAL_REMOTE', websiteClass: 'STANDALONE',
+      websiteAudit: { seoQuality: 'GOOD', mobileQuality: 'GOOD', ctaQuality: 'GOOD', hasArabic: true, hasBooking: true },
+      socialAssessment: { status: 'VERIFIED', quality: 'INACTIVE', source: 'OWNER_REVIEW' },
+      enabledServiceIds: catalog,
+    });
+    expect(result.primaryOfferFamily).toBe('AI_REELS');
+    expect(result.primaryServiceId).toBe('ai_reels_4');
+    expect(result.serviceFits.some(item => item.family === 'MUSCAT_CONTENT_GROWTH')).toBe(false);
+  });
+
+  it('does not promote even a strong need without a direct contact path', () => {
+    const result = buildServiceFitQualification({
+      business: { ...base, phone: undefined }, region: 'MUSCAT_LOCAL', websiteClass: 'NONE', enabledServiceIds: catalog,
+    });
+    expect(result.shouldContact).toBe(false);
+    expect(result.cheapestNextAction).toBe('SKIP');
+  });
+});
