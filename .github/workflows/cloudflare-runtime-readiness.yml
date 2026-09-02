@@ -1,0 +1,303 @@
+name: Cloudflare Runtime Readiness
+
+on:
+  push:
+    branches:
+      - feat/cloudflare-runtime-readiness
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cloudflare-growth-runtime-readiness
+  cancel-in-progress: true
+
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies and create deterministic lockfile
+        run: npm install --no-audit --no-fund
+
+      - name: Runtime source inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const roots = ['app','components','lib','proxy.ts'];
+          const extensions = new Set(['.ts','.tsx','.js','.jsx','.mjs','.cjs']);
+          const envNames = new Set();
+          const nodeImports = new Set();
+          const vercelHits = [];
+          function scan(file) {
+            const text = fs.readFileSync(file,'utf8');
+            for (const m of text.matchAll(/process\.env(?:\.([A-Z][A-Z0-9_]*)|\[['"]([A-Z][A-Z0-9_]*)['"]\])/g)) envNames.add(m[1] || m[2]);
+            for (const m of text.matchAll(/(?:from\s+|import\s*\()['"](node:[^'"]+)['"]/g)) nodeImports.add(m[1]);
+            if (/smartvisions[^\s'"`]*\.vercel\.app|VERCEL_URL|VERCEL_ENV/i.test(text)) vercelHits.push(file);
+          }
+          function walk(target) {
+            if (!fs.existsSync(target)) return;
+            const stat = fs.statSync(target);
+            if (stat.isFile()) { if (extensions.has(path.extname(target))) scan(target); return; }
+            for (const entry of fs.readdirSync(target)) {
+              if (['node_modules','.next','dist','.git'].includes(entry)) continue;
+              walk(path.join(target,entry));
+            }
+          }
+          roots.forEach(walk);
+          console.log('APPLICATION_RUNTIME_ENV_NAMES');
+          [...envNames].sort().forEach(name => console.log(name));
+          console.log('NODE_BUILTIN_IMPORTS');
+          [...nodeImports].sort().forEach(name => console.log(name));
+          console.log(`VERCEL_ORIGIN_REFERENCE_FILES=${vercelHits.length}`);
+          vercelHits.forEach(file => console.log(file));
+          NODE
+
+      - name: Quality gates
+        run: |
+          npm run lint
+          npm run typecheck
+          npm test
+          npm run build
+
+      - name: Official Vinext compatibility gate
+        run: npx vinext check
+
+      - name: Build Cloudflare Workers bundle
+        run: npm run build:vinext
+
+      - name: Worker bundle dry run
+        run: npx wrangler deploy --dry-run --config dist/server/wrangler.json
+
+      - name: Persist package lock on migration branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- package-lock.json && git ls-files --error-unmatch package-lock.json >/dev/null 2>&1; then
+            echo "package-lock.json already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "chore: lock cloudflare runtime dependencies"
+          git push origin HEAD:feat/cloudflare-runtime-readiness
+
+  candidate:
+    needs: compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      NEXT_PUBLIC_APP_NAME: Smart Visions Growth OS
+      NEXT_PUBLIC_SUPABASE_URL: https://pkypexzpyfbikdnkrzvw.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+      META_WHATSAPP_ACCESS_TOKEN: ${{ secrets.META_WHATSAPP_ACCESS_TOKEN }}
+      META_WHATSAPP_TOKEN: ${{ secrets.META_WHATSAPP_TOKEN }}
+      META_WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.META_WHATSAPP_PHONE_NUMBER_ID }}
+      META_WHATSAPP_CATALOG_ID: ${{ secrets.META_WHATSAPP_CATALOG_ID }}
+      WHATSAPP_CATALOG_ID: ${{ secrets.WHATSAPP_CATALOG_ID }}
+      META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
+      META_WEBHOOK_VERIFY_TOKEN: ${{ secrets.META_WEBHOOK_VERIFY_TOKEN }}
+      EMAIL_PROVIDER: RESEND
+      EMAIL_PROVIDER_API_KEY: ${{ secrets.EMAIL_PROVIDER_API_KEY }}
+      EMAIL_WEBHOOK_SECRET: ${{ secrets.EMAIL_WEBHOOK_SECRET }}
+      REDIS_URL: ${{ secrets.REDIS_URL }}
+      CRAWL4AI_URL: ${{ secrets.CRAWL4AI_URL }}
+      INTERNAL_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+      TELEGRAM_OWNER_USER_ID: ${{ secrets.TELEGRAM_OWNER_USER_ID }}
+      TELEGRAM_OWNER_CHAT_ID: ${{ secrets.TELEGRAM_OWNER_CHAT_ID }}
+      TELEGRAM_ORGANIZATION_ID: ${{ secrets.TELEGRAM_ORGANIZATION_ID }}
+      GLOBAL_KILL_SWITCH: "false"
+      SHADOW_MODE: "true"
+      CANDIDATE_URL: https://smartvisions-growth-os-release-candidate.hamedarezoo900.workers.dev
+
+    steps:
+      - name: Checkout exact source commit
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Secret presence preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          require(){ if [ -z "${!1:-}" ]; then echo "::error::Missing GitHub Actions secret: $1"; missing=1; fi; }
+          require_one(){
+            label="$1"; shift
+            for key in "$@"; do [ -n "${!key:-}" ] && return 0; done
+            echo "::error::Missing GitHub Actions secret for ${label}: one of $*"; missing=1
+          }
+          require CLOUDFLARE_API_TOKEN
+          require CLOUDFLARE_ACCOUNT_ID
+          require NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+          require_one "Supabase server credential" SUPABASE_SECRET_KEY SUPABASE_SERVICE_ROLE_KEY
+          require OPENAI_API_KEY
+          require GOOGLE_PLACES_API_KEY
+          require_one "Meta WhatsApp access token" META_WHATSAPP_ACCESS_TOKEN META_WHATSAPP_TOKEN
+          require META_WHATSAPP_PHONE_NUMBER_ID
+          require META_APP_SECRET
+          require META_WEBHOOK_VERIFY_TOKEN
+          require EMAIL_PROVIDER_API_KEY
+          require EMAIL_WEBHOOK_SECRET
+          require INTERNAL_API_KEY
+          require TELEGRAM_BOT_TOKEN
+          require TELEGRAM_WEBHOOK_SECRET
+          require TELEGRAM_OWNER_USER_ID
+          require TELEGRAM_OWNER_CHAT_ID
+          require TELEGRAM_ORGANIZATION_ID
+          [ "$missing" -eq 0 ] || exit 1
+          echo "Required candidate secrets are present. Values were not printed."
+
+      - name: Validate Growth Supabase credential read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          key="${SUPABASE_SECRET_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}"
+          status="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' \
+            "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/" \
+            -H "apikey: $key" \
+            -H "Accept: application/json")"
+          if [ "$status" != "200" ]; then
+            echo "::error::Growth Supabase server credential validation failed with HTTP $status"
+            exit 1
+          fi
+          echo "Growth Supabase server credential validated read-only against pkypexzpyfbikdnkrzvw."
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build exact candidate bundle
+        run: |
+          npx vinext check
+          npm run build:vinext
+
+      - name: Prepare isolated candidate config
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('node:fs');
+          const file='dist/server/wrangler.json';
+          const config=JSON.parse(fs.readFileSync(file,'utf8'));
+          config.name='smartvisions-growth-os-release-candidate';
+          config.workers_dev=true;
+          config.vars={
+            ...(config.vars||{}),
+            DEPLOYMENT_ENV:'candidate',
+            NEXT_PUBLIC_APP_NAME:'Smart Visions Growth OS',
+            NEXT_PUBLIC_SUPABASE_URL:'https://pkypexzpyfbikdnkrzvw.supabase.co',
+            EMAIL_PROVIDER:'RESEND',
+            GLOBAL_KILL_SWITCH:'false',
+            SHADOW_MODE:'true'
+          };
+          config.limits={...(config.limits||{}),cpu_ms:100};
+          delete config.routes;
+          delete config.route;
+          fs.writeFileSync(file,JSON.stringify(config,null,2)+'\n');
+          console.log('Growth release candidate prepared with no routes and CPU guard=100ms.');
+          NODE
+
+      - name: Deploy isolated release candidate
+        run: npx wrangler deploy --config dist/server/wrangler.json
+
+      - name: Attach encrypted runtime secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          put(){ printf '%s' "${!1}" | npx wrangler secret put "$1" --config dist/server/wrangler.json >/dev/null; echo "$1: attached"; }
+          put_if_present(){ [ -z "${!1:-}" ] || put "$1"; }
+          for key in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY OPENAI_API_KEY GOOGLE_PLACES_API_KEY META_WHATSAPP_PHONE_NUMBER_ID META_APP_SECRET META_WEBHOOK_VERIFY_TOKEN EMAIL_PROVIDER_API_KEY EMAIL_WEBHOOK_SECRET INTERNAL_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET TELEGRAM_OWNER_USER_ID TELEGRAM_OWNER_CHAT_ID TELEGRAM_ORGANIZATION_ID; do put "$key"; done
+          put_if_present SUPABASE_SECRET_KEY
+          put_if_present SUPABASE_SERVICE_ROLE_KEY
+          put_if_present META_WHATSAPP_ACCESS_TOKEN
+          put_if_present META_WHATSAPP_TOKEN
+          put_if_present META_WHATSAPP_CATALOG_ID
+          put_if_present WHATSAPP_CATALOG_ID
+          put_if_present REDIS_URL
+          put_if_present CRAWL4AI_URL
+          echo "Runtime secrets attached without printing values."
+
+      - name: Start bounded live Tail
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > tail.jsonl
+          timeout 100s npx wrangler tail smartvisions-growth-os-release-candidate --format json > tail.jsonl 2>/dev/null &
+          echo $! > tail.pid
+          sleep 5
+
+      - name: Safe API webhook auth and Supabase smoke
+        run: node scripts/cloudflare-safe-smoke.mjs
+
+      - name: Controlled SSR load
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const base=process.env.CANDIDATE_URL;
+          const paths=Array.from({length:40},(_,i)=>i%4===0?`/p/cloudflare-load-miss-${Date.now()}-${i}`:'/login');
+          let failed=0;
+          for(let i=0;i<paths.length;i+=5){
+            const batch=paths.slice(i,i+5);
+            const results=await Promise.all(batch.map(async path=>{
+              try{const r=await fetch(base+path,{redirect:'manual'}); return r.status;}catch{return 0;}
+            }));
+            for(const status of results) if(![200,404].includes(status)) failed++;
+          }
+          console.log(`Controlled load requests=${paths.length} unexpected=${failed}`);
+          if(failed) process.exit(1);
+          NODE
+
+      - name: Evaluate Tail CPU and runtime outcomes
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 8
+          if [ -f tail.pid ]; then kill "$(cat tail.pid)" 2>/dev/null || true; fi
+          node <<'NODE'
+          const fs=require('node:fs');
+          const text=fs.existsSync('tail.jsonl')?fs.readFileSync('tail.jsonl','utf8'):'';
+          const rows=[];
+          for(const line of text.split(/\n+/)){
+            try{rows.push(JSON.parse(line));}catch{}
+          }
+          const bad=rows.filter(r=>['exceededCpu','exceededMemory','exception'].includes(r.outcome)||((r.exceptions||[]).length>0));
+          const cpu=rows.map(r=>Number(r.cpuTime??r.cpuTimeMs??r.cpu_time_ms)).filter(Number.isFinite);
+          const max=cpu.length?Math.max(...cpu):null;
+          console.log(`Tail events=${rows.length} bad_outcomes=${bad.length} max_cpu_ms=${max===null?'unavailable':max}`);
+          if(!rows.length) throw new Error('No live Tail events captured');
+          if(bad.length) throw new Error('Live Tail captured unexpected runtime outcomes');
+          NODE
+
+      - name: Candidate summary
+        if: always()
+        run: |
+          echo "Candidate Worker: smartvisions-growth-os-release-candidate"
+          echo "Production DNS/Worker Routes changed: no"
+          echo "Outbound provider sends invoked: no"
+          echo "Candidate CPU guard: 100ms"
+          echo "Vercel production changed: no"
