@@ -52,30 +52,34 @@ export function buildIndustryPerformance(input:{leads:LeadRow[];businesses:Busin
   const totalContacted=contacted.size;
   const globalPositiveRate=totalContacted?totalPositive/totalContacted:0;
   const priorWeight=5;
-  const buckets=new Map<string,{leadIds:Set<string>;offerCounts:Map<string,number>}>();
+  const buckets=new Map<string,Set<string>>();
 
   for(const lead of input.leads){
     const industry=industryKey(lead.business_id?businessById.get(lead.business_id):undefined);
-    const bucket=buckets.get(industry)??{leadIds:new Set<string>(),offerCounts:new Map<string,number>()};
-    bucket.leadIds.add(lead.id);
-    if(lead.recommended_offer)bucket.offerCounts.set(lead.recommended_offer,(bucket.offerCounts.get(lead.recommended_offer)??0)+1);
-    buckets.set(industry,bucket);
+    const leadIds=buckets.get(industry)??new Set<string>();
+    leadIds.add(lead.id);
+    buckets.set(industry,leadIds);
   }
 
   const rows:IndustryPerformance[]=[];
-  for(const[industry,bucket]of buckets){
-    const ids=[...bucket.leadIds];
-    const c=ids.filter(id=>contacted.has(id)).length;
+  for(const[industry,leadIds]of buckets){
+    const contactedIds=[...leadIds].filter(id=>contacted.has(id));
+    const c=contactedIds.length;
     if(c===0)continue;
-    const r=ids.filter(id=>replied.has(id)).length;
-    const p=ids.filter(id=>positive.has(id)).length;
-    const e=ids.filter(id=>engaged.has(id)).length;
-    const h=ids.filter(id=>hot.has(id)||['HOT','WON'].includes(leadById.get(id)?.status??'')).length;
-    const w=ids.filter(id=>leadById.get(id)?.status==='WON').length;
-    const d=ids.filter(id=>dnc.has(id)||leadById.get(id)?.status==='DO_NOT_CONTACT').length;
+    const r=contactedIds.filter(id=>replied.has(id)).length;
+    const p=contactedIds.filter(id=>positive.has(id)).length;
+    const e=contactedIds.filter(id=>engaged.has(id)).length;
+    const h=contactedIds.filter(id=>hot.has(id)||['HOT','WON'].includes(leadById.get(id)?.status??'')).length;
+    const w=contactedIds.filter(id=>leadById.get(id)?.status==='WON').length;
+    const d=contactedIds.filter(id=>dnc.has(id)||leadById.get(id)?.status==='DO_NOT_CONTACT').length;
     const adjustedPositive=(p+globalPositiveRate*priorWeight)/(c+priorWeight);
     const score=Math.max(0,Math.min(100,Math.round(100*(adjustedPositive*0.45+(e/c)*0.25+(h/c)*0.18+(w/c)*0.12-(d/c)*0.20))));
-    const topOffer=[...bucket.offerCounts.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]??null;
+    const offerCounts=new Map<string,number>();
+    for(const id of contactedIds){
+      const offer=leadById.get(id)?.recommended_offer;
+      if(offer)offerCounts.set(offer,(offerCounts.get(offer)??0)+1);
+    }
+    const topOffer=[...offerCounts.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]??null;
     rows.push({
       industry,contacted:c,replied:r,positive:p,engaged:e,hot:h,won:w,dnc:d,
       replyRate:pct(r,c),positiveRate:pct(p,c),engagedRate:pct(e,c),hotRate:pct(h,c),winRate:pct(w,c),
