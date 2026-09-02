@@ -47,15 +47,23 @@ describe('industry performance learning',()=>{
     expect(row.performanceScore).toBeLessThan(30);
   });
 
-  it('keeps delivered/read outbound prospects in the contacted denominator',()=>{
+  it('uses sent_at and excludes uncontacted outcomes from the outbound cohort',()=>{
     const businesses=[{id:'b1',name:'Dental One',category:'dental clinic',google_primary_type_display_name:null},{id:'b2',name:'Dental Two',category:'dental clinic',google_primary_type_display_name:null},{id:'b3',name:'Dental Three',category:'dental clinic',google_primary_type_display_name:null}];
-    const leads=[lead('l1','b1'),lead('l2','b2'),lead('l3','b3')];
+    const leads=[lead('l1','b1'),lead('l2','b2'),lead('l3','b3','WON')];
     const messages=[sent('l1','DELIVERED'),sent('l2','READ'),{lead_id:'l3',direction:'OUTBOUND',status:'PROCESSING',sent_at:null}];
-    const replies=[{lead_id:'l1',category:'positive',hot:false,signals:{positive:true}},{lead_id:'l2',category:'price',hot:false,signals:{askedPrice:true}}];
+    const replies=[
+      {lead_id:'l1',category:'positive',hot:false,signals:{positive:true}},
+      {lead_id:'l2',category:'price',hot:false,signals:{askedPrice:true}},
+      {lead_id:'l3',category:'positive',hot:true,signals:{positive:true}},
+    ];
     const [row]=buildIndustryPerformance({leads,businesses,messages,replies});
     expect(row.contacted).toBe(2);
     expect(row.replied).toBe(2);
+    expect(row.positive).toBe(1);
+    expect(row.hot).toBe(0);
+    expect(row.won).toBe(0);
     expect(row.replyRate).toBe(100);
+    expect(row.positiveRate).toBe(50);
     expect(row.sampleStatus).toBe('INSUFFICIENT');
   });
 });
