@@ -49,38 +49,19 @@ jobs:
           npx wrangler deploy --config dist/server/wrangler.json
           printf '%s' "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" | npx wrangler secret put NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY --config dist/server/wrangler.json >/dev/null
           printf '%s' "$SUPABASE_SECRET_KEY" | npx wrangler secret put SUPABASE_SECRET_KEY --config dist/server/wrangler.json >/dev/null
-      - name: Capture foreground Tail during diagnostic requests
+      - name: Stream foreground Tail during diagnostic requests
         shell: bash
         run: |
           set -euo pipefail
-          : > tail.jsonl
-          : > tail.stderr
           (
             sleep 8
-            node -e 'const base=process.env.CANDIDATE_URL; const paths=["/login","/","/p/__cloudflare_notfound_probe__",`/p/cloudflare-migration-missing-${Date.now()}`]; for (const path of paths) { try { const r=await fetch(base+path,{redirect:"manual"}); console.log(`${path} -> ${r.status}`); } catch { console.log(`${path} -> request-error`); } }'
-          ) > request.log 2>&1 &
+            node -e 'const base=process.env.CANDIDATE_URL; const paths=["/login","/","/p/__cloudflare_notfound_probe__",`/p/cloudflare-migration-missing-${Date.now()}`]; for (const path of paths) { try { const r=await fetch(base+path,{redirect:"manual"}); console.error(`[probe] ${path} -> ${r.status}`); } catch (error) { console.error(`[probe] ${path} -> request-error`, error); } }'
+          ) &
           traffic_pid=$!
           set +e
-          timeout 25s npx wrangler tail smartvisions-growth-os-release-candidate --format json > tail.jsonl 2>tail.stderr
+          timeout 25s npx wrangler tail smartvisions-growth-os-release-candidate --format pretty
           tail_code=$?
           set -e
           wait "$traffic_pid"
-          cat request.log
-          if [ -s tail.stderr ]; then sed -n '1,120p' tail.stderr; fi
           echo "tail_exit=$tail_code"
-          node <<'NODE'
-          const fs=require('node:fs');
-          const text=fs.readFileSync('tail.jsonl','utf8');
-          const rows=[];
-          for(const line of text.split(/\n+/)){try{rows.push(JSON.parse(line));}catch{}}
-          console.log(`tail_events=${rows.length}`);
-          for(const r of rows){
-            const url=r?.event?.request?.url ?? '';
-            const status=r?.event?.response?.status ?? null;
-            const exceptions=(r.exceptions||[]).map(e=>({name:e.name,message:e.message,stack:e.stack}));
-            if(status===500 || exceptions.length || /__cloudflare_notfound_probe__|cloudflare-migration-missing/.test(url)) {
-              console.log(JSON.stringify({outcome:r.outcome,status,url,cpuTimeMs:r.cpuTimeMs,exceptions}));
-            }
-          }
-          if(!rows.length) process.exit(2);
-          NODE
+          [ "$tail_code" -eq 124 ] || [ "$tail_code" -eq 0 ]
