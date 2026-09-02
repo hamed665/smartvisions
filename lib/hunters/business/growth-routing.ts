@@ -1,7 +1,12 @@
 import type { DiscoveredBusiness } from './types';
-import { classifyWebsiteUri, deriveWhatsappCandidate } from './selective-enrichment';
+import { classifyWebsiteUri } from './selective-enrichment';
 import { buildZeroCostPersonalization } from './personalization';
 import { buildDigitalPresenceEvidence } from './digital-evidence';
+import {
+  buildServiceFitQualification,
+  type SocialAssessment,
+  type WebsiteAuditEvidence,
+} from './service-fit';
 
 export type GrowthServiceRegion = 'MUSCAT_LOCAL' | 'OMAN_REMOTE' | 'INTERNATIONAL_REMOTE';
 export type GrowthLane = 'MUSCAT_LOCAL_GROWTH' | 'OMAN_REMOTE_GROWTH' | 'INTERNATIONAL_AI_GROWTH';
@@ -21,54 +26,103 @@ export function classifyServiceRegion(countryCode: string | null | undefined, ci
   return 'OMAN_REMOTE';
 }
 
-export function buildGrowthOpportunity(business: DiscoveredBusiness) {
+export function buildGrowthOpportunity(
+  business: DiscoveredBusiness,
+  options: {
+    websiteAudit?: WebsiteAuditEvidence | null;
+    socialAssessment?: SocialAssessment | null;
+    enabledServiceIds?: ReadonlySet<string>;
+  } = {},
+) {
   const operational = String(business.businessStatus ?? '').toUpperCase() === 'OPERATIONAL';
   const websiteClass = classifyWebsiteUri(business.officialWebsite);
   const region = classifyServiceRegion(business.countryCode, business.city);
-  const contactable = Boolean(business.phone || business.internationalPhone || business.whatsapp || deriveWhatsappCandidate(business.internationalPhone, business.phone, business.countryCode));
-  const reviewCount = Math.max(0, Number(business.userRatingCount ?? 0));
-  const rating = Math.max(0, Number(business.rating ?? 0));
+  const lane: GrowthLane = region === 'MUSCAT_LOCAL'
+    ? 'MUSCAT_LOCAL_GROWTH'
+    : region === 'OMAN_REMOTE'
+      ? 'OMAN_REMOTE_GROWTH'
+      : 'INTERNATIONAL_AI_GROWTH';
 
-  let websiteScore = 0;
-  if (operational && websiteClass === 'NONE') websiteScore = 95;
-  else if (operational && websiteClass === 'CONTACT_ONLY') websiteScore = 88;
-  else if (operational && websiteClass === 'STANDALONE') websiteScore = 15;
-  if (contactable && websiteScore > 0) websiteScore = Math.min(100, websiteScore + 5);
+  const basePersonalization = buildZeroCostPersonalization(business, region, websiteClass);
+  const qualification = buildServiceFitQualification({
+    business,
+    region,
+    websiteClass,
+    websiteAudit: options.websiteAudit,
+    socialAssessment: options.socialAssessment,
+    enabledServiceIds: options.enabledServiceIds,
+  });
 
-  let localContentScore = 0;
-  let aiContentScore = 0;
-  if (operational && region === 'MUSCAT_LOCAL') {
-    localContentScore = 55 + (contactable ? 10 : 0) + (websiteClass !== 'STANDALONE' ? 10 : 0) + (reviewCount >= 20 ? 5 : 0) + (rating >= 4 ? 5 : 0);
-    aiContentScore = 35 + (contactable ? 10 : 0);
-  } else if (operational) {
-    aiContentScore = 55 + (contactable ? 10 : 0) + (websiteClass !== 'STANDALONE' ? 10 : 0) + (reviewCount >= 20 ? 5 : 0) + (rating >= 4 ? 5 : 0);
-  }
+  const websiteScore = Math.max(0, ...qualification.serviceFits
+    .filter((item) => ['WEBSITE_BUILD','WEBSITE_UPGRADE','SEO_GROWTH'].includes(item.family))
+    .map((item) => item.score));
+  const localContentScore = Math.max(0, ...qualification.serviceFits
+    .filter((item) => item.family === 'MUSCAT_CONTENT_GROWTH')
+    .map((item) => item.score));
+  const aiContentScore = Math.max(0, ...qualification.serviceFits
+    .filter((item) => item.family === 'AI_REELS')
+    .map((item) => item.score));
+  const overallSalesScore = qualification.qualificationScore;
+  const recommendedServices = qualification.serviceFits
+    .map((item) => item.serviceId)
+    .filter((value): value is string => Boolean(value))
+    .slice(0, 2);
+  const offerBundle = qualification.serviceFits.slice(0, 2).map((item) => item.family);
 
-  websiteScore = Math.min(100, websiteScore);
-  localContentScore = Math.min(100, localContentScore);
-  aiContentScore = Math.min(100, aiContentScore);
-  const overallSalesScore = Math.max(websiteScore, localContentScore, aiContentScore);
+  const personalization = {
+    ...basePersonalization,
+    contactabilityScore: qualification.contactabilityScore,
+    needScore: qualification.needScore,
+    serviceFitScore: qualification.serviceFitScore,
+    revenuePotentialScore: qualification.revenuePotentialScore,
+    personalizationPriorityScore: qualification.qualificationScore,
+    offerBundle,
+    recommendedAngle: qualification.primaryOfferFamily === 'NONE'
+      ? basePersonalization.recommendedAngle
+      : `${qualification.primaryOfferFamily}: ${basePersonalization.recommendedAngle}`,
+    messageHooks: [...new Set([...basePersonalization.messageHooks, ...qualification.reasons])],
+    socialCheckEligible: qualification.cheapestNextAction === 'SOCIAL_CHECK',
+    cheapestNextAction: qualification.cheapestNextAction,
+    nextActionReason: qualification.nextActionReason,
+    nextActionCanSpendMoney: qualification.nextActionCanSpendMoney,
+  };
 
-  const lane: GrowthLane = region === 'MUSCAT_LOCAL' ? 'MUSCAT_LOCAL_GROWTH' : region === 'OMAN_REMOTE' ? 'OMAN_REMOTE_GROWTH' : 'INTERNATIONAL_AI_GROWTH';
-  const recommendedServices: string[] = [];
-  if (websiteScore >= 70) recommendedServices.push('WEBSITE');
-  if (localContentScore >= 50) recommendedServices.push('ON_SITE_CONTENT','REELS','PHOTOGRAPHY');
-  if (aiContentScore >= 50) recommendedServices.push('AI_CONTENT','AI_REELS','CREATIVE_PACK');
-  if (overallSalesScore >= 70) recommendedServices.push('ADS_CREATIVES');
+  const baseEvidence = buildDigitalPresenceEvidence(business, websiteClass);
+  const socialAssessment = options.socialAssessment ?? { status: 'UNKNOWN', quality: 'UNKNOWN' };
+  const digitalEvidence = {
+    ...baseEvidence,
+    ...(options.websiteAudit ? {
+      websiteEvidenceStatus: 'AUDITED',
+      websiteAudit: options.websiteAudit,
+    } : {}),
+    socialAssessment,
+    socialQuality: socialAssessment.status === 'VERIFIED' ? socialAssessment.quality : 'UNKNOWN',
+    safeClaims: {
+      ...baseEvidence.safeClaims,
+      socialContentWeak: socialAssessment.status === 'VERIFIED' ? socialAssessment.quality === 'WEAK' : null,
+      socialContentInactive: socialAssessment.status === 'VERIFIED' ? socialAssessment.quality === 'INACTIVE' : null,
+    },
+    qualification: {
+      tier: qualification.prospectTier,
+      score: qualification.qualificationScore,
+      confidence: qualification.qualificationConfidence,
+      primaryOfferFamily: qualification.primaryOfferFamily,
+      primaryServiceId: qualification.primaryServiceId,
+      primarySuggestedServiceId: qualification.primarySuggestedServiceId,
+      secondaryOfferFamily: qualification.secondaryOfferFamily,
+      secondaryServiceId: qualification.secondaryServiceId,
+      catalogReady: qualification.catalogReady,
+      shouldContact: qualification.shouldContact,
+      evidenceGaps: qualification.evidenceGaps,
+    },
+  };
 
-  const reasons: string[] = [];
-  if (!operational) reasons.push('Business is not confirmed operational');
-  else reasons.push('Google marks the business as operational');
-  if (websiteClass === 'NONE') reasons.push('No website returned by Google');
-  if (websiteClass === 'CONTACT_ONLY') reasons.push('Only social/contact link present; no standalone website');
-  if (region === 'MUSCAT_LOCAL') reasons.push('Muscat-local: on-site filming and content production are serviceable');
-  if (region === 'OMAN_REMOTE') reasons.push('Outside Muscat: route to website + remote AI content');
-  if (region === 'INTERNATIONAL_REMOTE') reasons.push('International: route to website + remote AI content');
-  if (contactable) reasons.push('Direct contact path is available');
+  const contentCheckStatus: ContentCheckStatus = !operational
+    ? 'NOT_ELIGIBLE'
+    : qualification.cheapestNextAction === 'SOCIAL_CHECK'
+      ? 'PENDING_SOCIAL_CHECK'
+      : 'READY_FOR_REVIEW';
 
-  const personalization = buildZeroCostPersonalization(business, region, websiteClass);
-  const digitalEvidence = buildDigitalPresenceEvidence(business, websiteClass);
-  const contentCheckStatus: ContentCheckStatus = !operational ? 'NOT_ELIGIBLE' : personalization.socialCheckEligible ? 'PENDING_SOCIAL_CHECK' : 'READY_FOR_REVIEW';
   return {
     region,
     lane,
@@ -79,8 +133,61 @@ export function buildGrowthOpportunity(business: DiscoveredBusiness) {
     overallSalesScore,
     contentCheckStatus,
     recommendedServices: [...new Set(recommendedServices)],
-    reasons,
+    reasons: qualification.reasons,
     personalization,
     digitalEvidence,
+    qualification,
+  };
+}
+
+export type GrowthOpportunity = ReturnType<typeof buildGrowthOpportunity>;
+
+export function buildGrowthOpportunityPersistenceRow(
+  organizationId: string,
+  businessId: string,
+  opportunity: GrowthOpportunity,
+) {
+  const p = opportunity.personalization;
+  const q = opportunity.qualification;
+  return {
+    organization_id: organizationId,
+    business_id: businessId,
+    service_region: opportunity.region,
+    sales_lane: opportunity.lane,
+    website_class: opportunity.websiteClass,
+    website_score: opportunity.websiteScore,
+    local_content_score: opportunity.localContentScore,
+    ai_content_score: opportunity.aiContentScore,
+    overall_sales_score: opportunity.overallSalesScore,
+    content_check_status: opportunity.contentCheckStatus,
+    recommended_services: opportunity.recommendedServices,
+    routing_reasons: opportunity.reasons,
+    contactability_score: p.contactabilityScore,
+    need_score: p.needScore,
+    service_fit_score: p.serviceFitScore,
+    revenue_potential_score: p.revenuePotentialScore,
+    personalization_priority_score: p.personalizationPriorityScore,
+    personalization_fingerprint: p.fingerprint,
+    offer_bundle: p.offerBundle,
+    recommended_angle: p.recommendedAngle,
+    message_hooks: p.messageHooks,
+    social_check_eligible: p.socialCheckEligible,
+    cheapest_next_action: p.cheapestNextAction,
+    next_action_reason: p.nextActionReason,
+    next_action_can_spend_money: p.nextActionCanSpendMoney,
+    digital_presence_evidence: opportunity.digitalEvidence,
+    prospect_tier: q.prospectTier,
+    qualification_score: q.qualificationScore,
+    qualification_confidence: q.qualificationConfidence,
+    primary_offer_family: q.primaryOfferFamily === 'NONE' ? null : q.primaryOfferFamily,
+    primary_service_id: q.primaryServiceId,
+    secondary_offer_family: q.secondaryOfferFamily,
+    secondary_service_id: q.secondaryServiceId,
+    should_contact: q.shouldContact,
+    catalog_ready: q.catalogReady,
+    qualification_reasons: q.reasons,
+    evidence_gaps: q.evidenceGaps,
+    routed_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   };
 }
