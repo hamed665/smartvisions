@@ -1,6 +1,18 @@
 import { createClient } from '@/lib/supabase/server';
+import { getServerOperatorContext } from '@/lib/supabase/operator-context';
 
 export async function getCurrentOrganization(requireOwner = false) {
+  const operator = getServerOperatorContext();
+  if (operator) {
+    if (requireOwner && operator.role !== 'OWNER') throw new Error('Owner permission required');
+    return {
+      supabase: operator.supabase,
+      organizationId: operator.organizationId,
+      role: operator.role,
+      userId: operator.userId,
+    };
+  }
+
   const supabase = await createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) throw new Error('Authentication required');
