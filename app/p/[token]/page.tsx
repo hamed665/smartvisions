@@ -8,6 +8,11 @@ export const dynamic = 'force-dynamic';
 
 export default async function PublicPreviewPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
+
+  // Temporary migration-only probe. It is unreachable in normal Vercel production
+  // because DEPLOYMENT_ENV is only set on the isolated Cloudflare candidate.
+  if (process.env.DEPLOYMENT_ENV === 'candidate' && token === '__cloudflare_notfound_probe__') notFound();
+
   const row = await loadPublicPreview(token);
   if (!row) notFound();
 
