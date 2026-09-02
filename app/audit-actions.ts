@@ -8,11 +8,25 @@ import { analyzeWebsiteHtml, isPrivateIp, normalizeAuditUrl } from '@/lib/hunter
 
 const MAX_BYTES = 1_000_000;
 const TIMEOUT_MS = 8_000;
-const MAX_REDIRECTS = 2;
+const MAX_REDIRECTS = 5;
 
 async function assertPublicHost(url: URL) {
   const addresses = await lookup(url.hostname, { all: true, verbatim: true });
   if (!addresses.length || addresses.some((entry) => isPrivateIp(entry.address))) throw new Error('Website resolved to a blocked/private address');
+}
+
+function safeErrorMessage(error: unknown, fallback = 'Website audit failed') {
+  if (error instanceof Error && error.message.trim()) return error.message.trim().slice(0, 240);
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>;
+    const message = String(record.message ?? record.cause ?? '').trim();
+    if (message) return message.slice(0, 240);
+    const name = String(record.name ?? '').trim();
+    const code = String(record.code ?? '').trim();
+    if (name || code) return [name, code].filter(Boolean).join(' ').slice(0, 240);
+  }
+  const text = String(error ?? '').trim();
+  return text && text !== '[object Object]' ? text.slice(0, 240) : fallback;
 }
 
 async function readLimitedText(response: Response) {
@@ -26,17 +40,33 @@ async function readLimitedText(response: Response) {
 
 async function fetchWebsite(startUrl: string) {
   let url = normalizeAuditUrl(startUrl);
+  const visited = new Set<string>();
   for (let attempt = 0; attempt <= MAX_REDIRECTS; attempt += 1) {
-    await assertPublicHost(url); const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const normalized = url.toString();
+    if (visited.has(normalized)) throw new Error(`Website redirect loop detected at ${url.origin}`);
+    visited.add(normalized);
+    await assertPublicHost(url);
+    const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
-      const response = await fetch(url, { method: 'GET', redirect: 'manual', cache: 'no-store', signal: controller.signal, headers: { 'user-agent': 'SmartVisionsWebsiteAudit/1.0' } });
-      if ([301,302,303,307,308].includes(response.status)) { const location = response.headers.get('location'); if (!location) throw new Error('Website redirect is missing a destination'); url = normalizeAuditUrl(new URL(location, url).toString()); continue; }
+      let response: Response;
+      try {
+        response = await fetch(url, { method: 'GET', redirect: 'manual', cache: 'no-store', signal: controller.signal, headers: { 'user-agent': 'SmartVisionsWebsiteAudit/1.0' } });
+      } catch (error) {
+        throw new Error(`Website fetch failed at ${url.origin}: ${safeErrorMessage(error, 'network error')}`);
+      }
+      if ([301,302,303,307,308].includes(response.status)) {
+        const location = response.headers.get('location');
+        if (!location) throw new Error(`Website redirect HTTP ${response.status} is missing a destination`);
+        if (attempt >= MAX_REDIRECTS) throw new Error(`Website exceeded ${MAX_REDIRECTS} redirects`);
+        url = normalizeAuditUrl(new URL(location, url).toString());
+        continue;
+      }
       if (!response.ok) throw new Error(`Website returned HTTP ${response.status}`);
       if (!(response.headers.get('content-type')?.toLowerCase() || '').includes('text/html')) throw new Error('Website did not return HTML');
       return { finalUrl: url.toString(), html: await readLimitedText(response) };
     } finally { clearTimeout(timer); }
   }
-  throw new Error('Website exceeded the redirect limit');
+  throw new Error(`Website exceeded ${MAX_REDIRECTS} redirects`);
 }
 
 function objectValue(value: unknown): Record<string, unknown> {
@@ -92,9 +122,10 @@ export async function runDeterministicWebsiteAudit(form: FormData) {
   const { count: auditsToday, error: countError } = await ctx.supabase.from('website_audits').select('id', { count: 'exact', head: true }).eq('organization_id', ctx.organizationId).gte('created_at', dayStart.toISOString());
   if (countError) throw countError; if (Number(auditsToday ?? 0) >= Number(settings.daily_website_audits)) throw new Error('Daily website-audit quota reached');
 
-  const { data: auditRow, error: insertError } = await ctx.supabase.from('website_audits').insert({ organization_id: ctx.organizationId, business_id: businessId, source_url: website, status: 'RUNNING' }).select('id').single(); if (insertError) throw insertError;
+  const normalizedWebsite = normalizeAuditUrl(website).toString();
+  const { data: auditRow, error: insertError } = await ctx.supabase.from('website_audits').insert({ organization_id: ctx.organizationId, business_id: businessId, source_url: normalizedWebsite, status: 'RUNNING' }).select('id').single(); if (insertError) throw insertError;
   try {
-    const fetched = await fetchWebsite(website); const result = analyzeWebsiteHtml(fetched.html); const completedAt = new Date().toISOString();
+    const fetched = await fetchWebsite(normalizedWebsite); const result = analyzeWebsiteHtml(fetched.html); const completedAt = new Date().toISOString();
     const { error: updateError } = await ctx.supabase.from('website_audits').update({ source_url: fetched.finalUrl, status: 'SUCCEEDED', title: result.title, detected_languages: result.detectedLanguages, services: result.services, contact_emails: result.contactEmails, contact_phones: result.contactPhones, social_links: result.socialLinks, has_arabic: result.hasArabic, has_english: result.hasEnglish, has_booking: result.hasBooking, has_whatsapp: result.hasWhatsapp, mobile_quality: result.mobileQuality, seo_quality: result.seoQuality, cta_quality: result.ctaQuality, broken_links: 0, evidence: result.evidence, error_message: null, audited_at: completedAt }).eq('organization_id', ctx.organizationId).eq('id', auditRow.id); if (updateError) throw updateError;
     if (leadId) {
       const { error: leadUpdateError } = await ctx.supabase.from('leads').update({ status: leadStatus === 'NEW' ? 'AUDITED' : leadStatus, updated_at: completedAt }).eq('organization_id', ctx.organizationId).eq('id', leadId); if (leadUpdateError) throw leadUpdateError;
@@ -121,7 +152,7 @@ export async function runDeterministicWebsiteAudit(form: FormData) {
     const { error: logError } = await ctx.supabase.from('audit_logs').insert({ organization_id: ctx.organizationId, actor_type: 'USER', actor_id: ctx.userId, action: 'DETERMINISTIC_WEBSITE_AUDIT', entity_type: 'website_audit', entity_id: auditRow.id, after_data: { leadId: leadId || null, businessId, sourceUrl: fetched.finalUrl, bytesInspected: fetched.html.length, origin: leadId ? 'LEAD' : 'GROWTH_OPPORTUNITY', llmUsed: false, paidProviderUsed: false, outreachTriggered: false } }); if (logError) throw logError;
     destination = leadId ? `/leads/${encodeURIComponent(leadId)}?audit=success` : '/hunters/growth-opportunities?audit=success';
   } catch (error) {
-    const message = error instanceof Error ? error.message.slice(0,240) : 'Website audit failed';
+    const message = safeErrorMessage(error);
     await ctx.supabase.from('website_audits').update({ status: 'FAILED', error_message: message, audited_at: new Date().toISOString() }).eq('organization_id', ctx.organizationId).eq('id', auditRow.id);
     await ctx.supabase.from('audit_logs').insert({ organization_id: ctx.organizationId, actor_type: 'USER', actor_id: ctx.userId, action: 'DETERMINISTIC_WEBSITE_AUDIT_FAILED', entity_type: 'website_audit', entity_id: auditRow.id, after_data: { leadId: leadId || null, businessId, error: message, origin: leadId ? 'LEAD' : 'GROWTH_OPPORTUNITY', outreachTriggered: false } });
     destination = leadId ? `/leads/${encodeURIComponent(leadId)}?audit=error&message=${encodeURIComponent(message)}` : `/hunters/growth-opportunities?audit=error&message=${encodeURIComponent(message)}`;
