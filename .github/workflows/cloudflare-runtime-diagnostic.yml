@@ -1,4 +1,4 @@
-# Migration-only workflow. Explicit process.env population diagnostic. Delete before merging PR A.
+# Migration-only workflow. Explicit source-config Node/env diagnostic. Delete before merging PR A.
 name: Cloudflare Runtime Diagnostic
 
 on:
@@ -7,8 +7,11 @@ on:
       - feat/cloudflare-runtime-readiness
     paths:
       - .github/workflows/cloudflare-runtime-diagnostic.yml
+      - wrangler.jsonc
       - 'app/p/**/page.tsx'
       - 'app/api/telegram/webhook/route.ts'
+      - 'lib/preview/public-persistence.ts'
+      - 'tests/public-preview-persistence.test.ts'
 
 permissions:
   contents: read
@@ -32,6 +35,7 @@ jobs:
       - name: Build exact candidate
         run: |
           npm ci --no-audit --no-fund
+          npm test -- --run tests/public-preview-persistence.test.ts
           npm run build:vinext
           node <<'NODE'
           const fs=require('node:fs');
@@ -39,12 +43,10 @@ jobs:
           const config=JSON.parse(fs.readFileSync(file,'utf8'));
           config.name='smartvisions-growth-os-release-candidate';
           config.workers_dev=true;
-          config.compatibility_date='2026-09-02';
-          config.compatibility_flags=[...new Set([...(config.compatibility_flags||[]),'nodejs_compat_populate_process_env'])];
           config.vars={...(config.vars||{}),DEPLOYMENT_ENV:'candidate',NEXT_PUBLIC_SUPABASE_URL:'https://pkypexzpyfbikdnkrzvw.supabase.co',GLOBAL_KILL_SWITCH:'false',SHADOW_MODE:'true'};
           config.limits={...(config.limits||{}),cpu_ms:100};
           delete config.routes; delete config.route;
-          console.log(JSON.stringify({compatibility_date:config.compatibility_date,compatibility_flags:config.compatibility_flags,var_keys:Object.keys(config.vars||{}).sort()}));
+          console.log(JSON.stringify({compatibility_date:config.compatibility_date,compatibility_flags:config.compatibility_flags||[],var_keys:Object.keys(config.vars||{}).sort()}));
           fs.writeFileSync(file,JSON.stringify(config,null,2)+'\n');
           NODE
       - name: Deploy and reassert minimal secrets
