@@ -1,3 +1,4 @@
+# Migration-only workflow. Delete before merging PR A.
 name: Cloudflare Runtime Diagnostic
 
 on:
