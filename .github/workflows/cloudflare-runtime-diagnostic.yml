@@ -1,4 +1,4 @@
-# Migration-only workflow. Lazy public-preview persistence diagnostic. Delete before merging PR A.
+# Migration-only workflow. Module-load isolation diagnostic. Delete before merging PR A.
 name: Cloudflare Runtime Diagnostic
 
 on:
@@ -7,7 +7,7 @@ on:
       - feat/cloudflare-runtime-readiness
     paths:
       - .github/workflows/cloudflare-runtime-diagnostic.yml
-      - app/p/[token]/page.tsx
+      - 'app/p/**/page.tsx'
 
 permissions:
   contents: read
