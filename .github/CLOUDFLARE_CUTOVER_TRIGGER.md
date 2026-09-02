@@ -1,4 +1,4 @@
 One-time production cutover trigger for Smart Visions Growth OS.
 
-Retry after switching secret retrieval to Vercel's per-variable decrypt endpoint.
+Final guarded retry using an unaliased temporary Vercel Production-target deployment for runtime secret transfer.
 This file is temporary and will be removed before PR #103 merges.
