@@ -154,22 +154,8 @@ jobs:
           require CLOUDFLARE_ACCOUNT_ID
           require NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
           require_one "Supabase server credential" SUPABASE_SECRET_KEY SUPABASE_SERVICE_ROLE_KEY
-          require OPENAI_API_KEY
-          require GOOGLE_PLACES_API_KEY
-          require_one "Meta WhatsApp access token" META_WHATSAPP_ACCESS_TOKEN META_WHATSAPP_TOKEN
-          require META_WHATSAPP_PHONE_NUMBER_ID
-          require META_APP_SECRET
-          require META_WEBHOOK_VERIFY_TOKEN
-          require EMAIL_PROVIDER_API_KEY
-          require EMAIL_WEBHOOK_SECRET
-          require INTERNAL_API_KEY
-          require TELEGRAM_BOT_TOKEN
-          require TELEGRAM_WEBHOOK_SECRET
-          require TELEGRAM_OWNER_USER_ID
-          require TELEGRAM_OWNER_CHAT_ID
-          require TELEGRAM_ORGANIZATION_ID
           [ "$missing" -eq 0 ] || exit 1
-          echo "Required candidate secrets are present. Values were not printed."
+          echo "Minimal candidate secrets are present. Values were not printed."
 
       - name: Validate Growth Supabase credential read-only
         shell: bash
@@ -229,18 +215,14 @@ jobs:
           set -euo pipefail
           put(){ printf '%s' "${!1}" | npx wrangler secret put "$1" --config dist/server/wrangler.json >/dev/null; echo "$1: attached"; }
           put_if_present(){ [ -z "${!1:-}" ] || put "$1"; }
-          for key in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY OPENAI_API_KEY GOOGLE_PLACES_API_KEY META_WHATSAPP_PHONE_NUMBER_ID META_APP_SECRET META_WEBHOOK_VERIFY_TOKEN EMAIL_PROVIDER_API_KEY EMAIL_WEBHOOK_SECRET INTERNAL_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET TELEGRAM_OWNER_USER_ID TELEGRAM_OWNER_CHAT_ID TELEGRAM_ORGANIZATION_ID; do put "$key"; done
+          put NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
           put_if_present SUPABASE_SECRET_KEY
           put_if_present SUPABASE_SERVICE_ROLE_KEY
-          put_if_present META_WHATSAPP_ACCESS_TOKEN
-          put_if_present META_WHATSAPP_TOKEN
-          put_if_present META_WHATSAPP_CATALOG_ID
-          put_if_present WHATSAPP_CATALOG_ID
-          put_if_present REDIS_URL
-          put_if_present CRAWL4AI_URL
-          echo "Runtime secrets attached without printing values."
+          for key in OPENAI_API_KEY GOOGLE_PLACES_API_KEY META_WHATSAPP_ACCESS_TOKEN META_WHATSAPP_TOKEN META_WHATSAPP_PHONE_NUMBER_ID META_WHATSAPP_CATALOG_ID WHATSAPP_CATALOG_ID META_APP_SECRET META_WEBHOOK_VERIFY_TOKEN EMAIL_PROVIDER_API_KEY EMAIL_WEBHOOK_SECRET REDIS_URL CRAWL4AI_URL INTERNAL_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET TELEGRAM_OWNER_USER_ID TELEGRAM_OWNER_CHAT_ID TELEGRAM_ORGANIZATION_ID; do put_if_present "$key"; done
+          echo "Available runtime secrets attached without printing values."
 
       - name: Start bounded live Tail
+        id: tail
         shell: bash
         run: |
           set -euo pipefail
@@ -272,7 +254,7 @@ jobs:
           NODE
 
       - name: Evaluate Tail CPU and runtime outcomes
-        if: always()
+        if: ${{ always() && steps.tail.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
