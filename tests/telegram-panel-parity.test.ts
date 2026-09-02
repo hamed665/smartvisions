@@ -32,6 +32,18 @@ describe('Telegram Control Center parity parser', () => {
     });
   });
 
+  it('normalizes boolean owner intent to the checkbox values reused Server Actions expect', () => {
+    expect(parseTelegramOwnerCommand('/panel approval.require id=rule-1 requires_approval=true')).toEqual({
+      type:'PANEL_ACTION', action:'approval.require', args:{id:'rule-1',requires_approval:'on'},
+    });
+    expect(parseTelegramOwnerCommand('/panel service.update id=svc name="Service" enabled=false')).toEqual({
+      type:'PANEL_ACTION', action:'service.update', args:{id:'svc',name:'Service',enabled:'off'},
+    });
+    expect(parseTelegramOwnerCommand('/panel market.update id=m enabled=true currency=OMR timezone=Asia/Muscat send_window_start=09:00 send_window_end=19:00 whatsapp_cold_enabled=false instagram_auto_cold_enabled=false')).toMatchObject({
+      type:'PANEL_ACTION', action:'market.update', args:{enabled:'on',whatsapp_cold_enabled:'off',instagram_auto_cold_enabled:'off'},
+    });
+  });
+
   it('supports deterministic website audit shortcuts', () => {
     expect(parseTelegramOwnerCommand('/webaudit business abc')).toEqual({ type:'PANEL_ACTION', action:'website.audit', args:{businessId:'abc'} });
     expect(parseTelegramOwnerCommand('/webaudit lead xyz')).toEqual({ type:'PANEL_ACTION', action:'website.audit', args:{leadId:'xyz'} });
