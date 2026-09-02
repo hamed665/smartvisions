@@ -2,7 +2,7 @@ import { inferIndustrySegment } from '@/lib/hunters/business/personalization';
 
 type LeadRow = { id:string; business_id:string|null; status:string; recommended_offer:string|null };
 type BusinessRow = { id:string; name:string; category:string|null; google_primary_type_display_name:string|null };
-type MessageRow = { lead_id:string|null; direction:string; status:string };
+type MessageRow = { lead_id:string|null; direction:string; status:string; sent_at:string|null };
 type ReplyRow = { lead_id:string|null; category:string; hot:boolean|null; signals:unknown };
 
 export type IndustryPerformance = {
@@ -38,7 +38,8 @@ function industryKey(business:BusinessRow|undefined){
 export function buildIndustryPerformance(input:{leads:LeadRow[];businesses:BusinessRow[];messages:MessageRow[];replies:ReplyRow[]}):IndustryPerformance[]{
   const businessById=new Map(input.businesses.map(row=>[row.id,row]));
   const leadById=new Map(input.leads.map(row=>[row.id,row]));
-  const contacted=new Set(input.messages.filter(row=>row.direction==='OUTBOUND'&&row.status==='SENT'&&row.lead_id).map(row=>String(row.lead_id)));
+  // `status` is mutable after provider delivery/read webhooks. `sent_at` is the durable fact that outbound contact happened.
+  const contacted=new Set(input.messages.filter(row=>row.direction==='OUTBOUND'&&Boolean(row.sent_at)&&row.lead_id).map(row=>String(row.lead_id)));
   const replied=new Set(input.replies.filter(row=>row.lead_id).map(row=>String(row.lead_id)));
   const positive=new Set(input.replies.filter(row=>{
     const signals=asRecord(row.signals);
