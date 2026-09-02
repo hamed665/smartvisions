@@ -17,7 +17,7 @@ function configureServerCredentials() {
 }
 
 describe('public preview persistence', () => {
-  it('returns null for a missing token without exposing the server key as a bearer token', async () => {
+  it('authenticates a missing-token lookup with the server credential', async () => {
     configureServerCredentials();
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([]), {
       status: 200,
@@ -32,7 +32,7 @@ describe('public preview persistence', () => {
     expect(String(requestUrl)).toContain('/rest/v1/previews?');
     const headers = new Headers(init.headers);
     expect(headers.get('apikey')).toBe(secretKey);
-    expect(headers.get('authorization')).toBeNull();
+    expect(headers.get('authorization')).toBe(`Bearer ${secretKey}`);
   });
 
   it('atomically marks the first SENT view as VIEWED and records the event', async () => {
@@ -67,9 +67,11 @@ describe('public preview persistence', () => {
     expect(String(updateUrl)).toContain('status=eq.SENT');
     expect(updateInit.method).toBe('PATCH');
     expect(updateInit.body).toBe(JSON.stringify({ status: 'VIEWED' }));
+    expect(new Headers(updateInit.headers).get('authorization')).toBe(`Bearer ${secretKey}`);
 
     const [eventUrl, eventInit] = fetchMock.mock.calls[2] as [string, RequestInit];
     expect(eventUrl).toBe(`${supabaseUrl}/rest/v1/preview_events`);
     expect(eventInit.method).toBe('POST');
+    expect(new Headers(eventInit.headers).get('authorization')).toBe(`Bearer ${secretKey}`);
   });
 });
