@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { analyzeWebsiteHtml, normalizeAuditUrl } from '@/lib/hunters/business/website-audit';
+import { selectFirstPartyContactEmail } from '@/lib/hunters/business/contact-evidence';
 import { assertPublicHostname } from '@/lib/hunters/business/public-dns';
 
 const MAX_BYTES = 1_000_000;
@@ -72,6 +73,19 @@ function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+async function promoteCachedFirstPartyEmail(ctx: Awaited<ReturnType<typeof getCurrentOrganization>>, businessId: string, cached: { id: string; source_url?: string | null; contact_emails?: string[] | null }) {
+  const { data: business, error: businessError } = await ctx.supabase.from('businesses').select('email').eq('organization_id', ctx.organizationId).eq('id', businessId).maybeSingle();
+  if (businessError) throw businessError;
+  if (!business || String(business.email ?? '').trim()) return;
+  const email = selectFirstPartyContactEmail(String(cached.source_url ?? ''), Array.isArray(cached.contact_emails) ? cached.contact_emails.map(String) : []);
+  if (!email) return;
+  const { data: updated, error: updateError } = await ctx.supabase.from('businesses').update({ email, updated_at: new Date().toISOString() }).eq('organization_id', ctx.organizationId).eq('id', businessId).is('email', null).select('id').maybeSingle();
+  if (updateError) throw updateError;
+  if (!updated) return;
+  const { error: logError } = await ctx.supabase.from('audit_logs').insert({ organization_id: ctx.organizationId, actor_type: 'USER', actor_id: ctx.userId, action: 'PROMOTE_VERIFIED_WEBSITE_CONTACT_EMAIL', entity_type: 'business', entity_id: businessId, after_data: { websiteAuditId: cached.id, sourceUrl: cached.source_url ?? null, source: 'WEBSITE_AUDIT', firstPartyDomainMatch: true, llmUsed: false, paidProviderUsed: false, outreachTriggered: false } });
+  if (logError) throw logError;
+}
+
 export async function runDeterministicWebsiteAudit(form: FormData) {
   const ctx = await getCurrentOrganization(true);
   const leadId = String(form.get('leadId') ?? '').trim();
@@ -102,9 +116,10 @@ export async function runDeterministicWebsiteAudit(form: FormData) {
   const { data: settings, error: settingsError } = await ctx.supabase.from('cost_guard_settings').select('daily_website_audits,audit_cache_days').eq('organization_id', ctx.organizationId).maybeSingle();
   if (settingsError) throw settingsError; if (!settings) throw new Error('Cost Guard settings are unavailable; audit blocked');
   const cacheCutoff = new Date(Date.now() - Number(settings.audit_cache_days) * 86_400_000).toISOString();
-  const { data: cached, error: cacheError } = await ctx.supabase.from('website_audits').select('id,audited_at,status').eq('organization_id', ctx.organizationId).eq('business_id', businessId).eq('status', 'SUCCEEDED').gte('audited_at', cacheCutoff).order('audited_at', { ascending: false }).limit(1).maybeSingle();
+  const { data: cached, error: cacheError } = await ctx.supabase.from('website_audits').select('id,audited_at,status,source_url,contact_emails').eq('organization_id', ctx.organizationId).eq('business_id', businessId).eq('status', 'SUCCEEDED').gte('audited_at', cacheCutoff).order('audited_at', { ascending: false }).limit(1).maybeSingle();
   if (cacheError) throw cacheError;
   if (cached) {
+    await promoteCachedFirstPartyEmail(ctx, businessId, cached);
     const { data: growth } = await ctx.supabase.from('growth_opportunities').select('digital_presence_evidence').eq('organization_id', ctx.organizationId).eq('business_id', businessId).maybeSingle();
     const currentEvidence = objectValue(growth?.digital_presence_evidence);
     await ctx.supabase.from('growth_opportunities').update({

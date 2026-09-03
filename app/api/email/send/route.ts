@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { evaluateLocalWindow, type MarketCode } from '@/lib/outreach/scheduler';
 import { evaluateMailboxHealth } from '@/lib/outreach/mailbox-health';
+import { countMailboxSendsLast24Hours } from '@/lib/outreach/mailbox-usage';
 import { ResendEmailProvider } from '@/lib/outreach/resend-provider';
 import { assertChannelAllowed, getRuntimeControls } from '@/lib/reliability/runtime-controls';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
@@ -69,18 +70,29 @@ export async function POST(request: Request) {
 
   const { data: mailbox, error: mailboxError } = await supabase
     .from('mailboxes')
-    .select('id,organization_id,enabled,daily_limit,sent_today,bounce_rate,complaint_rate')
+    .select('id,organization_id,enabled,daily_limit,bounce_rate,complaint_rate')
     .eq('id', body.mailboxId)
     .eq('organization_id', body.organizationId)
     .maybeSingle();
   if (mailboxError || !mailbox) return NextResponse.json({ error: mailboxError?.message ?? 'Mailbox not found' }, { status: 404 });
+
+  let sentLast24Hours: number;
+  try {
+    sentLast24Hours = await countMailboxSendsLast24Hours({
+      supabase,
+      organizationId: body.organizationId,
+      mailboxId: body.mailboxId,
+    });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Mailbox usage is unavailable; sending blocked' }, { status: 503 });
+  }
 
   const provider = new ResendEmailProvider();
   const providerHealth = await provider.health();
   const mailboxHealth = evaluateMailboxHealth({
     enabled: Boolean(mailbox.enabled),
     dailyLimit: Number(mailbox.daily_limit),
-    sentToday: Number(mailbox.sent_today),
+    sentToday: sentLast24Hours,
     bounceRate: Number(mailbox.bounce_rate),
     complaintRate: Number(mailbox.complaint_rate),
     providerHealthy: providerHealth.ok,
@@ -116,10 +128,10 @@ export async function POST(request: Request) {
 
   const { error: mailboxUpdateError } = await supabase
     .from('mailboxes')
-    .update({ sent_today: Number(mailbox.sent_today) + 1, updated_at: new Date().toISOString() })
+    .update({ sent_today: sentLast24Hours + 1, updated_at: new Date().toISOString() })
     .eq('id', body.mailboxId)
     .eq('organization_id', body.organizationId);
-  if (mailboxUpdateError) console.error('Mailbox sent_today update failed', mailboxUpdateError);
+  if (mailboxUpdateError) console.error('Mailbox sent_today cache update failed', mailboxUpdateError);
 
   await recordUsage({
     organizationId: body.organizationId,
