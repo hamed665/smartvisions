@@ -1,6 +1,6 @@
 # Smart Visions Growth OS — Current Production State
 
-**Reconciled:** 2026-09-02 (Oman, UTC+4)
+**Reconciled:** 2026-09-03 (Oman, UTC+4)
 
 This is the operational handoff and the first document to read before changing Growth OS. Verified Production evidence and current `main` override older planning text. Preserve the existing architecture and extend only proven gaps.
 
@@ -8,12 +8,39 @@ This is the operational handoff and the first document to read before changing G
 
 - Repository: `hamed665/smartvisions`
 - Branch: `main`
-- Production URL: `https://smartvisions.vercel.app`
-- Supabase project: `pkypexzpyfbikdnkrzvw`
-- Runtime baseline: the latest merged runtime PR on `main`; verify the exact Git/Vercel HEAD directly before any operation that depends on a commit/deployment identity.
+- Primary Production URL: `https://app.smartvisionsai.com`
+- Production runtime: Cloudflare Workers Paid, Worker `smartvisions-growth-os-production`
+- Permanent deployment path: successful push-based `CI` on `main` → isolated Cloudflare release candidate → safe smoke/load → exact bundle promotion → Worker Route verification → routed Production smoke
+- Production Worker Route: `app.smartvisionsai.com/* -> smartvisions-growth-os-production`
+- Growth Supabase project: `pkypexzpyfbikdnkrzvw`
+- Vercel rollback URL: `https://smartvisions.vercel.app` retained temporarily as a frozen independent rollback during the stability window; it is not the primary Production runtime
+- Automatic Vercel Git deployments are disabled after the Cloudflare cutover; do not re-enable them unless an explicit rollback decision requires it
 - Master Tracker: GitHub Issue #18
 
-Documentation-only commits may advance `main` and produce a runtime-equivalent deployment. Do not create self-invalidating handoff text by treating an old SHA as permanently current.
+Runtime-changing PRs must verify the exact Git `main` HEAD, green CI, Cloudflare deployment run and routed Production evidence. Do not use an old Vercel deployment identity as the current runtime baseline.
+
+## Cloudflare production cutover — VERIFIED
+
+PR #102 prepared the Worker runtime and PR #103 completed the guarded Production cutover. PR #103 merged as `b13a1e568b1735148a15584fda8a5edb8bc5eb3a`.
+
+Post-merge evidence on that exact commit:
+
+- standard `main` CI: green for install, lint, typecheck, tests and build;
+- permanent `Cloudflare Production Deploy` workflow: green;
+- Vinext compatibility: 97%, 0 unsupported issues; only partial `next/font/google` behavior;
+- repository API inventory: 21 `app/api/**/route.ts` handlers;
+- deployed Vinext bundle: the same 21 route handlers, with no route-count drift;
+- required provider secret binding names present on release-candidate and Production Workers;
+- Growth Supabase credential validated read-only against `pkypexzpyfbikdnkrzvw`;
+- release candidate safe smoke: green;
+- controlled SSR load: 40 requests, 0 unexpected responses;
+- Production Worker deployed with `workers_dev=false` and hard `cpu_ms=100` guard;
+- exact Worker Route remained attached;
+- routed smoke: `/login` 200 with `cf-ray`, unauthenticated `/` 307 with `cf-ray`, missing public Preview 404 with `cf-ray`;
+- safe API/webhook rejection smoke: green;
+- no outbound provider send was invoked by migration/deployment smoke tests.
+
+The temporary cutover workflow, trigger file, migration-only inventory workflow and insecure runtime-secret export endpoint were removed before merge. Normal Cloudflare deployment does not mutate DNS/Worker Routes and does not depend on Vercel.
 
 ## Non-negotiable protection rules
 
@@ -49,8 +76,10 @@ The V1 foundation remains canonical. The most relevant recent milestones are:
 - #88: atomic pre-provider Cost Guard reservations for paid OpenAI Agent and paid Google Places calls, plus explicit least-privilege `usage_events` grants.
 - #89: documentation-only reconciliation of the real Production state through #88.
 - #90: atomic owner-managed Knowledge/Prompt version publishing and the first reviewed Smart Visions Knowledge baseline, without copying Services/Pricing/Locale into a parallel source of truth.
+- #102: Cloudflare Workers runtime readiness and Worker-safe runtime compatibility.
+- #103: guarded Production cutover from Vercel to Cloudflare Workers, permanent Cloudflare CI/CD and routed Production verification.
 
-Runtime-changing PRs are merged only after exact-head lint, typecheck, tests and build are green, required migrations are verified, review threads are clear, and Production deployment is checked.
+Runtime-changing PRs are merged only after exact-head lint, typecheck, tests and build are green, required migrations are verified, review threads are clear, and Cloudflare Production deployment is checked.
 
 ## Current verified provider state
 
@@ -297,4 +326,4 @@ Prefer evidence over architecture tourism:
 
 `current canonical data → deterministic/cache gate → Cost Guard → minimum paid reasoning/provider work → Shadow Approval/control → durable outcome evidence → only then tune/scale`
 
-If a future chat proposes rebuilding Hunter, adding another Agent framework, duplicating pricing/knowledge, running paid smoke tests for already-proven paths, or disabling Shadow Mode before behavior proof, stop and reconcile against this document and Issue #18 first.
+If a future chat proposes rebuilding Hunter, adding another Agent framework, duplicating pricing/knowledge, running paid smoke tests for already-proven paths, reintroducing Vercel as the default runtime, or disabling Shadow Mode before behavior proof, stop and reconcile against this document and Issue #18 first.
