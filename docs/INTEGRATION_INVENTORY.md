@@ -1,8 +1,8 @@
 # Smart Visions Growth OS — Integration Inventory
 
-**Reconciled:** 2026-08-31 (Oman, UTC+4)
+**Reconciled:** 2026-09-03 (Oman, UTC+4)
 
-Production database evidence and current `main` override older provider-status text.
+Production database evidence, current `main`, Cloudflare deployment evidence and provider durability evidence override older provider-status text.
 
 Definitions:
 
@@ -15,10 +15,11 @@ Definitions:
 
 | Slot | Purpose | State | Production evidence / remaining boundary |
 |---|---|---|---|
+| Cloudflare Workers Paid | Primary hosting/runtime | **CONNECTED / PRODUCTION VERIFIED** | `https://app.smartvisionsai.com` routes through `app.smartvisionsai.com/* -> smartvisions-growth-os-production`; permanent main-CI-driven deploy, release-candidate smoke/load and routed Production smoke are green. |
 | Supabase browser/auth | Authenticated Control Center | CONNECTED | Existing organization/owner model remains canonical. |
-| Supabase server credential | Privileged server operations | CONNECTED | Used only at controlled server boundaries; service credential stays server-side. |
+| Supabase server credential | Privileged server operations | CONNECTED | Growth project `pkypexzpyfbikdnkrzvw`; controlled server credential validated read-only during Cloudflare deploy. |
 | OpenAI API | Agent reasoning + Voice transcription | **CONNECTED** | Agent usage exists; real WhatsApp Voice transcription and cached replay are production-proven. |
-| OpenAI model routing | Cost-aware AI execution | CONNECTED | Existing Cost Guard/model routing remains canonical. DB prompt/Knowledge runtime wiring is a later intelligence gap, not a provider gap. |
+| OpenAI model routing | Cost-aware AI execution | CONNECTED | Existing Cost Guard/model routing remains canonical. |
 | Google Places | Hunter discovery / qualification | **CONNECTED** | Controlled production discovery path proven. |
 | Meta / WhatsApp | Inbound, Agent approval, Catalog send, status and Voice media | **CONNECTED** | Real Catalog E2E through READ plus real Voice media/transcription proof. |
 | Email Provider / Resend | Sending + branded receiving | **CONNECTED** | Outbound sent/delivered and real `hello@smartvisionsai.com` inbound are production-proven. |
@@ -28,9 +29,39 @@ Definitions:
 | Meta / Instagram | Restricted social integration | NOT_CONFIGURED / DEFERRED | No production page-monitoring or cold-DM runtime. Any later use must feed existing Hunter/CRM and comply with provider policy. |
 | Redis / Queue | Optional async queue | OPTIONAL / NOT_CONFIGURED | Add only if measured load/recovery requirements justify it. |
 | Internal API key | Internal server endpoint protection | CONFIGURED / server-only | Existing internal AI/Voice/Approved Send boundaries remain protected. |
-| Vercel Production | Hosting/runtime | **CONNECTED** | `main` commit `227f0d4948ba5512751d1b98d2603e4717f509a6`, deployment `dpl_4FPTwhW9uTr63FNLwkvKxhcDQ9f1`, READY. |
+| Vercel | Temporary rollback only | **FROZEN ROLLBACK / NOT PRIMARY** | `https://smartvisions.vercel.app` is retained only during the Cloudflare stability window. Automatic Vercel Git deployments are disabled; do not treat Vercel as current Production. |
 | Runtime controls | Kill / pause controls | CONNECTED | Database state is canonical. |
 | Shadow Mode | Prevent broad autonomous outbound | CONNECTED / intentionally ON | Keep ON until remaining behavior/policy gates and owner launch decision. |
+
+## Cloudflare API/runtime parity
+
+Post-cutover reconciliation against merge commit `b13a1e568b1735148a15584fda8a5edb8bc5eb3a` found exactly 21 repository API route handlers and exactly 21 route handlers in the deployed Vinext Worker bundle. No API route-count drift exists.
+
+Canonical API routes currently deployed through the Growth Worker are:
+
+- `/api/ai/process-inbound`
+- `/api/email/send`
+- `/api/email/webhook`
+- `/api/hunters/business/audit`
+- `/api/hunters/business/details`
+- `/api/hunters/business/discover`
+- `/api/hunters/business/score`
+- `/api/hunters/intent/score`
+- `/api/outreach/approved-send`
+- `/api/outreach/message-plan`
+- `/api/outreach/quote`
+- `/api/outreach/replies/analyze`
+- `/api/outreach/schedule`
+- `/api/outreach/shadow-approval`
+- `/api/preview/generate`
+- `/api/preview/production`
+- `/api/telegram/notify`
+- `/api/telegram/webhook`
+- `/api/whatsapp/send`
+- `/api/whatsapp/voice/transcribe`
+- `/api/whatsapp/webhook`
+
+Deployment evidence additionally proves the release candidate and routed Production pass safe auth/webhook rejection checks without invoking outbound provider sends. `workers_dev` is disabled on Production and the hard Worker CPU guard remains `100ms`.
 
 ## Current production control state
 
@@ -129,15 +160,7 @@ Instagram remains NOT_CONFIGURED. There is no current production Instagram monit
 
 Provider integrations are not the same as autonomous sales intelligence.
 
-Known non-provider gaps before broad autonomous conversations:
-
-- recent conversation/history hydration is incomplete;
-- Knowledge Base has UI/versioning but not a complete active service corpus wired into runtime;
-- Agent prompt/settings controls are not yet the complete runtime source for code instructions;
-- Services/Pricing and WhatsApp Catalog need source-of-truth reconciliation;
-- natural Smart Visions brand voice requires explicit runtime guidance/examples.
-
-Reuse existing Agent/Knowledge primitives. Do not build a second framework.
+Current runtime already hydrates conversation/history, active Knowledge, canonical Services/Pricing/Locale and existing Agent settings before paid reasoning. Do not create a second intelligence framework or duplicate commercial sources of truth.
 
 ## Cost Guard ownership
 
@@ -162,10 +185,11 @@ Cost thresholds remain `70 / 85 / 95 / 100%` for warning / throttle / critical /
 - Email: signed provider-event idempotency plus inbound-message identity
 - WhatsApp: durable provider-event/message idempotency
 - Approved outbound: pre-provider claim; provider acceptance is not blindly retryable
+- Cloudflare deploy: successful main CI → isolated candidate → safe smoke/load → exact production promotion → existing Worker Route verification → routed smoke
 
 ## Remaining launch evidence
 
-Do not re-smoke-test Google Places, OpenAI connectivity, WhatsApp Catalog transport, Email transport, Voice transcription or Preview public rendering merely to refresh UI badges.
+Do not re-smoke-test Google Places, OpenAI connectivity, WhatsApp Catalog transport, Email transport, Voice transcription, Preview public rendering or Cloudflare route parity merely to refresh UI badges.
 
 Remaining work is now primarily behavior/policy proof:
 
@@ -173,7 +197,7 @@ Remaining work is now primarily behavior/policy proof:
 2. controlled Shadow Mode scenarios: positive reply, no reply/follow-up, objection, DNC/unsubscribe, human takeover;
 3. prove cancellation against an actual pending follow-up;
 4. verify fail-closed local-time, DNC, takeover, kill-switch and commercial-price boundaries in the full path;
-5. close the existing Agent intelligence wiring gaps before broad autonomous advice;
+5. prove the real Telegram owner-alert send/journal path without manufacturing a fake customer event;
 6. only then make an explicit owner decision on a tiny Oman pilot and automation level.
 
 Crawl4AI, Redis and Instagram remain optional/deferred unless a concrete V1 requirement changes that decision.
