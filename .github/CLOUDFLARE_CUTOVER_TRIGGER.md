@@ -1,4 +1,4 @@
 One-time production cutover trigger for Smart Visions Growth OS.
 
-Guarded retry with an explicit Vercel rewrite to the routable one-time runtime secret bridge.
+Guarded run using authenticated Vercel deployment curl for one-time Production runtime secret transfer.
 This file is temporary and will be removed before PR #103 merges.
