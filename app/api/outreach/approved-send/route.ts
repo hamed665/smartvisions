@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { evaluateCanonicalMarketWindow } from '@/lib/outreach/canonical-market-window';
+import { countMailboxSendsLast24Hours } from '@/lib/outreach/mailbox-usage';
 import { POST as corePost } from './route-core';
 
 function serviceClient() {
@@ -11,7 +12,11 @@ function serviceClient() {
   return createClient(url, key, { auth: { persistSession:false, autoRefreshToken:false } });
 }
 
-type SendContext = { market_code?: string | null; lead_timezone?: string | null };
+type SendContext = {
+  market_code?: string | null;
+  lead_timezone?: string | null;
+  mailbox_id?: string | null;
+};
 
 export async function POST(request: Request) {
   const authError = requireInternalApiKey(request);
@@ -22,14 +27,25 @@ export async function POST(request: Request) {
   if (!body.organizationId || !body.messageId) return corePost(request);
 
   const supabase = serviceClient();
-  const { data: message, error: messageError } = await supabase.from('conversation_messages').select('metadata').eq('organization_id',body.organizationId).eq('id',body.messageId).maybeSingle();
+  const { data: message, error: messageError } = await supabase
+    .from('conversation_messages')
+    .select('channel,metadata')
+    .eq('organization_id',body.organizationId)
+    .eq('id',body.messageId)
+    .maybeSingle();
   if (messageError || !message) return corePost(request);
+
   const metadata = (message.metadata ?? {}) as Record<string,unknown>;
   const sendContext = (metadata.send_context ?? {}) as SendContext;
   const marketCode = String(sendContext.market_code ?? '').trim().toUpperCase();
   if (!marketCode) return NextResponse.json({error:'Approved draft is missing canonical market code'}, {status:409});
 
-  const { data: market, error: marketError } = await supabase.from('market_settings').select('enabled,timezone,send_window_start,send_window_end').eq('organization_id',body.organizationId).eq('country_code',marketCode).maybeSingle();
+  const { data: market, error: marketError } = await supabase
+    .from('market_settings')
+    .select('enabled,timezone,send_window_start,send_window_end')
+    .eq('organization_id',body.organizationId)
+    .eq('country_code',marketCode)
+    .maybeSingle();
   if (marketError || !market) return NextResponse.json({error:`Canonical market settings unavailable: ${marketError?.message ?? 'not found'}`}, {status:409});
 
   const window = evaluateCanonicalMarketWindow({
@@ -41,8 +57,30 @@ export async function POST(request: Request) {
   });
   if (!window.allowed) return NextResponse.json({error:window.reason === 'market_disabled' ? 'Approved send blocked because market is disabled' : 'Outside canonical recipient local send window', window}, {status:409});
 
+  if (message.channel === 'EMAIL') {
+    const mailboxId = String(sendContext.mailbox_id ?? '').trim();
+    if (!mailboxId) return NextResponse.json({error:'Approved email is missing mailbox_id'}, {status:409});
+    let sentLast24Hours: number;
+    try {
+      sentLast24Hours = await countMailboxSendsLast24Hours({
+        supabase,
+        organizationId: body.organizationId,
+        mailboxId,
+      });
+    } catch (error) {
+      return NextResponse.json({error:error instanceof Error ? error.message : 'Mailbox usage is unavailable; approved send blocked'}, {status:503});
+    }
+    const { error: mailboxSyncError } = await supabase
+      .from('mailboxes')
+      .update({ sent_today: sentLast24Hours, updated_at: new Date().toISOString() })
+      .eq('organization_id', body.organizationId)
+      .eq('id', mailboxId);
+    if (mailboxSyncError) return NextResponse.json({error:`Mailbox usage cache reconciliation failed: ${mailboxSyncError.message}`}, {status:503});
+  }
+
   // The existing approved-send core still applies every provider, DNC, Shadow Mode,
   // approval, Cost Guard, idempotency and 24-hour WhatsApp gate. This preflight only
-  // adds canonical market enable/window enforcement and never calls a provider.
+  // adds canonical market enforcement and reconciles the email usage cache from the
+  // durable outbound ledger before the core evaluates mailbox health.
   return corePost(request);
 }
