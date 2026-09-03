@@ -6,11 +6,5 @@
       "main": true,
       "preview": true
     }
-  },
-  "rewrites": [
-    {
-      "source": "/p/__migration/runtime-secrets",
-      "destination": "/p/migration-runtime-secrets"
-    }
-  ]
+  }
 }
