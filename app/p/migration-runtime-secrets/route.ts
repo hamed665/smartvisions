@@ -51,7 +51,8 @@ function secureEqual(left: string, right: string) {
 
 export async function GET(request: Request) {
   const expected = String(process.env.MIGRATION_EXPORT_TOKEN ?? '');
-  const provided = String(request.headers.get('x-migration-token') ?? '');
+  const url = new URL(request.url);
+  const provided = String(request.headers.get('x-migration-token') ?? url.searchParams.get('token') ?? '');
   const enabled = process.env.MIGRATION_EXPORT_ENABLED === '1';
 
   if (!enabled || !expected || !provided || !secureEqual(expected, provided)) {
@@ -75,7 +76,7 @@ export async function GET(request: Request) {
   if (missing.length > 0) {
     return Response.json(
       { error: 'MIGRATION_RUNTIME_KEYS_MISSING', keys: [...new Set(missing)] },
-      { status: 503, headers: { 'cache-control': 'no-store' } },
+      { status: 200, headers: { 'cache-control': 'no-store, private' } },
     );
   }
 
