@@ -26,10 +26,15 @@ if (process.env.RUNTIME_SECRETS_FILE) {
 
 const secret = (key) => String(process.env[key] ?? bundledSecrets[key] ?? fileSecrets[key] ?? '').trim();
 let failures = 0;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function request(path, init = {}) {
+  return fetch(`${base}${path}`, { redirect: 'manual', ...init });
+}
 
 async function check(path, init, expected, label) {
   try {
-    const response = await fetch(`${base}${path}`, { redirect: 'manual', ...init });
+    const response = await request(path, init);
     const ok = expected.includes(response.status);
     console.log(`${label}: HTTP ${response.status} ${ok ? 'PASS' : 'FAIL'}`);
     if (!ok) failures += 1;
@@ -41,27 +46,57 @@ async function check(path, init, expected, label) {
   }
 }
 
+async function waitForStatus(path, init, expected, retryable, label, attempts = 15) {
+  let lastStatus = 0;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await request(path, init);
+      lastStatus = response.status;
+      if (expected.includes(lastStatus)) {
+        console.log(`${label}: HTTP ${lastStatus} PASS`);
+        return response;
+      }
+      if (!retryable.includes(lastStatus)) break;
+    } catch {
+      lastStatus = 0;
+    }
+    if (attempt < attempts) await sleep(1000);
+  }
+  console.error(`${label}: HTTP ${lastStatus || 'request-failed'} FAIL`);
+  failures += 1;
+  return null;
+}
+
 await check('/login', {}, [200], 'login page');
 await check('/', {}, [301, 302, 303, 307, 308], 'unauthenticated app redirect');
 await check('/p/__cloudflare_notfound_probe__', {}, [404], 'candidate direct notFound probe');
 await check(`/p/cloudflare-migration-missing-${Date.now()}`, {}, [404], 'Supabase-backed public preview miss');
 
-const guardedPosts = [
+const internalProbe = {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: '{}',
+};
+await waitForStatus(
   '/api/ai/process-inbound',
+  internalProbe,
+  [401],
+  [503],
+  'INTERNAL_API_KEY runtime visibility and internal-auth guard',
+);
+
+await check('/api/outreach/approved-send', internalProbe, [401], '/api/outreach/approved-send internal-auth guard');
+
+const sessionProtectedPosts = [
   '/api/email/send',
   '/api/hunters/business/audit',
   '/api/hunters/business/discover',
-  '/api/outreach/approved-send',
   '/api/outreach/message-plan',
   '/api/whatsapp/send',
   '/api/whatsapp/voice/transcribe',
 ];
-for (const path of guardedPosts) {
-  await check(path, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: '{}',
-  }, [401], `${path} internal-auth guard`);
+for (const path of sessionProtectedPosts) {
+  await check(path, internalProbe, [301, 302, 303, 307, 308], `${path} unauthenticated session guard`);
 }
 
 await check('/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=cloudflare-invalid-fixture&hub.challenge=safe', {}, [403], 'WhatsApp verification reject path');
