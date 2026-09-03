@@ -62,14 +62,17 @@ jobs:
           const token=process.env.CLOUDFLARE_API_TOKEN;
           const api='https://api.cloudflare.com/client/v4';
           const headers={Authorization:`Bearer ${token}`};
-          async function cf(path){const r=await fetch(api+path,{headers});const j=await r.json().catch(()=>({}));return {r,j};}
-          const z=await cf('/zones?name=smartvisionsai.com&status=active&per_page=50');
-          if(!z.r.ok||z.j.success===false||(z.j.result||[]).length!==1)throw new Error('Cloudflare zone read unavailable');
-          const zone=z.j.result[0];
-          const dns=await cf(`/zones/${zone.id}/dns_records?name=app.smartvisionsai.com&per_page=100`);
-          if(!dns.r.ok||dns.j.success===false)throw new Error('Cloudflare DNS permission unavailable');
-          const routes=await cf(`/zones/${zone.id}/workers/routes`);
-          if(!routes.r.ok||routes.j.success===false)throw new Error('Cloudflare Workers Routes permission unavailable');
+          async function cf(path){
+            const r=await fetch(api+path,{headers});
+            const j=await r.json().catch(()=>({}));
+            if(!r.ok||j.success===false)throw new Error(`Cloudflare read failed: ${path}`);
+            return j;
+          }
+          const zones=(await cf('/zones?name=smartvisionsai.com&status=active&per_page=50')).result||[];
+          if(zones.length!==1)throw new Error('Cloudflare zone read unavailable');
+          const zone=zones[0];
+          await cf(`/zones/${zone.id}/dns_records?name=app.smartvisionsai.com&per_page=100`);
+          await cf(`/zones/${zone.id}/workers/routes`);
           console.log('Cloudflare cutover permissions validated; values not printed.');
           NODE
 
@@ -106,11 +109,12 @@ jobs:
           JSON
           echo "Vercel project metadata bound locally; no remote mutation performed."
 
-      - name: Transfer Production secrets through an unaliased temporary Vercel deployment
+      - name: Transfer Production secrets through authenticated temporary Vercel deployment
         shell: bash
         run: |
           set -euo pipefail
           migration_token="$(openssl rand -hex 32)"
+          echo "::add-mask::$migration_token"
           deployment_url=""
           cleanup_temp(){
             if [ -n "${deployment_url:-}" ]; then
@@ -126,42 +130,42 @@ jobs:
           [ -n "$deployment_url" ] || { echo "::error::Temporary Vercel deployment URL was not returned"; exit 1; }
           [ "$deployment_url" != "$LEGACY_VERCEL_URL" ] || { echo "::error::Temporary deployment unexpectedly matched the legacy production URL"; exit 1; }
           printf '%s' "$deployment_url" > .temp-vercel-deployment-url
-          echo "Temporary Production-target Vercel deployment created with domain assignment skipped."
+          echo "Temporary Production-target Vercel deployment created; legacy production URL unchanged."
 
           tmp="$(mktemp)"
-          status=000
-          for attempt in $(seq 1 30); do
-            status="$(curl --silent --show-error --max-time 30 --output "$tmp" --write-out '%{http_code}' \
-              -H "x-migration-token: $migration_token" \
-              "$deployment_url/p/__migration/runtime-secrets" || printf '000')"
-            if [ "$status" = "200" ]; then break; fi
-            if [ "$status" = "503" ]; then
-              node -e 'const fs=require("node:fs");try{const j=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));console.error(`::error::Temporary runtime is missing required key name(s): ${(j.keys||[]).join(", ")}`)}catch{}' "$tmp"
-              exit 1
-            fi
-            sleep 2
-          done
-          [ "$status" = "200" ] || { echo "::error::Temporary secret bridge did not become healthy; HTTP $status"; exit 1; }
-          mv "$tmp" .growth-runtime-secrets.json
-          chmod 600 .growth-runtime-secrets.json
+          if ! npx --yes vercel@latest curl "/p/migration-runtime-secrets?token=$migration_token" \
+            --deployment "$deployment_url" --token "$VERCEL_TOKEN" > "$tmp"; then
+            echo "::error::Authenticated temporary Vercel runtime request failed"
+            exit 1
+          fi
 
-          node <<'NODE'
+          node - "$tmp" <<'NODE'
           const fs=require('node:fs');
-          const out=JSON.parse(fs.readFileSync('.growth-runtime-secrets.json','utf8'));
+          const file=process.argv[2];
+          let payload;
+          try { payload=JSON.parse(fs.readFileSync(file,'utf8')); }
+          catch { throw new Error('Temporary Vercel runtime returned non-JSON content'); }
+          if(payload?.error==='MIGRATION_RUNTIME_KEYS_MISSING'){
+            console.error(`::error::Temporary runtime is missing required key name(s): ${(payload.keys||[]).join(', ')}`);
+            process.exit(2);
+          }
+          if(!payload||Array.isArray(payload)||typeof payload!=='object')throw new Error('Temporary Vercel runtime payload shape invalid');
           const forbidden=['MIGRATION_EXPORT_TOKEN','MIGRATION_EXPORT_ENABLED'];
-          for(const key of forbidden)if(key in out)throw new Error(`Forbidden migration key leaked into bundle: ${key}`);
-          out.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-          if(process.env.SUPABASE_SECRET_KEY)out.SUPABASE_SECRET_KEY=process.env.SUPABASE_SECRET_KEY;
-          if(process.env.SUPABASE_SERVICE_ROLE_KEY)out.SUPABASE_SERVICE_ROLE_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY;
-          fs.writeFileSync('.growth-runtime-secrets.json',JSON.stringify(out),{mode:0o600});
-          console.log(`Prepared ${Object.keys(out).length} Worker secret binding(s); values not printed.`);
+          for(const key of forbidden)if(key in payload)throw new Error(`Forbidden migration key leaked into bundle: ${key}`);
+          payload.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+          if(process.env.SUPABASE_SECRET_KEY)payload.SUPABASE_SECRET_KEY=process.env.SUPABASE_SECRET_KEY;
+          if(process.env.SUPABASE_SERVICE_ROLE_KEY)payload.SUPABASE_SERVICE_ROLE_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY;
+          fs.writeFileSync('.growth-runtime-secrets.json',JSON.stringify(payload),{mode:0o600});
+          console.log(`Prepared ${Object.keys(payload).length} Worker secret binding(s); values not printed.`);
           NODE
+          rm -f "$tmp"
 
           code="$(curl --silent --show-error --max-time 30 --output /dev/null --write-out '%{http_code}' "$LEGACY_VERCEL_URL/login")"
           [ "$code" = "200" ] || { echo "::error::Legacy Vercel rollback changed during temporary transfer"; exit 1; }
           cleanup_temp
           deployment_url=""
-          echo "Temporary Vercel deployment removed; legacy production alias remained healthy."
+          rm -f .temp-vercel-deployment-url
+          echo "Temporary Vercel deployment removed; legacy production URL remained healthy."
 
       - name: Prepare production-shaped isolated candidate config
         shell: bash
@@ -175,7 +179,8 @@ jobs:
           c.workers_dev=true;
           c.vars={...(c.vars||{}),DEPLOYMENT_ENV:'production',NEXT_PUBLIC_APP_NAME:'Smart Visions Growth OS',NEXT_PUBLIC_SUPABASE_URL:'https://pkypexzpyfbikdnkrzvw.supabase.co',APP_BASE_URL:'https://app.smartvisionsai.com',EMAIL_PROVIDER:'RESEND',GLOBAL_KILL_SWITCH:'false',SHADOW_MODE:'true'};
           c.limits={...(c.limits||{}),cpu_ms:100};
-          delete c.routes; delete c.route;
+          delete c.routes;
+          delete c.route;
           fs.writeFileSync(f,JSON.stringify(c,null,2)+'\n');
           NODE
 
@@ -201,7 +206,6 @@ jobs:
           c.workers_dev=false;
           if(c.limits?.cpu_ms!==100)throw new Error('CPU guard drifted');
           if(c.routes||c.route)throw new Error('Production bundle must not carry routes');
-          if(c.workers_dev!==false)throw new Error('Production workers.dev must be disabled');
           fs.writeFileSync(f,JSON.stringify(c,null,2)+'\n');
           NODE
           npx wrangler deploy --config dist/server/wrangler.json
@@ -213,10 +217,14 @@ jobs:
           set -euo pipefail
           node <<'NODE'
           const fs=require('node:fs');
-          const token=process.env.CLOUDFLARE_API_TOKEN;
           const api='https://api.cloudflare.com/client/v4';
-          const headers={Authorization:`Bearer ${token}`};
-          async function cf(path){const r=await fetch(api+path,{headers});const j=await r.json();if(!r.ok||j.success===false)throw new Error(`Cloudflare read failed: ${path}`);return j;}
+          const headers={Authorization:`Bearer ${process.env.CLOUDFLARE_API_TOKEN}`};
+          async function cf(path){
+            const r=await fetch(api+path,{headers});
+            const j=await r.json();
+            if(!r.ok||j.success===false)throw new Error(`Cloudflare read failed: ${path}`);
+            return j;
+          }
           const zones=(await cf('/zones?name=smartvisionsai.com&status=active&per_page=50')).result||[];
           if(zones.length!==1)throw new Error('Zone lookup mismatch');
           const zone=zones[0];
@@ -224,7 +232,11 @@ jobs:
           const routes=(await cf(`/zones/${zone.id}/workers/routes`)).result||[];
           const exactRoutes=routes.filter(r=>r.pattern==='app.smartvisionsai.com/*');
           if(dns.length>1||exactRoutes.length>1)throw new Error('Ambiguous existing app DNS/route state; refusing cutover');
-          const snapshot={zoneId:zone.id,dns:dns.map(r=>({type:r.type,name:r.name,content:r.content,proxied:r.proxied,ttl:r.ttl})),routes:exactRoutes.map(r=>({pattern:r.pattern,script:r.script||null}))};
+          const snapshot={
+            zoneId:zone.id,
+            dns:dns.map(r=>({type:r.type,name:r.name,content:r.content,proxied:r.proxied,ttl:r.ttl})),
+            routes:exactRoutes.map(r=>({pattern:r.pattern,script:r.script||null})),
+          };
           fs.writeFileSync('cutover-snapshot.json',JSON.stringify(snapshot,null,2));
           console.log(`Cutover snapshot captured: DNS=${snapshot.dns.length}, exact routes=${snapshot.routes.length}.`);
           NODE
@@ -236,19 +248,24 @@ jobs:
           node <<'NODE'
           const fs=require('node:fs');
           const s=JSON.parse(fs.readFileSync('cutover-snapshot.json','utf8'));
-          const token=process.env.CLOUDFLARE_API_TOKEN;
           const api='https://api.cloudflare.com/client/v4';
-          const headers={Authorization:`Bearer ${token}`,'Content-Type':'application/json'};
-          async function call(method,path,body){const r=await fetch(api+path,{method,headers,body:body?JSON.stringify(body):undefined});const j=await r.json();if(!r.ok||j.success===false)throw new Error(`Cloudflare write failed: ${method} ${path}`);return j;}
-          const list=await call('GET',`/zones/${s.zoneId}/dns_records?name=app.smartvisionsai.com&per_page=100`);
-          const current=list.result||[];
+          const headers={Authorization:`Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,'Content-Type':'application/json'};
+          async function call(method,path,body){
+            const r=await fetch(api+path,{method,headers,body:body?JSON.stringify(body):undefined});
+            const j=await r.json();
+            if(!r.ok||j.success===false)throw new Error(`Cloudflare write failed: ${method} ${path}`);
+            return j;
+          }
+          const current=(await call('GET',`/zones/${s.zoneId}/dns_records?name=app.smartvisionsai.com&per_page=100`)).result||[];
           if(current.length>1)throw new Error('Multiple app DNS records appeared; refusing mutation');
           const desired={type:'CNAME',name:'app',content:'smartvisions.vercel.app',ttl:1,proxied:true};
-          if(!current.length){await call('POST',`/zones/${s.zoneId}/dns_records`,desired);console.log('Created proxied app DNS bridge.');}
-          else {
+          if(!current.length){
+            await call('POST',`/zones/${s.zoneId}/dns_records`,desired);
+            console.log('Created proxied app DNS bridge.');
+          } else {
             if(current[0].type!=='CNAME')throw new Error(`Existing app DNS type is ${current[0].type}; refusing overwrite`);
             await call('PUT',`/zones/${s.zoneId}/dns_records/${current[0].id}`,desired);
-            console.log('Updated existing app CNAME to the rollback bridge target.');
+            console.log('Updated existing app CNAME to rollback bridge target.');
           }
           NODE
 
@@ -259,12 +276,15 @@ jobs:
           node <<'NODE'
           const fs=require('node:fs');
           const s=JSON.parse(fs.readFileSync('cutover-snapshot.json','utf8'));
-          const token=process.env.CLOUDFLARE_API_TOKEN;
           const api='https://api.cloudflare.com/client/v4';
-          const headers={Authorization:`Bearer ${token}`,'Content-Type':'application/json'};
-          async function call(method,path,body){const r=await fetch(api+path,{method,headers,body:body?JSON.stringify(body):undefined});const j=await r.json();if(!r.ok||j.success===false)throw new Error(`Cloudflare route write failed: ${method} ${path}`);return j;}
-          const list=await call('GET',`/zones/${s.zoneId}/workers/routes`);
-          const exact=(list.result||[]).filter(r=>r.pattern==='app.smartvisionsai.com/*');
+          const headers={Authorization:`Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,'Content-Type':'application/json'};
+          async function call(method,path,body){
+            const r=await fetch(api+path,{method,headers,body:body?JSON.stringify(body):undefined});
+            const j=await r.json();
+            if(!r.ok||j.success===false)throw new Error(`Cloudflare route write failed: ${method} ${path}`);
+            return j;
+          }
+          const exact=((await call('GET',`/zones/${s.zoneId}/workers/routes`)).result||[]).filter(r=>r.pattern==='app.smartvisionsai.com/*');
           if(exact.length>1)throw new Error('Multiple exact app Worker Routes exist; refusing mutation');
           if(exact.length===1&&exact[0].script!=='smartvisions-growth-os-production')throw new Error(`Existing app route points to ${exact[0].script||'no script'}; refusing overwrite`);
           if(!exact.length)await call('POST',`/zones/${s.zoneId}/workers/routes`,{pattern:'app.smartvisionsai.com/*',script:'smartvisions-growth-os-production'});
@@ -277,13 +297,14 @@ jobs:
           RUNTIME_SECRETS_FILE: .growth-runtime-secrets.json
         run: |
           set -euo pipefail
-          tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
           check(){
-            path="$1"; expected="$2"; name="$(printf '%s' "$path"|tr '/?' '__')";
-            code="$(curl --silent --show-error --noproxy '*' --doh-url https://cloudflare-dns.com/dns-query --max-time 30 --dump-header "$tmp/$name.h" --output "$tmp/$name.b" --write-out '%{http_code}' "$PRODUCTION_URL$path" || printf '000')";
-            ray="$(grep -i '^cf-ray:' "$tmp/$name.h" || true)";
-            echo "$path -> HTTP $code cf-ray=$([ -n "$ray" ]&&echo yes||echo no)";
-            [[ "$code" =~ ^($expected)$ ]]&&[ -n "$ray" ];
+            path="$1"; expected="$2"; name="$(printf '%s' "$path"|tr '/?' '__')"
+            code="$(curl --silent --show-error --noproxy '*' --doh-url https://cloudflare-dns.com/dns-query --max-time 30 --dump-header "$tmp/$name.h" --output "$tmp/$name.b" --write-out '%{http_code}' "$PRODUCTION_URL$path" || printf '000')"
+            ray="$(grep -i '^cf-ray:' "$tmp/$name.h" || true)"
+            echo "$path -> HTTP $code cf-ray=$([ -n "$ray" ]&&echo yes||echo no)"
+            [[ "$code" =~ ^($expected)$ ]] && [ -n "$ray" ]
           }
           for attempt in $(seq 1 20); do
             if check "/login" "200"; then ready=1; break; fi
@@ -302,10 +323,13 @@ jobs:
           node <<'NODE'
           const fs=require('node:fs');
           const s=JSON.parse(fs.readFileSync('cutover-snapshot.json','utf8'));
-          const token=process.env.CLOUDFLARE_API_TOKEN;
           const api='https://api.cloudflare.com/client/v4';
-          const headers={Authorization:`Bearer ${token}`,'Content-Type':'application/json'};
-          async function call(method,path,body){const r=await fetch(api+path,{method,headers,body:body?JSON.stringify(body):undefined});const j=await r.json().catch(()=>({}));return {ok:r.ok&&j.success!==false,j};}
+          const headers={Authorization:`Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,'Content-Type':'application/json'};
+          async function call(method,path,body){
+            const r=await fetch(api+path,{method,headers,body:body?JSON.stringify(body):undefined});
+            const j=await r.json().catch(()=>({}));
+            return {ok:r.ok&&j.success!==false,j};
+          }
           const routes=await call('GET',`/zones/${s.zoneId}/workers/routes`);
           for(const r of (routes.j.result||[]).filter(x=>x.pattern==='app.smartvisionsai.com/*'))await call('DELETE',`/zones/${s.zoneId}/workers/routes/${r.id}`);
           for(const r of s.routes)await call('POST',`/zones/${s.zoneId}/workers/routes`,{pattern:r.pattern,script:r.script});
@@ -318,6 +342,7 @@ jobs:
 
       - name: Cutover summary
         if: always()
+        shell: bash
         run: |
           if [ -f .temp-vercel-deployment-url ]; then
             temp_url="$(cat .temp-vercel-deployment-url)"
