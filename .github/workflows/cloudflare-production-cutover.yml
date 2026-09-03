@@ -133,8 +133,8 @@ jobs:
           echo "Temporary Production-target Vercel deployment created; legacy production URL unchanged."
 
           tmp="$(mktemp)"
-          if ! npx --yes vercel@latest curl "/p/migration-runtime-secrets?token=$migration_token" \
-            --deployment "$deployment_url" --token "$VERCEL_TOKEN" > "$tmp"; then
+          if ! npx --yes vercel@latest --token "$VERCEL_TOKEN" curl "/p/migration-runtime-secrets?token=$migration_token" \
+            --deployment "$deployment_url" > "$tmp"; then
             echo "::error::Authenticated temporary Vercel runtime request failed"
             exit 1
           fi
