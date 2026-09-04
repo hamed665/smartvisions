@@ -7,15 +7,34 @@ const arabicScript = /[\u0600-\u06FF]/;
 const latin = /[A-Za-z]/;
 const otherSupportedScripts = /[\u0400-\u04FF\u0980-\u09FF\u0B80-\u0BFF\u0C00-\u0C7F\u0D00-\u0DFF\u0E00-\u0E7F\u3040-\u30FF\u3400-\u9FFF\uAC00-\uD7AF]/;
 
-const englishSingleTurn = new Set(['hi', 'hello', 'hey', 'hiya', 'thanks', 'thankyou', 'thx', 'yes', 'no', 'ok', 'okay']);
+const englishSingleTurn = new Set(['hi', 'hello', 'hey', 'hiya', 'thanks', 'thankyou', 'thx', 'yes']);
 const englishSignals = new Set([
-  'i', 'we', 'you', 'my', 'our', 'your', 'me', 'us',
-  'hi', 'hello', 'hey', 'thanks', 'thank', 'please', 'yes', 'no', 'ok', 'okay',
+  'i', 'we', 'you', 'my', 'our', 'your', 'us',
+  'hi', 'hello', 'hey', 'thanks', 'thank', 'please', 'yes',
   'need', 'want', 'looking', 'interested', 'help', 'show', 'tell', 'explain',
   'can', 'could', 'would', 'do', 'does', 'is', 'are', 'what', 'how', 'much',
   'website', 'service', 'services', 'price', 'cost', 'marketing', 'instagram', 'content',
-  'restaurant', 'clinic', 'business', 'company', 'for', 'with', 'this', 'that', 'the', 'a', 'an',
+  'restaurant', 'clinic', 'business', 'company', 'for', 'with', 'this', 'that', 'the',
 ]);
+
+const arabicSignals = new Set([
+  'مرحبا', 'مرحباً', 'اهلا', 'أهلا', 'ممكن', 'اريد', 'أريد', 'احتاج', 'أحتاج',
+  'كيف', 'خدماتكم', 'خدمات', 'سعر', 'السعر', 'كم', 'موقع', 'الموقع', 'عندي', 'عندنا',
+  'مطعم', 'عيادة', 'شركة', 'تسويق', 'انستغرام', 'إنستغرام', 'واتساب', 'شكرا', 'شكراً',
+]);
+
+const hindiSignals = new Set([
+  'क्या', 'है', 'हैं', 'मुझे', 'चाहिए', 'की', 'का', 'के', 'आप', 'हम', 'मेरी', 'हमारी',
+  'वेबसाइट', 'कीमत', 'सेवा', 'सेवाएं', 'व्यवसाय', 'मदद',
+]);
+
+function words(value: string) {
+  return value.toLowerCase().match(/\p{L}+/gu) ?? [];
+}
+
+function signalHits(value: string, lexicon: Set<string>) {
+  return words(value).reduce((count, token) => count + (lexicon.has(token) ? 1 : 0), 0);
+}
 
 function latinEnglishConfidence(value: string) {
   const cleaned = value
@@ -49,7 +68,12 @@ export function detectLanguageZeroCost(text: string): { language: DetectedLangua
   const scriptHits = [hasLatin, hasArabic, hasDevanagari, hasOtherScript].filter(Boolean).length;
   if (scriptHits > 1) return { language: 'mixed', confidence: 0.88, signals: ['MULTIPLE_SCRIPTS'] };
 
-  if (hasDevanagari) return { language: 'hi', confidence: 0.9, signals: ['DEVANAGARI_SCRIPT_SUPPORTED'] };
+  if (hasDevanagari) {
+    const hits = signalHits(value, hindiSignals);
+    return hits >= 2
+      ? { language: 'hi', confidence: 0.9, signals: ['HINDI_LEXICAL_SIGNAL'] }
+      : { language: 'unknown', confidence: 0.6, signals: ['DEVANAGARI_LANGUAGE_UNRESOLVED'] };
+  }
 
   if (hasArabic) {
     const signals: string[] = [];
@@ -57,7 +81,8 @@ export function detectLanguageZeroCost(text: string): { language: DetectedLangua
     if (persianSpecific.test(value)) signals.push('PERSIAN_SPECIFIC_CHARS');
     if (urduSpecific.test(value)) return { language: 'ur', confidence: 0.93, signals };
     if (persianSpecific.test(value)) return { language: 'fa', confidence: 0.88, signals };
-    return { language: 'ar', confidence: 0.76, signals: [...signals, 'ARABIC_SCRIPT_FALLBACK'] };
+    if (signalHits(value, arabicSignals) >= 1) return { language: 'ar', confidence: 0.9, signals: [...signals, 'ARABIC_LEXICAL_SIGNAL'] };
+    return { language: 'unknown', confidence: 0.6, signals: [...signals, 'ARABIC_SCRIPT_LANGUAGE_UNRESOLVED'] };
   }
 
   if (hasLatin) {
