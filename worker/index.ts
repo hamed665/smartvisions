@@ -1,6 +1,7 @@
 import handler from 'vinext/server/fetch-handler';
+import { shouldRunScheduledOperations } from './schedule-policy';
 
-type WorkerEnv = { INTERNAL_API_KEY?: string };
+type WorkerEnv = { INTERNAL_API_KEY?: string; DEPLOYMENT_ENV?: string };
 type ScheduledController = { scheduledTime?: number; cron?: string };
 type ExecutionContextLike = { waitUntil(promise: Promise<unknown>): void };
 
@@ -189,6 +190,7 @@ const worker = {
     return handler.fetch(request);
   },
   scheduled(controller: ScheduledController, env: WorkerEnv, ctx: ExecutionContextLike) {
+    if (!shouldRunScheduledOperations(env)) return;
     ctx.waitUntil(runScheduledOperations(env, controller));
   },
 };
