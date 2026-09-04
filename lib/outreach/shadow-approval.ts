@@ -25,6 +25,7 @@ export type ShadowDraftInput = {
   replyDialect?: string;
   persianTranslation?: string;
   persianSummary?: string;
+  rememberCustomerLanguage?: boolean;
 };
 
 function serviceClient() {
@@ -42,6 +43,29 @@ export function shadowProviderMessageId(idempotencyKey: string) {
 
 export function isShadowDuplicateError(code?: string | null) {
   return code === '23505';
+}
+
+function normalizedLanguageTag(value?: string) {
+  const language = String(value ?? '').trim();
+  if (!language || language.toLowerCase() === 'und' || language.length > 32) return null;
+  return /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(language) ? language : null;
+}
+
+async function persistCustomerLanguageMemory(input: {
+  supabase: ReturnType<typeof serviceClient>;
+  draft: ShadowDraftInput;
+}) {
+  if (!input.draft.rememberCustomerLanguage) return { persisted: false as const, reason: 'NOT_REQUESTED' as const };
+  const language = normalizedLanguageTag(input.draft.replyLanguage);
+  if (!language) return { persisted: false as const, reason: 'LANGUAGE_UNRESOLVED' as const };
+  const dialect = language.toLowerCase().startsWith('ar') ? input.draft.replyDialect ?? null : null;
+  const { error } = await input.supabase.from('sales_conversations').update({
+    detected_language: language,
+    detected_dialect: dialect,
+    updated_at: new Date().toISOString(),
+  }).eq('organization_id', input.draft.organizationId).eq('id', input.draft.conversationId);
+  if (error) return { persisted: false as const, reason: 'PERSIST_FAILED' as const };
+  return { persisted: true as const, language, dialect };
 }
 
 export async function queueShadowDraft(input: ShadowDraftInput) {
@@ -111,7 +135,10 @@ export async function queueShadowDraft(input: ShadowDraftInput) {
     .insert(row)
     .select('id,status,requires_approval')
     .maybeSingle();
-  if (!error && data) return { queued: true, duplicate: false, messageId: data.id, status: data.status };
+  if (!error && data) {
+    const languageMemory = await persistCustomerLanguageMemory({ supabase, draft: input });
+    return { queued: true, duplicate: false, messageId: data.id, status: data.status, languageMemory };
+  }
   if (error && !isShadowDuplicateError(error.code)) throw new Error(`Shadow approval queue failed: ${error.message}`);
 
   const { data: existing, error: existingError } = await supabase
@@ -123,5 +150,6 @@ export async function queueShadowDraft(input: ShadowDraftInput) {
     .maybeSingle();
   if (existingError) throw new Error(`Shadow approval duplicate lookup failed: ${existingError.message}`);
   if (!existing) throw new Error('Shadow approval draft was not persisted');
-  return { queued: false, duplicate: true, messageId: existing.id, status: existing.status };
+  const languageMemory = await persistCustomerLanguageMemory({ supabase, draft: input });
+  return { queued: false, duplicate: true, messageId: existing.id, status: existing.status, languageMemory };
 }
