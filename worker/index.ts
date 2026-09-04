@@ -184,7 +184,7 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
   return metrics;
 }
 
-export default {
+const worker = {
   fetch(request: Request) {
     return handler.fetch(request);
   },
@@ -192,3 +192,5 @@ export default {
     ctx.waitUntil(runScheduledOperations(env, controller));
   },
 };
+
+export default worker;
