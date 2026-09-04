@@ -6,9 +6,14 @@
     "nodejs_compat",
     "nodejs_compat_populate_process_env"
   ],
-  "main": "vinext/server/fetch-handler",
+  "main": "worker/index.ts",
   "vars": {
     "DEPLOYMENT_ENV": "candidate"
+  },
+  "triggers": {
+    "crons": [
+      "*/2 * * * *"
+    ]
   },
   "assets": {
     "directory": "dist/client",
