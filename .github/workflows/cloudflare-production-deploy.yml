@@ -108,7 +108,7 @@ jobs:
           done
           rm -f .*.secret-names.json
 
-      - name: Prepare isolated production-shaped release candidate
+      - name: Prepare isolated release candidate
         shell: bash
         run: |
           set -euo pipefail
@@ -120,10 +120,10 @@ jobs:
           c.workers_dev=true;
           c.vars={
             ...(c.vars||{}),
-            DEPLOYMENT_ENV:'production',
+            DEPLOYMENT_ENV:'candidate',
             NEXT_PUBLIC_APP_NAME:'Smart Visions Growth OS',
             NEXT_PUBLIC_SUPABASE_URL:'https://pkypexzpyfbikdnkrzvw.supabase.co',
-            APP_BASE_URL:'https://app.smartvisionsai.com',
+            APP_BASE_URL:process.env.CANDIDATE_URL,
             EMAIL_PROVIDER:'RESEND',
             GLOBAL_KILL_SWITCH:'false',
             SHADOW_MODE:'true'
@@ -131,9 +131,10 @@ jobs:
           c.limits={...(c.limits||{}),cpu_ms:100};
           delete c.routes;
           delete c.route;
+          delete c.triggers;
           fs.writeFileSync(file,JSON.stringify(c,null,2)+'\n');
-          if(c.name!=='smartvisions-growth-os-release-candidate'||c.limits?.cpu_ms!==100||c.routes||c.route)throw new Error('Release candidate config validation failed');
-          console.log('Release candidate config validated: no production route, CPU guard=100ms.');
+          if(c.name!=='smartvisions-growth-os-release-candidate'||c.vars?.DEPLOYMENT_ENV!=='candidate'||c.limits?.cpu_ms!==100||c.routes||c.route||c.triggers)throw new Error('Release candidate isolation validation failed');
+          console.log('Release candidate validated: candidate env, no production route, no scheduled triggers, CPU guard=100ms.');
           NODE
 
       - name: Deploy exact release candidate while preserving provider secrets
@@ -180,9 +181,17 @@ jobs:
           const c=JSON.parse(fs.readFileSync(file,'utf8'));
           c.name='smartvisions-growth-os-production';
           c.workers_dev=false;
+          c.vars={
+            ...(c.vars||{}),
+            DEPLOYMENT_ENV:'production',
+            APP_BASE_URL:process.env.PRODUCTION_URL
+          };
+          c.triggers={crons:['*/2 * * * *']};
           if(c.limits?.cpu_ms!==100)throw new Error('CPU guard drifted before promotion');
           if(c.routes||c.route)throw new Error('Production deploy must not mutate Worker Routes');
           if(c.workers_dev!==false)throw new Error('Production workers.dev must be disabled');
+          if(c.vars?.DEPLOYMENT_ENV!=='production')throw new Error('Production deployment env is not production');
+          if(JSON.stringify(c.triggers?.crons)!==JSON.stringify(['*/2 * * * *']))throw new Error('Production cron invariant failed');
           fs.writeFileSync(file,JSON.stringify(c,null,2)+'\n');
           NODE
           npx wrangler deploy --config dist/server/wrangler.json
@@ -243,7 +252,9 @@ jobs:
           rm -f .*.secret-names.json
           echo "Source gate: successful push-based CI on main"
           echo "Candidate Worker: smartvisions-growth-os-release-candidate"
+          echo "Candidate scheduled triggers: none"
           echo "Production Worker: smartvisions-growth-os-production"
+          echo "Production scheduled trigger: */2 * * * *"
           echo "Production hostname: app.smartvisionsai.com"
           echo "Production workers.dev exposure: disabled"
           echo "CPU guard: 100ms"
