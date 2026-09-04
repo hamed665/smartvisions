@@ -44,7 +44,7 @@ describe('Telegram Owner extended control plane', () => {
   });
 
   it('applies owner-configured market style to deterministic culture behavior', async () => {
-    const result = await executeAgent('culture_locale', {message:'hello',language:'ar-OM',marketLocaleStyle:{countryCode:'OM',primaryLocale:'ar-OM',dialect:'omani',toneProfile:'friendly_professional',maxReplyWords:90}});
+    const result = await executeAgent('culture_locale', {message:'مرحبا',language:'ar-OM',marketLocaleStyle:{countryCode:'OM',primaryLocale:'ar-OM',dialect:'omani',toneProfile:'friendly_professional',maxReplyWords:90}});
     expect(result.data).toMatchObject({locale:'ar-OM',dialect:'omani',tone:'friendly_professional',maxReplyWords:90});
   });
 
