@@ -10,6 +10,7 @@
     "build": "next build",
     "build:vinext": "vinext build",
     "check:vinext": "vinext check",
+    "verify:cloudflare-scheduled": "node scripts/verify-cloudflare-scheduled-bundle.mjs",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
