@@ -1,3 +1,5 @@
+import { normalizeIdempotencyKey } from '@/lib/agents/idempotency';
+
 export type OperationalChannel = 'EMAIL' | 'WHATSAPP';
 
 export type OperationalInbound = {
@@ -39,13 +41,21 @@ const TERMINAL_LEAD_STATES = new Set(['WON', 'LOST', 'DO_NOT_CONTACT', 'HUMAN'])
 const TERMINAL_CONVERSATION_STAGES = new Set(['WON', 'LOST', 'DO_NOT_CONTACT', 'SPAM', 'PAUSED', 'NEEDS_HUMAN']);
 const SAFE_AUTOMATION_ACTIONS = new Set(['REQUIRE_HUMAN', 'PAUSE_AUTOMATION', 'SET_STAGE', 'QUEUE_TEMPLATE_APPROVAL']);
 const SAFE_STAGES = new Set(['NEW','ACTIVE','CLOSING','WAITING_CUSTOMER','UNANSWERED','HOT','NEEDS_HUMAN','FOLLOW_UP_DUE','WON','LOST','DO_NOT_CONTACT','SPAM','PAUSED']);
+const SAFE_REQUEST_ID = /^[A-Za-z0-9._:-]+$/;
+const ENCODED_REQUEST_ID_PREFIX = 'enc:';
+
+function canonicalRequestId(value: string) {
+  if (SAFE_REQUEST_ID.test(value) && !value.startsWith(ENCODED_REQUEST_ID_PREFIX)) return value;
+  const encoded = Array.from(new TextEncoder().encode(value), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${ENCODED_REQUEST_ID_PREFIX}${encoded}`;
+}
 
 export function stableAgentRequestKey(channel: string, providerMessageId: string) {
   const normalizedChannel = channel.trim().toLowerCase();
   const normalizedId = providerMessageId.trim();
   if (!['email', 'whatsapp'].includes(normalizedChannel)) throw new Error('Unsupported inbound channel');
   if (!normalizedId) throw new Error('providerMessageId is required');
-  return `agent:${normalizedChannel}:${normalizedId}`;
+  return normalizeIdempotencyKey(`agent:${normalizedChannel}:${canonicalRequestId(normalizedId)}`);
 }
 
 export function conversationIdFromMetadata(metadata: unknown) {
