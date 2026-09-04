@@ -10,6 +10,6 @@ export function agentRunReplayState(run?: { status?: string | null; result_paylo
 export function normalizeIdempotencyKey(value: string) {
   const key = value.trim();
   if (key.length < 8 || key.length > 160) throw new Error('idempotencyKey must be 8-160 characters');
-  if (!/^[A-Za-z0-9._:=-]+$/.test(key)) throw new Error('idempotencyKey contains unsupported characters');
+  if (!/^[A-Za-z0-9._:-]+$/.test(key)) throw new Error('idempotencyKey contains unsupported characters');
   return key;
 }
