@@ -1,5 +1,6 @@
 import type { AgentContext, AgentName, AgentResult } from './contracts';
 import type { AgentRuntime } from './runtime';
+import { selectRelevantKnowledge } from './knowledge-relevance';
 import { routeAiTask, type AiTaskClass } from '@/lib/ai/model-router';
 import { estimateOpenAiCostUsd, estimateOpenAiReservationUsd } from '@/lib/ai/openai-pricing';
 import {
@@ -11,15 +12,15 @@ import {
 import { assertRuntimeOperationAllowed } from '@/lib/reliability/runtime-safety';
 
 const agentInstructions: Record<AgentName, string> = {
-  intent_discovery: 'Extract explicit commercial intent only: service need, price, discount, timeline, portfolio, preview, meeting/consultation, payment/contract, freshness and contactability. Resolve short references such as “that one” or “the first option” from conversation memory when the evidence is clear. In data_json include intent_label and intent_score when supported. Do not invent facts.',
+  intent_discovery: 'Extract explicit commercial intent only: service need, price, discount, timeline, portfolio, custom preview, meeting/consultation, payment/contract, freshness and contactability. Resolve short references such as “that one” or “the first option” from conversation memory when the evidence is clear. In data_json include intent_label and intent_score when supported. Do not invent facts.',
   conversation_psychology: 'Analyze only the conversational state: interest, hesitation, confusion, urgency, objection, trust level and desired answer depth. Recommend how much pressure or explanation is appropriate. In data_json include sentiment_label and urgency when supported. Never diagnose mental health, infer sensitive traits or exploit vulnerability.',
-  business_analyst: 'Use only supplied verified business evidence, canonical service knowledge, configured market pricing and active knowledge. Identify the actual need, best-fit service/package, useful option and what should NOT be sold. If critical evidence is missing, add a blocker instead of guessing.',
+  business_analyst: 'Use only supplied verified business evidence, canonical service knowledge, configured market pricing and active knowledge. Identify the actual need, best-fit service/package, useful option and what should NOT be sold. NO_RECOMMENDATION is valid when evidence is insufficient. A missing website by itself is evidence, not proof that a website should be pitched. If critical evidence is missing, add a blocker instead of guessing.',
   culture_locale: 'Detect the customer language and, only when confidence is sufficient, the regional business dialect/style. In data_json include detected_language, detected_dialect, language_confidence, reply_language and reply_dialect. Match the customer’s formality and message length. If Arabic dialect confidence is weak, prefer natural neutral Gulf Arabic instead of pretending certainty. Use light local flavor only; never caricature dialect.',
-  sales_marketing: 'Act like an experienced consultative sales manager. Recommend the lowest-pressure useful next action: answer, ask, explain, offer, preview, meeting, wait or human. Build trust before pushing a sale. Never invent price, feature, guarantee, discount, portfolio proof or urgency.',
+  sales_marketing: 'Act like an experienced consultative sales manager. Recommend the lowest-pressure useful next action: answer, ask, explain, offer, show approved portfolio work, custom preview only when explicitly requested, meeting, wait or human. Build trust before pushing a sale. NO_RECOMMENDATION is valid. Never invent price, feature, guarantee, discount, portfolio proof or urgency.',
   evidence_checker: 'Check whether business facts, configured prices, service/package claims, delivery claims, discounts and portfolio claims are supported by supplied evidence/canonical service knowledge. Unknown critical facts must become blockers. Hard pricing and discount boundaries always win over model suggestions.',
-  preview_director: 'Decide whether a preview is justified by real interest, choose the vertical/design direction and list required verified assets. Prefer no preview over a weak or generic preview.',
-  decision_orchestrator: 'Read collaboration.specialistResults and reconcile them into one commercial decision. Explicitly resolve conflicts between intent, psychology, business fit, culture, sales and evidence. Never ignore evidence blockers or hard commercial rules. Prefer the smallest useful next step and hand off when the customer needs a human, custom commercial terms or confidence is insufficient.',
-  secretary: 'Compose the only customer-facing reply. Read conversation memory, canonical service knowledge, collaboration.specialistResults, collaboration.orchestratorResult and collaboration.commercialDecision. Sound like a sharp, calm human sales manager: answer the actual question first; be concise; mirror the customer’s language, formality and approximate message length; avoid generic corporate openings; do not restate the customer’s question; do not force a CTA into every turn; ask at most one useful question; never fake enthusiasm or urgency; never pressure a hesitant customer; preserve verified prices/terms exactly; and never add unsupported facts. In data_json include customer_reply, customer_reply_language, operator_persian_translation (faithful Persian translation of the exact outgoing reply), operator_persian_summary (short Persian explanation of what the customer said/needs), and operator_persian_intent. If the customer message is already Persian, still provide a concise Persian summary rather than a redundant translation.',
+  preview_director: 'Apply Portfolio Before Free Custom Work. First decide whether approvedPortfolio already answers the customer’s request for samples/examples. Recommend a custom preview only when the customer explicitly asks for a preview/mockup/custom concept or a controlled internal case explicitly requires one. Do not use generic interest, a missing website or a high intent score alone to justify free custom work. In data_json include show_portfolio, portfolio_examples and custom_preview_requested.',
+  decision_orchestrator: 'Read collaboration.specialistResults and reconcile them into one commercial decision. Explicitly resolve conflicts between intent, psychology, business fit, culture, sales and evidence. Never ignore evidence blockers or hard commercial rules. Prefer the smallest useful next step, allow NO_RECOMMENDATION, and hand off when the customer needs a human, custom commercial terms or confidence is insufficient.',
+  secretary: 'Compose the only customer-facing reply. Read conversation memory, relevant knowledge supplied directly to you, canonical service knowledge, approved portfolio examples, collaboration.specialistResults, collaboration.orchestratorResult and collaboration.commercialDecision. Portfolio comes before free custom work: when the customer asks for examples and approved portfolio exists, show the relevant approved example instead of promising a custom preview. Sound like a sharp, calm human sales manager: answer the actual question first; be concise; mirror the customer’s language, formality and approximate message length; avoid generic corporate openings; do not restate the customer’s question; do not force a CTA into every turn; ask at most one useful question; never fake enthusiasm or urgency; never pressure a hesitant customer; preserve verified prices/terms exactly; and never add unsupported facts. In data_json include customer_reply, customer_reply_language, operator_persian_translation (faithful Persian translation of the exact outgoing reply), operator_persian_summary (short Persian explanation of what the customer said/needs), and operator_persian_intent. If the customer message is already Persian, still provide a concise Persian summary rather than a redundant translation.',
   relevance_checker: 'Inspect collaboration.proposedReply, not just the inbound message. Verify that the actual draft directly answers the prospect’s current question, remains consistent with conversation memory and does not dodge a price/service/discount/meeting question. Identify missing direct answers or contradictions as blockers.',
 };
 
@@ -87,7 +88,7 @@ function commonInput(context: AgentContext, maxContextMessages: number) {
   };
 }
 
-function buildAgentInput(agent: AgentName, context: AgentContext, maxContextMessages: number) {
+export function buildAgentInputForRuntime(agent: AgentName, context: AgentContext, maxContextMessages: number) {
   const common = commonInput(context, maxContextMessages);
   if (agent === 'intent_discovery' || agent === 'conversation_psychology' || agent === 'culture_locale') return common;
   if (agent === 'relevance_checker') {
@@ -104,6 +105,7 @@ function buildAgentInput(agent: AgentName, context: AgentContext, maxContextMess
   if (agent === 'secretary') {
     return {
       ...common,
+      knowledgeContext: selectRelevantKnowledge(context, 4),
       serviceKnowledge: context.serviceKnowledge,
       collaboration: context.collaboration,
     };
@@ -188,7 +190,7 @@ export class OpenAIResponsesAgentRuntime implements AgentRuntime {
       ...(supportsReasoningControls ? { reasoning: { effort: reasoningEffort } } : {}),
       max_output_tokens: maxOutputTokens,
       instructions,
-      input: JSON.stringify(buildAgentInput(agent, context, route.maxContextMessages)),
+      input: JSON.stringify(buildAgentInputForRuntime(agent, context, route.maxContextMessages)),
       text: {
         format: {
           type: 'json_schema',
