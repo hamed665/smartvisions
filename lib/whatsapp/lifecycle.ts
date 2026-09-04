@@ -20,6 +20,24 @@ export function phonesRepresentSameNumber(targetValue?: string | null, candidate
   return target === candidate || target.endsWith(candidate) || candidate.endsWith(target);
 }
 
+export function verifiedInboundMarketForPhone(value?: string | null) {
+  const digits = normalizePhoneDigits(value);
+  return digits.length === 11 && digits.startsWith('968') ? 'OM' as const : null;
+}
+
+export function buildVerifiedInboundBusinessSeed(event: Pick<NormalizedWhatsAppInbound, 'from' | 'contactName'>) {
+  const digits = normalizePhoneDigits(event.from);
+  const countryCode = verifiedInboundMarketForPhone(digits);
+  if (!countryCode) return null;
+  const contactName = String(event.contactName ?? '').trim().replace(/\s+/g, ' ').slice(0, 180);
+  return {
+    name: contactName || 'WhatsApp inbound contact',
+    countryCode,
+    whatsapp: `+${digits}`,
+    dedupeDomain: `wa-${digits}.whatsapp-inbound.invalid`,
+  };
+}
+
 export function isWhatsAppInboundDuplicateError(code?: string | null) {
   return code === '23505';
 }
@@ -35,10 +53,10 @@ export function mapWhatsAppDeliveryStatus(status: NormalizedWhatsAppStatus['stat
   }
 }
 
-async function resolveLeadByPhone(organizationId: string, from: string) {
+async function resolveExactBusinessByPhone(organizationId: string, from: string) {
   const supabase = serviceClient();
   const target = normalizePhoneDigits(from);
-  if (target.length < 8) return null;
+  if (target.length < 8) return { business: null, ambiguous: false };
   const suffix = target.slice(-8);
 
   const { data: businesses, error: businessError } = await supabase
@@ -52,17 +70,88 @@ async function resolveLeadByPhone(organizationId: string, from: string) {
   const exact = (businesses ?? []).filter(row =>
     phonesRepresentSameNumber(target, row.phone) || phonesRepresentSameNumber(target, row.whatsapp),
   );
-  if (exact.length !== 1) return null;
+  if (exact.length > 1) return { business: null, ambiguous: true };
+  return { business: exact[0] ?? null, ambiguous: false };
+}
 
-  const { data: leads, error: leadError } = await supabase
+async function getOrCreateLeadForBusiness(organizationId: string, businessId: string) {
+  const supabase = serviceClient();
+  const { data: existing, error: existingError } = await supabase
     .from('leads')
     .select('id,status,agent_mode')
     .eq('organization_id', organizationId)
-    .eq('business_id', exact[0].id)
-    .order('updated_at', { ascending: false })
-    .limit(2);
-  if (leadError) throw new Error(`WhatsApp lead lookup failed: ${leadError.message}`);
-  return leads?.length === 1 ? leads[0] : null;
+    .eq('business_id', businessId)
+    .maybeSingle();
+  if (existingError) throw new Error(`WhatsApp lead lookup failed: ${existingError.message}`);
+  if (existing) return existing;
+
+  const { data: created, error: createError } = await supabase.from('leads').insert({
+    organization_id: organizationId,
+    business_id: businessId,
+    status: 'NEW',
+    agent_mode: 'AUTO',
+    opportunity_score: 0,
+    intent_score: 0,
+    score_reasons: ['Verified customer-initiated WhatsApp inbound'],
+  }).select('id,status,agent_mode').single();
+  if (!createError) return created;
+  if (!isWhatsAppInboundDuplicateError(createError.code)) {
+    throw new Error(`WhatsApp inbound lead create failed: ${createError.message}`);
+  }
+
+  const { data: raced, error: racedError } = await supabase
+    .from('leads')
+    .select('id,status,agent_mode')
+    .eq('organization_id', organizationId)
+    .eq('business_id', businessId)
+    .maybeSingle();
+  if (racedError || !raced) throw new Error(`WhatsApp inbound lead race recovery failed: ${racedError?.message ?? 'lead unavailable'}`);
+  return raced;
+}
+
+async function resolveOrCreateVerifiedInboundLead(organizationId: string, event: NormalizedWhatsAppInbound) {
+  const supabase = serviceClient();
+  const resolved = await resolveExactBusinessByPhone(organizationId, event.from);
+  if (resolved.ambiguous) return null;
+  if (resolved.business) return getOrCreateLeadForBusiness(organizationId, String(resolved.business.id));
+
+  const seed = buildVerifiedInboundBusinessSeed(event);
+  if (!seed) return null;
+
+  const { data: existingPlaceholder, error: placeholderError } = await supabase
+    .from('businesses')
+    .select('id')
+    .eq('organization_id', organizationId)
+    .eq('dedupe_domain', seed.dedupeDomain)
+    .maybeSingle();
+  if (placeholderError) throw new Error(`WhatsApp inbound placeholder lookup failed: ${placeholderError.message}`);
+
+  let businessId = existingPlaceholder?.id ? String(existingPlaceholder.id) : null;
+  if (!businessId) {
+    const { data: created, error: createError } = await supabase.from('businesses').insert({
+      organization_id: organizationId,
+      name: seed.name,
+      country_code: seed.countryCode,
+      whatsapp: seed.whatsapp,
+      dedupe_domain: seed.dedupeDomain,
+    }).select('id').single();
+    if (!createError) {
+      businessId = String(created.id);
+    } else if (isWhatsAppInboundDuplicateError(createError.code)) {
+      const { data: raced, error: racedError } = await supabase
+        .from('businesses')
+        .select('id')
+        .eq('organization_id', organizationId)
+        .eq('dedupe_domain', seed.dedupeDomain)
+        .maybeSingle();
+      if (racedError || !raced) throw new Error(`WhatsApp inbound business race recovery failed: ${racedError?.message ?? 'business unavailable'}`);
+      businessId = String(raced.id);
+    } else {
+      throw new Error(`WhatsApp inbound business create failed: ${createError.message}`);
+    }
+  }
+
+  return getOrCreateLeadForBusiness(organizationId, businessId);
 }
 
 async function getOrCreateConversation(organizationId: string, leadId: string, receivedAt: string) {
@@ -96,13 +185,22 @@ async function getOrCreateConversation(organizationId: string, leadId: string, r
 
 export async function applyWhatsAppInboundLifecycle(organizationId: string, event: NormalizedWhatsAppInbound) {
   const supabase = serviceClient();
-  const lead = await resolveLeadByPhone(organizationId, event.from);
+  const lead = await resolveOrCreateVerifiedInboundLead(organizationId, event);
   if (!lead) return { linked: false as const };
 
   const receivedAt = event.timestamp ? new Date(Number(event.timestamp) * 1000).toISOString() : new Date().toISOString();
   const conversation = await getOrCreateConversation(organizationId, lead.id, receivedAt);
   const body = event.text?.trim() || (event.type === 'audio' ? '[WhatsApp voice message]' : `[WhatsApp ${event.type} message]`);
   const idempotencyKey = `whatsapp:inbound:${event.providerMessageId}`;
+
+  const { error: eventLinkError } = await supabase.from('whatsapp_events').update({
+    lead_id: lead.id,
+    conversation_id: conversation.id,
+  }).eq('organization_id', organizationId)
+    .eq('provider_message_id', event.providerMessageId)
+    .eq('direction', 'INBOUND')
+    .eq('event_type', event.type.toUpperCase());
+  if (eventLinkError) throw new Error(`WhatsApp event linkage failed: ${eventLinkError.message}`);
 
   const { error: messageError } = await supabase.from('outreach_messages').insert({
     organization_id: organizationId,
