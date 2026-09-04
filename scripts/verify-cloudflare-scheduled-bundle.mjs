@@ -50,7 +50,7 @@ function collect(file) {
   chunks.push(source);
 
   const importPatterns = [
-    /\b(?:import|export)\s+(?:[^'";]*?\s+from\s+)?['"]([^'"]+)['"]/g,
+    /\b(?:import|export)\s*(?:[^'";]*?\bfrom\s*)?['"]([^'"]+)['"]/g,
     /\bimport\(\s*['"]([^'"]+)['"]\s*\)/g,
   ];
   for (const pattern of importPatterns) {
