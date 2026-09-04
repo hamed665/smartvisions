@@ -14,6 +14,17 @@ type TickResponse = {
   agentTasks?: AgentTask[];
 };
 
+type ScheduledMetrics = {
+  discovered: number;
+  processed: number;
+  safetyBlocked: number;
+  idempotent: number;
+  throttled: number;
+  failed: number;
+  reconciliationAttention: number;
+  tickStatus: number;
+};
+
 function organizationIdFromTask(task: AgentTask) {
   const context = task.payload.context;
   if (!context || typeof context !== 'object' || Array.isArray(context)) return null;
@@ -33,6 +44,27 @@ async function internalPost(env: WorkerEnv, path: string, body: unknown) {
   }));
 }
 
+async function recordScheduledHeartbeat(
+  env: WorkerEnv,
+  controller: ScheduledController | undefined,
+  phase: 'START' | 'RESULT',
+  metrics?: ScheduledMetrics,
+) {
+  const cron = typeof controller?.cron === 'string' ? controller.cron.trim() : '';
+  if (!cron) return;
+  try {
+    await internalPost(env, '/api/operations/heartbeat', {
+      source: 'CLOUDFLARE_CRON',
+      phase,
+      cron,
+      scheduledTime: controller?.scheduledTime,
+      metrics,
+    });
+  } catch {
+    // Observability must never block or retry operational work.
+  }
+}
+
 async function reportFailure(env: WorkerEnv, task: AgentTask, detail: string) {
   const organizationId = organizationIdFromTask(task);
   if (!organizationId) return;
@@ -50,27 +82,52 @@ async function reportFailure(env: WorkerEnv, task: AgentTask, detail: string) {
   }
 }
 
-export async function runScheduledOperations(env: WorkerEnv) {
+export async function runScheduledOperations(env: WorkerEnv, controller?: ScheduledController) {
+  await recordScheduledHeartbeat(env, controller, 'START');
+
   const tickResponse = await internalPost(env, '/api/operations/tick', {});
-  if (!tickResponse.ok) throw new Error(`Operational tick failed with HTTP ${tickResponse.status}`);
+  const metrics: ScheduledMetrics = {
+    discovered: 0,
+    processed: 0,
+    safetyBlocked: 0,
+    idempotent: 0,
+    throttled: 0,
+    failed: 0,
+    reconciliationAttention: 0,
+    tickStatus: tickResponse.status,
+  };
+  if (!tickResponse.ok) {
+    metrics.failed += 1;
+    await recordScheduledHeartbeat(env, controller, 'RESULT', metrics);
+    throw new Error(`Operational tick failed with HTTP ${tickResponse.status}`);
+  }
+
   const tick = await tickResponse.json() as TickResponse;
   const tasks = Array.isArray(tick.agentTasks) ? tick.agentTasks.slice(0, 5) : [];
+  metrics.discovered = tasks.length;
 
   for (const task of tasks) {
     const organizationId = organizationIdFromTask(task);
-    if (!organizationId) continue;
+    if (!organizationId) {
+      metrics.failed += 1;
+      continue;
+    }
 
     let guard: Response;
     try {
       guard = await internalPost(env, '/api/operations/channel-guard', { organizationId, channel: task.channel });
     } catch (error) {
+      metrics.failed += 1;
       await reportFailure(env, task, error instanceof Error ? error.message : 'Channel guard invocation failed');
       continue;
     }
     if (!guard.ok) {
       if (guard.status >= 500) {
+        metrics.failed += 1;
         const detail = await guard.text().catch(() => 'Channel guard unavailable');
         await reportFailure(env, task, `Channel guard HTTP ${guard.status}: ${detail}`);
+      } else {
+        metrics.safetyBlocked += 1;
       }
       continue;
     }
@@ -79,6 +136,7 @@ export async function runScheduledOperations(env: WorkerEnv) {
     try {
       response = await internalPost(env, '/api/ai/process-inbound', task.payload);
     } catch (error) {
+      metrics.failed += 1;
       await reportFailure(env, task, error instanceof Error ? error.message : 'Agent invocation failed');
       continue;
     }
@@ -86,19 +144,25 @@ export async function runScheduledOperations(env: WorkerEnv) {
     if (!response.ok) {
       // 409 is an idempotency race; 423 is a deliberate safety pause; 429 is Cost Guard/quota.
       // None should trigger automatic retry or duplicate paid work.
-      if (![409, 423, 429].includes(response.status)) {
+      if (response.status === 409) metrics.idempotent += 1;
+      else if (response.status === 423) metrics.safetyBlocked += 1;
+      else if (response.status === 429) metrics.throttled += 1;
+      else {
+        metrics.failed += 1;
         const detail = await response.text().catch(() => 'Agent processing failed');
         await reportFailure(env, task, `HTTP ${response.status}: ${detail}`);
       }
       continue;
     }
 
+    metrics.processed += 1;
     if (task.channel === 'EMAIL') {
       const reconciliation = await internalPost(env, '/api/operations/email-shadow', {
         organizationId,
         requestKey: task.requestKey,
       });
       if (reconciliation.status === 202 || reconciliation.status >= 500) {
+        metrics.reconciliationAttention += 1;
         const detail = await reconciliation.text().catch(() => 'Email Shadow reconciliation requires attention');
         try {
           await internalPost(env, '/api/operations/report', {
@@ -116,14 +180,15 @@ export async function runScheduledOperations(env: WorkerEnv) {
     }
   }
 
-  return { discovered: tasks.length };
+  await recordScheduledHeartbeat(env, controller, 'RESULT', metrics);
+  return metrics;
 }
 
 export default {
   fetch(request: Request) {
     return handler.fetch(request);
   },
-  scheduled(_controller: ScheduledController, env: WorkerEnv, ctx: ExecutionContextLike) {
-    ctx.waitUntil(runScheduledOperations(env));
+  scheduled(controller: ScheduledController, env: WorkerEnv, ctx: ExecutionContextLike) {
+    ctx.waitUntil(runScheduledOperations(env, controller));
   },
 };
