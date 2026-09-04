@@ -6,6 +6,11 @@ const SESSION_BYPASS_PATHS = new Set([
   '/api/whatsapp/webhook',
   '/api/ai/process-inbound',
   '/api/outreach/approved-send',
+  '/api/operations/channel-guard',
+  '/api/operations/email-shadow',
+  '/api/operations/heartbeat',
+  '/api/operations/report',
+  '/api/operations/tick',
   '/api/telegram/webhook',
   '/api/telegram/notify',
 ]);
