@@ -132,15 +132,15 @@ export async function applyWhatsAppInboundLifecycle(organizationId: string, even
     return { linked: true as const, leadId: lead.id, conversationId: conversation.id, agentMode: 'PAUSED' as const, doNotContact: true as const };
   }
 
-  await persistCustomerReplyConversationState({
-    supabase,
-    organizationId,
-    leadId: lead.id,
-    conversationId: conversation.id,
-  });
-
   const terminal = new Set(['WON','LOST','DO_NOT_CONTACT','HUMAN']);
   if (!terminal.has(String(lead.status))) {
+    await persistCustomerReplyConversationState({
+      supabase,
+      organizationId,
+      leadId: lead.id,
+      conversationId: conversation.id,
+    });
+
     const { error } = await supabase.from('leads').update({ status: 'REPLIED', updated_at: new Date().toISOString() }).eq('organization_id', organizationId).eq('id', lead.id);
     if (error) throw new Error(`WhatsApp lead lifecycle update failed: ${error.message}`);
   }
