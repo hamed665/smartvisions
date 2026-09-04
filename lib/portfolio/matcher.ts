@@ -5,6 +5,7 @@ export type PortfolioItem = {
   industry?: string;
   countryCode?: string;
   approved: boolean;
+  publicUrl?: string;
   tags?: string[];
 };
 
