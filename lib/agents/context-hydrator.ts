@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AgentContext, MarketLocaleStyleSnapshot } from './contracts';
 import { resolveCanonicalLeadQuote } from './canonical-quote';
 import { hydrateAgentContext as hydrateCore, type HydratedRuntimeEvidence } from './context-hydrator-core';
+import { resolveReplyLanguage } from '@/lib/outreach/locale';
 
 export type { HydratedRuntimeEvidence } from './context-hydrator-core';
 
@@ -109,12 +110,21 @@ export async function hydrateAgentContext(input: {
     maxReplyWords: data.max_reply_words == null ? undefined : Number(data.max_reply_words),
   };
 
+  const replyLanguage = resolveReplyLanguage({
+    message: hydrated.context.message,
+    primaryLocale: marketLocaleStyle.primaryLocale,
+    fallbackLocale: marketLocaleStyle.fallbackLocale,
+    preferredLanguage: hydrated.context.language,
+  });
+  const replyDialect = hydrated.context.dialect
+    || (replyLanguage.toLowerCase().startsWith('ar') ? marketLocaleStyle.dialect : undefined);
+
   return {
     ...hydrated,
     context: {
       ...hydrated.context,
-      language: hydrated.context.language || marketLocaleStyle.primaryLocale,
-      dialect: hydrated.context.dialect || marketLocaleStyle.dialect,
+      language: replyLanguage,
+      dialect: replyDialect,
       marketLocaleStyle,
       knowledgeContext: [
         ...(hydrated.context.knowledgeContext ?? []),
