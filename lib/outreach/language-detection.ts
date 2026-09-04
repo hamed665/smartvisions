@@ -28,12 +28,9 @@ const hindiSignals = new Set([
   'वेबसाइट', 'कीमत', 'सेवा', 'सेवाएं', 'व्यवसाय', 'मदद',
 ]);
 
-function words(value: string) {
-  return value.toLowerCase().match(/\p{L}+/gu) ?? [];
-}
-
 function signalHits(value: string, lexicon: Set<string>) {
-  return words(value).reduce((count, token) => count + (lexicon.has(token) ? 1 : 0), 0);
+  const normalized = value.toLowerCase().normalize('NFC');
+  return [...lexicon].reduce((count, signal) => count + (normalized.includes(signal.normalize('NFC')) ? 1 : 0), 0);
 }
 
 function latinEnglishConfidence(value: string) {
