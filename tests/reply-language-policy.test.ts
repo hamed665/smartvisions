@@ -7,28 +7,45 @@ import {
 } from '@/lib/outreach/locale';
 
 describe('customer reply language policy', () => {
-  it('recognizes short English customer turns without paying for language detection', () => {
+  it('recognizes supported customer languages without a provider call', () => {
     expect(detectHighConfidenceMessageLanguage('Hi')).toBe('en');
-    expect(detectHighConfidenceMessageLanguage('Can you show me your website service?')).toBe('en');
-    expect(detectHighConfidenceMessageLanguage('restaurant')).toBeUndefined();
-    expect(detectHighConfidenceMessageLanguage('مرحبا')).toBeUndefined();
+    expect(detectHighConfidenceMessageLanguage('مرحبا')).toBe('ar');
+    expect(detectHighConfidenceMessageLanguage('قیمت چنده؟')).toBe('fa');
+    expect(detectHighConfidenceMessageLanguage('آپ کیسے ہیں؟')).toBe('ur');
+    expect(detectHighConfidenceMessageLanguage('वेबसाइट की कीमत क्या है?')).toBe('hi');
   });
 
-  it('lets the current English message override an Oman Arabic market default', () => {
+  it('lets the current customer turn override a stale Oman language preference', () => {
     expect(resolveReplyLanguage({
       message: 'Hi',
       primaryLocale: 'ar-OM',
       fallbackLocale: 'en',
       preferredLanguage: 'ar-OM',
     })).toBe('en');
-  });
-
-  it('keeps Oman market language only as a fallback when current language is not strongly known', () => {
     expect(resolveReplyLanguage({
-      message: 'مرحبا',
+      message: 'قیمت چنده؟',
       primaryLocale: 'ar-OM',
       fallbackLocale: 'en',
-    })).toBe('ar-OM');
+      preferredLanguage: 'en',
+    })).toBe('fa');
+  });
+
+  it('does not force an unknown substantive language to the market default', () => {
+    expect(resolveReplyLanguage({
+      message: 'Hola, necesito ayuda con mi negocio',
+      primaryLocale: 'ar-OM',
+      fallbackLocale: 'en',
+      preferredLanguage: 'ar-OM',
+    })).toBe('und');
+  });
+
+  it('uses the remembered customer language only for language-neutral turns', () => {
+    expect(resolveReplyLanguage({
+      message: '👍',
+      primaryLocale: 'ar-OM',
+      fallbackLocale: 'en',
+      preferredLanguage: 'es',
+    })).toBe('es');
   });
 
   it('makes deterministic culture routing answer English Hi in English, not Omani Arabic', async () => {
@@ -49,16 +66,41 @@ describe('customer reply language policy', () => {
     expect(result.data).toMatchObject({ locale: 'en', dialect: null });
   });
 
-  it('blocks an Arabic draft for a high-confidence English customer turn', () => {
+  it('keeps Arabic Oman replies natural when the customer writes Arabic', async () => {
+    const result = await executeAgent('culture_locale', {
+      message: 'مرحبا، ممكن أعرف عن خدماتكم؟',
+      language: 'en',
+      marketLocaleStyle: {
+        countryCode: 'OM',
+        primaryLocale: 'ar-OM',
+        fallbackLocale: 'en',
+        dialect: 'omani',
+        toneProfile: 'warm_short_business',
+      },
+    });
+    expect(result.data).toMatchObject({ locale: 'ar-OM', dialect: 'omani' });
+  });
+
+  it('blocks obvious or unresolved reply-language mismatches before delivery', () => {
     expect(replyMatchesHighConfidenceMessageLanguage({
       message: 'Hi',
       replyLanguage: 'ar-OM',
       replyText: 'مرحباً! كيف نقدر نساعدك؟',
     })).toBe(false);
     expect(replyMatchesHighConfidenceMessageLanguage({
-      message: 'Hi',
+      message: 'قیمت چنده؟',
       replyLanguage: 'en',
-      replyText: 'Hi! How can we help?',
+      replyText: 'The price depends on the service.',
+    })).toBe(false);
+    expect(replyMatchesHighConfidenceMessageLanguage({
+      message: 'Hola, necesito ayuda con mi negocio',
+      replyLanguage: 'und',
+      replyText: 'I can help with that.',
+    })).toBe(false);
+    expect(replyMatchesHighConfidenceMessageLanguage({
+      message: 'Hola, necesito ayuda con mi negocio',
+      replyLanguage: 'es',
+      replyText: 'Claro, cuéntame qué necesitas.',
     })).toBe(true);
   });
 });
