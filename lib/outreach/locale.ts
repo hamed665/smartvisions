@@ -63,15 +63,8 @@ export function resolveReplyLanguage(input: {
     return normalizeDetectedLanguage(detected.language, input.marketCode, input.primaryLocale);
   }
 
-  // A substantive message whose exact language is not deterministically known must
-  // not inherit an old market or conversation language. The existing Secretary LLM
-  // sees the raw customer turn and is required to mirror that language without an
-  // extra provider call. `und` explicitly means "detect from this turn".
   if (hasSubstantiveLanguageSignal(input.message)) return 'und';
 
-  // Emoji/link/number/name-only turns carry no new language evidence. In that case
-  // only the last clear customer language may be reused. Market is never an inbound
-  // reply-language default.
   const remembered = String(input.preferredLanguage ?? '').trim();
   return remembered || 'und';
 }
@@ -99,6 +92,8 @@ export function replyMatchesHighConfidenceMessageLanguage(input: {
   const detected = detectLanguageZeroCost(input.message);
   const replyLanguage = String(input.replyLanguage ?? '').toLowerCase();
 
+  if (hasSubstantiveLanguageSignal(input.message) && replyLanguage === 'und') return false;
+
   if (detected.language !== 'unknown' && detected.language !== 'mixed' && detected.confidence >= 0.75) {
     const expected = detected.language;
     if (expected === 'ar') {
@@ -108,10 +103,6 @@ export function replyMatchesHighConfidenceMessageLanguage(input: {
     }
   }
 
-  // Script mismatch is a cheap final guard for languages the zero-cost detector
-  // cannot name precisely (for example Spanish/French on Latin script). It cannot
-  // prove Spanish vs English, but it prevents a Latin customer turn from silently
-  // falling back to Arabic, which was the Production failure we are eliminating.
   const messageScript = dominantScript(input.message);
   const replyScript = dominantScript(input.replyText);
   if (!['NONE', 'OTHER'].includes(messageScript) && !['NONE', 'OTHER'].includes(replyScript) && messageScript !== replyScript) return false;
