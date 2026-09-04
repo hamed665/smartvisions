@@ -1,5 +1,6 @@
 import type { AgentContext, AgentName, AgentResult, CommercialDecision, ReplyDraft } from './contracts';
 import { getLocaleProfile, chooseLanguage } from '@/lib/outreach/locale';
+import { decidePreviewStrategy, previewIntent } from './preview-policy';
 
 const lower = (value: string) => value.toLowerCase();
 const VALID_ACTIONS = new Set<CommercialDecision['action']>(['ANSWER','ASK','OFFER','SHOW_PREVIEW','MEETING','WAIT','HUMAN']);
@@ -17,14 +18,15 @@ export async function executeAgent(agent: AgentName, context: AgentContext): Pro
   const text = lower(context.message);
   const evidence = context.verifiedEvidence ?? [];
   const hasKnowledge = configuredKnowledgeAvailable(context);
+  const preview = decidePreviewStrategy({ message: context.message, approvedPortfolio: context.approvedPortfolio });
+  const previewSignals = previewIntent(context.message);
 
   switch (agent) {
     case 'intent_discovery': {
       const askedPrice = /(price|cost|how much|discount|best price|السعر|كم|تكلفة|خصم|تخفيض|آخر سعر)/i.test(text);
       const askedMeeting = /(meeting|call|zoom|consultation|consult|مكالمة|اجتماع|استشارة)/i.test(text);
       const askedPayment = /(payment|pay|invoice|deposit|contract|دفع|فاتورة|عربون|عقد)/i.test(text);
-      const askedPreview = /(preview|mockup|sample|example|معاينة|نموذج|مثال)/i.test(text);
-      return { agent, confidence: 0.92, summary: 'Detected explicit commercial intent signals.', data: { askedPrice, askedMeeting, askedPayment, askedPreview }, evidence: [], blockers: [] };
+      return { agent, confidence: 0.92, summary: 'Detected explicit commercial intent signals.', data: { askedPrice, askedMeeting, askedPayment, askedPreview: previewSignals.customPreviewRequested, askedPortfolio: previewSignals.portfolioRequested }, evidence: [], blockers: [] };
     }
     case 'conversation_psychology': {
       const priceObjection = /(expensive|too much|discount|better price|cheaper|غالي|مرتف|خصم|تخفيض|سعر أفضل|أرخص)/i.test(text);
@@ -45,10 +47,19 @@ export async function executeAgent(agent: AgentName, context: AgentContext): Pro
       const profile = getLocaleProfile(marketCode);
       return { agent, confidence: 0.95, summary: 'Localized language, dialect and tone selected.', data: { locale: chooseLanguage({ marketCode, preferredLanguage: context.language }), dialect: context.dialect ?? profile.dialect, tone: profile.tone }, evidence, blockers: [] };
     }
-    case 'sales_marketing': {
-      const wantsExample = /(preview|sample|example|mockup|معاينة|نموذج|مثال)/i.test(text);
-      return { agent, confidence: 0.84, summary: 'Recommended the lowest-pressure next commercial action.', data: { nextAction: wantsExample ? 'SHOW_PREVIEW' : (context.intentScore ?? 0) >= 70 ? 'HUMAN' : 'ANSWER', scopeReductionPreferred: /(expensive|discount|cheaper|غالي|خصم|أرخص)/i.test(text) }, evidence, blockers: [] };
-    }
+    case 'sales_marketing':
+      return {
+        agent,
+        confidence: 0.84,
+        summary: 'Recommended the lowest-pressure next commercial action.',
+        data: {
+          nextAction: preview.strategy === 'CUSTOM_PREVIEW' ? 'SHOW_PREVIEW' : (context.intentScore ?? 0) >= 70 ? 'HUMAN' : 'ANSWER',
+          showPortfolio: preview.strategy === 'SHOW_PORTFOLIO',
+          scopeReductionPreferred: /(expensive|discount|cheaper|غالي|خصم|أرخص)/i.test(text),
+        },
+        evidence,
+        blockers: [],
+      };
     case 'evidence_checker': {
       const priceVerified = context.quotedPrice != null || context.serviceKnowledge?.some((service) => service.marketPrice != null) === true;
       return {
@@ -61,7 +72,20 @@ export async function executeAgent(agent: AgentName, context: AgentContext): Pro
       };
     }
     case 'preview_director':
-      return { agent, confidence: context.businessName && context.industry ? 0.9 : 0.6, summary: 'Preview eligibility and vertical direction assessed.', data: { eligible: !!context.businessName && ((context.intentScore ?? 0) >= 60 || /(preview|sample|example|معاينة|نموذج)/i.test(text)), industry: context.industry ?? 'general' }, evidence, blockers: context.businessName ? [] : ['BUSINESS_NAME_REQUIRED'] };
+      return {
+        agent,
+        confidence: context.businessName ? 0.92 : 0.68,
+        summary: 'Portfolio-first preview policy assessed deterministically.',
+        data: {
+          showPortfolio: preview.strategy === 'SHOW_PORTFOLIO',
+          portfolioExamples: preview.approvedExamples,
+          customPreviewRequested: previewSignals.customPreviewRequested,
+          eligible: preview.strategy === 'CUSTOM_PREVIEW' && Boolean(context.businessName),
+          industry: context.industry ?? 'general',
+        },
+        evidence,
+        blockers: preview.strategy === 'CUSTOM_PREVIEW' && !context.businessName ? ['BUSINESS_NAME_REQUIRED'] : [],
+      };
     case 'decision_orchestrator': {
       const specialistResults = context.collaboration?.specialistResults ?? [];
       const sales = specialistResults.find((item) => item.agent === 'sales_marketing')?.data as { nextAction?: unknown } | undefined;
@@ -93,7 +117,9 @@ export function decideCommercialAction(context: AgentContext, results: AgentResu
   const lowConfidence = results.some((result) => result.confidence < 0.65 && result.blockers.length > 0);
   const orchestratedAction = normalizedAction(orchestrator?.recommended_action ?? orchestrator?.recommendedAction);
   const salesAction = normalizedAction(sales?.nextAction);
-  const action = lowConfidence ? 'HUMAN' : orchestratedAction ?? salesAction ?? (intent?.askedMeeting ? 'MEETING' : 'ANSWER');
+  const proposedAction = lowConfidence ? 'HUMAN' : orchestratedAction ?? salesAction ?? (intent?.askedMeeting ? 'MEETING' : 'ANSWER');
+  const preview = decidePreviewStrategy({ message: context.message, approvedPortfolio: context.approvedPortfolio });
+  const action = proposedAction === 'SHOW_PREVIEW' && preview.strategy !== 'CUSTOM_PREVIEW' ? 'ANSWER' : proposedAction;
 
   return {
     action,
@@ -102,7 +128,11 @@ export function decideCommercialAction(context: AgentContext, results: AgentResu
     explainValue: true,
     askLowPressureCta: action !== 'WAIT' && action !== 'HUMAN',
     requiresHuman: lowConfidence || action === 'HUMAN' || (context.intentScore ?? 0) >= 70 || !!intent?.askedPayment || !!intent?.askedMeeting,
-    reasons: lowConfidence ? ['CRITICAL_EVIDENCE_OR_CONFIDENCE_GAP'] : ['SPECIALIST_CONSENSUS'],
+    reasons: lowConfidence
+      ? ['CRITICAL_EVIDENCE_OR_CONFIDENCE_GAP']
+      : proposedAction === 'SHOW_PREVIEW' && action !== 'SHOW_PREVIEW'
+        ? ['PORTFOLIO_BEFORE_FREE_CUSTOM_WORK']
+        : ['SPECIALIST_CONSENSUS'],
   };
 }
 
@@ -120,7 +150,7 @@ export function secretaryCompose(context: AgentContext, decision: CommercialDeci
   }
 
   const asksPrice = /(price|cost|how much|السعر|كم|تكلفة)/i.test(context.message);
-  const asksPreview = /(preview|sample|example|mockup|معاينة|نموذج|مثال)/i.test(context.message);
+  const preview = decidePreviewStrategy({ message: context.message, approvedPortfolio: context.approvedPortfolio });
   const simpleThanks = /^(thanks|thank you|thx|شكرا|شكراً|مشكور|مشكورة|تسلم|تسلمين)[.!\s]*$/i.test(context.message.trim());
 
   let text: string;
@@ -128,8 +158,10 @@ export function secretaryCompose(context: AgentContext, decision: CommercialDeci
     text = /[\u0600-\u06FF]/.test(context.message) ? 'العفو، حاضرين.' : 'You’re welcome.';
   } else if (asksPrice && context.quotedPrice != null && context.quotedCurrency) {
     text = `The configured price is ${context.quotedPrice} ${context.quotedCurrency}.`;
-  } else if (asksPreview && decision.action === 'SHOW_PREVIEW') {
-    text = 'I can show you a tailored concept based on the business, so you can judge the direction before discussing a full build.';
+  } else if (preview.strategy === 'SHOW_PORTFOLIO') {
+    text = `Here are relevant approved examples: ${preview.approvedExamples.slice(0, 2).join(' | ')}`;
+  } else if (preview.strategy === 'CUSTOM_PREVIEW' && decision.action === 'SHOW_PREVIEW') {
+    text = 'You asked for a custom preview. I can prepare one based on the verified business context rather than generating a generic concept.';
   } else {
     text = 'I can help with that. I’ll keep the answer focused on what’s relevant to your business.';
   }
@@ -140,7 +172,7 @@ export function secretaryCompose(context: AgentContext, decision: CommercialDeci
 export function checkRelevance(context: AgentContext, draft: ReplyDraft) {
   const asksPrice = /(price|cost|how much|السعر|كم|تكلفة)/i.test(context.message);
   if (asksPrice && !/(price|cost|OMR|AED|SAR|QAR|GBP|USD|ريال|درهم|دولار|£|\$)/i.test(draft.text)) return false;
-  const asksPreview = /(preview|sample|example|mockup|معاينة|نموذج|مثال)/i.test(context.message);
-  if (asksPreview && !/(preview|concept|sample|معاينة|نموذج|تصور)/i.test(draft.text)) return false;
+  const asksExample = /(preview|sample|example|mockup|portfolio|past work|معاينة|نموذج|مثال|نمونه.?کار|أمثلة|امثلة)/i.test(context.message);
+  if (asksExample && !/(preview|concept|sample|example|portfolio|approved|معاينة|نموذج|تصور|مثال|نمونه|أمثلة|امثلة)/i.test(draft.text)) return false;
   return true;
 }
