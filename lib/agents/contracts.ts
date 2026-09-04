@@ -12,20 +12,23 @@ export type AgentName =
 
 export type AgentMode = 'AUTO' | 'PAUSED' | 'HUMAN';
 
-export type ConversationStage =
-  | 'NEW'
-  | 'ACTIVE'
-  | 'CLOSING'
-  | 'WAITING_CUSTOMER'
-  | 'UNANSWERED'
-  | 'HOT'
-  | 'NEEDS_HUMAN'
-  | 'FOLLOW_UP_DUE'
-  | 'WON'
-  | 'LOST'
-  | 'DO_NOT_CONTACT'
-  | 'SPAM'
-  | 'PAUSED';
+export const CONVERSATION_STAGES = [
+  'NEW',
+  'ACTIVE',
+  'CLOSING',
+  'WAITING_CUSTOMER',
+  'UNANSWERED',
+  'HOT',
+  'NEEDS_HUMAN',
+  'FOLLOW_UP_DUE',
+  'WON',
+  'LOST',
+  'DO_NOT_CONTACT',
+  'SPAM',
+  'PAUSED',
+] as const;
+
+export type ConversationStage = typeof CONVERSATION_STAGES[number];
 
 export type AgentResult<T = Record<string, unknown>> = {
   agent: AgentName;
