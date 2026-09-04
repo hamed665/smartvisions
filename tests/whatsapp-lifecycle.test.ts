@@ -39,6 +39,7 @@ describe('WhatsApp lifecycle helpers', () => {
       whatsapp: '+96894974431',
       dedupeDomain: 'wa-96894974431.whatsapp-inbound.invalid',
     });
+    expect(buildVerifiedInboundBusinessSeed({ from: '+968 9497 4431' })?.name).toBe('WhatsApp inbound contact');
     expect(buildVerifiedInboundBusinessSeed({ from: '+971 50 123 4567', contactName: 'UAE Contact' })).toBeNull();
   });
 
