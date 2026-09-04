@@ -15,6 +15,7 @@ const INDUSTRY_RULES: Array<{ segment: IndustrySegment; needles: string[]; angle
 ];
 
 const MARKET_LABELS: Record<string,string> = { OM:'Oman', AE:'UAE', SA:'Saudi Arabia', QA:'Qatar', GB:'UK', UK:'UK', US:'USA' };
+const HIGH_VALUE_WEBSITE_SEGMENTS = new Set<IndustrySegment>(['DENTAL','CLINIC','VET']);
 
 function clean(value: string | null | undefined) { return String(value ?? '').trim(); }
 function lower(value: string | null | undefined) { return clean(value).toLowerCase(); }
@@ -23,6 +24,12 @@ function clamp(value:number){return Math.max(0,Math.min(100,Math.round(value)));
 export function inferIndustrySegment(business: Pick<DiscoveredBusiness,'name'|'category'|'primaryTypeDisplayName'>): IndustrySegment {
   const haystack = `${lower(business.name)} ${lower(business.category)} ${lower(business.primaryTypeDisplayName)}`;
   return INDUSTRY_RULES.find(rule=>rule.needles.some(needle=>haystack.includes(needle)))?.segment ?? 'GENERIC';
+}
+
+function premiumRestaurantWebsiteSignal(business: DiscoveredBusiness, segment: IndustrySegment, reviewCount: number, rating: number) {
+  if (segment !== 'RESTAURANT') return false;
+  const priceLevel = String(business.priceLevel ?? '').toUpperCase();
+  return priceLevel.includes('EXPENSIVE') || priceLevel.includes('HIGH') || (reviewCount >= 100 && rating >= 4.2);
 }
 
 export function buildZeroCostPersonalization(
@@ -41,6 +48,7 @@ export function buildZeroCostPersonalization(
   const rating = Math.max(0, Number(business.rating ?? 0));
   const market = MARKET_LABELS[String(business.countryCode ?? '').toUpperCase()] ?? String(business.countryCode ?? 'Unknown market').toUpperCase();
   const industryRule = INDUSTRY_RULES.find(rule=>rule.segment===segment);
+  const websiteHypothesisStrong = HIGH_VALUE_WEBSITE_SEGMENTS.has(segment) || premiumRestaurantWebsiteSignal(business, segment, reviewCount, rating);
 
   const contactabilityScore = clamp((hasPhone?55:0)+(hasWhatsapp?25:0)+(hasMaps?10:0)+(hasAddress?10:0));
   const needScore = operational ? clamp((websiteClass==='NONE'?75:websiteClass==='CONTACT_ONLY'?68:20)+(region==='MUSCAT_LOCAL'?10:5)+(segment!=='GENERIC'?10:0)) : 0;
@@ -62,14 +70,14 @@ export function buildZeroCostPersonalization(
   ];
 
   const offerBundle:string[]=[];
-  if(websiteClass!=='STANDALONE')offerBundle.push('WEBSITE');
+  if(websiteClass!=='STANDALONE' && websiteHypothesisStrong)offerBundle.push('WEBSITE');
   if(region==='MUSCAT_LOCAL')offerBundle.push('ON_SITE_CONTENT','REELS');
   else offerBundle.push('AI_CONTENT','AI_REELS');
   if(segment==='RESTAURANT'||segment==='BEAUTY'||segment==='SALON'||segment==='DENTAL'||segment==='VET')offerBundle.push('ADS_CREATIVES');
 
   const messageHooks:string[]=[];
-  if(websiteClass==='NONE')messageHooks.push('No standalone website is currently known for this business.');
-  else if(websiteClass==='CONTACT_ONLY')messageHooks.push('The known web presence is a directory/social/contact page rather than a standalone website.');
+  if(websiteClass==='NONE')messageHooks.push('No standalone website is currently known; this is evidence to evaluate, not automatically a website-sales conclusion.');
+  else if(websiteClass==='CONTACT_ONLY')messageHooks.push('The known web presence is a directory/social/contact page rather than a standalone website; service fit still needs evidence.');
   if(region==='MUSCAT_LOCAL')messageHooks.push(`The business is in ${clean(business.city)||'Muscat'}, where on-site filming is serviceable.`);
   else messageHooks.push('Remote website and AI-content delivery is serviceable without on-site filming.');
   if(hasPhone)messageHooks.push('A direct phone contact path is available.');
@@ -83,9 +91,9 @@ export function buildZeroCostPersonalization(
   let cheapestNextAction: CheapestNextAction = 'SKIP';
   let nextActionReason = 'Not enough verified value to spend or contact yet.';
   let nextActionCanSpendMoney = false;
-  if (operational && contactabilityScore >= 55 && websiteClass !== 'STANDALONE' && personalizationPriorityScore >= 65) {
+  if (operational && contactabilityScore >= 55 && websiteClass !== 'STANDALONE' && personalizationPriorityScore >= 65 && websiteHypothesisStrong) {
     cheapestNextAction = 'CONTACT_READY';
-    nextActionReason = 'No standalone website plus a direct contact path is already enough for a personalized website/content approach.';
+    nextActionReason = 'Industry/scale evidence plus the missing standalone website supports a website hypothesis; the missing website alone is not sufficient.';
   } else if (socialCheckEligible && hasInstagram) {
     cheapestNextAction = 'SOCIAL_CHECK';
     nextActionReason = 'A known Instagram presence and strong content fit make a controlled social check useful before AI is used.';
