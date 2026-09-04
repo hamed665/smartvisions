@@ -17,7 +17,7 @@ export async function executeAgent(agent: AgentName, context: AgentContext): Pro
       summary: 'Applied customer language evidence before canonical owner-configured market style.',
       data: {
         locale,
-        dialect: context.dialect ?? (locale.toLowerCase().startsWith('ar') ? style.dialect ?? null : null),
+        dialect: locale.toLowerCase().startsWith('ar') ? context.dialect ?? style.dialect ?? null : null,
         tone: style.toneProfile ?? 'professional',
         dialectIntensity: style.dialectIntensity ?? null,
         maxFirstTouchWords: style.maxFirstTouchWords ?? null,
