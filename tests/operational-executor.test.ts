@@ -26,6 +26,15 @@ describe('operational executor', () => {
     expect(stableAgentRequestKey('email', 'mail_123')).toBe('agent:email:mail_123');
   });
 
+  it('canonically encodes provider ids that are unsafe as raw idempotency keys', () => {
+    const providerId = 'wamid.HBgMOTY4OTk5OTk5OTk5FQIAERgSRTQ2N0FCQ0RFRjEyMzQ1NgA=';
+    const key = stableAgentRequestKey('WHATSAPP', providerId);
+    expect(key).toMatch(/^agent:whatsapp:enc:[a-f0-9]+$/);
+    expect(key).toBe(stableAgentRequestKey('WHATSAPP', providerId));
+    expect(key).not.toContain('=');
+    expect(stableAgentRequestKey('WHATSAPP', 'enc:reserved')).not.toBe('agent:whatsapp:enc:reserved');
+  });
+
   it('reads both lifecycle metadata conventions', () => {
     expect(conversationIdFromMetadata({ conversationId: 'email-c' })).toBe('email-c');
     expect(conversationIdFromMetadata({ conversation_id: 'wa-c' })).toBe('wa-c');
