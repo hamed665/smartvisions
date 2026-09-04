@@ -30,13 +30,53 @@ describe('high-precision service-fit qualification', () => {
     });
   });
 
-  it('promotes a direct-contact no-website business as Tier A website fit', () => {
+  it('can promote an appointment-heavy no-website dental clinic as Tier A website fit', () => {
     const result = buildServiceFitQualification({ business: base, region: 'MUSCAT_LOCAL', websiteClass: 'NONE', enabledServiceIds: catalog });
     expect(result.prospectTier).toBe('A');
     expect(result.primaryOfferFamily).toBe('WEBSITE_BUILD');
     expect(result.primaryServiceId).toBe('business_website');
     expect(result.shouldContact).toBe(true);
     expect(result.cheapestNextAction).toBe('CONTACT_READY');
+  });
+
+  it('does not equate an ordinary Oman restaurant with no website to a website lead', () => {
+    const result = buildServiceFitQualification({
+      business: { ...base, name: 'Neighbourhood Cafe', category: 'restaurant cafe', rating: 4.3, userRatingCount: 40 },
+      region: 'MUSCAT_LOCAL',
+      websiteClass: 'NONE',
+      enabledServiceIds: catalog,
+    });
+    expect(result.primaryOfferFamily).toBe('NONE');
+    expect(result.primaryServiceId).toBeNull();
+    expect(result.shouldContact).toBe(false);
+    expect(result.prospectTier).toBe('SKIP');
+    expect(result.evidenceGaps).toContain('NO_WEBSITE_IS_NOT_SERVICE_EVIDENCE');
+    expect(result.reasons.join(' ')).toContain('NO_RECOMMENDATION');
+  });
+
+  it('allows premium-scale restaurant evidence to justify website fit', () => {
+    const result = buildServiceFitQualification({
+      business: { ...base, name: 'Premium Muscat Dining', category: 'restaurant', priceLevel: 'PRICE_LEVEL_EXPENSIVE', rating: 4.6, userRatingCount: 160 },
+      region: 'MUSCAT_LOCAL',
+      websiteClass: 'NONE',
+      enabledServiceIds: catalog,
+    });
+    expect(result.primaryOfferFamily).toBe('WEBSITE_BUILD');
+    expect(result.primaryServiceId).toBe('business_website');
+    expect(result.prospectTier).toBe('A');
+  });
+
+  it('lets verified weak social content beat a generic website pitch for a visual restaurant', () => {
+    const result = buildServiceFitQualification({
+      business: { ...base, name: 'Visual Cafe', category: 'restaurant cafe', instagram: 'https://instagram.com/visualcafe' },
+      region: 'MUSCAT_LOCAL',
+      websiteClass: 'NONE',
+      socialAssessment: { status: 'VERIFIED', quality: 'WEAK', source: 'OWNER_REVIEW', reasons: ['posting is inconsistent and offers are unclear'] },
+      enabledServiceIds: new Set([...catalog, 'muscat_content_production']),
+    });
+    expect(result.primaryOfferFamily).toBe('MUSCAT_CONTENT_GROWTH');
+    expect(result.primaryServiceId).toBe('muscat_content_production');
+    expect(result.shouldContact).toBe(true);
   });
 
   it('recognizes audited poor SEO but blocks outreach until SEO exists in the canonical service catalog', () => {
