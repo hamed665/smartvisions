@@ -5,6 +5,7 @@ import {
   followupStopReason,
   operationalAlertCodeForBudgetMode,
   operationalAutomationAllowed,
+  operationalChannelAllowed,
   stableAgentRequestKey,
   type AutomationRuleSnapshot,
 } from '@/lib/operations/executor-core';
@@ -35,6 +36,13 @@ describe('operational executor', () => {
     expect(operationalAutomationAllowed({ ...baseSafety, leadAgentMode: 'HUMAN' }).allowed).toBe(false);
     expect(operationalAutomationAllowed({ ...baseSafety, conversationRequiresHuman: true }).allowed).toBe(false);
     expect(operationalAutomationAllowed({ ...baseSafety, agentsPaused: true }).allowed).toBe(false);
+  });
+
+  it('fails closed for channel-specific pause controls before scheduled AI work', () => {
+    expect(operationalChannelAllowed({ channel: 'WHATSAPP', whatsappAiPaused: true }).reason).toBe('WHATSAPP_AI_PAUSED');
+    expect(operationalChannelAllowed({ channel: 'EMAIL', emailPaused: true }).reason).toBe('EMAIL_PAUSED');
+    expect(operationalChannelAllowed({ channel: 'WHATSAPP', emailPaused: true }).allowed).toBe(true);
+    expect(operationalChannelAllowed({ channel: 'EMAIL', whatsappAiPaused: true }).allowed).toBe(true);
   });
 
   it('stops follow-up when the customer replied at or after last outbound', () => {
