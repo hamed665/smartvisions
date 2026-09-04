@@ -3,6 +3,8 @@ import { classifyReply } from '@/lib/outreach/replies';
 
 export type SalesLifecycleSupabase = SupabaseClient;
 
+const replyActivatedStages = new Set(['NEW', 'WAITING_CUSTOMER', 'UNANSWERED', 'FOLLOW_UP_DUE']);
+
 export function isDoNotContactReply(text: string) {
   return classifyReply(text) === 'unsubscribe';
 }
@@ -18,6 +20,53 @@ export function humanHandoffReasons(result: unknown) {
   if (!trace || typeof trace !== 'object') return [] as string[];
   const reasons = (trace as Record<string, unknown>).handoffReasons;
   return Array.isArray(reasons) ? reasons.map(String).filter(Boolean) : [];
+}
+
+export function conversationStageAfterCustomerReply(stage?: string | null) {
+  const current = String(stage ?? '').trim().toUpperCase();
+  if (!current) return 'ACTIVE';
+  return replyActivatedStages.has(current) ? 'ACTIVE' : current;
+}
+
+export async function persistCustomerReplyConversationState(input: {
+  supabase: SalesLifecycleSupabase;
+  organizationId: string;
+  leadId: string;
+  conversationId: string;
+}) {
+  const { data: conversation, error: lookupError } = await input.supabase
+    .from('sales_conversations')
+    .select('stage,agent_mode,requires_human')
+    .eq('organization_id', input.organizationId)
+    .eq('id', input.conversationId)
+    .eq('lead_id', input.leadId)
+    .maybeSingle();
+  if (lookupError) throw new Error(`Conversation reply-state lookup failed: ${lookupError.message}`);
+  if (!conversation) throw new Error('Conversation reply-state target not found');
+
+  const agentMode = String(conversation.agent_mode ?? '').toUpperCase();
+  if (conversation.requires_human || agentMode === 'HUMAN' || agentMode === 'PAUSED') {
+    return { updated: false as const, stage: String(conversation.stage ?? '') };
+  }
+
+  const nextStage = conversationStageAfterCustomerReply(conversation.stage);
+  if (!nextStage || nextStage === String(conversation.stage ?? '').toUpperCase()) {
+    return { updated: false as const, stage: nextStage };
+  }
+
+  const { error: updateError } = await input.supabase
+    .from('sales_conversations')
+    .update({
+      stage: nextStage,
+      stage_reason: 'CUSTOMER_REPLIED',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('organization_id', input.organizationId)
+    .eq('id', input.conversationId)
+    .eq('lead_id', input.leadId);
+  if (updateError) throw new Error(`Conversation reply-state update failed: ${updateError.message}`);
+
+  return { updated: true as const, stage: nextStage };
 }
 
 function normalizePhone(value?: string | null) {
