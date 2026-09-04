@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AgentContext, AgentResult } from '@/lib/agents/contracts';
 import { stageValue } from '@/lib/agents/context-hydrator-core';
 import { buildAgentInputForRuntime } from '@/lib/agents/openai-runtime-core';
-import { decidePreviewStrategy } from '@/lib/agents/preview-policy';
+import { decidePreviewStrategy, draftOffersUnrequestedCustomPreview } from '@/lib/agents/preview-policy';
 import { decideCommercialAction, secretaryCompose } from '@/lib/agents/executor-core';
 
 function result(agent: AgentResult['agent'], data: Record<string, unknown> = {}): AgentResult {
@@ -58,6 +58,17 @@ describe('Agent quality and Growth Brain', () => {
   it('allows custom preview only when the customer explicitly asks for one', () => {
     expect(decidePreviewStrategy({ message: 'I am interested, show me what you can do', approvedPortfolio: [] }).strategy).toBe('NONE');
     expect(decidePreviewStrategy({ message: 'Can you make a custom preview for my clinic?', approvedPortfolio: [] }).strategy).toBe('CUSTOM_PREVIEW');
+  });
+
+  it('blocks a composed custom-preview promise when the customer did not request custom work', () => {
+    expect(draftOffersUnrequestedCustomPreview({
+      customerMessage: 'I am interested in the website service',
+      draft: 'We can prepare a custom preview for your clinic before you decide.',
+    })).toBe(true);
+    expect(draftOffersUnrequestedCustomPreview({
+      customerMessage: 'Can you make a custom preview for my clinic?',
+      draft: 'We can prepare a custom preview for your clinic.',
+    })).toBe(false);
   });
 
   it('overrides an LLM SHOW_PREVIEW suggestion when there is no explicit custom-preview request', () => {
