@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { mapWhatsAppDeliveryStatus, normalizePhoneDigits, phonesRepresentSameNumber } from '@/lib/whatsapp/lifecycle';
+import {
+  buildVerifiedInboundBusinessSeed,
+  mapWhatsAppDeliveryStatus,
+  normalizePhoneDigits,
+  phonesRepresentSameNumber,
+  verifiedInboundMarketForPhone,
+} from '@/lib/whatsapp/lifecycle';
 
 describe('WhatsApp lifecycle helpers', () => {
   it('normalizes international phone formats deterministically', () => {
@@ -17,6 +23,23 @@ describe('WhatsApp lifecycle helpers', () => {
   it('matches the same number with or without a country-code prefix', () => {
     expect(phonesRepresentSameNumber('96894974431', '94974431')).toBe(true);
     expect(phonesRepresentSameNumber('94974431', '+968 9497 4431')).toBe(true);
+  });
+
+  it('admits only canonical Oman Meta sender numbers into the inbound pilot', () => {
+    expect(verifiedInboundMarketForPhone('+968 9497 4431')).toBe('OM');
+    expect(verifiedInboundMarketForPhone('94974431')).toBeNull();
+    expect(verifiedInboundMarketForPhone('+971501234567')).toBeNull();
+    expect(verifiedInboundMarketForPhone('968123')).toBeNull();
+  });
+
+  it('builds a deterministic dedupe identity from a verified Oman inbound without inventing business evidence', () => {
+    expect(buildVerifiedInboundBusinessSeed({ from: '+968 9497 4431', contactName: '  Test   Customer  ' })).toEqual({
+      name: 'Test Customer',
+      countryCode: 'OM',
+      whatsapp: '+96894974431',
+      dedupeDomain: 'wa-96894974431.whatsapp-inbound.invalid',
+    });
+    expect(buildVerifiedInboundBusinessSeed({ from: '+971 50 123 4567', contactName: 'UAE Contact' })).toBeNull();
   });
 
   it('maps Meta delivery states without inventing unknown state semantics', () => {
