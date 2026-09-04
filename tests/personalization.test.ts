@@ -16,7 +16,7 @@ const base = {
 };
 
 describe('zero-cost personalization', () => {
-  it('makes an operational Muscat no-site business contact-ready without paid evidence', () => {
+  it('makes an operational Muscat dental clinic contact-ready without paid evidence', () => {
     const result = buildZeroCostPersonalization(base, 'MUSCAT_LOCAL', 'NONE');
     expect(result.segment).toBe('DENTAL');
     expect(result.personalizationPriorityScore).toBeGreaterThanOrEqual(65);
@@ -26,6 +26,32 @@ describe('zero-cost personalization', () => {
     expect(result.offerBundle).toContain('ON_SITE_CONTENT');
     expect(result.providerCalls).toBe(0);
     expect(result.llmCalls).toBe(0);
+  });
+
+  it('does not make an ordinary Oman restaurant contact-ready from website absence alone', () => {
+    const result = buildZeroCostPersonalization({
+      ...base,
+      name: 'Neighbourhood Cafe',
+      category: 'restaurant cafe',
+      userRatingCount: 35,
+      rating: 4.3,
+    }, 'MUSCAT_LOCAL', 'NONE');
+    expect(result.segment).toBe('RESTAURANT');
+    expect(result.cheapestNextAction).toBe('SKIP');
+    expect(result.offerBundle).not.toContain('WEBSITE');
+  });
+
+  it('allows premium restaurant scale to make website evidence commercially relevant', () => {
+    const result = buildZeroCostPersonalization({
+      ...base,
+      name: 'Premium Dining',
+      category: 'restaurant',
+      priceLevel: 'PRICE_LEVEL_EXPENSIVE',
+      userRatingCount: 140,
+      rating: 4.6,
+    }, 'MUSCAT_LOCAL', 'NONE');
+    expect(result.cheapestNextAction).toBe('CONTACT_READY');
+    expect(result.offerBundle).toContain('WEBSITE');
   });
 
   it('routes a strong standalone-site lead with known Instagram to controlled social evidence', () => {
