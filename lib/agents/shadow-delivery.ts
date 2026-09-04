@@ -85,6 +85,7 @@ export function planAgentWhatsAppShadowApproval(input: {
       replyDialect: operator.replyDialect,
       persianTranslation: operator.persianTranslation,
       persianSummary: operator.persianSummary,
+      rememberCustomerLanguage: true,
     },
   };
 }
