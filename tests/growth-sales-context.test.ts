@@ -28,7 +28,9 @@ describe('growth sales context', () => {
     expect(context.messagePlanInput.recommendedOffer).toBe('WEBSITE + ON_SITE_CONTENT + REELS');
 
     const plan = buildMessagePlan(context.messagePlanInput);
-    expect(plan.language).toBe('ar-OM');
+    expect(plan.language).toBe('en+ar-OM');
+    expect(plan.languages).toEqual(['en', 'ar-OM']);
+    expect(plan.languageMode).toBe('BILINGUAL_FIRST_TOUCH');
     expect(plan.dialect).toBe('omani');
   });
 
