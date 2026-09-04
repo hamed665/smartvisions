@@ -14,10 +14,22 @@ describe('zero-cost language detection', () => {
     expect(detectLanguageZeroCost('वेबसाइट की कीमत क्या है?').language).toBe('hi');
   });
 
-  it('marks Arabic plus English as mixed and falls back safely', () => {
+  it('does not pretend every Latin-script message is English', () => {
+    expect(detectLanguageZeroCost('Hola, necesito ayuda con mi negocio').language).toBe('unknown');
+    expect(detectLanguageZeroCost('Hi, I need help with my business').language).toBe('en');
+  });
+
+  it('does not use the market as an inbound language default for substantive mixed text', () => {
     const detected = detectLanguageZeroCost('ممكن price للموقع؟');
     expect(detected.language).toBe('mixed');
-    expect(resolveReplyLanguage({ text: 'ممكن price للموقع؟', marketPrimaryLanguage: 'ar-OM' }).language).toBe('ar-OM');
+    expect(resolveReplyLanguage({ text: 'ممكن price للموقع؟', marketPrimaryLanguage: 'ar-OM' }).language).toBe('und');
+  });
+
+  it('uses the last clear customer language only for language-neutral turns', () => {
+    expect(resolveReplyLanguage({ text: '👍', lastConversationLanguage: 'es' })).toMatchObject({
+      language: 'es',
+      source: 'CONVERSATION_MEMORY',
+    });
   });
 
   it('respects an explicit language without any provider call', () => {
