@@ -14,13 +14,18 @@ export type AgentMode = 'AUTO' | 'PAUSED' | 'HUMAN';
 
 export type ConversationStage =
   | 'NEW'
-  | 'CONTACTED'
-  | 'REPLIED'
-  | 'INTERESTED'
+  | 'ACTIVE'
+  | 'CLOSING'
+  | 'WAITING_CUSTOMER'
+  | 'UNANSWERED'
   | 'HOT'
-  | 'HUMAN'
+  | 'NEEDS_HUMAN'
+  | 'FOLLOW_UP_DUE'
   | 'WON'
-  | 'LOST';
+  | 'LOST'
+  | 'DO_NOT_CONTACT'
+  | 'SPAM'
+  | 'PAUSED';
 
 export type AgentResult<T = Record<string, unknown>> = {
   agent: AgentName;
