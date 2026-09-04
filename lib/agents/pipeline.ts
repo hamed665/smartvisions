@@ -5,6 +5,7 @@ import { draftOffersUnrequestedCustomPreview } from './preview-policy';
 import { deterministicAgentRuntime, type AgentRuntime } from './runtime';
 import { canAutoSend, evaluateHandoff } from '@/lib/handoff/policy';
 import { resolveSmartVisionsCatalogRecommendation } from '@/lib/whatsapp/catalog';
+import { replyMatchesHighConfidenceMessageLanguage } from '@/lib/outreach/locale';
 
 const inferHandoffSignals = (message: string) => {
   const text = message.toLowerCase();
@@ -89,7 +90,12 @@ export async function processInboundMessage(
 
   const draft = secretaryCompose(context, decision, agentResults);
   const previewPolicyPassed = !draftOffersUnrequestedCustomPreview({ customerMessage: context.message, draft: draft.text });
-  const deterministicRelevance = checkRelevance(context, draft) && previewPolicyPassed;
+  const languagePolicyPassed = replyMatchesHighConfidenceMessageLanguage({
+    message: context.message,
+    replyLanguage: draft.language,
+    replyText: draft.text,
+  });
+  const deterministicRelevance = checkRelevance(context, draft) && previewPolicyPassed && languagePolicyPassed;
 
   const relevanceContext: AgentContext = {
     ...context,
@@ -116,6 +122,7 @@ export async function processInboundMessage(
 
   const guardrails: string[] = [];
   if (!previewPolicyPassed) guardrails.push('UNREQUESTED_CUSTOM_PREVIEW');
+  if (!languagePolicyPassed) guardrails.push('REPLY_LANGUAGE_MISMATCH');
   if (!relevancePassed) guardrails.push('RELEVANCE_GATE_FAILED');
   if (!humanStyle.passed) guardrails.push('HUMAN_STYLE_GATE_FAILED', ...humanStyle.reasons);
   if (!routedAgents.includes('secretary')) guardrails.push('SECRETARY_DISABLED');
