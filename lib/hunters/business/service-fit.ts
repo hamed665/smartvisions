@@ -42,6 +42,7 @@ type ServiceFit = {
 };
 
 const VISUAL_SEGMENTS = new Set<IndustrySegment>(['DENTAL','BEAUTY','RESTAURANT','SALON','VET','CLINIC']);
+const HIGH_VALUE_WEBSITE_SEGMENTS = new Set<IndustrySegment>(['DENTAL','CLINIC','VET']);
 const clean = (value: unknown) => String(value ?? '').trim();
 const upper = (value: unknown) => clean(value).toUpperCase();
 const clamp = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
@@ -94,6 +95,14 @@ function knownInstagram(business: DiscoveredBusiness) {
   if (explicit) return explicit;
   const website = clean(business.officialWebsite);
   return /(?:^|\.)instagram\.com/i.test(website.replace(/^https?:\/\//i, '')) ? website : '';
+}
+
+function premiumWebsiteSignal(segment: IndustrySegment, business: DiscoveredBusiness, activityScore: number) {
+  if (segment !== 'RESTAURANT') return false;
+  const priceLevel = upper(business.priceLevel);
+  const premiumPrice = priceLevel.includes('EXPENSIVE') || priceLevel.includes('HIGH');
+  const scaledDemand = Number(business.userRatingCount ?? 0) >= 100 && Number(business.rating ?? 0) >= 4.2;
+  return activityScore >= 80 && (premiumPrice || scaledDemand);
 }
 
 function serviceIfEnabled(enabled: ReadonlySet<string>, id: string) {
@@ -168,16 +177,33 @@ export function buildServiceFitQualification(input: {
   }
 
   if (websiteClass === 'NONE' || websiteClass === 'CONTACT_ONLY') {
-    fits.push(fit(
-      enabled,
-      'WEBSITE_BUILD',
-      websiteClass === 'NONE' ? 98 : 94,
-      96,
-      'business_website',
-      [websiteClass === 'NONE'
-        ? 'No standalone website is known, creating a direct website-design need.'
-        : 'Only a social/contact/directory presence is known; no standalone website is present.'],
-    ));
+    if (HIGH_VALUE_WEBSITE_SEGMENTS.has(segment)) {
+      fits.push(fit(
+        enabled,
+        'WEBSITE_BUILD',
+        websiteClass === 'NONE' ? 96 : 91,
+        93,
+        'business_website',
+        [
+          `${segment} is an appointment/trust-heavy segment where a standalone website can materially improve service clarity and conversion.`,
+          websiteClass === 'NONE' ? 'No standalone website is currently known.' : 'Only a contact/social/directory presence is currently known.',
+        ],
+      ));
+    } else if (premiumWebsiteSignal(segment, business, activityScore)) {
+      fits.push(fit(
+        enabled,
+        'WEBSITE_BUILD',
+        websiteClass === 'NONE' ? 88 : 84,
+        84,
+        'business_website',
+        [
+          'Premium/scale signals and strong business activity make a standalone website a justified growth hypothesis.',
+          'Website absence is supporting evidence, not the sole reason for the recommendation.',
+        ],
+      ));
+    } else {
+      globalGaps.push('NO_WEBSITE_IS_NOT_SERVICE_EVIDENCE');
+    }
   } else if (!audit) {
     globalGaps.push('WEBSITE_AUDIT_REQUIRED');
   } else {
@@ -281,8 +307,8 @@ export function buildServiceFitQualification(input: {
       `Business activity evidence score: ${activityScore}/100.`,
     ]
     : [
-      'No service has enough verified evidence for a high-confidence pitch yet.',
-      contact.direct ? 'A direct contact path exists, but evidence is insufficient.' : 'No direct contact path is available.',
+      'NO_RECOMMENDATION: no service has enough verified evidence for a high-confidence pitch yet.',
+      contact.direct ? 'A direct contact path exists, but contactability alone is not a reason to sell.' : 'No direct contact path is available.',
     ];
   const evidenceGaps = [...new Set([...globalGaps, ...(primary?.evidenceGaps ?? [])])];
 
