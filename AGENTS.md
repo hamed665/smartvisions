@@ -4,152 +4,199 @@
 
 ## Source of truth
 
-Continue from repository and production state, never from chat memory alone. Read in this order:
+Continue from repository and Production state, never from chat memory alone. Read in this order:
 
-1. `AGENTS.md` — non-negotiable engineering/operational rules.
-2. `docs/CURRENT_STATE.md` — exact production status and current next action.
-3. `docs/MASTER_PLAN.md` — product scope, Production V1 completion state and post-V1 backlog.
-4. `docs/V1_FINAL_4_PR_PLAN.md` — actual #36–#40 closure sequence and exit gate.
-5. `docs/INTEGRATION_INVENTORY.md` — provider/config state and verification rules.
-6. `docs/EXECUTION_PLAYBOOK.md` — implementation/deployment discipline.
-7. `.env.example` — integration contract. Never commit real secrets.
+1. current `main` runtime code + exact Git SHA;
+2. Production Supabase state in `pkypexzpyfbikdnkrzvw`;
+3. current Cloudflare Production deployment at `https://app.smartvisionsai.com`;
+4. `docs/CURRENT_STATE.md`;
+5. this file for non-negotiable engineering/operational rules;
+6. older plans/Issue #18 only as historical planning context.
 
-If chat history conflicts with repository documentation, verify code, current PR SHA, Supabase schema/state and Vercel deployment first. Update `docs/CURRENT_STATE.md` after every meaningful production change.
+If any document conflicts with runtime/Production evidence, runtime and Production win. Reconcile the document after the change is proven.
 
-## Project identity
+## Project identity and boundaries
 
-- Repository: `hamed665/smartvisions`
-- Product: **Smart Visions Growth OS**
-- This repository is separate from the Smart Visions Website repository and from DrKhaleej. Never mix their code, databases or deployment state.
-- Frontend/control plane: Next.js on Vercel.
-- Database/Auth: Supabase.
+- Repository: `hamed665/smartvisions`.
+- Product: **Smart Visions Growth OS**.
+- Primary Production: `https://app.smartvisionsai.com` on Cloudflare Workers Paid.
+- Production Worker: `smartvisions-growth-os-production`.
 - Production Supabase ref: `pkypexzpyfbikdnkrzvw`.
-- Main Control Center language: English.
-- Owner/operator explanations, translations, summaries and handoff context: Persian where applicable.
+- The Website repository `hamed665/smartvisions-website` is a separate project. Never modify it from Growth OS work.
+- The historical `website/` directory and `.github/workflows/website-ci.yml` inside this repository are frozen/out of scope. Do not clean them up as part of Growth OS changes.
+- The old Vercel deployment is rollback/history only and must not be used as the Production health baseline.
+- Main Control Center language: English. Owner/operator explanations, translations, summaries and handoff context may be Persian.
 
-## Current Production V1 sequence
+## Current runtime architecture — do not rebuild
 
-- PR #36 — Growth Intelligence — COMPLETE.
-- PR #37 — AI Sales / Conversations / Outreach foundations — COMPLETE.
-- PR #38 — emergency reliability hardening of five real #37 review defects — COMPLETE.
-- PR #39 — Website Demo & Content Production Engine — COMPLETE.
-- PR #40 — Control Center completeness / reliability / final QA / launch gates — COMPLETE foundation; controlled production verification continues under the same launch plan.
-- PRs #49–#69 — provider configuration, WhatsApp controlled E2E, evidence reconciliation and Email inbound reliability/verification work.
+The following are already canonical and must be extended rather than duplicated:
 
-The original four-feature-PR plan was shifted by emergency #38. Do not resurrect old numbering by creating duplicate subsystems or reopening completed phases.
+- Lead/Business/Conversation CRM model;
+- Google Places Hunter and deterministic qualification/service-fit logic;
+- Website Audit and its cache/quota/idempotency controls;
+- Multi-Agent pipeline: Intent Discovery, Conversation Psychology, Business Analyst, Culture/Locale, Sales & Marketing, Evidence Checker, Preview Director, Decision Orchestrator, Secretary and Relevance Checker;
+- Agent Context Hydrator with conversation memory, active Knowledge/Prompts, Services, Pricing, locale and portfolio evidence;
+- `ZERO_COST / LIGHT / FULL` selective routing;
+- OpenAI model router and Cost Guard;
+- canonical outbound send gate;
+- durable Email/WhatsApp webhook journals and idempotency;
+- `agent_runs.request_key` claim/replay boundary;
+- Follow-up jobs and Automation Rules storage/executor primitives;
+- Cloudflare scheduled executor;
+- Telegram Owner Assistant/control plane and notification journal;
+- versioned `knowledge_versions` / `prompt_versions` publishing;
+- approved Portfolio matcher;
+- Preview infrastructure for explicit/controlled cases only.
+
+Do not add Redis, a second queue/outbox, a second Knowledge Base, another recommendation engine, another portfolio system, another automation system or another Agent framework unless Production evidence proves the existing primitive cannot meet the requirement.
 
 ## Product operating principles
 
-1. **Automation by default, human approval by exception, but launch permission is explicit.** Routine low-risk work may become autonomous only after its provider/policy launch gate is proven. Human approval/handoff is required for configured high-risk pricing, unusual discounts, payment/contract terms, complaints/legal claims, low confidence, exceptions, or owner-configured cases.
-2. **No uncontrolled API spending.** Every paid provider passes runtime safety and Cost Guard before execution and records/reconciles usage after execution.
-3. **No fake integrations.** `CONNECTED` means durable production E2E evidence. Credential presence alone is not connectivity.
-4. **One source of truth per control.** Budget/quota thresholds live in `cost_guard_settings`; emergency runtime state lives in `system_controls`; pricing remains in existing pricing tables; provider state remains in `integration_connections`. Do not revive legacy duplicate controls such as `system_controls.monthly_budget_usd` as operational inputs.
-5. **Do not hardcode business controls that operators must change.** Use existing database settings/config JSON and Control Center surfaces where practical.
-6. **Respect recipient-local time and channel policy.** Existing market/outreach windows, DNC/suppression, channel pause, provider policy and reputation safeguards are hard gates.
-7. **Localized communication without fake certainty.** Use appropriate market language/tone; if dialect confidence is weak, prefer natural neutral language rather than invented specificity.
-8. **Original + Persian operator view.** Preserve original customer content and useful Persian translation/summary/intent for the owner where relevant.
-9. **No autonomous platform abuse.** Instagram cold DM and marketplace auto-apply remain policy-aware/semi-manual where required. WhatsApp/email must honor provider policy, consent/opt-out, DNC and reputation safeguards.
-10. **No blind retry across paid or externally visible boundaries.** Use the existing journals/claims/caches described below.
+1. **Evidence Before Offer.** Missing evidence is allowed to produce `NO_RECOMMENDATION`.
+2. **Portfolio Before Free Custom Work.** Approved relevant Portfolio examples come before custom Preview work. Custom Preview requires an explicit customer request or an approved controlled internal case.
+3. **Deterministic Before Paid AI.** Cache/rules/evidence gates run before paid model/provider work where possible.
+4. **Market Fit Before Product Push.** A missing website alone is not proof that Website Build should be sold.
+5. **Owner Brain Before Generic AI Knowledge.** Reuse versioned `knowledge_versions`; owner-reviewed Knowledge never overrides hard safety/pricing/DNC rules.
+6. **LLM suggests; deterministic code has authority.** Models do not own provider side effects.
+7. **No uncontrolled API spending.** Every paid boundary uses runtime safety + Cost Guard + durable accounting/reconciliation.
+8. **No blind retry across paid or externally visible boundaries.** Provider acceptance and ambiguous failures use existing claims/journals/reconciliation semantics.
+9. **Human handoff for high-risk commercial decisions.** Special discounts, contracts, payment, complaints, meetings, explicit human requests, unsupported claims and low-confidence cases remain human-controlled.
+10. **No fake prospects.** Hunter must never manufacture businesses/customers to populate CRM.
 
-## Canonical reliability boundaries
+## Canonical safety boundaries
+
+Every provider-bound outbound path must use canonical persisted state rather than caller-supplied safety claims. The provider-boundary gate must recheck, as applicable:
+
+- global Kill Switch;
+- channel/Agent pause;
+- Shadow Mode and any narrowly verified exception;
+- Lead DNC/status/agent mode;
+- Conversation stage/mode/human takeover;
+- suppression list;
+- canonical recipient identity;
+- market enabled/timezone/local send window;
+- WhatsApp durable inbound evidence and exact 24-hour rule;
+- Email mailbox health/ledger;
+- approval state where required;
+- Cost Guard/provider quota.
+
+A message approved earlier must still be blocked if DNC, suppression, human takeover, pause, Kill Switch, market window or recipient identity changes before Provider invocation.
+
+## Reliability boundaries
 
 - Business identity: existing Google Place/domain dedupe.
-- Google Place Details: `discovery_records` journal; completed replay, PROCESSING/FAILED fail closed against blind rerun.
-- Website audit: TTL cache + quota + unique one-RUNNING-per-business guard.
-- Inbound AI: caller idempotency key + `agent_runs.request_key/result_payload`; completed replay; PROCESSING/FAILED keys do not blindly rerun AI.
-- Voice: media transcription cache with failure/stale-processing recovery policy.
-- Preview/content: stable `brief_hash` + organization/lead/brief uniqueness.
-- Email/WhatsApp send: pre-provider claim; provider acceptance is final for resend safety, with later persistence failures reconciliation-only.
-- Email inbound: signed Resend event identity + stable provider received-email identity; do not call paid AI directly from webhook retry delivery.
-- Global kill switch: enforced before controlled provider operations.
-- Agent pause: enforced from database state before AI execution; caller input cannot override it.
+- Google Place Details: durable discovery journal and cache; no blind paid replay.
+- Website audit: TTL cache + quota + one-RUNNING-per-business semantics.
+- Inbound AI: stable request key + `agent_runs`; COMPLETED replays, PROCESSING races do not duplicate paid work, ambiguous/failed work remains controlled.
+- Voice: media/transcription cache and stale-processing recovery semantics.
+- Preview/content: stable brief identity and controlled lifecycle.
+- Email/WhatsApp send: pre-provider claim + canonical final gate + reconciliation-only behavior after ambiguous/provider-accepted boundaries.
+- Provider webhook: verify → persist idempotently → fast ACK; do not synchronously spend paid AI inside provider retry delivery.
+- Cloudflare scheduler: Production Worker only. Release Candidate must have no scheduled trigger and runtime code must fail closed unless `DEPLOYMENT_ENV=production`.
 
-## Current safety defaults
+## Current safety/cost defaults
 
-These are runtime-editable defaults, not permanent constants:
+These are runtime-editable values in Production, not constants to duplicate in code:
 
-- Canonical monthly paid-API budget: `$25`
-- OpenAI: `$10`
-- Google Places: `$5`
-- Email: `$4`
-- WhatsApp: `$3`
-- Reserve: `$3`
-- Daily new leads: `50`
-- Daily website audits: `15`
-- Daily deep AI runs: `10`
-- Max AI runs per lead: `20`
-- Max voice duration: `180 seconds`
-- Automatic retry ceiling: `1`
-- Website audit cache: `30 days`
-- Warning / throttle / critical / hard stop: `70 / 85 / 95 / 100%`
+- Shadow Mode: ON.
+- Global Kill Switch: OFF.
+- Email pause: OFF.
+- WhatsApp AI pause: OFF.
+- Agents pause: OFF.
+- monthly total budget: `$25`;
+- OpenAI `$10`, Google Places `$5`, Email `$4`, WhatsApp `$3`, reserve `$3`;
+- warning/throttle/critical/hard stop: `70 / 85 / 95 / 100%`;
+- daily new leads: `50`;
+- daily website audits: `15`;
+- daily deep AI runs: `10`;
+- max AI runs per Lead: `20`;
+- max voice duration: `180s`;
+- max automatic retries: `1`;
+- website audit cache: `30 days`;
+- Router Default low-cost model: `gpt-5.6-luna`;
+- Router Default high-reasoning model: `gpt-5.6-terra`.
 
-Large budget/quota increases require explicit confirmation and audit logging. The legacy System monthly-budget field is not a second source of truth.
+The legacy `system_controls.monthly_budget_usd` is not the Cost Guard source of truth.
 
-## Current provider launch state
+## Provider/runtime state
 
-Read `docs/CURRENT_STATE.md` and `docs/INTEGRATION_INVENTORY.md` for the exact evidence IDs. Current production truth after the 2026-08-31 controlled verification is:
+Current durable Production state is maintained in `docs/CURRENT_STATE.md`. As of the pre-pilot reconciliation:
 
-- Google Places / Discovery: production-evidenced CONNECTED.
-- OpenAI / AI: production-evidenced CONNECTED.
-- Meta / WhatsApp: production-evidenced CONNECTED. Real inbound → Agent → Shadow Approval → owner approval → canonical Catalog send → SENT → DELIVERED → READ is proven for the INTERNAL_TEST path.
-- Email Provider / Resend: production-evidenced CONNECTED. Real outbound delivery and real custom-domain inbound to `hello@smartvisionsai.com` through Resend Receiving are proven.
-- Email receiving DNS: root MX is configured and Resend-verified; sending DKIM/SPF remain verified; DMARC exists with `p=none`.
-- Crawl4AI / Audit: code-ready but production NOT_CONFIGURED; optional for V1 because deterministic website audit exists.
-- Meta / Instagram: NOT_CONFIGURED; there is no production page-monitoring/DM runtime. Keep restricted automation semi-manual/policy-aware and feed any later permitted source into the existing Hunter/CRM.
-- Redis / Queue: OPTIONAL / NOT_CONFIGURED. Do not add merely because queues are fashionable.
-- Shadow Mode: remains ON. Controlled provider proof is not permission for broad autonomous outbound.
+- Google Places / Discovery: CONNECTED.
+- OpenAI / AI: CONNECTED.
+- Meta / WhatsApp: CONNECTED.
+- Email Provider / Resend: CONNECTED.
+- WhatsApp Voice: production-proven.
+- Preview public delivery: production-proven.
+- Telegram owner command/control plane: production-proven.
+- Telegram notification journal contains successful events.
+- Crawl4AI: NOT_CONFIGURED and optional.
+- Instagram: NOT_CONFIGURED and intentionally deferred.
+- Redis: NOT_CONFIGURED and unnecessary at current scale.
+- Cloudflare Production scheduler: exactly `*/2 * * * *` on Production only; Release Candidate has no Cron.
 
-Known post-transport Agent gap: Email webhook persistence currently does not itself run paid Agent intelligence, and the canonical AI endpoint does not yet fully hydrate conversation history/Knowledge Base/operator prompt settings. Close those gaps later by wiring existing primitives, not by building another agent stack.
+`CONNECTED` means durable evidence, not merely a configured secret.
+
+## Agent / Growth Brain current truth
+
+- Specialist → Orchestrator → Secretary → Relevance Checker collaboration is real.
+- Context hydration includes conversation memory, Knowledge/Prompt versions, Services, market Pricing/discount boundaries, locale style and approved portfolio context.
+- Secretary receives a small relevant Knowledge subset directly so Knowledge-only facts are not lost through multi-agent compression.
+- `agent_settings.model = null` means Router Default. Temperature/Max Token controls that runtime did not honor are not authoritative UI controls.
+- Conversation lifecycle uses the canonical Production stage taxonomy. Real linked customer replies move reply-driven stages (`NEW`, `WAITING_CUSTOMER`, `UNANSWERED`, `FOLLOW_UP_DUE`) to `ACTIVE` while HUMAN/PAUSED/high-intent/terminal stages remain preserved.
+- Active `smartvisions_customer_journey` v2 enforces Evidence Before Offer, `NO_RECOMMENDATION`, Portfolio Before Free Custom Work and explicit-request custom Preview behavior.
 
 ## Engineering rules
 
-- Work through isolated branches and PRs.
-- Never merge with failing install, lint, typecheck, tests or build.
-- Merge with expected head SHA so a moving branch cannot slip through the gate.
-- Prefer least privilege. Never fix authorization errors with broad grants.
-- Supabase DDL/policy/grant changes require a migration and production verification.
-- Run Supabase Security and Performance Advisors after final DDL/RLS changes.
-- Secrets stay in Vercel/Supabase/provider secret stores. Never commit tokens, API keys, passwords, webhook secrets or service keys.
-- Server-paid operations use server-only credentials.
-- Preserve idempotency, audit logging, DNC/suppression, human takeover, retry ceilings, Cost Guard and kill/pause controls.
-- Any newly activated paid provider needs: runtime-safety preflight, Cost Guard/provider quota, explicit retry semantics, usage evidence and visible health state.
-- Extend existing primitives before adding schema or services. No duplicate CRM, pricing, conversations, agents, previews, Cost Guard or integration state.
-- Do not describe untested work as production-verified. Use `implemented`, `configured`, `tested`, `READY`, or `CONNECTED` accurately.
-- Do not run paid smoke tests just to refresh a dashboard badge when durable evidence already proves the provider works.
-- Historical failed rows are evidence, not visual clutter. Do not delete them merely to make dashboards look clean.
+- Work through isolated branches and minimal coherent PRs.
+- Never modify the Website repo or frozen legacy Website paths while working on Growth OS.
+- Never merge with failing install/lint/typecheck/tests/build.
+- Runtime-changing Cloudflare work must also pass Vinext build/compatibility and scheduled-bundle invariants where applicable.
+- Inspect real PR review threads before merge.
+- Merge using the exact expected head SHA.
+- Verify the exact merged commit in routed Cloudflare Production after merge.
+- Prefer least privilege. Never solve authorization problems with broad grants.
+- Before **every** Supabase operation, reread the Supabase skill/instructions.
+- Supabase DDL/policy/grant changes use migrations; data reads/verifications use the read/query path and every change must be verified afterward.
+- Run Supabase Advisors after relevant schema/security work.
+- Never expose or commit tokens, API keys, passwords, webhook secrets, provider credentials or service-role keys.
+- Historical failure rows are evidence. Do not delete them just to make dashboards visually clean.
+- Do not run paid smoke tests simply to refresh a badge when durable evidence already proves the provider.
 
 ## Definition of done
 
-A feature/closure item is complete only when applicable items are satisfied:
+A change is complete only when applicable items are true:
 
-- schema/migration and RLS/permissions are correct;
-- server action/API/runtime works;
-- existing UI supports useful operation without decorative duplication;
-- validation/failure states are usable and fail closed;
-- meaningful operator changes are audited;
-- paid work is runtime-safety + Cost Guard protected;
-- idempotency/retry behavior is explicit;
-- tests cover important business/safety logic;
-- install/lint/typecheck/tests/build are green on the exact final head;
-- migrations are applied and Advisors reviewed if schema changed;
-- Vercel Preview is READY on the exact final head;
+- schema/RLS/permissions are correct;
+- runtime/API/UI behavior is real, not decorative;
+- failure states fail closed;
+- safety, idempotency and retry semantics are explicit;
+- meaningful mutations are audited;
+- paid boundaries are Cost Guard protected;
+- important business/safety logic has tests;
+- exact-head lint, typecheck, tests and build are green;
+- applicable Cloudflare bundle checks are green;
 - review threads are resolved/absent;
 - merge uses expected head SHA;
-- exact merge commit is READY in Production;
-- `docs/CURRENT_STATE.md` reflects the resulting truth.
+- routed Cloudflare Production is verified on the merge commit;
+- Production DB state is verified where relevant;
+- `docs/CURRENT_STATE.md` is reconciled after meaningful Production changes.
+
+## Controlled launch rule
+
+Do **not** turn Shadow Mode off merely because transport and tests are green. The first Oman launch is a tiny controlled pilot:
+
+- evidence-qualified real businesses only;
+- no fake CRM population;
+- low volume;
+- Shadow/approval/human gates remain authoritative;
+- no blind follow-up sends;
+- no free custom Preview as a default sales tactic;
+- monitor Cost Guard, DNC/suppression, Agent runs, approval state and provider outcomes;
+- scale automation only from measured results and an explicit owner decision.
+
+The pre-pilot safety suite already covers positive interest, price objection/handoff, no-reply follow-up semantics, deterministic DNC, human takeover, provider-boundary Kill Switch/DNC checks, duplicate logical Agent-run replay and the exact WhatsApp 24-hour boundary. Do not replace these tests with live customer sends just to call the system “tested.”
 
 ## Immediate continuation rule
 
-At the start of a new chat/session, **do not invent another roadmap**. Read `docs/CURRENT_STATE.md`, verify the referenced commit/PR/deployment/database state, then continue only the listed real gap.
-
-Current controlled launch sequence after the verified WhatsApp and custom-domain Email transport milestones:
-
-1. one real controlled WhatsApp Voice transcription using the existing OpenAI + media-cache path;
-2. Preview generate → share/send → public view E2E;
-3. Crawl4AI only if configured/needed;
-4. smallest safe remaining suppression/bounce/unsubscribe evidence;
-5. five Shadow Mode behavior scenarios;
-6. close the existing Agent intelligence wiring gaps required for safe multi-turn autonomous advisory behavior;
-7. only then an explicit owner decision about a tiny Oman pilot and automation level.
-
-Do not wire provider webhook retries directly to paid Agent execution merely to make a demo feel automatic. Use the existing idempotent internal/owner-controlled boundaries, prove them, then automate only after the behavior is safe.
+At the start of any new session, do not invent another roadmap. Verify current `main`, Cloudflare Production, Production Supabase controls/cost/provider state and `docs/CURRENT_STATE.md`, then continue only a proven gap. Runtime/Production evidence always overrides stale historical handoffs.
