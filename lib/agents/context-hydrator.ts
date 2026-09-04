@@ -116,8 +116,9 @@ export async function hydrateAgentContext(input: {
     fallbackLocale: marketLocaleStyle.fallbackLocale,
     preferredLanguage: hydrated.context.language,
   });
-  const replyDialect = hydrated.context.dialect
-    || (replyLanguage.toLowerCase().startsWith('ar') ? marketLocaleStyle.dialect : undefined);
+  const replyDialect = replyLanguage.toLowerCase().startsWith('ar')
+    ? hydrated.context.dialect || marketLocaleStyle.dialect
+    : undefined;
 
   return {
     ...hydrated,
