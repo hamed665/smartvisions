@@ -59,6 +59,22 @@ export async function runScheduledOperations(env: WorkerEnv) {
   for (const task of tasks) {
     const organizationId = organizationIdFromTask(task);
     if (!organizationId) continue;
+
+    let guard: Response;
+    try {
+      guard = await internalPost(env, '/api/operations/channel-guard', { organizationId, channel: task.channel });
+    } catch (error) {
+      await reportFailure(env, task, error instanceof Error ? error.message : 'Channel guard invocation failed');
+      continue;
+    }
+    if (!guard.ok) {
+      if (guard.status >= 500) {
+        const detail = await guard.text().catch(() => 'Channel guard unavailable');
+        await reportFailure(env, task, `Channel guard HTTP ${guard.status}: ${detail}`);
+      }
+      continue;
+    }
+
     let response: Response;
     try {
       response = await internalPost(env, '/api/ai/process-inbound', task.payload);
