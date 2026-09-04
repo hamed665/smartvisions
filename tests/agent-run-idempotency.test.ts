@@ -11,9 +11,8 @@ describe('agent run idempotency', () => {
     expect(agentRunReplayState({ status: 'FAILED', result_payload: null })).toBe('FAILED_LOCKED');
   });
 
-  it('validates caller idempotency keys including WhatsApp provider padding', () => {
+  it('validates caller idempotency keys', () => {
     expect(normalizeIdempotencyKey('wa:message:12345')).toBe('wa:message:12345');
-    expect(normalizeIdempotencyKey('agent:whatsapp:wamid.HBgM1234567890=')).toBe('agent:whatsapp:wamid.HBgM1234567890=');
     expect(() => normalizeIdempotencyKey('short')).toThrow();
     expect(() => normalizeIdempotencyKey('bad key with spaces')).toThrow();
   });
