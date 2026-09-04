@@ -81,7 +81,7 @@ describe('customer reply language policy', () => {
     expect(result.data).toMatchObject({ locale: 'ar-OM', dialect: 'omani' });
   });
 
-  it('blocks obvious reply-language/script mismatches before delivery', () => {
+  it('blocks obvious or unresolved reply-language mismatches before delivery', () => {
     expect(replyMatchesHighConfidenceMessageLanguage({
       message: 'Hi',
       replyLanguage: 'ar-OM',
@@ -91,6 +91,11 @@ describe('customer reply language policy', () => {
       message: 'قیمت چنده؟',
       replyLanguage: 'en',
       replyText: 'The price depends on the service.',
+    })).toBe(false);
+    expect(replyMatchesHighConfidenceMessageLanguage({
+      message: 'Hola, necesito ayuda con mi negocio',
+      replyLanguage: 'und',
+      replyText: 'I can help with that.',
     })).toBe(false);
     expect(replyMatchesHighConfidenceMessageLanguage({
       message: 'Hola, necesito ayuda con mi negocio',
