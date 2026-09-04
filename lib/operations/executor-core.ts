@@ -19,6 +19,14 @@ export type OperationalSafetyState = {
   agentsPaused?: boolean;
 };
 
+export type OperationalChannelControlState = {
+  channel: OperationalChannel;
+  globalKillSwitch?: boolean;
+  agentsPaused?: boolean;
+  emailPaused?: boolean;
+  whatsappAiPaused?: boolean;
+};
+
 export type AutomationRuleSnapshot = {
   id: string;
   triggerKey: string;
@@ -57,6 +65,14 @@ export function operationalAutomationAllowed(state: OperationalSafetyState) {
   if (state.leadAgentMode === 'PAUSED' || state.leadAgentMode === 'HUMAN') return { allowed: false, reason: 'LEAD_AUTOMATION_DISABLED' as const };
   if (TERMINAL_CONVERSATION_STAGES.has(String(state.conversationStage ?? ''))) return { allowed: false, reason: 'CONVERSATION_TERMINAL_OR_HUMAN' as const };
   if (state.conversationAgentMode === 'PAUSED' || state.conversationAgentMode === 'HUMAN' || state.conversationRequiresHuman) return { allowed: false, reason: 'CONVERSATION_AUTOMATION_DISABLED' as const };
+  return { allowed: true, reason: 'ALLOWED' as const };
+}
+
+export function operationalChannelAllowed(state: OperationalChannelControlState) {
+  if (state.globalKillSwitch) return { allowed: false, reason: 'GLOBAL_KILL_SWITCH' as const };
+  if (state.agentsPaused) return { allowed: false, reason: 'AGENTS_PAUSED' as const };
+  if (state.channel === 'EMAIL' && state.emailPaused) return { allowed: false, reason: 'EMAIL_PAUSED' as const };
+  if (state.channel === 'WHATSAPP' && state.whatsappAiPaused) return { allowed: false, reason: 'WHATSAPP_AI_PAUSED' as const };
   return { allowed: true, reason: 'ALLOWED' as const };
 }
 
