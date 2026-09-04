@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { isDoNotContactReply, persistCustomerDoNotContact } from '@/lib/conversations/sales-lifecycle';
+import { isDoNotContactReply, persistCustomerDoNotContact, persistCustomerReplyConversationState } from '@/lib/conversations/sales-lifecycle';
 import type { ResendWebhookEvent } from './resend-webhook';
 
 function serviceClient() {
@@ -194,6 +194,13 @@ export async function persistResendWebhookEvent(event: ResendWebhookEvent) {
       });
       return { duplicate, organizationId, linked: true, leadId: lead.id, conversationId, doNotContact: true };
     }
+
+    await persistCustomerReplyConversationState({
+      supabase,
+      organizationId,
+      leadId: lead.id,
+      conversationId,
+    });
 
     if (!['WON','LOST','DO_NOT_CONTACT','HUMAN'].includes(lead.status)) {
       const { error: leadError } = await supabase
