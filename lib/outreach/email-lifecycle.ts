@@ -195,14 +195,14 @@ export async function persistResendWebhookEvent(event: ResendWebhookEvent) {
       return { duplicate, organizationId, linked: true, leadId: lead.id, conversationId, doNotContact: true };
     }
 
-    await persistCustomerReplyConversationState({
-      supabase,
-      organizationId,
-      leadId: lead.id,
-      conversationId,
-    });
-
     if (!['WON','LOST','DO_NOT_CONTACT','HUMAN'].includes(lead.status)) {
+      await persistCustomerReplyConversationState({
+        supabase,
+        organizationId,
+        leadId: lead.id,
+        conversationId,
+      });
+
       const { error: leadError } = await supabase
         .from('leads')
         .update({ status: 'REPLIED', updated_at: new Date().toISOString() })
