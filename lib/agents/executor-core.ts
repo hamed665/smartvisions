@@ -1,5 +1,5 @@
 import type { AgentContext, AgentName, AgentResult, CommercialDecision, ReplyDraft } from './contracts';
-import { getLocaleProfile, chooseLanguage } from '@/lib/outreach/locale';
+import { getLocaleProfile, resolveReplyLanguage } from '@/lib/outreach/locale';
 import { decidePreviewStrategy, previewIntent } from './preview-policy';
 
 const lower = (value: string) => value.toLowerCase();
@@ -45,7 +45,25 @@ export async function executeAgent(agent: AgentName, context: AgentContext): Pro
     case 'culture_locale': {
       const marketCode = (context.countryCode ?? 'OM') as Parameters<typeof getLocaleProfile>[0];
       const profile = getLocaleProfile(marketCode);
-      return { agent, confidence: 0.95, summary: 'Localized language, dialect and tone selected.', data: { locale: chooseLanguage({ marketCode, preferredLanguage: context.language }), dialect: context.dialect ?? profile.dialect, tone: profile.tone }, evidence, blockers: [] };
+      const locale = resolveReplyLanguage({
+        message: context.message,
+        primaryLocale: profile.primaryLocale,
+        fallbackLocale: profile.fallbackLocale,
+        preferredLanguage: context.language,
+        marketCode,
+      });
+      return {
+        agent,
+        confidence: 0.95,
+        summary: 'Localized language, dialect and tone selected from customer language first, then market fallback.',
+        data: {
+          locale,
+          dialect: locale.toLowerCase().startsWith('ar') ? context.dialect ?? profile.dialect : null,
+          tone: profile.tone,
+        },
+        evidence,
+        blockers: [],
+      };
     }
     case 'sales_marketing':
       return {
