@@ -1,329 +1,287 @@
 # Smart Visions Growth OS — Current Production State
 
-**Reconciled:** 2026-09-03 (Oman, UTC+4)
+**Reconciled:** 2026-09-05 (Oman, UTC+4)
 
-This is the operational handoff and the first document to read before changing Growth OS. Verified Production evidence and current `main` override older planning text. Preserve the existing architecture and extend only proven gaps.
+This is the current operational handoff for Growth OS. Runtime code, Production Supabase and routed Cloudflare Production override older planning documents and chat history.
 
 ## Production identity
 
 - Repository: `hamed665/smartvisions`
 - Branch: `main`
-- Primary Production URL: `https://app.smartvisionsai.com`
-- Production runtime: Cloudflare Workers Paid, Worker `smartvisions-growth-os-production`
-- Permanent deployment path: successful push-based `CI` on `main` → isolated Cloudflare release candidate → safe smoke/load → exact bundle promotion → Worker Route verification → routed Production smoke
+- Primary Production: `https://app.smartvisionsai.com`
+- Runtime: Cloudflare Workers Paid
+- Production Worker: `smartvisions-growth-os-production`
 - Production Worker Route: `app.smartvisionsai.com/* -> smartvisions-growth-os-production`
-- Growth Supabase project: `pkypexzpyfbikdnkrzvw`
-- Vercel rollback URL: `https://smartvisions.vercel.app` retained temporarily as a frozen independent rollback during the stability window; it is not the primary Production runtime
-- Automatic Vercel Git deployments are disabled after the Cloudflare cutover; do not re-enable them unless an explicit rollback decision requires it
-- Master Tracker: GitHub Issue #18
+- Production Supabase: `pkypexzpyfbikdnkrzvw`
+- Latest runtime-changing Production merge: PR #111, merge commit `a68ad45e473eca8ebec6f0cbbe781f3a2cddc79d`
+- Old Vercel deployment: frozen rollback/history only; not a Production health source
+- Master Tracker: GitHub Issue #18, historical/stale in places and never authoritative over current runtime/DB evidence
 
-Runtime-changing PRs must verify the exact Git `main` HEAD, green CI, Cloudflare deployment run and routed Production evidence. Do not use an old Vercel deployment identity as the current runtime baseline.
+The Smart Visions Website repository and its Supabase project are separate and out of scope. The historical `website/` tree inside this repository is also frozen/out of scope.
 
-## Cloudflare production cutover — VERIFIED
+## Pre-pilot status
 
-PR #102 prepared the Worker runtime and PR #103 completed the guarded Production cutover. PR #103 merged as `b13a1e568b1735148a15584fda8a5edb8bc5eb3a`.
+The Growth OS core is **ready for a tiny controlled Oman pilot with Shadow/approval/human gates kept on**. This is not permission for broad autonomous outreach.
 
-Post-merge evidence on that exact commit:
+Current Production safety snapshot:
 
-- standard `main` CI: green for install, lint, typecheck, tests and build;
-- permanent `Cloudflare Production Deploy` workflow: green;
-- Vinext compatibility: 97%, 0 unsupported issues; only partial `next/font/google` behavior;
-- repository API inventory: 21 `app/api/**/route.ts` handlers;
-- deployed Vinext bundle: the same 21 route handlers, with no route-count drift;
-- required provider secret binding names present on release-candidate and Production Workers;
-- Growth Supabase credential validated read-only against `pkypexzpyfbikdnkrzvw`;
-- release candidate safe smoke: green;
-- controlled SSR load: 40 requests, 0 unexpected responses;
-- Production Worker deployed with `workers_dev=false` and hard `cpu_ms=100` guard;
-- exact Worker Route remained attached;
-- routed smoke: `/login` 200 with `cf-ray`, unauthenticated `/` 307 with `cf-ray`, missing public Preview 404 with `cf-ray`;
-- safe API/webhook rejection smoke: green;
-- no outbound provider send was invoked by migration/deployment smoke tests.
+- Shadow Mode: **ON**
+- Global Kill Switch: OFF
+- Email pause: OFF
+- WhatsApp AI pause: OFF
+- Agents pause: OFF
+- outbound `SENT` rows in the last 24 hours at reconciliation: **0**
+- failed Agent runs in the last 24 hours: **0**
+- enabled Automation Rules: **0**
+- pending Follow-ups: **0**
+- Telegram notification events: **4 total / 0 failed**
 
-The temporary cutover workflow, trigger file, migration-only inventory workflow and insecure runtime-secret export endpoint were removed before merge. Normal Cloudflare deployment does not mutate DNS/Worker Routes and does not depend on Vercel.
+Current Conversation state after verified lifecycle backfill:
 
-## Non-negotiable protection rules
+- `ACTIVE`: 2 linked real-reply conversations, one Email and one WhatsApp
+- `NEW`: 1 deliberately PAUSED/requires-human internal row with no durable inbound; left untouched
 
-- Shadow Mode remains ON.
-- Global kill switch remains OFF.
-- Agents pause remains OFF.
-- Email pause remains OFF.
-- WhatsApp AI pause remains OFF.
-- Do not create parallel CRM, Lead, Conversation, Pricing, Cost Guard, Integration, Agent, Preview, Catalog or notification subsystems.
-- Do not repeat paid smoke tests when durable Production evidence already proves the behavior.
-- Deterministic logic/cached evidence must run before paid AI/provider work where possible.
-- A successful provider call must never be blindly retried because local persistence failed.
-- No broad autonomous prospecting until the remaining behavior gates below are explicitly closed.
+## Cloudflare scheduler — VERIFIED CLEAN
 
-## Recent production closure sequence
+PR #107 introduced the operational scheduler and PR #109 made scheduled internal execution Production-viable. Audit later found that both the release candidate and Production Worker inherited the same `*/2 * * * *` Cron.
 
-The V1 foundation remains canonical. The most relevant recent milestones are:
+PR #111 closed that drift and Production deployment logs prove:
 
-- #55–#68: WhatsApp Catalog, Agent recommendation, Shadow Approval, inbound idempotency, controlled pilot, Approved Send and production evidence reconciliation.
-- #69–#70: Email inbound idempotency/hardening and branded Resend production reconciliation.
-- #71–#72: controlled WhatsApp Voice production pilot and least-required Voice transcription grants.
-- #73–#76: Preview production readiness, controlled pilot, public-token access and isolation from internal Control Center navigation.
-- #78: premium mobile-first 2026 Preview path.
-- #79: human multi-agent sales consensus, conversation memory and specialist-to-orchestrator/secretary collaboration.
-- #80: Telegram Owner Assistant and typed command journal.
-- #81: complete Telegram Lead alert context, including first-class HOT_LEAD and canonical Lead/service/pricing/WhatsApp context.
-- #82: Telegram runtime read grants restored after least-privilege hardening.
-- #83: Telegram owner control plane completed.
-- #84: Telegram confirmation comparison made JSONB-order safe.
-- #85: AI cost-efficiency hardening, selective paid-agent routing, context/output/reasoning controls and current OpenAI pricing/cached-input accounting.
-- #86: Cost Guard aggregation moved into PostgreSQL and existing paid-AI/deep-run quotas made real.
-- #87: provider cost truth added so provisional `$0`/reserve values cannot masquerade as final provider invoices.
-- #88: atomic pre-provider Cost Guard reservations for paid OpenAI Agent and paid Google Places calls, plus explicit least-privilege `usage_events` grants.
-- #89: documentation-only reconciliation of the real Production state through #88.
-- #90: atomic owner-managed Knowledge/Prompt version publishing and the first reviewed Smart Visions Knowledge baseline, without copying Services/Pricing/Locale into a parallel source of truth.
-- #102: Cloudflare Workers runtime readiness and Worker-safe runtime compatibility.
-- #103: guarded Production cutover from Vercel to Cloudflare Workers, permanent Cloudflare CI/CD and routed Production verification.
+- release candidate uses `DEPLOYMENT_ENV=candidate`;
+- release candidate has **no scheduled trigger**;
+- Production uses `DEPLOYMENT_ENV=production`;
+- Production has exactly one Cron: `*/2 * * * *`;
+- Worker code also fails closed and refuses scheduled work outside `DEPLOYMENT_ENV=production`;
+- routed Production smoke is green;
+- deployment smoke invoked no outbound provider send.
 
-Runtime-changing PRs are merged only after exact-head lint, typecheck, tests and build are green, required migrations are verified, review threads are clear, and Cloudflare Production deployment is checked.
+Do not restore a Candidate Cron. The release candidate exists for isolated smoke/load validation, not as a second operational executor.
 
-## Current verified provider state
+## Canonical outbound safety — CLOSED
+
+PR #106 introduced the provider-boundary canonical send gate over existing safety primitives. Caller input is not allowed to define canonical DNC, agent mode, market/timezone, recipient identity, Shadow state or WhatsApp 24-hour evidence.
+
+The final provider-boundary gate rechecks, where applicable:
+
+- Kill Switch;
+- channel/Agent pause;
+- Shadow Mode;
+- Lead DNC/status/mode;
+- Conversation stage/mode/human takeover;
+- suppression;
+- canonical recipient identity;
+- canonical market/local send window;
+- durable WhatsApp inbound evidence and exact 24-hour policy;
+- Email mailbox health/ledger;
+- approval state;
+- Cost Guard/provider quota.
+
+DNC or Kill Switch changes after approval still block the provider call. Human takeover and recipient/suppression drift also fail closed.
+
+## Inbound operational loop — CURRENT TRUTH
+
+Provider webhooks follow:
+
+`verify -> persist idempotently -> fast ACK`
+
+They do not synchronously spend paid AI inside provider retry delivery.
+
+Cloudflare scheduled execution discovers durable inbound work and feeds the existing Agent endpoint using stable request keys. Existing `agent_runs.request_key` remains the atomic logical-run boundary; no Redis/new queue is required at current scale.
+
+PR #110 fixed real Meta provider IDs containing unsafe request-key characters by deterministic canonicalization while preserving safe existing Email keys. The previously blocked WhatsApp inbound runs subsequently completed without duplicate paid work.
+
+## Conversation lifecycle — VERIFIED ALIGNED
+
+PR #111 aligned real linked replies with the canonical Conversation lifecycle:
+
+- reply-driven stages `NEW`, `WAITING_CUSTOMER`, `UNANSWERED`, `FOLLOW_UP_DUE` move to `ACTIVE`;
+- already `ACTIVE`, higher-intent, HUMAN, PAUSED and terminal stages are preserved;
+- terminal Lead states are never reactivated by a later inbound message;
+- Email and WhatsApp use the same shared lifecycle rule.
+
+Production backfill updated only the two rows satisfying all of these conditions: `stage=NEW`, Conversation `AUTO`, not requires-human, Lead `REPLIED/AUTO`, and durable matching inbound `RECEIVED` evidence. The PAUSED/requires-human row was not changed.
+
+## Multi-Agent sales intelligence — CURRENT TRUTH
+
+The existing Agent architecture is canonical and must not be rebuilt.
+
+Pipeline:
+
+`Intent Discovery / Psychology / Business Analyst / Culture / Sales & Marketing / Evidence Checker / Preview Director -> Decision Orchestrator -> Secretary -> Relevance Checker`
+
+Context hydration includes:
+
+- authoritative Lead/Business/Conversation;
+- recent conversation memory and summary;
+- canonical Conversation stage/mode;
+- active Knowledge and Prompt versions;
+- Agent settings;
+- enabled Services;
+- canonical market Pricing/floor/discount boundaries;
+- locale/tone profile;
+- approved Portfolio evidence;
+- canonical quote context where relevant.
+
+Selective routing remains `ZERO_COST / LIGHT / FULL`. Deterministic work is preferred before paid model calls. Agent settings with `model=null` intentionally use Router Default.
+
+## Growth Brain / Knowledge — VERIFIED
+
+Canonical storage remains `knowledge_versions`; there is no second Knowledge Base.
+
+Active Production Knowledge keys:
+
+- `smartvisions_brand_positioning` v1
+- `smartvisions_customer_journey` **v2**
+
+Active Prompt versions: 0 by design. Hard safety/system behavior lives in code unless measured owner-tunable prompt content is justified.
+
+`smartvisions_customer_journey` v2 was published through the existing OWNER-only atomic `publish_knowledge_version` function. The publisher uses locking/version allocation, deactivates the prior active version, inserts the new version and writes an audit event in one transaction.
+
+v2 explicitly encodes:
+
+- Evidence Before Offer;
+- `NO_RECOMMENDATION` when evidence is insufficient;
+- Portfolio Before Free Custom Work;
+- custom Smart Preview only for an explicit customer request or an approved controlled internal case;
+- canonical Pricing/discount rules;
+- human escalation for custom terms, exceptional discounts, payment/contract, complaints, explicit human request and low confidence.
+
+v1 remains in history and is inactive; it was not overwritten.
+
+## Market fit / Portfolio / Preview
+
+The existing deterministic service-fit engine is the recommendation foundation. Do not add a parallel recommendation engine.
+
+Rules:
+
+- a missing website alone is not proof of Website fit;
+- market/industry/maturity/evidence determine the recommended service;
+- `NO_RECOMMENDATION` is valid;
+- approved Portfolio matcher is reused for relevant examples;
+- custom Preview is not a default cold-sales tactic;
+- existing Preview infrastructure remains for explicit customer requests and controlled internal cases.
+
+## Services / Pricing / locale
+
+Current Production counts at reconciliation:
+
+- enabled Services: **7**
+- `service_prices` rows: **37**
+- pricing remains canonical in existing Pricing tables; Agent/Knowledge must never invent or duplicate prices.
+
+## Cost Guard / paid AI — PRODUCTION
+
+Canonical Production settings:
+
+- monthly total budget: `$25`
+- OpenAI: `$10`
+- Google Places: `$5`
+- Email: `$4`
+- WhatsApp: `$3`
+- reserve: `$3`
+- warning / throttle / critical / hard stop: `70 / 85 / 95 / 100%`
+- daily new leads: `50`
+- daily website audits: `15`
+- daily deep AI runs: `10`
+- max AI runs per Lead: `20`
+- max voice duration: `180s`
+- max automatic retries: `1`
+- audit cache: `30 days`
+- Router Default low-cost model: `gpt-5.6-luna`
+- Router Default high-reasoning model: `gpt-5.6-terra`
+
+Recorded month spend during the pre-pilot audit was only about `$0.004858`, all OpenAI usage. The legacy `system_controls.monthly_budget_usd` is not a second source of truth.
+
+Paid OpenAI Agent and Google Places operations use atomic reservations and later settlement/reconciliation. Ambiguous network/provider failures remain conservatively accounted rather than disappearing.
+
+## Provider state
+
+Production durable state:
 
 - `GOOGLE_PLACES / DISCOVERY`: CONNECTED, enabled
 - `OPENAI / AI`: CONNECTED, enabled
 - `META / WHATSAPP`: CONNECTED, enabled
 - `EMAIL_PROVIDER / EMAIL`: CONNECTED, enabled
-- WhatsApp Voice transcription: production-proven
+- WhatsApp Voice: production-proven
 - Preview public delivery: production-proven
-- Telegram command webhook/control plane: production-proven for real owner commands
-- `CRAWL4AI / AUDIT`: NOT_CONFIGURED, disabled, optional while deterministic audit is sufficient
-- `META / INSTAGRAM`: NOT_CONFIGURED, disabled, intentionally deferred
-- `REDIS / QUEUE`: NOT_CONFIGURED, disabled, optional
+- Telegram owner command/control plane: production-proven
+- Telegram notification journal: successful events exist, no recorded notification failure at reconciliation
+- `CRAWL4AI / AUDIT`: NOT_CONFIGURED, optional while deterministic audit is sufficient
+- `META / INSTAGRAM`: NOT_CONFIGURED, intentionally deferred
+- `REDIS / QUEUE`: NOT_CONFIGURED, unnecessary at current scale
 
-Provider status must not be upgraded merely because a secret exists. Durable success evidence remains authoritative.
+A configured secret alone never upgrades an integration to CONNECTED.
 
-## WhatsApp Catalog E2E — PRODUCTION VERIFIED
+## WhatsApp / Email / Voice / Preview durable proofs
 
-Verified controlled path:
+Previously verified controlled Production paths remain valid:
 
-`real inbound → linked Lead/Conversation → Agent → deterministic Catalog recommendation → Shadow Approval → owner approval → canonical Approved Send → Meta product message → SENT → DELIVERED → READ`
+- WhatsApp: real inbound -> linked Lead/Conversation -> Agent -> Shadow Approval -> owner approval -> canonical Catalog send -> SENT -> DELIVERED -> READ for INTERNAL_TEST.
+- Email: branded outbound delivery and signed custom-domain inbound through Resend Receiving are proven.
+- Voice: real WhatsApp voice media -> one logical cached OpenAI transcription -> no duplicate cost on replay.
+- Preview: deterministic controlled Preview -> APPROVED -> internal share -> public token view -> VIEWED with no duplicate subsystem.
 
-Canonical Catalog ID: `1773319100642340`.
+These historical transport proofs are not permission for broad autonomous outreach.
 
-Current Catalog Content IDs:
+## Shadow pre-pilot behavior gate — CODE/CI VERIFIED
 
-- `SV-WEB-001` — Website Design & Development
-- `SV-IG-CONTENT-001` — Instagram Content Creation
-- `SV-WA-001` — WhatsApp Automation
-- `SV-SEO-001` — SEO & GEO
-- `SV-AI-AGENT-001` — AI Agents
-- `SV-SM-001` — Social Media Management
+The full CI suite on PR #111 is green. Existing focused tests cover the agreed pre-pilot behavior set on the real policy/lifecycle primitives:
 
-No duplicate provider send occurred and Shadow Mode remained ON throughout the proof.
+1. positive interest remains REVIEW while Shadow Mode is enabled;
+2. price/discount objection escalates to HUMAN rather than inventing a deal;
+3. no-reply follow-up schedule exists, while a customer reply removes follow-up work;
+4. explicit English/Arabic/Persian DNC is detected deterministically and approved-send cannot bypass it;
+5. human takeover blocks approved send and automation path;
+6. provider-boundary Kill Switch flip blocks send;
+7. completed logical Agent runs replay instead of paying/running again, while PROCESSING/FAILED work is not blindly duplicated;
+8. WhatsApp free-form is allowed just inside 24 hours and blocked at exactly 24 hours.
 
-## Email / Resend — OUTBOUND + BRANDED INBOUND PRODUCTION VERIFIED
+The canonical-send suite also specifically verifies DNC after approval, suppression, recipient drift and Shadow fail-closed behavior.
 
-Provider: Resend.
+Do not manufacture live customer sends simply to re-prove deterministic safety tests. During the first pilot, durable DB/approval/provider evidence should be monitored continuously while Shadow/approval gates remain on.
 
-Verified outbound:
+## Telegram Owner Assistant
 
-- sender `hello@smartvisionsai.com`
-- durable `email.sent` and `email.delivered` evidence
-- provider/mailbox integration CONNECTED and enabled
+Telegram control-plane history includes successful owner command runs. Latest audited command history was healthy and the notification journal contained 4 events with 0 failures.
 
-Verified inbound:
+Historical failed command rows are retained as evidence and must not be deleted for cosmetic reasons.
 
-`Gmail → hello@smartvisionsai.com → Resend Receiving → signed email.received → content retrieval → exact INTERNAL_TEST Business/Lead match → EMAIL conversation → inbound outreach_messages → Lead REPLIED`
+## Supabase Security Advisor
 
-The controlled inbound persisted exactly once.
+Current Advisor state contains one real manual hardening warning:
 
-Important distinction: the provider webhook deliberately does not invoke paid AI directly because provider retries must not duplicate Agent calls. Email transport is green; broad autonomous Email conversation behavior still requires the Shadow Mode behavior scenarios below.
+- **Leaked Password Protection Disabled** in Supabase Auth.
 
-## WhatsApp Voice — PRODUCTION VERIFIED
+It also reports INFO for `telegram_command_runs` and `telegram_notification_events` having RLS enabled with no public policies. These tables are intentionally fail-closed/service-only; do not add broad policies merely to silence the Advisor.
 
-A real WhatsApp voice note from the linked INTERNAL_TEST contact was downloaded from Meta and transcribed once through OpenAI.
+The leaked-password setting is an Auth project setting, not a schema migration. Enable it in the Supabase dashboard if the current plan exposes the control.
 
-Durable evidence includes:
+## GitHub repository hygiene
 
-- real Meta provider message/media identity
-- one logical `voice_transcriptions` row
-- model `gpt-4o-mini-transcribe`
-- status `SUCCEEDED`
-- one paid OpenAI Voice usage event for the first logical transcription
-- repeated identical logical request returned cached transcription with `openAiCalls=0`
-- no second usage/cost event
-- no outbound message triggered
-- Shadow Mode remained ON
+`main` is currently reported as unprotected by GitHub. Runtime/CI discipline is good, but repository settings should still protect `main` with PR + required CI and block force-push/delete. This is an account/repository setting rather than an application-code change.
 
-Voice already has cache/idempotency and crash-recovery semantics. PR #88 intentionally did not mix Voice into the new atomic pre-call reservation mechanism; this is a bounded hardening option before larger concurrency, not a reason to rebuild the Voice path.
+The old Vercel Git status can remain red because the Vercel account/deployment is frozen; it is not the canonical deployment gate. Cloudflare CI/deploy status is authoritative.
 
-## Preview E2E — PRODUCTION VERIFIED
+## Controlled Oman pilot rule
 
-Verified lifecycle:
+The first pilot may start only as a **tiny controlled pilot**, not broad autonomy:
 
-`real voice Website request → deterministic zero-provider-cost Preview → GENERATED → owner APPROVED → controlled internal share → SENT → public token view → VIEWED`
-
-Evidence includes quality `100/100`, zero provider calls for generation/share, zero generation cost, single lifecycle events and public unauthenticated access without exposing the internal Control Center shell.
-
-Do not create a second Preview/content system.
-
-## Multi-Agent sales intelligence — CURRENT TRUTH
-
-The Agent architecture is canonical and should not be replaced.
-
-Current runtime wiring hydrates, before the paid boundary:
-
-- the authoritative Lead/Conversation;
-- up to 14 recent inbound/outbound conversation messages;
-- conversation summary/stage/mode/language/dialect;
-- active `knowledge_versions`;
-- active `prompt_versions`;
-- per-Agent settings/model/confidence/config;
-- enabled canonical Services;
-- market-specific canonical `service_prices` including floor/discount boundaries;
-- market locale/tone profile;
-- approved evidence/portfolio context passed through the existing Agent contract.
-
-Specialist outputs feed the real Orchestrator. The Secretary reads specialist consensus, Orchestrator decision, conversation memory and canonical service knowledge. The Relevance Checker evaluates the actual proposed reply rather than only the inbound message.
-
-### Current Production Knowledge/Prompt baseline
-
-Production now has:
-
-- active Knowledge versions: `2`
-- active Prompt versions: `0`
-- enabled Services: `6`
-- service price rows: `36`
-- locale profiles: `6`
-
-Active Knowledge keys:
-
-- `smartvisions_brand_positioning`
-- `smartvisions_customer_journey`
-
-The baseline contains only brand/process guidance. It does not copy service prices, market locale configuration or dynamic portfolio evidence. Services/Pricing/Locale remain the canonical commercial source of truth, and approved portfolio evidence remains runtime data.
-
-Owner publication of Knowledge and Prompt versions now uses one atomic PostgreSQL transaction: organization/key lock → next version allocation → old active version deactivation → new active version insertion → audit insertion. Partial unique indexes enforce one active version per Knowledge key or Agent prompt. The RPCs are `SECURITY INVOKER`, OWNER RLS remains authoritative, and `anon`/`service_role` do not have publish execution.
-
-Controlled transactional Production verification proved both Knowledge and Prompt publishers create an active row plus audit row, then rollback cleanly. Verification rows/audits were confirmed absent afterward. No active Prompt was seeded intentionally; hard code-level Agent safety remains the fallback until owner-tunable prompt content has a measured reason to exist.
-
-## Selective AI routing / token-efficiency — PRODUCTION
-
-PR #85 established the intended paid boundary:
-
-- `ZERO_COST`: zero paid Agent calls.
-- `LIGHT`: one paid Secretary call for routine replies.
-- `FULL`: deterministic specialists still contribute, but only specialists that materially need model reasoning are paid; Orchestrator/Secretary and high-risk relevance/evidence checks remain where justified.
-- Typical complex FULL work is roughly 3–6 paid calls instead of paying the entire 7–10 Agent committee.
-- context history limits are enforced in the actual Responses payload.
-- task-specific output ceilings and GPT-5 reasoning effort are explicit.
-- cached input tokens are accounted separately.
-- configured per-Agent model selection is honored.
-
-Do not optimize cost by removing evidence/pricing/handoff safety. The objective is fewer unnecessary calls, not cheaper bad decisions.
-
-## Cost Guard / accounting — PRODUCTION
-
-Canonical monthly guardrails remain:
-
-- total `$25`
-- OpenAI `$10`
-- Google Places `$5`
-- Email `$4`
-- WhatsApp `$3`
-- reserve `$3`
-- warning / throttle / critical / hard-stop: `70 / 85 / 95 / 100%`
-- daily new leads: `50`
-- daily website audits: `15`
-- daily deep AI runs: `10`
-- max AI runs per lead: `20`
-- max voice seconds: `180`
-- max automatic retries: `1`
-
-Current hardening:
-
-- monthly provider totals are aggregated in PostgreSQL rather than downloading the month's usage history for each serverless preflight;
-- `max_ai_runs_per_lead` is enforced for paid LIGHT/FULL AI work;
-- `daily_deep_ai_runs` is enforced for FULL reasoning;
-- ZERO_COST deterministic work remains available without consuming paid-AI quota;
-- OpenAI usage uses current official model pricing and cached-input accounting;
-- Dashboard distinguishes reconciled/token-metered, conservative reserve, pending reconciliation and legacy/unclassified records;
-- paid OpenAI Agent + paid Google Places work reserves budget atomically in canonical `usage_events` before the provider call;
-- successful calls settle that same row, avoiding double accounting;
-- network/5xx ambiguity remains conservatively counted and becomes reconciliation-required rather than disappearing after a timeout;
-- no active/stale reservation remained after the PR #88 DB-only verification transaction.
-
-### `usage_events` least privilege
-
-Production verification exposed older broad/default grants and PR #88 explicitly corrected them:
-
-- authenticated: SELECT + INSERT only; no table UPDATE/DELETE/TRUNCATE;
-- service_role: SELECT + INSERT, no table-wide UPDATE/DELETE/TRUNCATE;
-- service_role UPDATE only on `cost_usd`, `input_tokens`, `output_tokens`, `units`, `metadata`;
-- service_role cannot mutate provider identity;
-- reservation/finalization RPC execute: service_role only; authenticated/anon denied.
-
-## Telegram Owner Assistant — CURRENT PRODUCTION EVIDENCE
-
-Telegram is no longer merely code/deployment-ready. Real owner command journal evidence exists.
-
-Production journal currently contains successful executions for read/control flows including:
-
-- status
-- services
-- pricing
-- leads
-- markets
-- budget
-- help
-- reversible market-style mutation
-- confirmation callback
-- revert-last-change
-
-The stale-preview/changed-state confirmation path also failed closed as designed. An earlier status lookup failure is superseded by a later successful `SHOW_STATUS` run.
-
-### Telegram gap still not proven
-
-`telegram_notification_events` currently has `0` rows. Therefore do **not** claim real Production E2E yet for outbound owner alerts such as:
-
-- New Lead
-- Hot Lead
-- Discount request
-- Consultation request
-- Human handoff
-
-The alert code/context is implemented, but the real Telegram notification send/journal path still needs one controlled proof without manufacturing a fake customer event.
-
-## Business Hunter — CURRENT TRUTH
-
-Business Hunter remains intact and must not be rebuilt.
-
-Canonical behavior:
-
-- Google Places IDs-first discovery;
-- dedupe/minimum qualification before paid enrichment;
-- paid Details only when value justifies it;
-- standalone website absence/social-only contact can strengthen Website opportunity;
-- having a website does not eliminate other growth/content opportunities;
-- Muscat/Oman/international routing remains canonical;
-- qualification itself does not trigger outreach;
-- paid Google calls now atomically reserve Cost Guard budget before provider invocation.
-
-Project/marketplace Hunter remains a future source-expansion lane only if sources are public/official/licensed/permitted and feed the existing Lead/Intent model. No second CRM.
-
-Instagram remains deferred and is not a V1 launch blocker.
-
-## Remaining launch gates — prioritized
-
-Do not disable Shadow Mode and do not start broad autonomous prospecting yet.
-
-1. **Telegram owner alerts:** produce one controlled real notification-path proof and then cover New Lead / Hot Lead / Discount / Consultation / Human Handoff alert behavior without triggering customer outreach.
-2. **Shadow Mode behavior scenarios:** using test/internal contacts only, prove positive reply, objection, no reply/follow-up, DNC/unsubscribe and human takeover.
-3. **Follow-up cancellation:** prove cancellation with an actual pending follow-up rather than a synthetic state claim.
-4. **Full-path fail-closed checks:** DNC, human takeover, global kill, local time and commercial-price boundaries must remain authoritative through the real path.
-5. **Voice concurrency decision:** before materially higher concurrency, either extend the atomic reservation primitive to Voice with its existing post-provider reconciliation semantics or document why the existing single-call/cache boundary plus small pilot volume is sufficient.
-6. **Tiny Oman pilot:** only after the gates above are green, make an explicit owner decision on permitted automation level and tiny volume. Scale only from measured outcomes.
-
-Crawl4AI, Redis and Instagram are not current launch blockers unless a measured use case proves otherwise.
+- real evidence-qualified Oman businesses only;
+- low volume;
+- Shadow Mode remains ON;
+- approval/human handoff remains authoritative;
+- no fake leads;
+- no blind follow-up sends;
+- no free custom Preview by default;
+- no Instagram automation;
+- no Redis/queue expansion;
+- monitor DNC/suppression, Conversation stage, Agent run idempotency, Cost Guard, approval state, Telegram alerts and provider outcomes;
+- scale only after measured outcomes and an explicit owner decision.
 
 ## Definition of next clean work
 
-Prefer evidence over architecture tourism:
+Do not invent another architecture phase. Continue from:
 
-`current canonical data → deterministic/cache gate → Cost Guard → minimum paid reasoning/provider work → Shadow Approval/control → durable outcome evidence → only then tune/scale`
+`real business evidence -> deterministic qualification/service fit -> smallest useful recommendation or NO_RECOMMENDATION -> selective Agent reasoning -> Shadow/approval/human gates -> canonical provider-boundary safety -> durable result evidence -> measured learning`
 
-If a future chat proposes rebuilding Hunter, adding another Agent framework, duplicating pricing/knowledge, running paid smoke tests for already-proven paths, reintroducing Vercel as the default runtime, or disabling Shadow Mode before behavior proof, stop and reconcile against this document and Issue #18 first.
+If a future change proposes a second CRM/Knowledge/recommendation/Portfolio/automation/Agent stack, Redis without measured need, Vercel as the primary runtime, free custom Preview as default outreach, or disabling Shadow before controlled pilot evidence, stop and reconcile against current runtime and this document first.
