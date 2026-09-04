@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
-import { evaluateLocalWindow, type MarketCode } from '@/lib/outreach/scheduler';
+import { assertCanonicalSendAllowed } from '@/lib/outreach/canonical-send-gate';
 import { MetaCloudWhatsAppProvider } from '@/lib/whatsapp/meta-cloud';
-import { evaluateWhatsAppSendPolicy } from '@/lib/whatsapp/policy';
-import { assertChannelAllowed, getRuntimeControls } from '@/lib/reliability/runtime-controls';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
+
+function serviceClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Server Supabase credentials are required for WhatsApp sending');
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
 
 export async function POST(request: Request) {
   const authError = requireInternalApiKey(request);
@@ -12,35 +18,57 @@ export async function POST(request: Request) {
 
   const body = await request.json() as {
     organizationId?: string;
+    leadId?: string;
+    conversationId?: string;
     to?: string;
     text?: string;
-    marketCode?: MarketCode;
-    leadTimezone?: string;
-    agentMode?: 'AUTO' | 'PAUSED' | 'HUMAN';
-    shadowMode?: boolean;
-    doNotContact?: boolean;
     replyToMessageId?: string;
     priority?: 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
-    leadId?: string;
-    lastCustomerMessageAt?: string;
     templateName?: string;
     templateLanguageCode?: string;
   };
 
-  if (!body.to || !body.marketCode) {
-    return NextResponse.json({ error: 'to and marketCode are required' }, { status: 400 });
+  if (!body.organizationId || !body.leadId || !body.conversationId || !body.to) {
+    return NextResponse.json({ error: 'organizationId, leadId, conversationId and to are required' }, { status: 400 });
   }
-  if (body.doNotContact) return NextResponse.json({ error: 'Lead is marked do-not-contact' }, { status: 409 });
-  if (body.agentMode === 'HUMAN') return NextResponse.json({ error: 'AI sending is blocked during human takeover' }, { status: 409 });
-  if (body.agentMode === 'PAUSED') return NextResponse.json({ error: 'AI sending is paused' }, { status: 409 });
-  if (body.shadowMode) return NextResponse.json({ error: 'Shadow mode requires human review before send' }, { status: 409 });
 
-  const whatsappPolicy = evaluateWhatsAppSendPolicy({
-    lastCustomerMessageAt: body.lastCustomerMessageAt,
-    templateName: body.templateName,
-  });
-  if (!whatsappPolicy.allowed) {
-    return NextResponse.json({ error: 'WhatsApp free-form send is outside the 24-hour customer service window; an approved template is required', whatsappPolicy }, { status: 409 });
+  const supabase = serviceClient();
+  try {
+    await assertCanonicalSendAllowed({
+      supabase,
+      organizationId: body.organizationId,
+      leadId: body.leadId,
+      conversationId: body.conversationId,
+      channel: 'WHATSAPP',
+      recipient: body.to,
+      templateName: body.templateName,
+    });
+    const costState = await getCostGuardState(body.organizationId);
+    assertPaidOperationAllowed(costState, body.priority ?? 'NORMAL');
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Canonical safety block' }, { status: 409 });
+  }
+
+  let finalGate: Awaited<ReturnType<typeof assertCanonicalSendAllowed>>;
+  try {
+    // The durable inbound timestamp, DNC/suppression state and runtime controls are
+    // re-read immediately before the provider call. Request body safety hints are ignored.
+    finalGate = await assertCanonicalSendAllowed({
+      supabase,
+      organizationId: body.organizationId,
+      leadId: body.leadId,
+      conversationId: body.conversationId,
+      channel: 'WHATSAPP',
+      recipient: body.to,
+      templateName: body.templateName,
+    });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Final canonical safety block' }, { status: 409 });
+  }
+
+  const whatsappPolicy = finalGate.whatsappPolicy;
+  if (!whatsappPolicy?.allowed) {
+    return NextResponse.json({ error: 'WhatsApp canonical send policy blocks sending', whatsappPolicy }, { status: 409 });
   }
   if (whatsappPolicy.mode === 'FREEFORM' && !body.text) {
     return NextResponse.json({ error: 'text is required inside the customer service window' }, { status: 400 });
@@ -49,45 +77,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'templateName and templateLanguageCode are required for template sends' }, { status: 400 });
   }
 
-  try {
-    const [controls, costState] = await Promise.all([
-      getRuntimeControls(body.organizationId),
-      getCostGuardState(body.organizationId),
-    ]);
-    assertChannelAllowed(controls, 'WHATSAPP');
-    assertPaidOperationAllowed(costState, body.priority ?? 'NORMAL');
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Runtime safety block' }, { status: 409 });
-  }
-
-  const window = evaluateLocalWindow({ marketCode: body.marketCode, leadTimezone: body.leadTimezone });
-  if (!window.allowed) return NextResponse.json({ error: 'Outside recipient local send window', window }, { status: 409 });
-
   const provider = new MetaCloudWhatsAppProvider();
   const result = whatsappPolicy.mode === 'TEMPLATE'
     ? await provider.sendTemplate({ to: body.to, templateName: body.templateName!, languageCode: body.templateLanguageCode! })
     : await provider.sendText({ to: body.to, text: body.text!, replyToMessageId: body.replyToMessageId });
 
-  if (body.organizationId) {
-    const pricingStatus = whatsappPolicy.mode === 'FREEFORM'
-      ? 'FINAL_FREE_SERVICE_WINDOW'
-      : 'PENDING_TEMPLATE_CATEGORY_RECONCILIATION';
-    await recordUsage({
-      organizationId: body.organizationId,
-      provider: 'WHATSAPP',
-      operation: whatsappPolicy.mode === 'TEMPLATE' ? 'SEND_TEMPLATE' : 'SEND_TEXT',
-      costUsd: 0,
-      units: 1,
-      leadId: body.leadId,
-      metadata: {
-        pricing_status: pricingStatus,
-        whatsapp_mode: whatsappPolicy.mode,
-        ...(whatsappPolicy.mode === 'TEMPLATE' ? {
-          pricing_note: 'Template charge depends on Meta template category and destination market; zero is not asserted as final invoice cost',
-          template_name: body.templateName,
-        } : {}),
-      },
-    });
-  }
+  const pricingStatus = whatsappPolicy.mode === 'FREEFORM'
+    ? 'FINAL_FREE_SERVICE_WINDOW'
+    : 'PENDING_TEMPLATE_CATEGORY_RECONCILIATION';
+  await recordUsage({
+    organizationId: body.organizationId,
+    provider: 'WHATSAPP',
+    operation: whatsappPolicy.mode === 'TEMPLATE' ? 'SEND_TEMPLATE' : 'SEND_TEXT',
+    costUsd: 0,
+    units: 1,
+    leadId: body.leadId,
+    metadata: {
+      pricing_status: pricingStatus,
+      whatsapp_mode: whatsappPolicy.mode,
+      canonical_last_inbound_at: finalGate.lastInboundAt,
+      ...(whatsappPolicy.mode === 'TEMPLATE' ? {
+        pricing_note: 'Template charge depends on Meta template category and destination market; zero is not asserted as final invoice cost',
+        template_name: body.templateName,
+      } : {}),
+    },
+  });
   return NextResponse.json({ ...result, whatsappPolicy });
 }

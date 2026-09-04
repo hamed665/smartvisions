@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
-import { evaluateLocalWindow, type MarketCode } from '@/lib/outreach/scheduler';
+import { assertCanonicalSendAllowed } from '@/lib/outreach/canonical-send-gate';
 import { evaluateMailboxHealth } from '@/lib/outreach/mailbox-health';
 import { countMailboxSendsLast24Hours } from '@/lib/outreach/mailbox-usage';
 import { ResendEmailProvider } from '@/lib/outreach/resend-provider';
-import { assertChannelAllowed, getRuntimeControls } from '@/lib/reliability/runtime-controls';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
 
 function serviceClient() {
@@ -21,26 +20,20 @@ export async function POST(request: Request) {
 
   const body = await request.json() as {
     organizationId?: string;
+    leadId?: string;
+    conversationId?: string;
     mailboxId?: string;
     to?: string;
     subject?: string;
     text?: string;
     html?: string;
     idempotencyKey?: string;
-    marketCode?: MarketCode;
-    leadTimezone?: string;
-    agentMode?: 'AUTO' | 'PAUSED' | 'HUMAN';
-    doNotContact?: boolean;
     priority?: 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
-    leadId?: string;
   };
 
-  if (!body.organizationId || !body.mailboxId || !body.to || !body.subject || !body.text || !body.idempotencyKey || !body.marketCode) {
-    return NextResponse.json({ error: 'organizationId, mailboxId, to, subject, text, idempotencyKey and marketCode are required' }, { status: 400 });
+  if (!body.organizationId || !body.leadId || !body.conversationId || !body.mailboxId || !body.to || !body.subject || !body.text || !body.idempotencyKey) {
+    return NextResponse.json({ error: 'organizationId, leadId, conversationId, mailboxId, to, subject, text and idempotencyKey are required' }, { status: 400 });
   }
-  if (body.doNotContact) return NextResponse.json({ error: 'Lead is marked do-not-contact' }, { status: 409 });
-  if (body.agentMode === 'HUMAN') return NextResponse.json({ error: 'AI sending is blocked during human takeover' }, { status: 409 });
-  if (body.agentMode === 'PAUSED') return NextResponse.json({ error: 'AI sending is paused' }, { status: 409 });
 
   const supabase = serviceClient();
   const { data: existing, error: existingError } = await supabase
@@ -55,18 +48,19 @@ export async function POST(request: Request) {
   }
 
   try {
-    const [controls, costState] = await Promise.all([
-      getRuntimeControls(body.organizationId),
-      getCostGuardState(body.organizationId),
-    ]);
-    assertChannelAllowed(controls, 'EMAIL');
+    await assertCanonicalSendAllowed({
+      supabase,
+      organizationId: body.organizationId,
+      leadId: body.leadId,
+      conversationId: body.conversationId,
+      channel: 'EMAIL',
+      recipient: body.to,
+    });
+    const costState = await getCostGuardState(body.organizationId);
     assertPaidOperationAllowed(costState, body.priority ?? 'NORMAL');
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Runtime safety block' }, { status: 409 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Canonical safety block' }, { status: 409 });
   }
-
-  const window = evaluateLocalWindow({ marketCode: body.marketCode, leadTimezone: body.leadTimezone });
-  if (!window.allowed) return NextResponse.json({ error: 'Outside recipient local send window', window }, { status: 409 });
 
   const { data: mailbox, error: mailboxError } = await supabase
     .from('mailboxes')
@@ -101,6 +95,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Mailbox health blocks sending', mailboxHealth }, { status: 409 });
   }
 
+  try {
+    // Provider-boundary recheck: state may have changed after preflight/approval.
+    await assertCanonicalSendAllowed({
+      supabase,
+      organizationId: body.organizationId,
+      leadId: body.leadId,
+      conversationId: body.conversationId,
+      channel: 'EMAIL',
+      recipient: body.to,
+    });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Final canonical safety block' }, { status: 409 });
+  }
+
   const result = await provider.sendEmail({
     mailboxId: body.mailboxId,
     to: body.to,
@@ -112,7 +120,7 @@ export async function POST(request: Request) {
 
   const { error: upsertError } = await supabase.from('outreach_messages').upsert({
     organization_id: body.organizationId,
-    lead_id: body.leadId ?? null,
+    lead_id: body.leadId,
     mailbox_id: body.mailboxId,
     channel: 'EMAIL',
     direction: 'OUTBOUND',

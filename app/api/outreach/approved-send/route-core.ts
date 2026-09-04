@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { approvedSendFailureDisposition, evaluateApprovedSendPolicy } from '@/lib/outreach/approved-send-policy';
+import { assertCanonicalSendAllowed } from '@/lib/outreach/canonical-send-gate';
 import { verifyControlledWhatsAppCatalogPilot } from '@/lib/outreach/controlled-whatsapp-pilot';
 import { evaluateLocalWindow, type MarketCode } from '@/lib/outreach/scheduler';
 import { evaluateMailboxHealth } from '@/lib/outreach/mailbox-health';
-import { evaluateWhatsAppSendPolicy } from '@/lib/whatsapp/policy';
+import { countMailboxSendsLast24Hours } from '@/lib/outreach/mailbox-usage';
 import { MetaCloudWhatsAppProvider } from '@/lib/whatsapp/meta-cloud';
 import { assertSmartVisionsCatalogContentId } from '@/lib/whatsapp/catalog';
 import type { WhatsAppSendResult } from '@/lib/whatsapp/provider';
@@ -187,28 +188,53 @@ export async function POST(request: Request) {
   let providerAccepted = false;
   let providerMessageId: string | null = null;
   try {
+    if (!message.lead_id || !message.conversation_id) throw new Error('Approved send is missing canonical lead/conversation linkage');
+    if (message.channel !== 'EMAIL' && message.channel !== 'WHATSAPP') throw new Error('Approved send channel is unsupported');
+
+    const assertFinalProviderBoundary = async () => {
+      const gate = await assertCanonicalSendAllowed({
+        supabase,
+        organizationId: body.organizationId!,
+        leadId: message.lead_id!,
+        conversationId: message.conversation_id!,
+        channel: message.channel as 'EMAIL' | 'WHATSAPP',
+        recipient: sendContext.to!,
+        templateName: sendContext.template_name,
+        shadowModeExceptionVerified,
+      });
+      const costState = await getCostGuardState(body.organizationId!);
+      assertPaidOperationAllowed(costState, body.priority ?? 'NORMAL');
+      return gate;
+    };
+
     if (message.channel === 'EMAIL') {
       if (!sendContext.mailbox_id || !sendContext.subject) throw new Error('Approved email is missing mailbox_id or subject');
       const { data: mailbox, error: mailboxError } = await supabase
         .from('mailboxes')
-        .select('id,enabled,daily_limit,sent_today,bounce_rate,complaint_rate')
+        .select('id,enabled,daily_limit,bounce_rate,complaint_rate')
         .eq('organization_id', body.organizationId)
         .eq('id', sendContext.mailbox_id)
         .maybeSingle();
       if (mailboxError || !mailbox) throw new Error(mailboxError?.message ?? 'Mailbox not found');
 
+      const sentLast24Hours = await countMailboxSendsLast24Hours({
+        supabase,
+        organizationId: body.organizationId,
+        mailboxId: sendContext.mailbox_id,
+      });
       const provider = new ResendEmailProvider();
       const providerHealth = await provider.health();
       const mailboxHealth = evaluateMailboxHealth({
         enabled: Boolean(mailbox.enabled),
         dailyLimit: Number(mailbox.daily_limit),
-        sentToday: Number(mailbox.sent_today),
+        sentToday: sentLast24Hours,
         bounceRate: Number(mailbox.bounce_rate),
         complaintRate: Number(mailbox.complaint_rate),
         providerHealthy: providerHealth.ok,
       });
       if (!mailboxHealth.allowed) throw new Error(`Mailbox health blocks sending: ${mailboxHealth.blocks.join(',')}`);
 
+      await assertFinalProviderBoundary();
       const result = await provider.sendEmail({
         mailboxId: sendContext.mailbox_id,
         to: sendContext.to,
@@ -241,12 +267,13 @@ export async function POST(request: Request) {
       }, { onConflict: 'organization_id,idempotency_key' });
       if (outreach.error) throw new Error(`Email send ledger reconciliation failed: ${outreach.error.message}`);
 
-      const mailboxUpdate = await supabase.from('mailboxes').update({ sent_today: Number(mailbox.sent_today) + 1, updated_at: new Date().toISOString() }).eq('organization_id', body.organizationId).eq('id', sendContext.mailbox_id);
+      const mailboxUpdate = await supabase.from('mailboxes').update({ sent_today: sentLast24Hours + 1, updated_at: new Date().toISOString() }).eq('organization_id', body.organizationId).eq('id', sendContext.mailbox_id);
       if (mailboxUpdate.error) throw new Error(`Mailbox counter reconciliation failed: ${mailboxUpdate.error.message}`);
       await recordUsage({ organizationId: body.organizationId, provider: 'EMAIL', operation: 'SEND_EMAIL', costUsd: 0, units: 1, leadId: message.lead_id ?? undefined, metadata: { provider: 'RESEND', source: 'APPROVED_SHADOW_DRAFT', pricing_status: 'PENDING_RECONCILIATION' } });
     } else {
-      const whatsappPolicy = evaluateWhatsAppSendPolicy({ lastCustomerMessageAt: sendContext.last_customer_message_at ?? undefined, templateName: sendContext.template_name ?? undefined });
-      if (!whatsappPolicy.allowed) throw new Error('WhatsApp 24-hour policy blocks this approved send');
+      const finalGate = await assertFinalProviderBoundary();
+      const whatsappPolicy = finalGate.whatsappPolicy;
+      if (!whatsappPolicy?.allowed) throw new Error('WhatsApp canonical 24-hour policy blocks this approved send');
       const provider = new MetaCloudWhatsAppProvider();
       const catalogContentId = sendContext.catalog_content_id?.trim() || null;
       let whatsappOperation: 'SEND_TEMPLATE' | 'SEND_TEXT' | 'SEND_PRODUCT';
@@ -290,7 +317,7 @@ export async function POST(request: Request) {
         payload: { source: 'APPROVED_SHADOW_DRAFT', ...(catalogContentId ? { catalog_content_id: catalogContentId } : {}) },
       }, { onConflict: 'organization_id,provider_message_id,direction,event_type', ignoreDuplicates: true });
       if (eventWrite.error) throw new Error(`WhatsApp event reconciliation failed: ${eventWrite.error.message}`);
-      await recordUsage({ organizationId: body.organizationId, provider: 'WHATSAPP', operation: whatsappOperation, costUsd: 0, units: 1, leadId: message.lead_id ?? undefined, metadata: { source: 'APPROVED_SHADOW_DRAFT', pricing_status: 'PENDING_RECONCILIATION', ...(catalogContentId ? { catalog_content_id: catalogContentId } : {}) } });
+      await recordUsage({ organizationId: body.organizationId, provider: 'WHATSAPP', operation: whatsappOperation, costUsd: 0, units: 1, leadId: message.lead_id ?? undefined, metadata: { source: 'APPROVED_SHADOW_DRAFT', pricing_status: 'PENDING_RECONCILIATION', canonical_last_inbound_at: finalGate.lastInboundAt, ...(catalogContentId ? { catalog_content_id: catalogContentId } : {}) } });
     }
 
     const conversationUpdate = await supabase.from('sales_conversations').update({ last_outbound_at: new Date().toISOString(), last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('organization_id', body.organizationId).eq('id', message.conversation_id);

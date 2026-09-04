@@ -9,6 +9,11 @@ function requiredText(formData: FormData, key: string) {
   return value;
 }
 
+function optionalText(formData: FormData, key: string) {
+  const value = String(formData.get(key) ?? '').trim();
+  return value || null;
+}
+
 function numeric(formData: FormData, key: string) {
   const value = Number(formData.get(key));
   if (!Number.isFinite(value)) throw new Error(`${key} must be numeric`);
@@ -109,12 +114,8 @@ export async function updateAgent(formData: FormData) {
   const { data: current, error: readError } = await ctx.supabase.from('agent_settings').select('agent_name,config').eq('organization_id', ctx.organizationId).eq('id', id).maybeSingle();
   if (readError || !current) throw new Error(readError?.message ?? 'Agent not found');
 
-  const temperature = numeric(formData, 'temperature');
-  const max_tokens = Math.round(numeric(formData, 'max_tokens'));
   const confidence_threshold = numeric(formData, 'confidence_threshold');
-  if (temperature < 0 || temperature > 2) throw new Error('temperature out of range');
   if (confidence_threshold < 0 || confidence_threshold > 1) throw new Error('confidence threshold out of range');
-  if (max_tokens < 64) throw new Error('max_tokens is too low');
 
   const config = { ...((current.config ?? {}) as Record<string, unknown>) };
   if (current.agent_name === 'preview_director') {
@@ -128,16 +129,14 @@ export async function updateAgent(formData: FormData) {
 
   const payload = {
     enabled: formData.get('enabled') === 'on',
-    model: requiredText(formData, 'model'),
-    temperature,
-    max_tokens,
+    model: optionalText(formData, 'model'),
     confidence_threshold,
     config,
     updated_at: new Date().toISOString(),
   };
   const { error } = await ctx.supabase.from('agent_settings').update(payload).eq('organization_id', ctx.organizationId).eq('id', id);
   if (error) throw error;
-  await audit(ctx, 'UPDATE_AGENT_SETTINGS', 'agent_settings', id, { ...payload, config });
+  await audit(ctx, 'UPDATE_AGENT_SETTINGS', 'agent_settings', id, payload);
   revalidatePath('/agents');
 }
 
