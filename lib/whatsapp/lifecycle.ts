@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { isDoNotContactReply, persistCustomerDoNotContact } from '@/lib/conversations/sales-lifecycle';
+import { isDoNotContactReply, persistCustomerDoNotContact, persistCustomerReplyConversationState } from '@/lib/conversations/sales-lifecycle';
 import type { NormalizedWhatsAppInbound, NormalizedWhatsAppStatus } from './webhook';
 
 function serviceClient() {
@@ -131,6 +131,13 @@ export async function applyWhatsAppInboundLifecycle(organizationId: string, even
     });
     return { linked: true as const, leadId: lead.id, conversationId: conversation.id, agentMode: 'PAUSED' as const, doNotContact: true as const };
   }
+
+  await persistCustomerReplyConversationState({
+    supabase,
+    organizationId,
+    leadId: lead.id,
+    conversationId: conversation.id,
+  });
 
   const terminal = new Set(['WON','LOST','DO_NOT_CONTACT','HUMAN']);
   if (!terminal.has(String(lead.status))) {
