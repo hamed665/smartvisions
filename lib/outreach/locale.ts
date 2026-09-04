@@ -14,6 +14,9 @@ export interface LocaleProfile {
   maxReplyWords: number;
 }
 
+type ScriptFamily = 'ARABIC' | 'DEVANAGARI' | 'LATIN' | 'CYRILLIC' | 'CJK' | 'OTHER' | 'NONE';
+type CountedScript = Exclude<ScriptFamily, 'OTHER' | 'NONE'>;
+
 const overrides: Record<MarketCode, Omit<LocaleProfile, 'marketCode'>> = {
   OM: { primaryLocale: 'ar-OM', fallbackLocale: 'en', dialect: 'omani', tone: 'warm_short_business', dialectIntensity: 0.2, emojiLevel: 'low', maxFirstTouchWords: 80, maxReplyWords: 120 },
   AE: { primaryLocale: 'ar-AE', fallbackLocale: 'en', dialect: 'emirati', tone: 'polished_concise', dialectIntensity: 0.2, emojiLevel: 'low', maxFirstTouchWords: 80, maxReplyWords: 120 },
@@ -73,15 +76,15 @@ export function resolveReplyLanguage(input: {
   return remembered || 'und';
 }
 
-function dominantScript(text: string): 'ARABIC' | 'DEVANAGARI' | 'LATIN' | 'CYRILLIC' | 'CJK' | 'OTHER' | 'NONE' {
-  const counts = {
+function dominantScript(text: string): ScriptFamily {
+  const counts: Record<CountedScript, number> = {
     ARABIC: (text.match(/[\u0600-\u06FF]/gu) ?? []).length,
     DEVANAGARI: (text.match(/[\u0900-\u097F]/gu) ?? []).length,
     LATIN: (text.match(/[A-Za-z]/g) ?? []).length,
     CYRILLIC: (text.match(/[\u0400-\u04FF]/gu) ?? []).length,
     CJK: (text.match(/[\u3040-\u30FF\u3400-\u9FFF\uAC00-\uD7AF]/gu) ?? []).length,
   };
-  const entries = Object.entries(counts) as Array<[Exclude<ReturnType<typeof dominantScript>, 'OTHER' | 'NONE'>, number]>;
+  const entries = Object.entries(counts) as Array<[CountedScript, number]>;
   const [script, count] = entries.sort((a, b) => b[1] - a[1])[0];
   const total = entries.reduce((sum, [, value]) => sum + value, 0);
   if (!total) return /\p{L}/u.test(text) ? 'OTHER' : 'NONE';
