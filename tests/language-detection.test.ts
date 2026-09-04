@@ -10,8 +10,15 @@ describe('zero-cost language detection', () => {
     expect(detectLanguageZeroCost('آپ کیسے ہیں؟').language).toBe('ur');
   });
 
-  it('detects Hindi Devanagari', () => {
+  it('detects Hindi only when Devanagari has Hindi lexical evidence', () => {
     expect(detectLanguageZeroCost('वेबसाइट की कीमत क्या है?').language).toBe('hi');
+    expect(detectLanguageZeroCost('नमस्ते').language).toBe('unknown');
+  });
+
+  it('does not force ambiguous Arabic-script text to Arabic', () => {
+    expect(detectLanguageZeroCost('سلام').language).toBe('unknown');
+    expect(resolveReplyLanguage({ text: 'سلام', marketPrimaryLanguage: 'ar-OM' }).language).toBe('und');
+    expect(detectLanguageZeroCost('مرحبا، ممكن أعرف السعر؟').language).toBe('ar');
   });
 
   it('does not pretend every Latin-script message is English', () => {
