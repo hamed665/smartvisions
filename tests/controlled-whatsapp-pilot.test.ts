@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   resolveControlledPilotGrowthOsBaseUrl,
-  verifyControlledWhatsAppCatalogPilot,
+  verifyControlledWhatsAppPilot,
 } from '@/lib/outreach/controlled-whatsapp-pilot';
 
 const base = {
@@ -21,32 +21,66 @@ const base = {
   businessPhone: null,
 };
 
-describe('controlled WhatsApp catalog pilot verification', () => {
-  it('accepts only the owner-approved internal test shadow artifact', () => {
-    expect(verifyControlledWhatsAppCatalogPilot(base)).toEqual({
+describe('controlled WhatsApp pilot verification', () => {
+  it('accepts the owner-approved internal test catalog artifact', () => {
+    expect(verifyControlledWhatsAppPilot(base)).toEqual({
       verified: true,
+      mode: 'CATALOG',
       catalogContentId: 'SV-WEB-001',
       recipient: '96877511053',
     });
   });
 
+  it('accepts an owner-approved INTERNAL_TEST text reply without a catalog id', () => {
+    expect(verifyControlledWhatsAppPilot({ ...base, catalogContentId: null })).toEqual({
+      verified: true,
+      mode: 'TEXT',
+      catalogContentId: null,
+      recipient: '96877511053',
+    });
+  });
+
+  it('still requires owner approval for text pilot sends', () => {
+    expect(verifyControlledWhatsAppPilot({
+      ...base,
+      catalogContentId: null,
+      messageStatus: 'APPROVAL_REQUIRED',
+      requiresApproval: true,
+    })).toEqual({
+      verified: false,
+      reason: 'MESSAGE_NOT_OWNER_APPROVED',
+    });
+  });
+
   it('rejects a request flag without canonical shadow provenance', () => {
-    expect(verifyControlledWhatsAppCatalogPilot({ ...base, providerMessageId: 'wamid.external' })).toEqual({
+    expect(verifyControlledWhatsAppPilot({ ...base, providerMessageId: 'wamid.external' })).toEqual({
       verified: false,
       reason: 'SHADOW_PROVIDER_ID_MISMATCH',
     });
   });
 
-  it('rejects non-internal businesses and recipient mismatches', () => {
-    expect(verifyControlledWhatsAppCatalogPilot({ ...base, businessCategory: 'DENTAL' }).verified).toBe(false);
-    expect(verifyControlledWhatsAppCatalogPilot({ ...base, businessWhatsapp: '+968 9999 9999' })).toEqual({
+  it('rejects generic Agent shadow drafts that were not created by the controlled pilot path', () => {
+    expect(verifyControlledWhatsAppPilot({
+      ...base,
+      catalogContentId: null,
+      idempotencyKey: 'agent:whatsapp:some-normal-agent-run:shadow',
+      providerMessageId: 'shadow:agent:whatsapp:some-normal-agent-run:shadow',
+    })).toEqual({
+      verified: false,
+      reason: 'IDEMPOTENCY_KEY_NOT_CONTROLLED_PILOT',
+    });
+  });
+
+  it('rejects non-internal businesses and recipient mismatches for text and catalog', () => {
+    expect(verifyControlledWhatsAppPilot({ ...base, catalogContentId: null, businessCategory: 'DENTAL' }).verified).toBe(false);
+    expect(verifyControlledWhatsAppPilot({ ...base, businessWhatsapp: '+968 9999 9999' })).toEqual({
       verified: false,
       reason: 'RECIPIENT_NOT_INTERNAL_TEST_BUSINESS',
     });
   });
 
   it('rejects catalog ids outside the Smart Visions allowlist', () => {
-    expect(verifyControlledWhatsAppCatalogPilot({ ...base, catalogContentId: 'SV-NOT-REAL' })).toEqual({
+    expect(verifyControlledWhatsAppPilot({ ...base, catalogContentId: 'SV-NOT-REAL' })).toEqual({
       verified: false,
       reason: 'CATALOG_CONTENT_NOT_ALLOWLISTED',
     });
