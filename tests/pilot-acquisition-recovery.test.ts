@@ -124,6 +124,22 @@ describe('pilot acquisition settled-ledger recovery', () => {
     expect(route).toContain('newProviderCallTriggered: false');
   });
 
+  it('evaluates the journal-backed priority stop before any new Google Places provider search', () => {
+    const route = fs.readFileSync(
+      path.join(process.cwd(), 'app/api/operations/pilot-acquisition/route.ts'),
+      'utf8',
+    );
+    const priorityCountIndex = route.indexOf('const priorityQualifiedCount = discoveryRows.filter');
+    const policyIndex = route.indexOf('const policy = evaluatePilotAcquisitionPolicy');
+    const providerIndex = route.indexOf('const search = await controlledGooglePlacesIdSearch');
+
+    expect(priorityCountIndex).toBeGreaterThan(-1);
+    expect(policyIndex).toBeGreaterThan(priorityCountIndex);
+    expect(providerIndex).toBeGreaterThan(policyIndex);
+    expect(route).toContain('priorityQualifiedCount,');
+    expect(route).toContain('stopAfterPriorityLeads: policy.stopAfterPriorityLeads');
+  });
+
   it('grants only the missing discovery UPDATE privilege to service_role', () => {
     const raw = fs.readFileSync(
       path.join(process.cwd(), 'supabase/migrations/0058_pilot_discovery_reconciliation_grant.sql'),
