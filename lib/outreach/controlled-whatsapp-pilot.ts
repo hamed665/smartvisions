@@ -36,7 +36,6 @@ export function verifyControlledWhatsAppPilot(
   }
   if (input.channel !== 'WHATSAPP') return { verified: false, reason: 'CHANNEL_NOT_WHATSAPP' };
   if (input.metadataSource !== 'SHADOW_MODE') return { verified: false, reason: 'SOURCE_NOT_SHADOW_MODE' };
-  if (input.businessCategory !== 'INTERNAL_TEST') return { verified: false, reason: 'BUSINESS_NOT_INTERNAL_TEST' };
   if (input.conversationChannel !== 'WHATSAPP') return { verified: false, reason: 'CONVERSATION_NOT_WHATSAPP' };
   if (!input.messageLeadId || input.conversationLeadId !== input.messageLeadId) {
     return { verified: false, reason: 'CONVERSATION_LEAD_MISMATCH' };
@@ -66,6 +65,14 @@ export function verifyControlledWhatsAppPilot(
     return { verified: false, reason: 'RECIPIENT_NOT_INTERNAL_TEST_BUSINESS' };
   }
 
+  const internalTestBusiness = String(input.businessCategory ?? '').toUpperCase() === 'INTERNAL_TEST';
+  const verifiedOmanLiveInbound = idempotencyKey.startsWith('agent:whatsapp-pilot:live:')
+    && recipient.length === 11
+    && recipient.startsWith('968');
+  if (!internalTestBusiness && !verifiedOmanLiveInbound) {
+    return { verified: false, reason: 'BUSINESS_NOT_INTERNAL_TEST' };
+  }
+
   return {
     verified: true,
     mode: catalogContentId ? 'CATALOG' : 'TEXT',
@@ -76,5 +83,7 @@ export function verifyControlledWhatsAppPilot(
 
 // Backward-compatible export for the canonical approved-send core. The verifier now
 // supports both controlled text replies and verified catalog replies while keeping
-// the same INTERNAL_TEST + owner approval + shadow provenance contract.
+// the same INTERNAL_TEST + owner approval + shadow provenance contract. The only
+// non-INTERNAL_TEST exception is the webhook-only `live:` Oman inbound provenance,
+// which is upstream time-boxed and still passes the canonical provider-boundary gate.
 export const verifyControlledWhatsAppCatalogPilot = verifyControlledWhatsAppPilot;
