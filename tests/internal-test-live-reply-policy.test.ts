@@ -40,6 +40,44 @@ describe('internal test live WhatsApp reply policy', () => {
     });
   });
 
+  it('allows a different exact Oman inbound sender only when the time-boxed Oman multi-number flag is enabled', () => {
+    const result = evaluateInternalTestLiveReplyPolicy({
+      ...base(),
+      businessCategory: 'dental_clinic',
+      businessWhatsapp: '+968 9115 0976',
+      inboundFrom: '96891150976',
+      ruleConfig: {
+        internalTestLiveReply: {
+          ...config.internalTestLiveReply,
+          allowVerifiedOmanInbound: true,
+          maxReplies: 20,
+        },
+      },
+    });
+    expect(result).toEqual({
+      allowed: true,
+      recipient: '96891150976',
+      startsAt: '2026-09-05T13:30:00.000Z',
+      endsAt: '2026-09-05T14:30:00.000Z',
+      maxReplies: 20,
+    });
+  });
+
+  it('does not treat a non-Oman sender as part of the Oman multi-number window', () => {
+    expect(evaluateInternalTestLiveReplyPolicy({
+      ...base(),
+      businessCategory: 'internal_contact',
+      businessWhatsapp: '+971501234567',
+      inboundFrom: '971501234567',
+      ruleConfig: {
+        internalTestLiveReply: {
+          ...config.internalTestLiveReply,
+          allowVerifiedOmanInbound: true,
+        },
+      },
+    })).toEqual({ allowed: false, reason: 'OMAN_TEST_RECIPIENT_REQUIRED' });
+  });
+
   it.each([
     [{ businessCategory: 'dental_clinic' }, 'BUSINESS_NOT_INTERNAL_TEST'],
     [{ inboundFrom: '96891150976' }, 'RECIPIENT_NOT_EXACT_INTERNAL_TEST_BUSINESS'],
