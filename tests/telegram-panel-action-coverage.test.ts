@@ -17,6 +17,7 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
     createKnowledge:'CANONICAL_ALIAS:knowledge.publish', createPromptVersion:'CANONICAL_ALIAS:prompt.publish',
     updateLead:'lead.update', addSuppression:'suppression.add', updatePortfolioItem:'portfolio.update', updatePreviewTemplate:'preview_template.update',
     approveMessage:'SPECIALIZED:/approve', rejectMessage:'SPECIALIZED:/reject', updateConversation:'conversation.update',
+    releaseHumanTakeover:'SPECIALIZED:OWNER_RELEASE',
   },
   'app/extended-actions.ts': {
     updateLocaleProfile:'locale.update', updateMailbox:'mailbox.update', updateMessageVariant:'variant.update', createPrice:'price.create', createMarket:'market.create',
@@ -99,5 +100,6 @@ describe('Control Center ↔ Telegram action coverage', () => {
     expect(CLASSIFICATION['app/management-actions.ts'].updateSystemControls).toBe('SPECIALIZED:SAFE_CONTROLS');
     expect(CLASSIFICATION['app/management-actions.ts'].approveMessage).toBe('SPECIALIZED:/approve');
     expect(CLASSIFICATION['app/management-actions.ts'].rejectMessage).toBe('SPECIALIZED:/reject');
+    expect(CLASSIFICATION['app/management-actions.ts'].releaseHumanTakeover).toBe('SPECIALIZED:OWNER_RELEASE');
   });
 });
