@@ -39,6 +39,51 @@ describe('controlled WhatsApp pilot verification', () => {
     });
   });
 
+  it('accepts only webhook-live provenance for a non-INTERNAL_TEST Oman recipient', () => {
+    const idempotencyKey = 'agent:whatsapp-pilot:live:oman-inbound-1:shadow';
+    expect(verifyControlledWhatsAppPilot({
+      ...base,
+      catalogContentId: null,
+      businessCategory: 'dental_clinic',
+      businessWhatsapp: '+968 9115 0976',
+      sendTo: '96891150976',
+      idempotencyKey,
+      providerMessageId: `shadow:${idempotencyKey}`,
+    })).toEqual({
+      verified: true,
+      mode: 'TEXT',
+      catalogContentId: null,
+      recipient: '96891150976',
+    });
+  });
+
+  it('does not broaden generic controlled-pilot provenance to normal Oman businesses', () => {
+    expect(verifyControlledWhatsAppPilot({
+      ...base,
+      catalogContentId: null,
+      businessCategory: 'dental_clinic',
+    })).toEqual({
+      verified: false,
+      reason: 'BUSINESS_NOT_INTERNAL_TEST',
+    });
+  });
+
+  it('does not allow webhook-live provenance outside Oman', () => {
+    const idempotencyKey = 'agent:whatsapp-pilot:live:non-oman-inbound:shadow';
+    expect(verifyControlledWhatsAppPilot({
+      ...base,
+      catalogContentId: null,
+      businessCategory: 'internal_contact',
+      businessWhatsapp: '+971 50 123 4567',
+      sendTo: '971501234567',
+      idempotencyKey,
+      providerMessageId: `shadow:${idempotencyKey}`,
+    })).toEqual({
+      verified: false,
+      reason: 'BUSINESS_NOT_INTERNAL_TEST',
+    });
+  });
+
   it('still requires owner approval for text pilot sends', () => {
     expect(verifyControlledWhatsAppPilot({
       ...base,
