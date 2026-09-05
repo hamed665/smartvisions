@@ -9,6 +9,7 @@ import { evaluateMailboxHealth } from '@/lib/outreach/mailbox-health';
 import { countMailboxSendsLast24Hours } from '@/lib/outreach/mailbox-usage';
 import { MetaCloudWhatsAppProvider } from '@/lib/whatsapp/meta-cloud';
 import { assertSmartVisionsCatalogContentId } from '@/lib/whatsapp/catalog';
+import { verifyLiveTestMarketWindowException } from '@/lib/whatsapp/live-test-market-window-exception';
 import type { WhatsAppSendResult } from '@/lib/whatsapp/provider';
 import { ResendEmailProvider } from '@/lib/outreach/resend-provider';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
@@ -85,6 +86,7 @@ export async function POST(request: Request) {
   }
 
   let shadowModeExceptionVerified = false;
+  let liveTestMarketWindowExceptionVerified = false;
   if (body.controlledShadowPilot) {
     if (!controls.shadow_mode) {
       return NextResponse.json({ error: 'Controlled shadow pilot requires Shadow Mode to remain ON' }, { status: 409 });
@@ -132,6 +134,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Controlled shadow pilot evidence failed closed', reason: verification.reason }, { status: 409 });
     }
     shadowModeExceptionVerified = true;
+    liveTestMarketWindowExceptionVerified = await verifyLiveTestMarketWindowException({
+      supabase,
+      organizationId: body.organizationId,
+      messageStatus: message.status,
+      requiresApproval: Boolean(message.requires_approval),
+      channel: message.channel,
+      metadataSource: metadata.source,
+      providerMessageId: message.provider_message_id,
+      idempotencyKey,
+      catalogContentId: sendContext.catalog_content_id,
+      sendTo: sendContext.to,
+      messageLeadId: message.lead_id,
+      conversationLeadId: conversation.lead_id,
+      conversationChannel: conversation.channel,
+      businessCategory: business.category,
+      businessWhatsapp: business.whatsapp,
+      businessPhone: business.phone,
+      shadowMode: Boolean(controls.shadow_mode),
+      globalKillSwitch: Boolean(controls.global_kill_switch),
+      agentsPaused: Boolean(controls.agents_paused),
+      whatsappPaused: Boolean(controls.whatsapp_ai_paused),
+    });
   }
 
   const policy = evaluateApprovedSendPolicy({
@@ -164,7 +188,9 @@ export async function POST(request: Request) {
   }
 
   const window = evaluateLocalWindow({ marketCode: sendContext.market_code, leadTimezone: sendContext.lead_timezone ?? undefined });
-  if (!window.allowed) return NextResponse.json({ error: 'Outside recipient local send window', window }, { status: 409 });
+  if (!window.allowed && !liveTestMarketWindowExceptionVerified) {
+    return NextResponse.json({ error: 'Outside recipient local send window', window }, { status: 409 });
+  }
 
   try {
     const costState = await getCostGuardState(body.organizationId);
@@ -201,6 +227,7 @@ export async function POST(request: Request) {
         recipient: sendContext.to!,
         templateName: sendContext.template_name,
         shadowModeExceptionVerified,
+        marketWindowExceptionVerified: liveTestMarketWindowExceptionVerified,
       });
       const costState = await getCostGuardState(body.organizationId!);
       assertPaidOperationAllowed(costState, body.priority ?? 'NORMAL');
