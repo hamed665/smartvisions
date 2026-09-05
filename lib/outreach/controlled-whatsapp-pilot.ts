@@ -1,11 +1,5 @@
 import { isSmartVisionsCatalogContentId } from '@/lib/whatsapp/catalog';
 
-const CONTROLLED_PILOT_ALLOWED_ORIGINS = new Set([
-  'https://app.smartvisionsai.com',
-  'https://smartvisions-growth-os-release-candidate.hamedarezoo900.workers.dev',
-  'https://smartvisions.vercel.app',
-]);
-
 export type ControlledWhatsAppPilotEvidence = {
   messageStatus: string;
   requiresApproval: boolean;
@@ -26,59 +20,6 @@ export type ControlledWhatsAppPilotEvidence = {
 export type ControlledWhatsAppPilotVerification =
   | { verified: true; mode: 'TEXT'|'CATALOG'; catalogContentId: string | null; recipient: string }
   | { verified: false; reason: string };
-
-export type ControlledPilotRuntimeInput = {
-  appBaseUrl?: string | null;
-  vercelProjectProductionUrl?: string | null;
-};
-
-function normalizedAllowlistedRuntime(value: string | null | undefined) {
-  const raw = String(value ?? '').trim();
-  if (!raw) return null;
-
-  let url: URL;
-  try {
-    url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
-  } catch {
-    return null;
-  }
-
-  if (
-    url.protocol !== 'https:'
-    || url.username
-    || url.password
-    || url.pathname !== '/'
-    || url.search
-    || url.hash
-    || !CONTROLLED_PILOT_ALLOWED_ORIGINS.has(url.origin)
-  ) {
-    return null;
-  }
-
-  return url.origin;
-}
-
-export function resolveControlledPilotGrowthOsBaseUrl(input: ControlledPilotRuntimeInput) {
-  const configuredAppBaseUrl = String(input.appBaseUrl ?? '').trim();
-  if (configuredAppBaseUrl) {
-    const appBaseUrl = normalizedAllowlistedRuntime(configuredAppBaseUrl);
-    if (!appBaseUrl) {
-      throw new Error('APP_BASE_URL is not an allowlisted controlled-pilot Growth OS runtime');
-    }
-    return appBaseUrl;
-  }
-
-  const legacyVercelUrl = String(input.vercelProjectProductionUrl ?? '').trim();
-  if (legacyVercelUrl) {
-    const vercelBaseUrl = normalizedAllowlistedRuntime(legacyVercelUrl);
-    if (!vercelBaseUrl) {
-      throw new Error('VERCEL_PROJECT_PRODUCTION_URL is not an allowlisted controlled-pilot runtime');
-    }
-    return vercelBaseUrl;
-  }
-
-  throw new Error('Controlled pilot Growth OS base URL is not configured');
-}
 
 export function normalizeControlledPilotPhone(value: unknown) {
   return typeof value === 'string' ? value.replace(/\D/g, '') : '';
