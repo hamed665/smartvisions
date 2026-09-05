@@ -7,6 +7,11 @@ import { buildPrecisionLeadPersistenceRow } from '@/lib/hunters/business/service
 import { buildBusinessPersistenceRow } from '@/lib/hunters/business/selective-enrichment';
 import { getCostGuardState } from '@/lib/reliability/cost-guard';
 import { evaluatePilotAcquisitionPolicy } from '@/lib/operations/pilot-acquisition-policy';
+import {
+  buildRecoveredPilotDiscovery,
+  findOldestUnreconciledPilotDiscovery,
+  type PilotGrowthRecoveryRow,
+} from '@/lib/operations/pilot-acquisition-recovery';
 
 const MAX_DISCOVERY_IDS = 20;
 const MAX_CAMPAIGNS_PER_TICK = 3;
@@ -70,6 +75,122 @@ async function audit(
   if (error) throw new Error(`Pilot acquisition audit failed: ${error.message}`);
 }
 
+async function recoverSettledQualification(input: {
+  supabase: SupabaseClient;
+  campaign: CampaignRow;
+  journal: { id: string; source_id: string; raw_payload: unknown; discovered_at: string };
+  qualificationCount: number;
+  maxPaidQualifications: number;
+  marketCatalog: Set<string>;
+  now: Date;
+}) {
+  const { supabase, campaign, journal, qualificationCount, maxPaidQualifications, marketCatalog, now } = input;
+  const placeId = String(journal.source_id ?? '').trim();
+  if (!placeId) throw new Error('Unreconciled pilot discovery is missing a provider Place ID; owner review required');
+
+  const [usageResult, businessResult] = await Promise.all([
+    supabase.from('usage_events')
+      .select('id,cost_usd,metadata,created_at')
+      .eq('organization_id', campaign.organization_id)
+      .eq('provider', 'GOOGLE_PLACES')
+      .eq('operation', 'PLACE_DETAILS_PRIORITY_QUALIFICATION')
+      .contains('metadata', { placeId, accounting_state: 'SETTLED' })
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase.from('businesses')
+      .select('id')
+      .eq('organization_id', campaign.organization_id)
+      .eq('google_place_id', placeId)
+      .maybeSingle(),
+  ]);
+  if (usageResult.error) throw new Error(`Pilot recovery cost ledger unavailable: ${usageResult.error.message}`);
+  if (!usageResult.data) {
+    throw new Error('Unreconciled pilot discovery has no settled qualification ledger; owner review required before any provider retry');
+  }
+  if (businessResult.error) throw new Error(`Pilot recovery business lookup failed: ${businessResult.error.message}`);
+  if (!businessResult.data?.id) {
+    throw new Error('Settled pilot qualification has no persisted business; owner review required before any provider retry');
+  }
+
+  const businessId = String(businessResult.data.id);
+  const [growthResult, leadResult] = await Promise.all([
+    supabase.from('growth_opportunities')
+      .select('sales_lane,service_region,overall_sales_score,prospect_tier,qualification_score,qualification_confidence,primary_offer_family,primary_service_id,should_contact,evidence_gaps,personalization_fingerprint,cheapest_next_action')
+      .eq('organization_id', campaign.organization_id)
+      .eq('business_id', businessId)
+      .maybeSingle(),
+    supabase.from('leads')
+      .select('id')
+      .eq('organization_id', campaign.organization_id)
+      .eq('business_id', businessId)
+      .maybeSingle(),
+  ]);
+  if (growthResult.error) throw new Error(`Pilot recovery growth lookup failed: ${growthResult.error.message}`);
+  if (!growthResult.data) {
+    throw new Error('Settled pilot qualification has no persisted growth routing; owner review required before any provider retry');
+  }
+  if (leadResult.error) throw new Error(`Pilot recovery lead lookup failed: ${leadResult.error.message}`);
+
+  const recovered = buildRecoveredPilotDiscovery({
+    journalRaw: journal.raw_payload,
+    recoveredAt: now.toISOString(),
+    settledAt: String(record(usageResult.data.metadata).settled_at ?? '') || null,
+    settledUsageEventId: String(usageResult.data.id),
+    businessId,
+    leadId: leadResult.data?.id ? String(leadResult.data.id) : null,
+    growth: growthResult.data as PilotGrowthRecoveryRow,
+    marketCatalog,
+  });
+  if (recovered.priorityQualified && !leadResult.data?.id) {
+    throw new Error('Settled Tier A pilot qualification is missing its Lead; owner review required before any provider retry');
+  }
+
+  const { error: discoveryUpdateError } = await supabase.from('discovery_records')
+    .update({ raw_payload: recovered.rawPayload })
+    .eq('organization_id', campaign.organization_id)
+    .eq('campaign_id', campaign.id)
+    .eq('id', journal.id);
+  if (discoveryUpdateError) throw new Error(`Pilot discovery recovery failed: ${discoveryUpdateError.message}`);
+
+  const nextQualificationCount = qualificationCount + 1;
+  await updateCampaignConfig(supabase, campaign, {
+    lastAutoAcquisitionAt: now.toISOString(),
+    providerCallsThisPilot: nextQualificationCount,
+    autoQualifiedCount: nextQualificationCount,
+    pilotPhase: nextQualificationCount >= maxPaidQualifications ? 'AUTO_ACQUISITION_CAP_REACHED' : 'AUTO_ACQUISITION_ACTIVE',
+    lastAutoAcquisitionError: null,
+  });
+  await audit(supabase, campaign, 'OMAN_PILOT_AUTO_ACQUISITION_RECOVERED', {
+    result: 'RECOVERED_SETTLED_QUALIFICATION',
+    placeId,
+    businessId,
+    leadId: leadResult.data?.id ? String(leadResult.data.id) : null,
+    priorityQualified: recovered.priorityQualified,
+    qualificationReason: recovered.qualificationReason,
+    providerCalls: 0,
+    recoveredSettledProviderCalls: 1,
+    providerCostAlreadySettledUsd: Math.max(0, Number(usageResult.data.cost_usd ?? 0)),
+    newProviderCallTriggered: false,
+    shadowModeRemainsOn: true,
+    manualReviewRemainsOn: true,
+    outreachEnabled: false,
+    providerSendTriggered: false,
+  });
+
+  return {
+    campaignId: campaign.id,
+    action: 'RECOVERED',
+    placeId,
+    businessId,
+    leadId: leadResult.data?.id ? String(leadResult.data.id) : null,
+    priorityQualified: recovered.priorityQualified,
+    qualificationCount: nextQualificationCount,
+    maxPaidQualifications,
+    providerCalls: 0,
+  };
+}
+
 async function processCampaign(supabase: SupabaseClient, campaign: CampaignRow, now: Date) {
   const config = record(campaign.config);
   if (config.autoAcquisitionEnabled !== true) {
@@ -92,7 +213,8 @@ async function processCampaign(supabase: SupabaseClient, campaign: CampaignRow, 
   if (controlsResult.error || !controlsResult.data) throw new Error(`Pilot controls unavailable: ${controlsResult.error?.message ?? 'not found'}`);
   if (discoveryResult.error) throw new Error(`Pilot discovery journal unavailable: ${discoveryResult.error.message}`);
 
-  const qualificationCount = (discoveryResult.data ?? []).filter((row) => {
+  const discoveryRows = (discoveryResult.data ?? []) as Array<{ id: string; source_id: string; raw_payload: unknown; discovered_at: string }>;
+  const qualificationCount = discoveryRows.filter((row) => {
     const raw = record(row.raw_payload);
     return raw.autoAcquisitionPilot === true && raw.detailsLookupCharged === true;
   }).length;
@@ -150,6 +272,27 @@ async function processCampaign(supabase: SupabaseClient, campaign: CampaignRow, 
   if (marketResult.error || !marketResult.data?.enabled) throw new Error(`Oman market is unavailable: ${marketResult.error?.message ?? 'disabled'}`);
   if (servicesResult.error || pricesResult.error) throw new Error(`Service catalog unavailable: ${servicesResult.error?.message ?? pricesResult.error?.message}`);
   if (!costState) throw new Error('Cost Guard state is unavailable; pilot acquisition blocked');
+
+  const enabledServices = new Set((servicesResult.data ?? []).map((row) => String(row.id)));
+  const marketCatalog = new Set<string>();
+  for (const price of pricesResult.data ?? []) {
+    const serviceId = String(price.service_id ?? '');
+    const amount = Number(price.price);
+    if (enabledServices.has(serviceId) && Number.isFinite(amount) && amount >= 0) marketCatalog.add(serviceId);
+  }
+
+  const unreconciled = findOldestUnreconciledPilotDiscovery(discoveryRows);
+  if (unreconciled) {
+    return recoverSettledQualification({
+      supabase,
+      campaign,
+      journal: unreconciled,
+      qualificationCount,
+      maxPaidQualifications: policy.maxPaidQualifications,
+      marketCatalog,
+      now,
+    });
+  }
 
   const startOfDay = new Date(now);
   startOfDay.setUTCHours(0, 0, 0, 0);
@@ -249,13 +392,6 @@ async function processCampaign(supabase: SupabaseClient, campaign: CampaignRow, 
     businessId = String(racedBusiness.id);
   }
 
-  const enabledServices = new Set((servicesResult.data ?? []).map((row) => String(row.id)));
-  const marketCatalog = new Set<string>();
-  for (const price of pricesResult.data ?? []) {
-    const serviceId = String(price.service_id ?? '');
-    const amount = Number(price.price);
-    if (enabledServices.has(serviceId) && Number.isFinite(amount) && amount >= 0) marketCatalog.add(serviceId);
-  }
   const growth = buildGrowthOpportunity(business, { enabledServiceIds: marketCatalog });
   const qualification = growth.qualification;
   const { error: growthError } = await supabase.from('growth_opportunities')
