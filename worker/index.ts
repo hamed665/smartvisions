@@ -1,4 +1,5 @@
 import handler from 'vinext/server/fetch-handler';
+import { POST as pilotAcquisitionPost } from '../app/api/operations/pilot-acquisition/route';
 import { shouldRunScheduledOperations } from './schedule-policy';
 
 type WorkerEnv = { INTERNAL_API_KEY?: string; DEPLOYMENT_ENV?: string };
@@ -24,6 +25,8 @@ type ScheduledMetrics = {
   failed: number;
   reconciliationAttention: number;
   tickStatus: number;
+  pilotStatus?: number;
+  pilotFailedOutcomes?: number;
 };
 
 function organizationIdFromTask(task: AgentTask) {
@@ -33,16 +36,20 @@ function organizationIdFromTask(task: AgentTask) {
   return typeof organizationId === 'string' && organizationId.trim() ? organizationId.trim() : null;
 }
 
-async function internalPost(env: WorkerEnv, path: string, body: unknown) {
+function internalJsonRequest(env: WorkerEnv, path: string, body: unknown) {
   if (!env.INTERNAL_API_KEY) throw new Error('INTERNAL_API_KEY is required for scheduled operations');
-  return handler.fetch(new Request(`https://smartvisions.internal${path}`, {
+  return new Request(`https://smartvisions.internal${path}`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       'x-internal-api-key': env.INTERNAL_API_KEY,
     },
     body: JSON.stringify(body),
-  }));
+  });
+}
+
+async function internalPost(env: WorkerEnv, path: string, body: unknown) {
+  return handler.fetch(internalJsonRequest(env, path, body));
 }
 
 async function recordScheduledHeartbeat(
@@ -181,17 +188,22 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
     }
   }
 
-  // Acquisition is deliberately isolated from inbound Agent work. It is a no-op
-  // unless an Oman campaign is explicitly time-boxed with Shadow/manual-review
-  // safeguards. A pilot failure is recorded, but never causes an Agent retry.
+  // Acquisition is deliberately isolated from inbound Agent work. It is a no-op unless
+  // an Oman campaign is explicitly time-boxed with Shadow/manual-review safeguards.
+  // Cloudflare routed Workers have already shown that self-routing can be unreliable for
+  // controlled internal work, so call the exact canonical route handler in-process. This
+  // does not bypass its internal-auth, Cost Guard, dedupe, policy, or fail-closed logic.
   try {
-    const pilotResponse = await internalPost(env, '/api/operations/pilot-acquisition', {});
+    const pilotResponse = await pilotAcquisitionPost(internalJsonRequest(env, '/api/operations/pilot-acquisition', {}));
+    metrics.pilotStatus = pilotResponse.status;
     if (pilotResponse.status === 429) metrics.throttled += 1;
     else if (pilotResponse.status === 409 || pilotResponse.status === 423) metrics.safetyBlocked += 1;
     else if (!pilotResponse.ok) metrics.failed += 1;
     else {
       const pilot = await pilotResponse.json().catch(() => null) as { outcomes?: Array<{ action?: string }> } | null;
-      if ((pilot?.outcomes ?? []).some((outcome) => outcome.action === 'FAILED')) metrics.failed += 1;
+      const failedOutcomes = (pilot?.outcomes ?? []).filter((outcome) => outcome.action === 'FAILED').length;
+      metrics.pilotFailedOutcomes = failedOutcomes;
+      if (failedOutcomes > 0) metrics.failed += failedOutcomes;
     }
   } catch {
     metrics.failed += 1;
