@@ -3,7 +3,7 @@ import { buildSelectiveRoutePlan } from './selective-routing';
 import { checkRelevance, decideCommercialAction, secretaryCompose } from './executor';
 import { draftOffersUnrequestedCustomPreview } from './preview-policy';
 import { deterministicAgentRuntime, type AgentRuntime } from './runtime';
-import { canAutoSend, evaluateHandoff } from '@/lib/handoff/policy';
+import { canAutoSend, evaluateHandoff, hasPaymentExecutionIntent } from '@/lib/handoff/policy';
 import { resolveSmartVisionsCatalogRecommendation } from '@/lib/whatsapp/catalog';
 import { replyMatchesHighConfidenceMessageLanguage } from '@/lib/outreach/locale';
 
@@ -12,7 +12,7 @@ const inferHandoffSignals = (message: string) => {
   return {
     asksHuman: /(human|person|manager|someone|موظف|شخص|مدير|مسؤول)/i.test(text),
     asksMeeting: /(meeting|call|zoom|meet|consultation|consult|مكالمة|اجتماع|استشارة|نتكلم)/i.test(text),
-    asksPayment: /(payment|pay|invoice|deposit|contract|دفع|فاتورة|عربون|عقد)/i.test(text),
+    asksPayment: hasPaymentExecutionIntent(message),
     specialDiscount: /(discount|better price|best price|reduce the price|cheaper|خصم|تخفيض|سعر أفضل|آخر سعر|ارخص|أرخص)/i.test(text),
     complaint: /(complaint|unhappy|bad service|شكوى|مشكلة|غير راضي)/i.test(text),
   };
