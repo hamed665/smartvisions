@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { verifyControlledWhatsAppCatalogPilot } from '@/lib/outreach/controlled-whatsapp-pilot';
+import {
+  resolveControlledPilotGrowthOsBaseUrl,
+  verifyControlledWhatsAppCatalogPilot,
+} from '@/lib/outreach/controlled-whatsapp-pilot';
 
 const base = {
   messageStatus: 'APPROVED',
@@ -47,5 +50,39 @@ describe('controlled WhatsApp catalog pilot verification', () => {
       verified: false,
       reason: 'CATALOG_CONTENT_NOT_ALLOWLISTED',
     });
+  });
+});
+
+describe('controlled WhatsApp pilot runtime resolution', () => {
+  it('uses the Cloudflare APP_BASE_URL before any legacy Vercel rollback URL', () => {
+    expect(resolveControlledPilotGrowthOsBaseUrl({
+      appBaseUrl: 'https://app.smartvisionsai.com',
+      vercelProjectProductionUrl: 'smartvisions.vercel.app',
+    })).toBe('https://app.smartvisionsai.com');
+  });
+
+  it('allows the isolated Cloudflare release candidate runtime', () => {
+    expect(resolveControlledPilotGrowthOsBaseUrl({
+      appBaseUrl: 'https://smartvisions-growth-os-release-candidate.hamedarezoo900.workers.dev/',
+    })).toBe('https://smartvisions-growth-os-release-candidate.hamedarezoo900.workers.dev');
+  });
+
+  it('keeps the explicit Vercel URL only as a rollback fallback when APP_BASE_URL is absent', () => {
+    expect(resolveControlledPilotGrowthOsBaseUrl({
+      vercelProjectProductionUrl: 'smartvisions.vercel.app',
+    })).toBe('https://smartvisions.vercel.app');
+  });
+
+  it('fails closed on an invalid APP_BASE_URL instead of silently falling back to Vercel', () => {
+    expect(() => resolveControlledPilotGrowthOsBaseUrl({
+      appBaseUrl: 'https://example.com',
+      vercelProjectProductionUrl: 'smartvisions.vercel.app',
+    })).toThrow('APP_BASE_URL is not an allowlisted controlled-pilot Growth OS runtime');
+  });
+
+  it('fails closed when no controlled-pilot runtime is configured', () => {
+    expect(() => resolveControlledPilotGrowthOsBaseUrl({})).toThrow(
+      'Controlled pilot Growth OS base URL is not configured',
+    );
   });
 });
