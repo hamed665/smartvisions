@@ -218,6 +218,12 @@ async function processCampaign(supabase: SupabaseClient, campaign: CampaignRow, 
     const raw = record(row.raw_payload);
     return raw.autoAcquisitionPilot === true && raw.detailsLookupCharged === true;
   }).length;
+  const priorityQualifiedCount = discoveryRows.filter((row) => {
+    const raw = record(row.raw_payload);
+    return raw.autoAcquisitionPilot === true
+      && raw.detailsLookupCharged === true
+      && raw.priorityQualified === true;
+  }).length;
 
   const policy = evaluatePilotAcquisitionPolicy({
     status: campaign.status,
@@ -227,6 +233,7 @@ async function processCampaign(supabase: SupabaseClient, campaign: CampaignRow, 
     globalKillSwitch: Boolean(controlsResult.data.global_kill_switch),
     agentsPaused: Boolean(controlsResult.data.agents_paused),
     qualificationCount,
+    priorityQualifiedCount,
     now,
   });
 
@@ -242,12 +249,20 @@ async function processCampaign(supabase: SupabaseClient, campaign: CampaignRow, 
       await audit(supabase, campaign, 'OMAN_PILOT_AUTO_ACQUISITION_STOPPED', {
         reason: policy.reason,
         qualificationCount,
+        priorityQualifiedCount,
         maxPaidQualifications: policy.maxPaidQualifications,
+        stopAfterPriorityLeads: policy.stopAfterPriorityLeads,
         shadowModeRemainsOn: true,
         providerSendTriggered: false,
       });
     }
-    return { campaignId: campaign.id, action: 'SKIPPED', reason: policy.reason, qualificationCount };
+    return {
+      campaignId: campaign.id,
+      action: 'SKIPPED',
+      reason: policy.reason,
+      qualificationCount,
+      priorityQualifiedCount,
+    };
   }
 
   const [integrationResult, marketResult, servicesResult, pricesResult, costState] = await Promise.all([
