@@ -13,7 +13,7 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
     updateSystemControls:'SPECIALIZED:SAFE_CONTROLS',
     createCampaign:'campaign.create', updateCampaign:'campaign.update', updateOutreachPolicy:'outreach.update',
     createMessageTemplate:'template.create', updateMessageTemplate:'template.update',
-    createAutomationRule:'automation.create', updateAutomationRule:'automation.update', updateIntegration:'integration.update', updateOrganizationSettings:'organization.update',
+    createAutomationRule:'automation.create', updateIntegration:'integration.update', updateOrganizationSettings:'organization.update', updateAutomationRule:'automation.update',
     createKnowledge:'CANONICAL_ALIAS:knowledge.publish', createPromptVersion:'CANONICAL_ALIAS:prompt.publish',
     updateLead:'lead.update', addSuppression:'suppression.add', updatePortfolioItem:'portfolio.update', updatePreviewTemplate:'preview_template.update',
     approveMessage:'SPECIALIZED:/approve', rejectMessage:'SPECIALIZED:/reject', updateConversation:'conversation.update',
@@ -51,8 +51,7 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
   },
   'app/whatsapp-pilot-actions.ts': {
     processLatestWhatsAppInboundPilot:'whatsapp.process_pilot',
-    sendApprovedWhatsAppCatalogPilot:'CANONICAL_ALIAS:whatsapp.send_approved_pilot',
-    sendApprovedWhatsAppPilot:'whatsapp.send_approved_pilot',
+    sendApprovedWhatsAppCatalogPilot:'whatsapp.send_approved_pilot',
   },
   'app/whatsapp-verification-actions.ts': {
     verifyWhatsAppIntegration:'whatsapp.verify', transcribeLatestWhatsAppVoicePilot:'whatsapp.voice_transcribe',
