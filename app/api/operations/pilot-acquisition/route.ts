@@ -159,7 +159,10 @@ async function processCampaign(supabase: SupabaseClient, campaign: CampaignRow, 
     .gte('discovered_at', startOfDay.toISOString());
   if (countError) throw new Error(`Daily discovery usage unavailable: ${countError.message}`);
   const remainingDaily = Math.max(0, Number(costState.settings.daily_new_leads ?? 0) - Number(discoveredToday ?? 0));
-  if (remainingDaily < 1) return { campaignId: campaign.id, action: 'SKIPPED', reason: 'DAILY_DISCOVERY_CAP_REACHED' };
+  if (remainingDaily < 1) {
+    await updateCampaignConfig(supabase, campaign, { lastAutoAcquisitionAt: now.toISOString() });
+    return { campaignId: campaign.id, action: 'SKIPPED', reason: 'DAILY_DISCOVERY_CAP_REACHED' };
+  }
 
   const city = String(campaign.city ?? 'Muscat').trim() || 'Muscat';
   const industry = String(campaign.industry ?? 'dental clinic').trim() || 'dental clinic';
@@ -188,7 +191,9 @@ async function processCampaign(supabase: SupabaseClient, campaign: CampaignRow, 
     ...(knownDiscoveriesResult.data ?? []).map((row) => String(row.source_id ?? '')).filter(Boolean),
   ]);
   const remainingQualifications = Math.max(0, policy.maxPaidQualifications - qualificationCount);
-  const newIds = placeIds.filter((id) => !known.has(id)).slice(0, Math.min(remainingDaily, remainingQualifications, 3));
+  // Keep the journal exactly aligned with paid work: one new Place ID and at most
+  // one paid qualification per cycle. We intentionally do not create a backlog.
+  const newIds = placeIds.filter((id) => !known.has(id)).slice(0, Math.min(remainingDaily, remainingQualifications, 1));
 
   if (!newIds.length) {
     await updateCampaignConfig(supabase, campaign, { lastAutoAcquisitionAt: now.toISOString() });
@@ -198,31 +203,29 @@ async function processCampaign(supabase: SupabaseClient, campaign: CampaignRow, 
     return { campaignId: campaign.id, action: 'NO_CANDIDATE', reason: 'NO_NEW_IDS' };
   }
 
-  const rows = newIds.map((placeId) => ({
+  const placeId = newIds[0];
+  const discoveryRaw = {
+    provider: 'GOOGLE_PLACES',
+    operation: 'TEXT_SEARCH_IDS_ONLY',
+    countryCode: 'OM',
+    city,
+    industry,
+    placeId,
+    autoAcquisitionPilot: true,
+    pilotWindowEndsAt: policy.windowEndsAt,
+    qualificationTarget: 'GROWTH_OPPORTUNITY',
+    providerSendTriggered: false,
+  };
+  const { error: insertDiscoveryError } = await supabase.from('discovery_records').insert({
     organization_id: campaign.organization_id,
     campaign_id: campaign.id,
     source_type: 'google_places',
     source_id: placeId,
     source_url: `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`,
-    raw_payload: {
-      provider: 'GOOGLE_PLACES',
-      operation: 'TEXT_SEARCH_IDS_ONLY',
-      countryCode: 'OM',
-      city,
-      industry,
-      placeId,
-      autoAcquisitionPilot: true,
-      pilotWindowEndsAt: policy.windowEndsAt,
-      qualificationTarget: 'GROWTH_OPPORTUNITY',
-      providerSendTriggered: false,
-    },
-  }));
-  const { error: insertDiscoveryError } = await supabase.from('discovery_records').insert(rows);
+    raw_payload: discoveryRaw,
+  });
   if (insertDiscoveryError) throw new Error(`Pilot discovery persistence failed: ${insertDiscoveryError.message}`);
 
-  // One paid qualification at most per scheduled cycle. The remaining IDs stay as
-  // free, journaled candidates for a later cooldown-protected cycle.
-  const placeId = newIds[0];
   const business = await controlledGooglePlaceQualification({
     organizationId: campaign.organization_id,
     placeId,
@@ -296,10 +299,9 @@ async function processCampaign(supabase: SupabaseClient, campaign: CampaignRow, 
       : qualification.cheapestNextAction === 'CATALOG_SETUP'
         ? `CATALOG_REQUIRED_${qualification.primaryOfferFamily}`
         : `TIER_${qualification.prospectTier}_${qualification.primaryOfferFamily}`;
-  const currentRaw = record(rows[0].raw_payload);
   const { error: discoveryUpdateError } = await supabase.from('discovery_records').update({
     raw_payload: {
-      ...currentRaw,
+      ...discoveryRaw,
       enrichedAt: now.toISOString(),
       businessId,
       leadId,
@@ -344,7 +346,7 @@ async function processCampaign(supabase: SupabaseClient, campaign: CampaignRow, 
     qualificationScore: qualification.qualificationScore,
     providerCalls: 1,
     providerCostReserveUsd: 0.02,
-    insertedDiscoveryIds: newIds.length,
+    insertedDiscoveryIds: 1,
     shadowModeRemainsOn: true,
     manualReviewRemainsOn: true,
     outreachEnabled: false,
@@ -386,15 +388,28 @@ export async function POST(request: Request) {
       outcomes.push(await processCampaign(supabase, campaign, now));
     } catch (error) {
       const message = safeMessage(error);
+      // Any failure pauses this paid acquisition window. There is deliberately no
+      // automatic retry on the next cron because provider acceptance/reconciliation
+      // may be ambiguous after a network or persistence failure.
+      try {
+        await updateCampaignConfig(supabase, campaign, {
+          autoAcquisitionEnabled: false,
+          pilotPhase: 'AUTO_ACQUISITION_FAILED',
+          pausedReason: 'AUTO_ACQUISITION_FAILURE',
+          autoAcquisitionStoppedAt: now.toISOString(),
+          lastAutoAcquisitionError: message,
+        });
+      } catch { /* preserve original failure */ }
       try {
         await audit(supabase, campaign, 'OMAN_PILOT_AUTO_ACQUISITION_FAILED', {
           error: message,
           automaticRetry: false,
+          autoAcquisitionPaused: true,
           shadowModeRemainsOn: true,
           providerSendTriggered: false,
         });
       } catch { /* preserve original failure */ }
-      outcomes.push({ campaignId: campaign.id, action: 'FAILED', error: message, automaticRetry: false });
+      outcomes.push({ campaignId: campaign.id, action: 'FAILED', error: message, automaticRetry: false, autoAcquisitionPaused: true });
     }
   }
 
