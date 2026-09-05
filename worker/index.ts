@@ -181,6 +181,22 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
     }
   }
 
+  // Acquisition is deliberately isolated from inbound Agent work. It is a no-op
+  // unless an Oman campaign is explicitly time-boxed with Shadow/manual-review
+  // safeguards. A pilot failure is recorded, but never causes an Agent retry.
+  try {
+    const pilotResponse = await internalPost(env, '/api/operations/pilot-acquisition', {});
+    if (pilotResponse.status === 429) metrics.throttled += 1;
+    else if (pilotResponse.status === 409 || pilotResponse.status === 423) metrics.safetyBlocked += 1;
+    else if (!pilotResponse.ok) metrics.failed += 1;
+    else {
+      const pilot = await pilotResponse.json().catch(() => null) as { outcomes?: Array<{ action?: string }> } | null;
+      if ((pilot?.outcomes ?? []).some((outcome) => outcome.action === 'FAILED')) metrics.failed += 1;
+    }
+  } catch {
+    metrics.failed += 1;
+  }
+
   await recordScheduledHeartbeat(env, controller, 'RESULT', metrics);
   return metrics;
 }
