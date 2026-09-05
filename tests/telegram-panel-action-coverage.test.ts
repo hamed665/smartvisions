@@ -51,8 +51,7 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
   },
   'app/whatsapp-pilot-actions.ts': {
     processLatestWhatsAppInboundPilot:'whatsapp.process_pilot',
-    sendApprovedWhatsAppCatalogPilot:'CANONICAL_ALIAS:whatsapp.send_approved_pilot',
-    sendApprovedWhatsAppPilot:'whatsapp.send_approved_pilot',
+    sendApprovedWhatsAppCatalogPilot:'whatsapp.send_approved_pilot',
   },
   'app/whatsapp-verification-actions.ts': {
     verifyWhatsAppIntegration:'whatsapp.verify', transcribeLatestWhatsAppVoicePilot:'whatsapp.voice_transcribe',

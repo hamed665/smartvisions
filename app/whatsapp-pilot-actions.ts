@@ -163,7 +163,7 @@ export async function processLatestWhatsAppInboundPilot() {
   revalidatePath('/conversations');
 }
 
-export async function sendApprovedWhatsAppPilot(formData: FormData) {
+export async function sendApprovedWhatsAppCatalogPilot(formData: FormData) {
   const ctx = await getCurrentOrganization(true);
   const messageId = String(formData.get('id') ?? '').trim();
   if (!messageId) throw new Error('Approved pilot message id is required');
@@ -312,8 +312,4 @@ export async function sendApprovedWhatsAppPilot(formData: FormData) {
   revalidatePath('/approvals');
   revalidatePath('/conversations');
   revalidatePath('/costs');
-}
-
-export async function sendApprovedWhatsAppCatalogPilot(formData: FormData) {
-  return sendApprovedWhatsAppPilot(formData);
 }

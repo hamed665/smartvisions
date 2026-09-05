@@ -1,5 +1,5 @@
 import { approveMessage, rejectMessage } from '@/app/management-actions';
-import { processLatestWhatsAppInboundPilot, sendApprovedWhatsAppPilot } from '@/app/whatsapp-pilot-actions';
+import { processLatestWhatsAppInboundPilot, sendApprovedWhatsAppCatalogPilot } from '@/app/whatsapp-pilot-actions';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 
 export const dynamic = 'force-dynamic';
@@ -120,7 +120,7 @@ export default async function ApprovalsPage() {
       <p>{pilotMessage.original_text || 'Approved WhatsApp pilot reply'}</p>
       {pilotCatalogContentId ? <p className="muted"><strong>Catalog:</strong> {pilotCatalogContentId}</p> : null}
       <p className="muted">Shadow Mode stays ON globally. Only this owner-approved INTERNAL_TEST artifact with exact recipient linkage can use the controlled pilot exception. DNC, human takeover, kill switch, channel pause, Cost Guard, market window and WhatsApp 24-hour checks still run immediately before provider send.</p>
-      {pilotMessage.status === 'APPROVED' ? <form action={sendApprovedWhatsAppPilot}>
+      {pilotMessage.status === 'APPROVED' ? <form action={sendApprovedWhatsAppCatalogPilot}>
         <input type="hidden" name="id" value={pilotMessage.id} />
         <button className="approveButton" disabled={!pilotSendReady}>Send approved {pilotMode === 'CATALOG' ? 'catalog' : 'text'} pilot</button>
       </form> : null}
