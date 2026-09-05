@@ -6,7 +6,7 @@ const CONTROLLED_PILOT_ALLOWED_ORIGINS = new Set([
   'https://smartvisions.vercel.app',
 ]);
 
-export type ControlledWhatsAppCatalogPilotEvidence = {
+export type ControlledWhatsAppPilotEvidence = {
   messageStatus: string;
   requiresApproval: boolean;
   channel: string;
@@ -23,8 +23,8 @@ export type ControlledWhatsAppCatalogPilotEvidence = {
   businessPhone?: string | null;
 };
 
-export type ControlledWhatsAppCatalogPilotVerification =
-  | { verified: true; catalogContentId: string; recipient: string }
+export type ControlledWhatsAppPilotVerification =
+  | { verified: true; mode: 'TEXT'|'CATALOG'; catalogContentId: string | null; recipient: string }
   | { verified: false; reason: string };
 
 export type ControlledPilotRuntimeInput = {
@@ -84,9 +84,9 @@ export function normalizeControlledPilotPhone(value: unknown) {
   return typeof value === 'string' ? value.replace(/\D/g, '') : '';
 }
 
-export function verifyControlledWhatsAppCatalogPilot(
-  input: ControlledWhatsAppCatalogPilotEvidence,
-): ControlledWhatsAppCatalogPilotVerification {
+export function verifyControlledWhatsAppPilot(
+  input: ControlledWhatsAppPilotEvidence,
+): ControlledWhatsAppPilotVerification {
   if (input.messageStatus !== 'APPROVED' || input.requiresApproval) {
     return { verified: false, reason: 'MESSAGE_NOT_OWNER_APPROVED' };
   }
@@ -105,7 +105,11 @@ export function verifyControlledWhatsAppCatalogPilot(
   if (input.providerMessageId !== `shadow:${idempotencyKey}`) {
     return { verified: false, reason: 'SHADOW_PROVIDER_ID_MISMATCH' };
   }
-  if (!isSmartVisionsCatalogContentId(input.catalogContentId)) {
+
+  const catalogContentId = typeof input.catalogContentId === 'string'
+    ? input.catalogContentId.trim()
+    : '';
+  if (catalogContentId && !isSmartVisionsCatalogContentId(catalogContentId)) {
     return { verified: false, reason: 'CATALOG_CONTENT_NOT_ALLOWLISTED' };
   }
 
@@ -115,5 +119,15 @@ export function verifyControlledWhatsAppCatalogPilot(
     return { verified: false, reason: 'RECIPIENT_NOT_INTERNAL_TEST_BUSINESS' };
   }
 
-  return { verified: true, catalogContentId: input.catalogContentId, recipient };
+  return {
+    verified: true,
+    mode: catalogContentId ? 'CATALOG' : 'TEXT',
+    catalogContentId: catalogContentId || null,
+    recipient,
+  };
 }
+
+// Backward-compatible export for the canonical approved-send core. The verifier now
+// supports both controlled text replies and allowlisted catalog replies while keeping
+// the same INTERNAL_TEST + owner approval + shadow provenance contract.
+export const verifyControlledWhatsAppCatalogPilot = verifyControlledWhatsAppPilot;
