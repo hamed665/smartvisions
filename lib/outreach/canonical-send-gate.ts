@@ -48,6 +48,16 @@ export function normalizeCanonicalPhone(value: unknown) {
   return typeof value === 'string' ? value.replace(/\D/g, '') : '';
 }
 
+export function latestInboundTimestamp(...values: Array<string | null | undefined>) {
+  let latestMs = Number.NEGATIVE_INFINITY;
+  for (const value of values) {
+    if (!value) continue;
+    const parsed = new Date(value).getTime();
+    if (Number.isFinite(parsed) && parsed > latestMs) latestMs = parsed;
+  }
+  return Number.isFinite(latestMs) ? new Date(latestMs).toISOString() : null;
+}
+
 type AssertCanonicalSendAllowedInput = {
   supabase: SupabaseClient;
   organizationId: string;
@@ -145,17 +155,34 @@ export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllow
   let whatsappPolicy: ReturnType<typeof evaluateWhatsAppSendPolicy> | null = null;
   let lastInboundAt: string | null = null;
   if (channel === 'WHATSAPP') {
-    const { data: inbound, error: inboundError } = await supabase.from('conversation_messages')
-      .select('created_at')
-      .eq('organization_id', organizationId)
-      .eq('conversation_id', conversationId)
-      .eq('channel', 'WHATSAPP')
-      .eq('direction', 'INBOUND')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (inboundError) throw new Error(`CANONICAL_WHATSAPP_INBOUND_UNAVAILABLE:${inboundError.message}`);
-    lastInboundAt = inbound?.created_at ?? null;
+    const [conversationInboundResult, outreachInboundResult] = await Promise.all([
+      supabase.from('conversation_messages')
+        .select('created_at')
+        .eq('organization_id', organizationId)
+        .eq('conversation_id', conversationId)
+        .eq('channel', 'WHATSAPP')
+        .eq('direction', 'INBOUND')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase.from('outreach_messages')
+        .select('received_at')
+        .eq('organization_id', organizationId)
+        .eq('lead_id', leadId)
+        .eq('channel', 'WHATSAPP')
+        .eq('direction', 'INBOUND')
+        .not('provider_message_id', 'is', null)
+        .not('received_at', 'is', null)
+        .order('received_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    if (conversationInboundResult.error) throw new Error(`CANONICAL_WHATSAPP_INBOUND_UNAVAILABLE:${conversationInboundResult.error.message}`);
+    if (outreachInboundResult.error) throw new Error(`CANONICAL_WHATSAPP_LEDGER_UNAVAILABLE:${outreachInboundResult.error.message}`);
+    lastInboundAt = latestInboundTimestamp(
+      conversationInboundResult.data?.created_at,
+      outreachInboundResult.data?.received_at,
+    );
     whatsappPolicy = evaluateWhatsAppSendPolicy({
       lastCustomerMessageAt: lastInboundAt ?? undefined,
       templateName: input.templateName ?? undefined,

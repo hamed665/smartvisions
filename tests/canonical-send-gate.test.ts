@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateCanonicalSendSafety, normalizeCanonicalEmail, normalizeCanonicalPhone } from '@/lib/outreach/canonical-send-gate';
+import {
+  evaluateCanonicalSendSafety,
+  latestInboundTimestamp,
+  normalizeCanonicalEmail,
+  normalizeCanonicalPhone,
+} from '@/lib/outreach/canonical-send-gate';
 import { evaluateWhatsAppSendPolicy } from '@/lib/whatsapp/policy';
 
 const base = {
@@ -63,6 +68,23 @@ describe('canonical send safety', () => {
   it('normalizes recipients before canonical comparison', () => {
     expect(normalizeCanonicalEmail(' Sales@Example.COM ')).toBe('sales@example.com');
     expect(normalizeCanonicalPhone('+968 9123-4567')).toBe('96891234567');
+  });
+});
+
+describe('durable WhatsApp inbound selection', () => {
+  it('uses the durable outreach ledger when the conversation copy is missing', () => {
+    expect(latestInboundTimestamp(null, '2026-09-05T09:36:32+00:00')).toBe('2026-09-05T09:36:32.000Z');
+  });
+
+  it('uses the newest valid inbound across both ledgers', () => {
+    expect(latestInboundTimestamp(
+      '2026-09-05T09:00:00.000Z',
+      '2026-09-05T09:36:32.000Z',
+    )).toBe('2026-09-05T09:36:32.000Z');
+  });
+
+  it('fails closed when neither ledger has a valid timestamp', () => {
+    expect(latestInboundTimestamp(null, undefined, 'not-a-date')).toBeNull();
   });
 });
 
