@@ -68,6 +68,8 @@ const requiredMarkers = [
   '/api/operations/heartbeat',
   '/api/operations/tick',
   '/api/ai/process-inbound',
+  '/api/operations/pilot-acquisition',
+  'pilotAcquisitionPost',
 ];
 for (const marker of requiredMarkers) {
   if (!graphSource.includes(marker)) fail(`custom scheduled runtime marker is absent from the built entry graph: ${marker}`);
