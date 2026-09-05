@@ -225,16 +225,25 @@ export function buildMessagePlan(input: MessagePlanInput) {
 }
 
 export function buildOmanFirstTouchDraft(input: MessagePlanInput) {
-  const plan = buildMessagePlan(input);
-  if (plan.languageMode !== 'BILINGUAL_FIRST_TOUCH' || input.marketCode !== 'OM') {
+  if (input.marketCode !== 'OM') {
     throw new Error('Canonical Oman first-touch rendering is only available for market OM');
   }
 
-  const observation = plan.evidence
+  const observation = input.evidence
+    .filter(Boolean)
     .map(canonicalOmanObservation)
     .find((item): item is CanonicalFirstTouchObservation => item !== null);
   if (!observation) {
     throw new Error('No supported verified Oman first-touch observation is available');
+  }
+
+  const prioritizedEvidence = [
+    observation.sourceEvidence,
+    ...input.evidence.filter((item) => item && item !== observation.sourceEvidence),
+  ];
+  const plan = buildMessagePlan({ ...input, evidence: prioritizedEvidence });
+  if (plan.languageMode !== 'BILINGUAL_FIRST_TOUCH') {
+    throw new Error('Canonical Oman first-touch plan must be bilingual');
   }
 
   const offer = CANONICAL_OFFER_COPY[input.recommendedOffer];
