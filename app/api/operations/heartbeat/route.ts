@@ -13,6 +13,8 @@ type HeartbeatMetrics = {
   failed?: number;
   reconciliationAttention?: number;
   tickStatus?: number;
+  pilotStatus?: number;
+  pilotFailedOutcomes?: number;
 };
 
 const ACTION_BY_PHASE: Record<HeartbeatPhase, string> = {
@@ -45,6 +47,8 @@ function sanitizeMetrics(value: unknown): HeartbeatMetrics {
     failed: boundedInteger(raw.failed),
     reconciliationAttention: boundedInteger(raw.reconciliationAttention),
     tickStatus: boundedInteger(raw.tickStatus),
+    pilotStatus: boundedInteger(raw.pilotStatus),
+    pilotFailedOutcomes: boundedInteger(raw.pilotFailedOutcomes),
   };
 }
 
