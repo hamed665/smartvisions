@@ -1,8 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import {
-  resolveControlledPilotGrowthOsBaseUrl,
-  verifyControlledWhatsAppPilot,
-} from '@/lib/outreach/controlled-whatsapp-pilot';
+import { verifyControlledWhatsAppPilot } from '@/lib/outreach/controlled-whatsapp-pilot';
 
 const base = {
   messageStatus: 'APPROVED',
@@ -87,36 +86,15 @@ describe('controlled WhatsApp pilot verification', () => {
   });
 });
 
-describe('controlled WhatsApp pilot runtime resolution', () => {
-  it('uses the Cloudflare APP_BASE_URL before any legacy Vercel rollback URL', () => {
-    expect(resolveControlledPilotGrowthOsBaseUrl({
-      appBaseUrl: 'https://app.smartvisionsai.com',
-      vercelProjectProductionUrl: 'smartvisions.vercel.app',
-    })).toBe('https://app.smartvisionsai.com');
-  });
-
-  it('allows the isolated Cloudflare release candidate runtime', () => {
-    expect(resolveControlledPilotGrowthOsBaseUrl({
-      appBaseUrl: 'https://smartvisions-growth-os-release-candidate.hamedarezoo900.workers.dev/',
-    })).toBe('https://smartvisions-growth-os-release-candidate.hamedarezoo900.workers.dev');
-  });
-
-  it('keeps the explicit Vercel URL only as a rollback fallback when APP_BASE_URL is absent', () => {
-    expect(resolveControlledPilotGrowthOsBaseUrl({
-      vercelProjectProductionUrl: 'smartvisions.vercel.app',
-    })).toBe('https://smartvisions.vercel.app');
-  });
-
-  it('fails closed on an invalid APP_BASE_URL instead of silently falling back to Vercel', () => {
-    expect(() => resolveControlledPilotGrowthOsBaseUrl({
-      appBaseUrl: 'https://example.com',
-      vercelProjectProductionUrl: 'smartvisions.vercel.app',
-    })).toThrow('APP_BASE_URL is not an allowlisted controlled-pilot Growth OS runtime');
-  });
-
-  it('fails closed when no controlled-pilot runtime is configured', () => {
-    expect(() => resolveControlledPilotGrowthOsBaseUrl({})).toThrow(
-      'Controlled pilot Growth OS base URL is not configured',
-    );
+describe('Cloudflare controlled-pilot internal invocation', () => {
+  it('reuses canonical handlers in-process and cannot regress to Worker self-fetch or Vercel fallback', () => {
+    const source = readFileSync(resolve(process.cwd(), 'app/whatsapp-pilot-actions.ts'), 'utf8');
+    expect(source).toContain("import { POST as processInboundPost } from '@/app/api/ai/process-inbound/route'");
+    expect(source).toContain("import { POST as approvedSendPost } from '@/app/api/outreach/approved-send/route'");
+    expect(source).toContain('processInboundPost(internalJsonRequest(');
+    expect(source).toContain('approvedSendPost(internalJsonRequest(');
+    expect(source).not.toContain('await fetch(');
+    expect(source).not.toContain('VERCEL_PROJECT_PRODUCTION_URL');
+    expect(source).not.toContain('APP_BASE_URL');
   });
 });
