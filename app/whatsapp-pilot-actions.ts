@@ -3,22 +3,16 @@
 import { revalidatePath } from 'next/cache';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { whatsappPilotRequestKey } from '@/lib/whatsapp/pilot';
-import { verifyControlledWhatsAppCatalogPilot } from '@/lib/outreach/controlled-whatsapp-pilot';
+import {
+  resolveControlledPilotGrowthOsBaseUrl,
+  verifyControlledWhatsAppCatalogPilot,
+} from '@/lib/outreach/controlled-whatsapp-pilot';
 import { evaluateWhatsAppSendPolicy } from '@/lib/whatsapp/policy';
 import { evaluateLocalWindow, type MarketCode } from '@/lib/outreach/scheduler';
 import { assertPaidOperationAllowed, getCostGuardState } from '@/lib/reliability/cost-guard';
 
 function normalizePhone(value: string | null | undefined) {
   return String(value ?? '').replace(/\D/g, '');
-}
-
-function growthOsProductionBaseUrl() {
-  const vercelHost = String(process.env.VERCEL_PROJECT_PRODUCTION_URL ?? '').trim();
-  if (vercelHost) {
-    const normalizedHost = vercelHost.replace(/^https?:\/\//i, '').replace(/\/$/, '');
-    return `https://${normalizedHost}`;
-  }
-  return 'https://smartvisions.vercel.app';
 }
 
 export async function processLatestWhatsAppInboundPilot() {
@@ -99,9 +93,13 @@ export async function processLatestWhatsAppInboundPilot() {
     throw new Error('Pilot conversation linkage is inconsistent');
   }
 
+  const baseUrl = resolveControlledPilotGrowthOsBaseUrl({
+    appBaseUrl: process.env.APP_BASE_URL,
+    vercelProjectProductionUrl: process.env.VERCEL_PROJECT_PRODUCTION_URL,
+  });
   const internalKey = process.env.INTERNAL_API_KEY;
   if (!internalKey) throw new Error('INTERNAL_API_KEY is not configured');
-  const endpoint = `${growthOsProductionBaseUrl()}/api/ai/process-inbound`;
+  const endpoint = `${baseUrl}/api/ai/process-inbound`;
 
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -265,6 +263,10 @@ export async function sendApprovedWhatsAppCatalogPilot(formData: FormData) {
   const costState = await getCostGuardState(ctx.organizationId);
   assertPaidOperationAllowed(costState, 'LOW');
 
+  const baseUrl = resolveControlledPilotGrowthOsBaseUrl({
+    appBaseUrl: process.env.APP_BASE_URL,
+    vercelProjectProductionUrl: process.env.VERCEL_PROJECT_PRODUCTION_URL,
+  });
   const internalKey = process.env.INTERNAL_API_KEY;
   if (!internalKey) throw new Error('INTERNAL_API_KEY is not configured');
 
@@ -284,7 +286,7 @@ export async function sendApprovedWhatsAppCatalogPilot(formData: FormData) {
   });
   if (auditError) throw new Error(`Controlled send audit failed before provider call: ${auditError.message}`);
 
-  const response = await fetch(`${growthOsProductionBaseUrl()}/api/outreach/approved-send`, {
+  const response = await fetch(`${baseUrl}/api/outreach/approved-send`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
