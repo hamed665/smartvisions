@@ -1,18 +1,28 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { POST as processInboundPost } from '@/app/api/ai/process-inbound/route';
+import { POST as approvedSendPost } from '@/app/api/outreach/approved-send/route';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { whatsappPilotRequestKey } from '@/lib/whatsapp/pilot';
-import {
-  resolveControlledPilotGrowthOsBaseUrl,
-  verifyControlledWhatsAppPilot,
-} from '@/lib/outreach/controlled-whatsapp-pilot';
+import { verifyControlledWhatsAppPilot } from '@/lib/outreach/controlled-whatsapp-pilot';
 import { evaluateWhatsAppSendPolicy } from '@/lib/whatsapp/policy';
 import { evaluateLocalWindow, type MarketCode } from '@/lib/outreach/scheduler';
 import { assertPaidOperationAllowed, getCostGuardState } from '@/lib/reliability/cost-guard';
 
 function normalizePhone(value: string | null | undefined) {
   return String(value ?? '').replace(/\D/g, '');
+}
+
+function internalJsonRequest(path: string, internalKey: string, body: unknown) {
+  return new Request(`https://growth-os.internal${path}`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-internal-api-key': internalKey,
+    },
+    body: JSON.stringify(body),
+  });
 }
 
 export async function processLatestWhatsAppInboundPilot() {
@@ -93,44 +103,36 @@ export async function processLatestWhatsAppInboundPilot() {
     throw new Error('Pilot conversation linkage is inconsistent');
   }
 
-  const baseUrl = resolveControlledPilotGrowthOsBaseUrl({
-    appBaseUrl: process.env.APP_BASE_URL,
-    vercelProjectProductionUrl: process.env.VERCEL_PROJECT_PRODUCTION_URL,
-  });
   const internalKey = process.env.INTERNAL_API_KEY;
   if (!internalKey) throw new Error('INTERNAL_API_KEY is not configured');
-  const endpoint = `${baseUrl}/api/ai/process-inbound`;
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-internal-api-key': internalKey,
+  // Do not HTTP-fetch app.smartvisionsai.com from the production Worker. The canonical
+  // hostname is attached via a Worker Route, and same-zone Worker-to-Worker fetches can
+  // fail before the request reaches this handler. Invoke the exact canonical route
+  // handler in-process so its validation, idempotency, Cost Guard and Shadow gates remain
+  // the single implementation used by both API callers and this owner-controlled pilot.
+  const response = await processInboundPost(internalJsonRequest('/api/ai/process-inbound', internalKey, {
+    idempotencyKey: requestKey,
+    context: {
+      organizationId: ctx.organizationId,
+      leadId: inbound.lead_id,
+      businessName: business.name,
+      countryCode: business.country_code || 'OM',
+      language: conversation.detected_language || undefined,
+      industry: business.category || undefined,
+      message: inbound.body,
+      conversationSummary: conversation.summary || undefined,
+      intentScore: lead.intent_score ?? undefined,
+      opportunityScore: lead.opportunity_score ?? undefined,
+      agentMode: lead.agent_mode || undefined,
     },
-    cache: 'no-store',
-    body: JSON.stringify({
-      idempotencyKey: requestKey,
-      context: {
-        organizationId: ctx.organizationId,
-        leadId: inbound.lead_id,
-        businessName: business.name,
-        countryCode: business.country_code || 'OM',
-        language: conversation.detected_language || undefined,
-        industry: business.category || undefined,
-        message: inbound.body,
-        conversationSummary: conversation.summary || undefined,
-        intentScore: lead.intent_score ?? undefined,
-        opportunityScore: lead.opportunity_score ?? undefined,
-        agentMode: lead.agent_mode || undefined,
-      },
-      deliveryContext: {
-        conversationId,
-        to,
-        marketCode: business.country_code || 'OM',
-        leadTimezone: business.country_code === 'OM' ? 'Asia/Muscat' : undefined,
-      },
-    }),
-  });
+    deliveryContext: {
+      conversationId,
+      to,
+      marketCode: business.country_code || 'OM',
+      leadTimezone: business.country_code === 'OM' ? 'Asia/Muscat' : undefined,
+    },
+  }));
 
   const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
   if (!response.ok && response.status !== 202) {
@@ -263,10 +265,6 @@ export async function sendApprovedWhatsAppCatalogPilot(formData: FormData) {
   const costState = await getCostGuardState(ctx.organizationId);
   assertPaidOperationAllowed(costState, 'LOW');
 
-  const baseUrl = resolveControlledPilotGrowthOsBaseUrl({
-    appBaseUrl: process.env.APP_BASE_URL,
-    vercelProjectProductionUrl: process.env.VERCEL_PROJECT_PRODUCTION_URL,
-  });
   const internalKey = process.env.INTERNAL_API_KEY;
   if (!internalKey) throw new Error('INTERNAL_API_KEY is not configured');
 
@@ -287,20 +285,15 @@ export async function sendApprovedWhatsAppCatalogPilot(formData: FormData) {
   });
   if (auditError) throw new Error(`Controlled send audit failed before provider call: ${auditError.message}`);
 
-  const response = await fetch(`${baseUrl}/api/outreach/approved-send`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-internal-api-key': internalKey,
-    },
-    cache: 'no-store',
-    body: JSON.stringify({
-      organizationId: ctx.organizationId,
-      messageId: message.id,
-      priority: 'LOW',
-      controlledShadowPilot: true,
-    }),
-  });
+  // Invoke the exact canonical approved-send handler in-process. This avoids a same-zone
+  // Cloudflare Worker self-fetch while preserving canonical market, approval, DNC,
+  // Shadow exception, Cost Guard, provider health, idempotency and final send gates.
+  const response = await approvedSendPost(internalJsonRequest('/api/outreach/approved-send', internalKey, {
+    organizationId: ctx.organizationId,
+    messageId: message.id,
+    priority: 'LOW',
+    controlledShadowPilot: true,
+  }));
 
   const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
   if (!response.ok && response.status !== 202) {
