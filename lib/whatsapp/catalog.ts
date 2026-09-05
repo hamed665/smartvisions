@@ -35,6 +35,35 @@ const EXPLICIT_SERVICE_PATTERNS: Array<{ contentId: SmartVisionsCatalogContentId
   { contentId: 'SV-SM-001', pattern: /\b(social media management|manage (my|our) social media|social media manager)\b|إدارة\s*وسائل\s*التواصل|مدیریت\s*شبکه(\s|‌)*های\s*اجتماعی/i },
 ];
 
+// Meta renders catalog price from Commerce Manager rather than Growth OS canonical
+// pricing. The website product currently has stale Meta pricing, so it stays quarantined
+// from automated or controlled catalog sends until price parity is explicitly re-verified.
+const CATALOG_SEND_QUARANTINE = new Set<SmartVisionsCatalogContentId>(['SV-WEB-001']);
+
+const REJECTION_PATTERNS: Partial<Record<SmartVisionsCatalogContentId, RegExp[]>> = {
+  'SV-WEB-001': [
+    /\b(?:don['’]?t|dont|do not|not|no longer)\s+(?:want|need|require|looking for|interested in)?\s*(?:a\s+)?(?:website|web site|web design|website design|website development)\b/i,
+    /\bwithout\s+(?:a\s+)?(?:website|web site)\b/i,
+    /(?:لا|ما)\s*(?:أريد|اريد|أحتاج|احتاج)\s*(?:موقع|موقع إلكتروني|موقع الكتروني)/i,
+    /(?:نمی[‌\s-]?(?:خوام|خواهم)|نیازی\s+به)\s*(?:وب[‌\s-]?سایت|سایت)/i,
+  ],
+  'SV-IG-CONTENT-001': [
+    /\b(?:don['’]?t|dont|do not|not|no longer)\s+(?:want|need|require|looking for|interested in)?\s*(?:instagram\s+)?(?:content|reels?)\b/i,
+  ],
+  'SV-WA-001': [
+    /\b(?:don['’]?t|dont|do not|not|no longer)\s+(?:want|need|require|looking for|interested in)?\s*(?:whatsapp\s+(?:automation|ai|bot))\b/i,
+  ],
+  'SV-SEO-001': [
+    /\b(?:don['’]?t|dont|do not|not|no longer)\s+(?:want|need|require|looking for|interested in)?\s*(?:seo|geo)\b/i,
+  ],
+  'SV-AI-AGENT-001': [
+    /\b(?:don['’]?t|dont|do not|not|no longer)\s+(?:want|need|require|looking for|interested in)?\s*(?:an?\s+)?(?:ai agent|ai assistant|chatbot)\b/i,
+  ],
+  'SV-SM-001': [
+    /\b(?:don['’]?t|dont|do not|not|no longer)\s+(?:want|need|require|looking for|interested in)?\s*(?:social media management|social media manager)\b/i,
+  ],
+};
+
 export function resolveWhatsAppCatalogId() {
   return process.env.META_WHATSAPP_CATALOG_ID?.trim()
     || process.env.WHATSAPP_CATALOG_ID?.trim()
@@ -43,6 +72,10 @@ export function resolveWhatsAppCatalogId() {
 
 export function isSmartVisionsCatalogContentId(value: unknown): value is SmartVisionsCatalogContentId {
   return typeof value === 'string' && Object.prototype.hasOwnProperty.call(SMART_VISIONS_CATALOG_ITEMS, value);
+}
+
+export function isSmartVisionsCatalogContentVerifiedForSend(value: unknown): value is SmartVisionsCatalogContentId {
+  return isSmartVisionsCatalogContentId(value) && !CATALOG_SEND_QUARANTINE.has(value);
 }
 
 export function assertSmartVisionsCatalogContentId(value: unknown): asserts value is SmartVisionsCatalogContentId {
@@ -55,19 +88,29 @@ export function getSmartVisionsCatalogItem(contentId: SmartVisionsCatalogContent
   return SMART_VISIONS_CATALOG_ITEMS[contentId];
 }
 
+function explicitlyRejects(contentId: SmartVisionsCatalogContentId, message: string) {
+  return (REJECTION_PATTERNS[contentId] ?? []).some((pattern) => pattern.test(message));
+}
+
+function safeRecommendation(contentId: SmartVisionsCatalogContentId, message: string | undefined, source: 'SERVICE_ID' | 'EXPLICIT_MESSAGE') {
+  if (message && explicitlyRejects(contentId, message)) return null;
+  if (!isSmartVisionsCatalogContentVerifiedForSend(contentId)) return null;
+  return { contentId, ...SMART_VISIONS_CATALOG_ITEMS[contentId], source };
+}
+
 export function resolveSmartVisionsCatalogRecommendation(input: { serviceId?: string | null; message?: string | null }) {
+  const message = input.message?.trim();
   const normalizedServiceId = input.serviceId?.trim().toLowerCase();
   if (normalizedServiceId && SERVICE_ALIASES[normalizedServiceId]) {
-    const contentId = SERVICE_ALIASES[normalizedServiceId];
-    return { contentId, ...SMART_VISIONS_CATALOG_ITEMS[contentId], source: 'SERVICE_ID' as const };
+    return safeRecommendation(SERVICE_ALIASES[normalizedServiceId], message, 'SERVICE_ID');
   }
 
-  const message = input.message?.trim();
   if (!message) return null;
-  const matches = EXPLICIT_SERVICE_PATTERNS.filter(({ pattern }) => pattern.test(message));
+  const matches = EXPLICIT_SERVICE_PATTERNS
+    .filter(({ pattern }) => pattern.test(message))
+    .filter(({ contentId }) => !explicitlyRejects(contentId, message));
   const uniqueContentIds = [...new Set(matches.map(({ contentId }) => contentId))];
   if (uniqueContentIds.length !== 1) return null;
 
-  const contentId = uniqueContentIds[0];
-  return { contentId, ...SMART_VISIONS_CATALOG_ITEMS[contentId], source: 'EXPLICIT_MESSAGE' as const };
+  return safeRecommendation(uniqueContentIds[0], message, 'EXPLICIT_MESSAGE');
 }
