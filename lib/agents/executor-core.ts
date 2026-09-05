@@ -1,6 +1,7 @@
 import type { AgentContext, AgentName, AgentResult, CommercialDecision, ReplyDraft } from './contracts';
 import { getLocaleProfile, resolveReplyLanguage } from '@/lib/outreach/locale';
 import { decidePreviewStrategy, previewIntent } from './preview-policy';
+import { hasPaymentExecutionIntent } from '@/lib/handoff/policy';
 
 const lower = (value: string) => value.toLowerCase();
 const VALID_ACTIONS = new Set<CommercialDecision['action']>(['ANSWER','ASK','OFFER','SHOW_PREVIEW','MEETING','WAIT','HUMAN']);
@@ -25,7 +26,7 @@ export async function executeAgent(agent: AgentName, context: AgentContext): Pro
     case 'intent_discovery': {
       const askedPrice = /(price|cost|how much|discount|best price|السعر|كم|تكلفة|خصم|تخفيض|آخر سعر)/i.test(text);
       const askedMeeting = /(meeting|call|zoom|consultation|consult|مكالمة|اجتماع|استشارة)/i.test(text);
-      const askedPayment = /(payment|pay|invoice|deposit|contract|دفع|فاتورة|عربون|عقد)/i.test(text);
+      const askedPayment = hasPaymentExecutionIntent(context.message);
       return { agent, confidence: 0.92, summary: 'Detected explicit commercial intent signals.', data: { askedPrice, askedMeeting, askedPayment, askedPreview: previewSignals.customPreviewRequested, askedPortfolio: previewSignals.portfolioRequested }, evidence: [], blockers: [] };
     }
     case 'conversation_psychology': {
@@ -138,6 +139,7 @@ export function decideCommercialAction(context: AgentContext, results: AgentResu
   const proposedAction = lowConfidence ? 'HUMAN' : orchestratedAction ?? salesAction ?? (intent?.askedMeeting ? 'MEETING' : 'ANSWER');
   const preview = decidePreviewStrategy({ message: context.message, approvedPortfolio: context.approvedPortfolio });
   const action = proposedAction === 'SHOW_PREVIEW' && preview.strategy !== 'CUSTOM_PREVIEW' ? 'ANSWER' : proposedAction;
+  const paymentExecutionIntent = hasPaymentExecutionIntent(context.message);
 
   return {
     action,
@@ -145,7 +147,7 @@ export function decideCommercialAction(context: AgentContext, results: AgentResu
     useDiscount: false,
     explainValue: true,
     askLowPressureCta: action !== 'WAIT' && action !== 'HUMAN',
-    requiresHuman: lowConfidence || action === 'HUMAN' || (context.intentScore ?? 0) >= 70 || !!intent?.askedPayment || !!intent?.askedMeeting,
+    requiresHuman: lowConfidence || action === 'HUMAN' || (context.intentScore ?? 0) >= 70 || paymentExecutionIntent || !!intent?.askedMeeting,
     reasons: lowConfidence
       ? ['CRITICAL_EVIDENCE_OR_CONFIDENCE_GAP']
       : proposedAction === 'SHOW_PREVIEW' && action !== 'SHOW_PREVIEW'
