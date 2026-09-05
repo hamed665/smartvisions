@@ -313,3 +313,7 @@ export async function sendApprovedWhatsAppPilot(formData: FormData) {
   revalidatePath('/conversations');
   revalidatePath('/costs');
 }
+
+export async function sendApprovedWhatsAppCatalogPilot(formData: FormData) {
+  return sendApprovedWhatsAppPilot(formData);
+}
