@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   const authError = requireInternalApiKey(request);
   if (authError) return authError;
 
-  let body: { organizationId?: string; messageId?: string } = {};
+  let body: { organizationId?: string; messageId?: string; controlledShadowPilot?: boolean } = {};
   try { body = await request.clone().json() as typeof body; } catch { return corePost(request); }
   if (!body.organizationId || !body.messageId) return corePost(request);
 
@@ -55,7 +55,12 @@ export async function POST(request: Request) {
     start:String(market.send_window_start),
     end:String(market.send_window_end),
   });
-  if (!window.allowed) return NextResponse.json({error:window.reason === 'market_disabled' ? 'Approved send blocked because market is disabled' : 'Outside canonical recipient local send window', window}, {status:409});
+  if (!window.allowed && !body.controlledShadowPilot) {
+    return NextResponse.json({error:window.reason === 'market_disabled' ? 'Approved send blocked because market is disabled' : 'Outside canonical recipient local send window', window}, {status:409});
+  }
+  if (!market.enabled) {
+    return NextResponse.json({error:'Approved send blocked because market is disabled', window}, {status:409});
+  }
 
   if (message.channel === 'EMAIL') {
     const mailboxId = String(sendContext.mailbox_id ?? '').trim();
@@ -78,9 +83,8 @@ export async function POST(request: Request) {
     if (mailboxSyncError) return NextResponse.json({error:`Mailbox usage cache reconciliation failed: ${mailboxSyncError.message}`}, {status:503});
   }
 
-  // The existing approved-send core still applies every provider, DNC, Shadow Mode,
-  // approval, Cost Guard, idempotency and 24-hour WhatsApp gate. This preflight only
-  // adds canonical market enforcement and reconciles the email usage cache from the
-  // durable outbound ledger before the core evaluates mailbox health.
+  // Controlled Shadow requests may reach the core outside normal market hours, but the
+  // core must independently prove a currently active, claimed live-test exception before
+  // it relaxes any market-window check. All other safety gates remain authoritative.
   return corePost(request);
 }

@@ -67,6 +67,7 @@ type AssertCanonicalSendAllowedInput = {
   recipient: string;
   templateName?: string | null;
   shadowModeExceptionVerified?: boolean;
+  marketWindowExceptionVerified?: boolean;
   nowUtc?: Date;
 };
 
@@ -190,6 +191,9 @@ export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllow
     });
   }
 
+  const marketWindowAllowed = Boolean(market.enabled)
+    && (marketWindow.allowed || Boolean(input.marketWindowExceptionVerified));
+
   const safety = evaluateCanonicalSendSafety({
     channel,
     globalKillSwitch: Boolean(controls.global_kill_switch),
@@ -204,7 +208,7 @@ export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllow
     conversationRequiresHuman: Boolean(conversation.requires_human),
     recipientMatchesCanonicalBusiness,
     suppressed,
-    marketWindowAllowed: marketWindow.allowed,
+    marketWindowAllowed,
     whatsappPolicyAllowed: whatsappPolicy?.allowed,
   });
 
