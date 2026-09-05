@@ -3,6 +3,7 @@ import type { AgentContext, AgentName, AgentResult } from '@/lib/agents/contract
 import type { AgentRuntime } from '@/lib/agents/runtime';
 import { checkHumanReplyQuality, processInboundMessage } from '@/lib/agents/pipeline';
 import { buildSelectiveRoutePlan } from '@/lib/agents/selective-routing';
+import { hasPaymentExecutionIntent } from '@/lib/handoff/policy';
 
 function result(agent: AgentName, data: Record<string, unknown> = {}, blockers: string[] = []): AgentResult {
   return { agent, confidence: 0.95, summary: `${agent} result`, data, evidence: [], blockers };
@@ -86,6 +87,39 @@ describe('human sales consensus', () => {
     expect(output.trace.reasoningTier).toBe('LIGHT');
     expect(output.trace.paidAgentCallsPlanned).toBe(1);
     expect(paidCalls).toEqual(['secretary']);
+  });
+
+  it('keeps a nonbinding trial-and-contract inquiry in automation instead of permanent HUMAN takeover', async () => {
+    const runtime: AgentRuntime = {
+      async run(agent) {
+        if (agent === 'sales_marketing') return result(agent, { nextAction: 'ANSWER' });
+        if (agent === 'decision_orchestrator') return result(agent, { recommended_action: 'ANSWER' });
+        if (agent === 'secretary') return result(agent, {
+          customer_reply: 'We do not have a verified single-content trial or contract term in the standard packages. I can explain the verified content packages, and custom terms can be reviewed separately if needed.',
+          customer_reply_language: 'English',
+        });
+        return result(agent);
+      },
+    };
+
+    const output = await processInboundMessage({
+      message: "I just one content to test you if it's ok contract",
+      countryCode: 'OM',
+      agentMode: 'AUTO',
+      shadowMode: true,
+      verifiedEvidence: ['No verified single-content trial or custom contract terms are configured.'],
+    }, undefined, runtime);
+
+    expect(hasPaymentExecutionIntent("I just one content to test you if it's ok contract")).toBe(false);
+    expect(output.trace.handoffReasons).not.toContain('PAYMENT_DISCUSSION');
+    expect(output.nextAgentMode).toBe('AUTO');
+    expect(output.trace.delivery).toBe('REVIEW');
+  });
+
+  it('still identifies explicit payment or contract execution as human-required', () => {
+    expect(hasPaymentExecutionIntent('How can I pay? Send me an invoice.')).toBe(true);
+    expect(hasPaymentExecutionIntent('Please send me the contract to sign.')).toBe(true);
+    expect(hasPaymentExecutionIntent('Can you explain what is included in the contract?')).toBe(false);
   });
 
   it('routes discount objections through psychology and hands them to a human', async () => {
