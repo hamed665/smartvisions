@@ -10,6 +10,8 @@ import {
 import { buildOwnerSocialAssessment, buildPrecisionLeadPersistenceRow, type SocialAssessment } from '@/lib/hunters/business/service-fit';
 import { deriveWhatsappCandidate } from '@/lib/hunters/business/selective-enrichment';
 import type { DiscoveredBusiness } from '@/lib/hunters/business/types';
+import { buildOmanFirstTouchDraft } from '@/lib/outreach/message-plan';
+import { queueShadowDraft, shadowProviderMessageId } from '@/lib/outreach/shadow-approval';
 
 type CachedBusiness = {
   id:string; name:string; country_code:string; city:string|null; category:string|null; google_place_id:string|null;
@@ -24,6 +26,16 @@ type FreshAudit = {
 };
 type StoredEvidence = { business_id:string; digital_presence_evidence:unknown };
 type CountryCatalog = Map<string, Set<string>>;
+type GrowthFirstTouchBusiness = {
+  name:string|null; country_code:string|null; category:string|null; email:string|null; whatsapp:string|null; phone:string|null; international_phone:string|null;
+};
+type PromotionOpportunity = {
+  id:string; business_id:string; qualification_score:number|null; qualification_reasons:unknown; prospect_tier:string; should_contact:boolean;
+  primary_service_id:string|null; message_hooks:unknown; businesses:GrowthFirstTouchBusiness|GrowthFirstTouchBusiness[]|null;
+};
+type FirstTouchResult = {
+  status:'QUEUED'|'DUPLICATE'|'SKIPPED'; reason?:string; channel?:'EMAIL'|'WHATSAPP'; messageId?:string;
+};
 
 const record=(value:unknown):Record<string,unknown>=>value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{};
 const toDiscovered=(row:CachedBusiness):DiscoveredBusiness=>({
@@ -57,6 +69,9 @@ const socialAssessmentFromEvidence=(value:unknown):SocialAssessment|null=>{
   return {status:'VERIFIED',quality:quality as SocialAssessment['quality'],source,assessedAt:String(social.assessedAt??''),reasons};
 };
 const countryCatalog=(catalog:CountryCatalog,countryCode:string|null|undefined)=>catalog.get(String(countryCode??'').toUpperCase())??new Set<string>();
+const normalizeEmail=(value:string|null|undefined)=>String(value??'').trim().toLowerCase();
+const normalizePhone=(value:string|null|undefined)=>String(value??'').replace(/\D/g,'');
+const allowedFirstTouchLead=(status:string|null|undefined,agentMode:string|null|undefined)=>!['DO_NOT_CONTACT','WON','LOST'].includes(String(status??'').toUpperCase())&&!['HUMAN','PAUSED'].includes(String(agentMode??'').toUpperCase());
 
 async function configuredServiceIdsByCountry(ctx: Awaited<ReturnType<typeof getCurrentOrganization>>):Promise<CountryCatalog> {
   const [{data:services,error:serviceError},{data:prices,error:priceError}]=await Promise.all([
@@ -74,6 +89,108 @@ async function configuredServiceIdsByCountry(ctx: Awaited<ReturnType<typeof getC
     const set=result.get(country)??new Set<string>();set.add(serviceId);result.set(country,set);
   }
   return result;
+}
+
+async function queuePromotedLeadFirstTouch(input:{
+  ctx:Awaited<ReturnType<typeof getCurrentOrganization>>;
+  leadId:string;
+  leadStatus:string|null|undefined;
+  leadAgentMode:string|null|undefined;
+  business:GrowthFirstTouchBusiness;
+  serviceId:string;
+  messageHooks:unknown;
+  mailboxId:string|null;
+  shadowMode:boolean;
+}):Promise<FirstTouchResult>{
+  const {ctx,leadId,business,serviceId,mailboxId}=input;
+  if(String(business.country_code??'').toUpperCase()!=='OM')return {status:'SKIPPED',reason:'OMAN_FIRST_TOUCH_ONLY'};
+  if(!input.shadowMode)return {status:'SKIPPED',reason:'SHADOW_MODE_REQUIRED'};
+  if(!allowedFirstTouchLead(input.leadStatus,input.leadAgentMode))return {status:'SKIPPED',reason:'LEAD_STATE_BLOCKED'};
+
+  const idempotencyKey=`growth-first-touch:${leadId}`;
+  const providerMessageId=shadowProviderMessageId(idempotencyKey);
+  const{data:existingDraft,error:existingDraftError}=await ctx.supabase.from('conversation_messages').select('id,status').eq('organization_id',ctx.organizationId).eq('provider_message_id',providerMessageId).limit(1).maybeSingle();
+  if(existingDraftError)throw existingDraftError;
+  if(existingDraft)return {status:'DUPLICATE',messageId:String(existingDraft.id)};
+
+  const[{count:conversationMessageCount,error:conversationMessageError},{count:outreachMessageCount,error:outreachMessageError}]=await Promise.all([
+    ctx.supabase.from('conversation_messages').select('id',{count:'exact',head:true}).eq('organization_id',ctx.organizationId).eq('lead_id',leadId),
+    ctx.supabase.from('outreach_messages').select('id',{count:'exact',head:true}).eq('organization_id',ctx.organizationId).eq('lead_id',leadId),
+  ]);
+  if(conversationMessageError)throw conversationMessageError;if(outreachMessageError)throw outreachMessageError;
+  if((conversationMessageCount??0)>0||(outreachMessageCount??0)>0)return {status:'SKIPPED',reason:'EXISTING_MESSAGE_ACTIVITY'};
+
+  const evidence=Array.isArray(input.messageHooks)?input.messageHooks.map(String).map(value=>value.trim()).filter(Boolean):[];
+  let draft:ReturnType<typeof buildOmanFirstTouchDraft>;
+  try{
+    draft=buildOmanFirstTouchDraft({
+      marketCode:'OM',
+      businessName:String(business.name??'').trim(),
+      industry:String(business.category??'').trim()||undefined,
+      evidence,
+      recommendedOffer:serviceId,
+    });
+  }catch{
+    return {status:'SKIPPED',reason:'NO_CANONICAL_VERIFIED_FIRST_TOUCH_COPY'};
+  }
+
+  const email=normalizeEmail(business.email);
+  const phone=normalizePhone(business.whatsapp)||normalizePhone(business.international_phone)||normalizePhone(business.phone);
+  const channel:'EMAIL'|'WHATSAPP'|null=email.includes('@')&&mailboxId?'EMAIL':phone.length>=8?'WHATSAPP':null;
+  const to=channel==='EMAIL'?email:channel==='WHATSAPP'?phone:'';
+  if(!channel||!to)return {status:'SKIPPED',reason:'NO_SAFE_FIRST_TOUCH_CHANNEL'};
+
+  const{data:conversation,error:conversationError}=await ctx.supabase.from('sales_conversations').select('id,stage,agent_mode,requires_human').eq('organization_id',ctx.organizationId).eq('lead_id',leadId).eq('channel',channel).order('updated_at',{ascending:false}).limit(1).maybeSingle();
+  if(conversationError)throw conversationError;
+  if(conversation&&(conversation.stage!=='NEW'||conversation.agent_mode==='HUMAN'||conversation.agent_mode==='PAUSED'||conversation.requires_human))return {status:'SKIPPED',reason:'CONVERSATION_STATE_BLOCKED'};
+
+  let conversationId=conversation?.id?String(conversation.id):'';
+  if(!conversationId){
+    const{data:createdConversation,error:createConversationError}=await ctx.supabase.from('sales_conversations').insert({organization_id:ctx.organizationId,lead_id:leadId,channel,stage:'NEW',agent_mode:'AUTO'}).select('id').single();
+    if(createConversationError)throw createConversationError;
+    conversationId=String(createdConversation.id);
+  }
+
+  const queued=await queueShadowDraft({
+    organizationId:ctx.organizationId,
+    conversationId,
+    leadId,
+    channel,
+    draft:draft.text,
+    idempotencyKey,
+    to,
+    subject:channel==='EMAIL'?draft.subject:undefined,
+    mailboxId:channel==='EMAIL'?mailboxId??undefined:undefined,
+    marketCode:'OM',
+    leadTimezone:'Asia/Muscat',
+    replyLanguage:draft.plan.language,
+    replyDialect:'omani',
+    rememberCustomerLanguage:false,
+  });
+
+  const{error:auditError}=await ctx.supabase.from('audit_logs').insert({
+    organization_id:ctx.organizationId,
+    actor_type:'USER',
+    actor_id:ctx.userId,
+    action:'QUEUE_GROWTH_FIRST_TOUCH_SHADOW_DRAFT',
+    entity_type:'conversation_message',
+    entity_id:queued.messageId,
+    after_data:{
+      leadId,
+      channel,
+      languageMode:draft.plan.languageMode,
+      languages:draft.plan.languages,
+      observationKey:draft.observation.key,
+      sourceEvidence:draft.observation.sourceEvidence,
+      recommendedOffer:serviceId,
+      shadowMode:true,
+      providerSendTriggered:false,
+      providerCalls:0,
+      llmCalls:0,
+    },
+  });
+  if(auditError)throw auditError;
+  return {status:queued.duplicate?'DUPLICATE':'QUEUED',channel,messageId:String(queued.messageId)};
 }
 
 export async function routeCachedGrowthOpportunities(){
@@ -153,26 +270,59 @@ export async function promoteHighPrecisionGrowthCandidates(form:FormData){
   const ctx=await getCurrentOrganization(true);let destination='/hunters/growth-opportunities';
   const requested=Math.max(1,Math.min(20,Number(form.get('limit')??10)||10));
   try{
-    const catalogByCountry=await configuredServiceIdsByCountry(ctx);
-    const{data:rows,error}=await ctx.supabase.from('growth_opportunities').select('id,business_id,qualification_score,qualification_reasons,prospect_tier,should_contact,primary_service_id,businesses(country_code)').eq('organization_id',ctx.organizationId).eq('prospect_tier','A').eq('should_contact',true).order('qualification_score',{ascending:false}).limit(requested*2);
+    const[catalogByCountry,controlsResult,mailboxResult]=await Promise.all([
+      configuredServiceIdsByCountry(ctx),
+      ctx.supabase.from('system_controls').select('shadow_mode').eq('organization_id',ctx.organizationId).maybeSingle(),
+      ctx.supabase.from('mailboxes').select('id,enabled,health_status').eq('organization_id',ctx.organizationId).eq('enabled',true).order('created_at',{ascending:true}).limit(10),
+    ]);
+    if(controlsResult.error)throw controlsResult.error;if(mailboxResult.error)throw mailboxResult.error;
+    const shadowMode=Boolean(controlsResult.data?.shadow_mode);
+    const mailboxId=String((mailboxResult.data??[]).find(row=>row.health_status==='HEALTHY')?.id??'')||null;
+    const{data:rows,error}=await ctx.supabase.from('growth_opportunities').select('id,business_id,qualification_score,qualification_reasons,prospect_tier,should_contact,primary_service_id,message_hooks,businesses(name,country_code,category,email,whatsapp,phone,international_phone)').eq('organization_id',ctx.organizationId).eq('prospect_tier','A').eq('should_contact',true).order('qualification_score',{ascending:false}).limit(requested*2);
     if(error)throw error;
-    let created=0,reused=0,skipped=0;
-    for(const row of rows??[]){
+    let created=0,reused=0,skipped=0,shadowDraftQueued=0,shadowDraftReused=0,shadowDraftSkipped=0;
+    const shadowDraftSkipReasons:Record<string,number>={};
+    for(const row of(rows??[]) as PromotionOpportunity[]){
       if(created>=requested)break;
       const serviceId=String(row.primary_service_id??'');
-      const businessRelation=Array.isArray(row.businesses)?row.businesses[0]:row.businesses;
+      const businessRelation=(Array.isArray(row.businesses)?row.businesses[0]:row.businesses)??null;
       const countryCode=String(businessRelation?.country_code??'').toUpperCase();
       if(!serviceId||!countryCatalog(catalogByCountry,countryCode).has(serviceId)){skipped+=1;continue;}
-      const{data:existing,error:existingError}=await ctx.supabase.from('leads').select('id').eq('organization_id',ctx.organizationId).eq('business_id',row.business_id).maybeSingle();
-      if(existingError)throw existingError;if(existing){reused+=1;continue;}
-      const qualification={shouldContact:true,primaryServiceId:serviceId,qualificationScore:Number(row.qualification_score??0),reasons:Array.isArray(row.qualification_reasons)?row.qualification_reasons.map(String):[]} as Parameters<typeof buildPrecisionLeadPersistenceRow>[0]['qualification'];
-      const leadRow=buildPrecisionLeadPersistenceRow({organizationId:ctx.organizationId,businessId:String(row.business_id),qualification});
-      const{error:insertError}=await ctx.supabase.from('leads').insert(leadRow);
-      if(insertError){if(insertError.code==='23505'){reused+=1;continue;}throw insertError;}
-      created+=1;
+
+      const{data:existing,error:existingError}=await ctx.supabase.from('leads').select('id,status,agent_mode').eq('organization_id',ctx.organizationId).eq('business_id',row.business_id).maybeSingle();
+      if(existingError)throw existingError;
+      let leadId=existing?.id?String(existing.id):'';
+      let leadStatus=existing?.status??'NEW';
+      let leadAgentMode=existing?.agent_mode??'AUTO';
+      if(existing){
+        reused+=1;
+      }else{
+        const qualification={shouldContact:true,primaryServiceId:serviceId,qualificationScore:Number(row.qualification_score??0),reasons:Array.isArray(row.qualification_reasons)?row.qualification_reasons.map(String):[]} as Parameters<typeof buildPrecisionLeadPersistenceRow>[0]['qualification'];
+        const leadRow=buildPrecisionLeadPersistenceRow({organizationId:ctx.organizationId,businessId:String(row.business_id),qualification});
+        const{data:insertedLead,error:insertError}=await ctx.supabase.from('leads').insert(leadRow).select('id,status,agent_mode').single();
+        if(insertError){
+          if(insertError.code==='23505'){
+            const{data:racedLead,error:racedLeadError}=await ctx.supabase.from('leads').select('id,status,agent_mode').eq('organization_id',ctx.organizationId).eq('business_id',row.business_id).single();
+            if(racedLeadError)throw racedLeadError;
+            leadId=String(racedLead.id);leadStatus=racedLead.status;leadAgentMode=racedLead.agent_mode;reused+=1;
+          }else throw insertError;
+        }else{
+          leadId=String(insertedLead.id);leadStatus=insertedLead.status;leadAgentMode=insertedLead.agent_mode;created+=1;
+        }
+      }
+
+      if(!leadId||!businessRelation){shadowDraftSkipped+=1;shadowDraftSkipReasons.MISSING_LINKAGE=(shadowDraftSkipReasons.MISSING_LINKAGE??0)+1;continue;}
+      const firstTouch=await queuePromotedLeadFirstTouch({ctx,leadId,leadStatus,leadAgentMode,business:businessRelation,serviceId,messageHooks:row.message_hooks,mailboxId,shadowMode});
+      if(firstTouch.status==='QUEUED')shadowDraftQueued+=1;
+      else if(firstTouch.status==='DUPLICATE')shadowDraftReused+=1;
+      else{
+        shadowDraftSkipped+=1;
+        const reason=firstTouch.reason??'UNKNOWN';
+        shadowDraftSkipReasons[reason]=(shadowDraftSkipReasons[reason]??0)+1;
+      }
     }
-    const{error:logError}=await ctx.supabase.from('audit_logs').insert({organization_id:ctx.organizationId,actor_type:'USER',actor_id:ctx.userId,action:'PROMOTE_HIGH_PRECISION_GROWTH_CANDIDATES',entity_type:'lead',entity_id:ctx.organizationId,after_data:{requested,created,reused,skipped,tier:'A',outreachTriggered:false,providerCalls:0,llmCalls:0,marketPriceRequired:true}});if(logError)throw logError;
-    destination=`/hunters/growth-opportunities?promoted=${created}&reused=${reused}&skipped=${skipped}`;
+    const{error:logError}=await ctx.supabase.from('audit_logs').insert({organization_id:ctx.organizationId,actor_type:'USER',actor_id:ctx.userId,action:'PROMOTE_HIGH_PRECISION_GROWTH_CANDIDATES',entity_type:'lead',entity_id:ctx.organizationId,after_data:{requested,created,reused,skipped,tier:'A',outreachTriggered:false,shadowDraftQueued,shadowDraftReused,shadowDraftSkipped,shadowDraftSkipReasons,firstTouchMode:'BILINGUAL_FIRST_TOUCH',providerSendTriggered:false,providerCalls:0,llmCalls:0,marketPriceRequired:true}});if(logError)throw logError;
+    destination=`/hunters/growth-opportunities?promoted=${created}&reused=${reused}&skipped=${skipped}&shadowDrafts=${shadowDraftQueued}`;
   }catch(error){destination=`/hunters/growth-opportunities?promotionError=${encodeURIComponent(error instanceof Error?error.message.slice(0,180):'Promotion failed')}`;}
-  revalidatePath('/hunters/growth-opportunities');revalidatePath('/leads');redirect(destination);
+  revalidatePath('/hunters/growth-opportunities');revalidatePath('/leads');revalidatePath('/approvals');revalidatePath('/conversations');redirect(destination);
 }
