@@ -5,7 +5,7 @@ import { getCurrentOrganization } from '@/lib/supabase/org';
 import { whatsappPilotRequestKey } from '@/lib/whatsapp/pilot';
 import {
   resolveControlledPilotGrowthOsBaseUrl,
-  verifyControlledWhatsAppCatalogPilot,
+  verifyControlledWhatsAppPilot,
 } from '@/lib/outreach/controlled-whatsapp-pilot';
 import { evaluateWhatsAppSendPolicy } from '@/lib/whatsapp/policy';
 import { evaluateLocalWindow, type MarketCode } from '@/lib/outreach/scheduler';
@@ -163,7 +163,7 @@ export async function processLatestWhatsAppInboundPilot() {
   revalidatePath('/conversations');
 }
 
-export async function sendApprovedWhatsAppCatalogPilot(formData: FormData) {
+export async function sendApprovedWhatsAppPilot(formData: FormData) {
   const ctx = await getCurrentOrganization(true);
   const messageId = String(formData.get('id') ?? '').trim();
   if (!messageId) throw new Error('Approved pilot message id is required');
@@ -184,7 +184,7 @@ export async function sendApprovedWhatsAppCatalogPilot(formData: FormData) {
 
   if (controlsError || !controls) throw new Error(`Runtime controls unavailable: ${controlsError?.message ?? 'missing row'}`);
   if (messageError || !message) throw new Error(`Approved pilot message unavailable: ${messageError?.message ?? 'not found'}`);
-  if (!controls.shadow_mode) throw new Error('Controlled catalog pilot requires Shadow Mode to remain ON');
+  if (!controls.shadow_mode) throw new Error('Controlled pilot requires Shadow Mode to remain ON');
   if (controls.global_kill_switch) throw new Error('Global kill switch is ON');
   if (controls.agents_paused) throw new Error('Agents are paused');
   if (controls.whatsapp_ai_paused) throw new Error('WhatsApp AI is paused');
@@ -229,7 +229,7 @@ export async function sendApprovedWhatsAppCatalogPilot(formData: FormData) {
 
   const metadata = (message.metadata ?? {}) as Record<string, unknown>;
   const sendContext = (metadata.send_context ?? {}) as Record<string, unknown>;
-  const verification = verifyControlledWhatsAppCatalogPilot({
+  const verification = verifyControlledWhatsAppPilot({
     messageStatus: message.status,
     requiresApproval: Boolean(message.requires_approval),
     channel: message.channel,
@@ -245,19 +245,19 @@ export async function sendApprovedWhatsAppCatalogPilot(formData: FormData) {
     businessWhatsapp: business.whatsapp,
     businessPhone: business.phone,
   });
-  if (!verification.verified) throw new Error(`Controlled catalog pilot verification failed: ${verification.reason}`);
+  if (!verification.verified) throw new Error(`Controlled pilot verification failed: ${verification.reason}`);
 
   const marketCode = String(sendContext.market_code ?? business.country_code ?? '').toUpperCase() as MarketCode;
   const leadTimezone = typeof sendContext.lead_timezone === 'string' ? sendContext.lead_timezone : undefined;
   const localWindow = evaluateLocalWindow({ marketCode, leadTimezone });
-  if (!localWindow.allowed) throw new Error('Controlled catalog pilot is outside the recipient local send window');
+  if (!localWindow.allowed) throw new Error('Controlled pilot is outside the recipient local send window');
 
   const lastCustomerMessageAt = typeof sendContext.last_customer_message_at === 'string'
     ? sendContext.last_customer_message_at
     : undefined;
   const whatsappPolicy = evaluateWhatsAppSendPolicy({ lastCustomerMessageAt });
   if (!whatsappPolicy.allowed || whatsappPolicy.mode !== 'FREEFORM') {
-    throw new Error('Controlled catalog pilot requires a currently open WhatsApp 24-hour customer service window');
+    throw new Error('Controlled pilot requires a currently open WhatsApp 24-hour customer service window');
   }
 
   const costState = await getCostGuardState(ctx.organizationId);
@@ -274,10 +274,11 @@ export async function sendApprovedWhatsAppCatalogPilot(formData: FormData) {
     organization_id: ctx.organizationId,
     actor_type: 'USER',
     actor_id: ctx.userId,
-    action: 'REQUEST_WHATSAPP_CONTROLLED_CATALOG_PILOT_SEND',
+    action: 'REQUEST_WHATSAPP_CONTROLLED_PILOT_SEND',
     entity_type: 'conversation_message',
     entity_id: message.id,
     after_data: {
+      mode: verification.mode,
       catalog_content_id: verification.catalogContentId,
       recipient: verification.recipient,
       shadow_mode_remains_on: true,
@@ -305,7 +306,7 @@ export async function sendApprovedWhatsAppCatalogPilot(formData: FormData) {
   if (!response.ok && response.status !== 202) {
     throw new Error(typeof payload.error === 'string'
       ? payload.error
-      : `Controlled catalog send failed with HTTP ${response.status}`);
+      : `Controlled WhatsApp send failed with HTTP ${response.status}`);
   }
 
   revalidatePath('/approvals');
