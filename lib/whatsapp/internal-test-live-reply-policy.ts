@@ -41,9 +41,6 @@ export function evaluateInternalTestLiveReplyPolicy(
   if (input.globalKillSwitch) return { allowed: false, reason: 'GLOBAL_KILL_SWITCH' };
   if (input.agentsPaused) return { allowed: false, reason: 'AGENTS_PAUSED' };
   if (input.whatsappPaused) return { allowed: false, reason: 'WHATSAPP_PAUSED' };
-  if (String(input.businessCategory ?? '').toUpperCase() !== 'INTERNAL_TEST') {
-    return { allowed: false, reason: 'BUSINESS_NOT_INTERNAL_TEST' };
-  }
 
   const config = record(record(input.ruleConfig).internalTestLiveReply);
   if (config.enabled !== true) return { allowed: false, reason: 'LIVE_TEST_DISABLED' };
@@ -51,11 +48,26 @@ export function evaluateInternalTestLiveReplyPolicy(
   const configuredRecipient = normalizeInternalTestPhone(config.recipient);
   const businessRecipient = normalizeInternalTestPhone(input.businessWhatsapp || input.businessPhone);
   const inboundFrom = normalizeInternalTestPhone(input.inboundFrom);
-  if (configuredRecipient.length < 8 || businessRecipient.length < 8 || inboundFrom.length < 8) {
+  if (businessRecipient.length < 8 || inboundFrom.length < 8) {
     return { allowed: false, reason: 'RECIPIENT_UNAVAILABLE' };
   }
-  if (configuredRecipient !== businessRecipient || inboundFrom !== businessRecipient) {
-    return { allowed: false, reason: 'RECIPIENT_NOT_EXACT_INTERNAL_TEST_BUSINESS' };
+
+  const businessCategory = String(input.businessCategory ?? '').toUpperCase();
+  if (businessCategory === 'INTERNAL_TEST') {
+    if (configuredRecipient.length < 8) return { allowed: false, reason: 'RECIPIENT_UNAVAILABLE' };
+    if (configuredRecipient !== businessRecipient || inboundFrom !== businessRecipient) {
+      return { allowed: false, reason: 'RECIPIENT_NOT_EXACT_INTERNAL_TEST_BUSINESS' };
+    }
+  } else {
+    if (config.allowVerifiedOmanInbound !== true) {
+      return { allowed: false, reason: 'BUSINESS_NOT_INTERNAL_TEST' };
+    }
+    if (inboundFrom !== businessRecipient) {
+      return { allowed: false, reason: 'RECIPIENT_NOT_EXACT_OMAN_TEST_BUSINESS' };
+    }
+    if (businessRecipient.length !== 11 || !businessRecipient.startsWith('968')) {
+      return { allowed: false, reason: 'OMAN_TEST_RECIPIENT_REQUIRED' };
+    }
   }
 
   const startsAt = typeof config.startsAt === 'string' ? config.startsAt : '';
