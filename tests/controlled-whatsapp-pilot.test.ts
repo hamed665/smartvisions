@@ -10,7 +10,7 @@ const base = {
   metadataSource: 'SHADOW_MODE',
   providerMessageId: 'shadow:agent:whatsapp-pilot:36c143b0-dd7a-4e4a-9aaa-8e708ebc601f:shadow',
   idempotencyKey: 'agent:whatsapp-pilot:36c143b0-dd7a-4e4a-9aaa-8e708ebc601f:shadow',
-  catalogContentId: 'SV-WEB-001',
+  catalogContentId: 'SV-WA-001',
   sendTo: '96877511053',
   messageLeadId: 'lead-1',
   conversationLeadId: 'lead-1',
@@ -21,11 +21,11 @@ const base = {
 };
 
 describe('controlled WhatsApp pilot verification', () => {
-  it('accepts the owner-approved internal test catalog artifact', () => {
+  it('accepts an owner-approved internal test catalog artifact with send-verified content', () => {
     expect(verifyControlledWhatsAppPilot(base)).toEqual({
       verified: true,
       mode: 'CATALOG',
-      catalogContentId: 'SV-WEB-001',
+      catalogContentId: 'SV-WA-001',
       recipient: '96877511053',
     });
   });
@@ -82,6 +82,13 @@ describe('controlled WhatsApp pilot verification', () => {
     expect(verifyControlledWhatsAppPilot({ ...base, catalogContentId: 'SV-NOT-REAL' })).toEqual({
       verified: false,
       reason: 'CATALOG_CONTENT_NOT_ALLOWLISTED',
+    });
+  });
+
+  it('rejects allowlisted catalog content whose external price parity is not verified', () => {
+    expect(verifyControlledWhatsAppPilot({ ...base, catalogContentId: 'SV-WEB-001' })).toEqual({
+      verified: false,
+      reason: 'CATALOG_CONTENT_NOT_SEND_VERIFIED',
     });
   });
 });

@@ -1,4 +1,7 @@
-import { isSmartVisionsCatalogContentId } from '@/lib/whatsapp/catalog';
+import {
+  isSmartVisionsCatalogContentId,
+  isSmartVisionsCatalogContentVerifiedForSend,
+} from '@/lib/whatsapp/catalog';
 
 export type ControlledWhatsAppPilotEvidence = {
   messageStatus: string;
@@ -53,6 +56,9 @@ export function verifyControlledWhatsAppPilot(
   if (catalogContentId && !isSmartVisionsCatalogContentId(catalogContentId)) {
     return { verified: false, reason: 'CATALOG_CONTENT_NOT_ALLOWLISTED' };
   }
+  if (catalogContentId && !isSmartVisionsCatalogContentVerifiedForSend(catalogContentId)) {
+    return { verified: false, reason: 'CATALOG_CONTENT_NOT_SEND_VERIFIED' };
+  }
 
   const recipient = normalizeControlledPilotPhone(input.sendTo);
   const businessRecipient = normalizeControlledPilotPhone(input.businessWhatsapp || input.businessPhone);
@@ -69,6 +75,6 @@ export function verifyControlledWhatsAppPilot(
 }
 
 // Backward-compatible export for the canonical approved-send core. The verifier now
-// supports both controlled text replies and allowlisted catalog replies while keeping
+// supports both controlled text replies and verified catalog replies while keeping
 // the same INTERNAL_TEST + owner approval + shadow provenance contract.
 export const verifyControlledWhatsAppCatalogPilot = verifyControlledWhatsAppPilot;
