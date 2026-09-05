@@ -3,19 +3,21 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const migration = readFileSync(resolve(process.cwd(), 'supabase/migrations/0059_owner_release_human_takeover.sql'), 'utf8');
+const hardening = readFileSync(resolve(process.cwd(), 'supabase/migrations/0060_harden_owner_release_human_takeover.sql'), 'utf8');
 const actions = readFileSync(resolve(process.cwd(), 'app/management-actions.ts'), 'utf8');
 const page = readFileSync(resolve(process.cwd(), 'app/conversations/[id]/page.tsx'), 'utf8');
 
 describe('owner human-takeover release', () => {
   it('is one atomic DB operation with owner verification and row locks', () => {
-    expect(migration).toContain('security definer');
     expect(migration).toContain("om.role = 'OWNER'");
     expect(migration.match(/for update;/g)?.length).toBe(2);
-    expect(migration).toContain("update public.leads");
-    expect(migration).toContain("update public.sales_conversations");
+    expect(migration).toContain('update public.leads');
+    expect(migration).toContain('update public.sales_conversations');
     expect(migration).toContain("'RELEASE_HUMAN_TAKEOVER'");
-    expect(migration).toContain('revoke all on function public.release_human_takeover(uuid, uuid) from anon');
-    expect(migration).toContain('grant execute on function public.release_human_takeover(uuid, uuid) to authenticated');
+    expect(hardening).toContain('security invoker');
+    expect(hardening).toContain('revoke all on function public.release_human_takeover(uuid, uuid) from public');
+    expect(hardening).toContain('revoke all on function public.release_human_takeover(uuid, uuid) from anon');
+    expect(hardening).toContain('grant execute on function public.release_human_takeover(uuid, uuid) to authenticated');
   });
 
   it('fails closed for terminal states and never replays an old message', () => {
@@ -33,7 +35,7 @@ describe('owner human-takeover release', () => {
   });
 
   it('exposes one owner-only release button only while the conversation is human locked and nonterminal', () => {
-    expect(page).toContain('const editable=role===\'OWNER\'');
+    expect(page).toContain("const editable=role==='OWNER'");
     expect(page).toContain('const humanLocked=conversation.requires_human');
     expect(page).toContain('humanLocked&&!terminal');
     expect(page).toContain('Release human takeover');
