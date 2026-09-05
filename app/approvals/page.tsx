@@ -1,5 +1,5 @@
 import { approveMessage, rejectMessage } from '@/app/management-actions';
-import { processLatestWhatsAppInboundPilot, sendApprovedWhatsAppCatalogPilot } from '@/app/whatsapp-pilot-actions';
+import { processLatestWhatsAppInboundPilot, sendApprovedWhatsAppPilot } from '@/app/whatsapp-pilot-actions';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 
 export const dynamic = 'force-dynamic';
@@ -71,6 +71,7 @@ export default async function ApprovalsPage() {
   const pilotCatalogContentId = typeof pilotSendContext.catalog_content_id === 'string'
     ? pilotSendContext.catalog_content_id
     : null;
+  const pilotMode = pilotCatalogContentId ? 'CATALOG' : 'TEXT';
 
   const controlsClear = Boolean(
     controls?.shadow_mode
@@ -83,8 +84,7 @@ export default async function ApprovalsPage() {
     editable
     && controlsClear
     && pilotMessage?.status === 'APPROVED'
-    && !pilotMessage.requires_approval
-    && pilotCatalogContentId,
+    && !pilotMessage.requires_approval,
   );
 
   return <div>
@@ -101,7 +101,7 @@ export default async function ApprovalsPage() {
         <strong>Controlled WhatsApp Agent Pilot</strong>
         <span className="humanBadge">SHADOW MODE</span>
       </div>
-      <p className="muted">Processes only the latest real linked WhatsApp inbound for the INTERNAL_TEST business through the existing idempotent Agent → Shadow Approval path. It never sends to Meta.</p>
+      <p className="muted">Processes only the latest real linked WhatsApp inbound for the INTERNAL_TEST business through the existing idempotent Agent → Shadow Approval path. It never sends to Meta until the owner separately approves and explicitly sends the controlled pilot artifact.</p>
       {latestInbound
         ? <p><strong>Latest inbound:</strong> {latestInbound.body || 'Media message'}</p>
         : <p className="muted">No linked inbound is currently available.</p>}
@@ -112,20 +112,20 @@ export default async function ApprovalsPage() {
       {!controls?.shadow_mode ? <p className="muted">Blocked because Shadow Mode is OFF.</p> : null}
     </section> : null}
 
-    {editable && pilotMessage && pilotMessage.status !== 'APPROVAL_REQUIRED' && pilotCatalogContentId ? <section className="panel">
+    {editable && pilotMessage && pilotMessage.status !== 'APPROVAL_REQUIRED' ? <section className="panel">
       <div className="conversationTopline">
-        <strong>Controlled WhatsApp Catalog Send</strong>
+        <strong>Controlled WhatsApp {pilotMode === 'CATALOG' ? 'Catalog' : 'Text'} Send</strong>
         <span className="humanBadge">{pilotMessage.status}</span>
       </div>
-      <p>{pilotMessage.original_text || 'Approved WhatsApp catalog reply'}</p>
-      <p className="muted"><strong>Catalog:</strong> {pilotCatalogContentId}</p>
-      <p className="muted">Shadow Mode stays ON globally. Only this owner-approved INTERNAL_TEST catalog card can use the controlled pilot exception; every normal outbound remains blocked by Shadow Mode.</p>
-      {pilotMessage.status === 'APPROVED' ? <form action={sendApprovedWhatsAppCatalogPilot}>
+      <p>{pilotMessage.original_text || 'Approved WhatsApp pilot reply'}</p>
+      {pilotCatalogContentId ? <p className="muted"><strong>Catalog:</strong> {pilotCatalogContentId}</p> : null}
+      <p className="muted">Shadow Mode stays ON globally. Only this owner-approved INTERNAL_TEST artifact with exact recipient linkage can use the controlled pilot exception. DNC, human takeover, kill switch, channel pause, Cost Guard, market window and WhatsApp 24-hour checks still run immediately before provider send.</p>
+      {pilotMessage.status === 'APPROVED' ? <form action={sendApprovedWhatsAppPilot}>
         <input type="hidden" name="id" value={pilotMessage.id} />
-        <button className="approveButton" disabled={!pilotSendReady}>Send approved catalog pilot</button>
+        <button className="approveButton" disabled={!pilotSendReady}>Send approved {pilotMode === 'CATALOG' ? 'catalog' : 'text'} pilot</button>
       </form> : null}
       {pilotMessage.status === 'PROCESSING' ? <p className="muted">Provider send is already claimed. Do not retry.</p> : null}
-      {pilotMessage.status === 'SENT' ? <p className="muted">Provider accepted the controlled catalog message. Delivery/read evidence can now be verified from the webhook ledger.</p> : null}
+      {pilotMessage.status === 'SENT' ? <p className="muted">Provider accepted the controlled pilot message. Delivery/read evidence can now be verified from the webhook ledger.</p> : null}
       {pilotMessage.status === 'FAILED' ? <p className="muted">The send failed before provider acceptance. Review the recorded failure before any manual retry: {pilotMessage.approval_reason || 'No detail recorded.'}</p> : null}
     </section> : null}
 
