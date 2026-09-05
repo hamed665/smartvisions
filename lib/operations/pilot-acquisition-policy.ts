@@ -6,6 +6,7 @@ export type PilotAcquisitionPolicyInput = {
   globalKillSwitch: boolean;
   agentsPaused: boolean;
   qualificationCount: number;
+  priorityQualifiedCount: number;
   now?: Date;
 };
 
@@ -27,9 +28,11 @@ export type PilotAcquisitionPolicyResult = {
     | 'PILOT_WINDOW_INVALID'
     | 'PILOT_WINDOW_NOT_STARTED'
     | 'PILOT_WINDOW_EXPIRED'
+    | 'PRIORITY_LEAD_TARGET_REACHED'
     | 'QUALIFICATION_CAP_REACHED'
     | 'COOLDOWN';
   maxPaidQualifications: number;
+  stopAfterPriorityLeads: number | null;
   cooldownMinutes: number;
   windowEndsAt: string | null;
 };
@@ -37,6 +40,13 @@ export type PilotAcquisitionPolicyResult = {
 function boundedInteger(value: unknown, fallback: number, min: number, max: number) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(numeric)));
+}
+
+function optionalBoundedInteger(value: unknown, min: number, max: number) {
+  if (value == null || value === '') return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < min) return null;
   return Math.min(max, Math.max(min, Math.round(numeric)));
 }
 
@@ -50,6 +60,7 @@ export function evaluatePilotAcquisitionPolicy(input: PilotAcquisitionPolicyInpu
   const config = input.config ?? {};
   const now = input.now ?? new Date();
   const maxPaidQualifications = boundedInteger(config.maxPaidQualifications, 3, 1, 3);
+  const stopAfterPriorityLeads = optionalBoundedInteger(config.stopAfterPriorityLeads, 1, 3);
   const cooldownMinutes = boundedInteger(config.autoAcquisitionCooldownMinutes, 10, 2, 60);
   const start = validDate(config.pilotWindowStartedAt);
   const end = validDate(config.pilotWindowEndsAt);
@@ -62,6 +73,7 @@ export function evaluatePilotAcquisitionPolicy(input: PilotAcquisitionPolicyInpu
     terminal,
     reason,
     maxPaidQualifications,
+    stopAfterPriorityLeads,
     cooldownMinutes,
     windowEndsAt: end?.toISOString() ?? null,
   });
@@ -79,6 +91,9 @@ export function evaluatePilotAcquisitionPolicy(input: PilotAcquisitionPolicyInpu
   if (!start || !end || end.getTime() <= start.getTime()) return result(false, 'PILOT_WINDOW_INVALID', true);
   if (now.getTime() < start.getTime()) return result(false, 'PILOT_WINDOW_NOT_STARTED');
   if (now.getTime() >= end.getTime()) return result(false, 'PILOT_WINDOW_EXPIRED', true);
+  if (stopAfterPriorityLeads != null && Math.max(0, input.priorityQualifiedCount) >= stopAfterPriorityLeads) {
+    return result(false, 'PRIORITY_LEAD_TARGET_REACHED', true);
+  }
   if (Math.max(0, input.qualificationCount) >= maxPaidQualifications) return result(false, 'QUALIFICATION_CAP_REACHED', true);
 
   const lastRun = validDate(config.lastAutoAcquisitionAt);
