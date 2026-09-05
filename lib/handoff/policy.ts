@@ -9,6 +9,19 @@ export type HandoffInput = {
   confidence?: number;
 };
 
+export function hasPaymentExecutionIntent(message: string) {
+  const text = message.trim();
+  if (!text) return false;
+
+  return [
+    /\b(how (?:do|can) i pay|where (?:do|can) i pay|ready to pay|want to pay|pay (?:now|today|the invoice|the deposit)|make (?:a )?payment|payment (?:link|method|methods|terms|option|options|details)|send (?:me )?(?:an? )?invoice|invoice me|bank (?:account|details)|card payment|checkout|deposit)\b/i,
+    /\b(?:send|sign|accept|execute) (?:me )?(?:the )?(?:contract|agreement)\b/i,
+    /\b(?:contract|agreement) (?:to sign|for signature)\b/i,
+    /(?:كيف|وين|أين)\s*(?:أدفع|ادفع)|(?:أريد|ابي|أبغى)\s*(?:أدفع|ادفع)|رابط\s*الدفع|(?:أرسل|ارسل)\s*(?:لي\s*)?فاتورة|فاتورة\s*(?:الدفع)?|عربون|حساب\s*بنكي|بيانات\s*البنك|(?:أرسل|ارسل)\s*(?:لي\s*)?(?:العقد|الاتفاقية)|(?:أوقع|اوقع)\s*(?:العقد|الاتفاقية)/i,
+    /(?:چطور|چجوری|کجا)\s*(?:پرداخت|واریز)\s*(?:کنم)?|می[‌\s-]?(?:خوام|خواهم)\s*(?:پرداخت|واریز)\s*(?:کنم)?|لینک\s*پرداخت|فاکتور\s*(?:رو|را)?\s*(?:بفرست|ارسال)|بیعانه|شماره\s*حساب|اطلاعات\s*بانکی|قرارداد\s*(?:رو|را)?\s*(?:بفرست|ارسال)|(?:امضا|امضاء)\s*(?:کردن|کنم|قرارداد)/i,
+  ].some((pattern) => pattern.test(text));
+}
+
 export function evaluateHandoff(input: HandoffInput) {
   const reasons: string[] = [];
 
