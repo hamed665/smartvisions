@@ -60,6 +60,64 @@ describe('canonical send safety', () => {
     expect(evaluateCanonicalSendSafety({ ...base, shadowMode: true, shadowModeExceptionVerified: true }).allowed).toBe(true);
   });
 
+  it('allows a verified owner manual send only while full human takeover is still active', () => {
+    const result = evaluateCanonicalSendSafety({
+      ...base,
+      channel: 'WHATSAPP',
+      shadowMode: true,
+      ownerManualSendVerified: true,
+      leadAgentMode: 'HUMAN',
+      conversationAgentMode: 'HUMAN',
+      conversationRequiresHuman: true,
+      whatsappPolicyAllowed: true,
+    });
+    expect(result).toEqual({ allowed: true, blocks: [] });
+  });
+
+  it('fails owner manual send closed if takeover was released before the final boundary', () => {
+    const result = evaluateCanonicalSendSafety({
+      ...base,
+      channel: 'WHATSAPP',
+      shadowMode: true,
+      ownerManualSendVerified: true,
+      whatsappPolicyAllowed: true,
+    });
+    expect(result.allowed).toBe(false);
+    expect(result.blocks).toContain('OWNER_MANUAL_REQUIRES_HUMAN_TAKEOVER');
+  });
+
+  it('never lets the owner manual exception bypass core safety gates', () => {
+    const result = evaluateCanonicalSendSafety({
+      ...base,
+      channel: 'WHATSAPP',
+      shadowMode: true,
+      ownerManualSendVerified: true,
+      leadAgentMode: 'HUMAN',
+      conversationAgentMode: 'HUMAN',
+      conversationRequiresHuman: true,
+      globalKillSwitch: true,
+      channelPaused: true,
+      agentsPaused: true,
+      leadStatus: 'DO_NOT_CONTACT',
+      suppressed: true,
+      recipientMatchesCanonicalBusiness: false,
+      marketWindowAllowed: false,
+      whatsappPolicyAllowed: false,
+    });
+    expect(result.blocks).toEqual(expect.arrayContaining([
+      'GLOBAL_KILL_SWITCH',
+      'CHANNEL_PAUSED',
+      'AGENTS_PAUSED',
+      'DO_NOT_CONTACT',
+      'SUPPRESSED_RECIPIENT',
+      'RECIPIENT_MISMATCH',
+      'OUTSIDE_CANONICAL_MARKET_WINDOW',
+      'WHATSAPP_24H_POLICY',
+    ]));
+    expect(result.blocks).not.toContain('SHADOW_MODE_ENABLED');
+    expect(result.blocks).not.toContain('HUMAN_TAKEOVER');
+  });
+
   it('blocks an invalid canonical WhatsApp policy', () => {
     const result = evaluateCanonicalSendSafety({ ...base, channel: 'WHATSAPP', whatsappPolicyAllowed: false });
     expect(result.blocks).toContain('WHATSAPP_24H_POLICY');
