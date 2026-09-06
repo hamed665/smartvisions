@@ -3,7 +3,8 @@ import { POST as evidencePipelinePost } from '../app/api/operations/evidence-pip
 import { POST as pilotAcquisitionPost } from '../app/api/operations/pilot-acquisition/route';
 import { shouldRunScheduledOperations } from './schedule-policy';
 
-type WorkerEnv = { INTERNAL_API_KEY?: string; DEPLOYMENT_ENV?: string };
+type WorkerVersionMetadata = { id?: string; tag?: string; timestamp?: string };
+type WorkerEnv = { INTERNAL_API_KEY?: string; DEPLOYMENT_ENV?: string; CF_VERSION_METADATA?: WorkerVersionMetadata };
 type ScheduledController = { scheduledTime?: number; cron?: string };
 type ExecutionContextLike = { waitUntil(promise: Promise<unknown>): void };
 
@@ -73,6 +74,7 @@ async function recordScheduledHeartbeat(
       phase,
       cron,
       scheduledTime: controller?.scheduledTime,
+      workerVersion: env.CF_VERSION_METADATA ?? {},
       metrics,
     });
   } catch {
