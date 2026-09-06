@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { getRuntimeControls } from '@/lib/reliability/runtime-controls';
+import { evaluateGrowthFirstTouchChannelPolicy } from '@/lib/outreach/first-touch-channel-policy';
 import { assertSmartVisionsCatalogContentId } from '@/lib/whatsapp/catalog';
 
 export type ShadowDraftChannel = 'EMAIL' | 'WHATSAPP';
@@ -33,6 +34,12 @@ function serviceClient() {
   const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error('Server Supabase credentials are required for shadow approval queue');
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 }
 
 export function shadowProviderMessageId(idempotencyKey: string) {
@@ -84,6 +91,44 @@ export async function queueShadowDraft(input: ShadowDraftInput) {
   if (!controls?.shadow_mode) throw new Error('Shadow approval queue is only available while Shadow Mode is enabled');
 
   const supabase = serviceClient();
+  let resolvedTemplateName = input.templateName?.trim() || undefined;
+  let resolvedTemplateLanguageCode = input.templateLanguageCode?.trim() || undefined;
+
+  if (input.idempotencyKey.trim().startsWith('growth-first-touch:')) {
+    const marketCode = String(input.marketCode ?? '').trim().toUpperCase();
+    if (marketCode !== 'OM') throw new Error('Growth first-touch cold outreach is currently restricted to market OM');
+
+    const { data: market, error: marketError } = await supabase
+      .from('market_settings')
+      .select('enabled,config')
+      .eq('organization_id', input.organizationId)
+      .eq('country_code', marketCode)
+      .maybeSingle();
+    if (marketError || !market) {
+      throw new Error(`Growth first-touch market policy unavailable: ${marketError?.message ?? 'not found'}`);
+    }
+
+    const config = record(market.config);
+    if (input.channel === 'WHATSAPP') {
+      resolvedTemplateName = resolvedTemplateName
+        ?? (typeof config.whatsappColdTemplateName === 'string' ? config.whatsappColdTemplateName.trim() || undefined : undefined);
+      resolvedTemplateLanguageCode = resolvedTemplateLanguageCode
+        ?? (typeof config.whatsappColdTemplateLanguageCode === 'string' ? config.whatsappColdTemplateLanguageCode.trim() || undefined : undefined);
+    }
+
+    const channelPolicy = evaluateGrowthFirstTouchChannelPolicy({
+      channel: input.channel,
+      marketEnabled: Boolean(market.enabled),
+      coldEmailEnabled: config.coldEmailEnabled === true,
+      whatsappColdEnabled: config.whatsappColdEnabled === true,
+      whatsappTemplateName: resolvedTemplateName,
+      whatsappTemplateLanguageCode: resolvedTemplateLanguageCode,
+    });
+    if (!channelPolicy.allowed) {
+      throw new Error(`Growth first-touch blocked by canonical channel policy (${channelPolicy.reason})`);
+    }
+  }
+
   const { data: conversation, error: conversationError } = await supabase
     .from('sales_conversations')
     .select('id,organization_id,lead_id,channel')
@@ -123,8 +168,8 @@ export async function queueShadowDraft(input: ShadowDraftInput) {
         market_code: input.marketCode ?? null,
         lead_timezone: input.leadTimezone ?? null,
         last_customer_message_at: input.lastCustomerMessageAt ?? null,
-        template_name: input.templateName ?? null,
-        template_language_code: input.templateLanguageCode ?? null,
+        template_name: resolvedTemplateName ?? null,
+        template_language_code: resolvedTemplateLanguageCode ?? null,
         catalog_content_id: input.catalogContentId ?? null,
       },
     },
