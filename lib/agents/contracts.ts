@@ -57,10 +57,63 @@ export type ReplyDraft = {
 };
 
 export type ConversationMemoryItem = {
+  sourceId?: string;
+  providerMessageId?: string;
+  source?: 'OUTREACH' | 'CONVERSATION';
+  scope?: 'CONVERSATION';
+  senderType?: 'CUSTOMER' | 'AGENT' | 'HUMAN';
   direction: 'INBOUND' | 'OUTBOUND';
   channel?: string;
+  status?: 'RECEIVED' | 'SENT';
   body: string;
   at?: string;
+};
+
+export type SalesStateEvidence = {
+  sourceId?: string;
+  at?: string;
+  excerpt: string;
+};
+
+export type SalesStateRevision = {
+  field: string;
+  from?: string | number | boolean | null;
+  to?: string | number | boolean | null;
+  sourceId?: string;
+  at?: string;
+};
+
+export type SalesDeliverable = {
+  kind: string;
+  quantity?: number;
+  detail?: string;
+};
+
+export type SalesStateSnapshot = {
+  version: 1;
+  objective?: string;
+  selectedService?: string;
+  selectedPackage?: string;
+  deliverables: SalesDeliverable[];
+  productionNeeds: string[];
+  location?: string;
+  date?: { raw: string; precision: 'AMBIGUOUS' | 'EXPLICIT' };
+  budget?: { raw: string; amount?: number; currency?: string };
+  objection?: string;
+  rejectedServices: string[];
+  missingRequiredInfo: string[];
+  lastQuestion?: string;
+  nextAction: 'ANSWER' | 'ASK' | 'OFFER' | 'HUMAN' | 'WAIT';
+  customQuoteRequired: boolean;
+  humanConfirmationRequired: boolean;
+  pendingHandoffReasons: string[];
+  language?: string;
+  stage?: ConversationStage;
+  rollingSummary?: string;
+  evidence: Record<string, SalesStateEvidence>;
+  revisions: SalesStateRevision[];
+  /** Persistence-only marker. Runtime serializers must not send this list to an LLM. */
+  processedEvidenceIds: string[];
 };
 
 export type ActivePromptSnapshot = {
@@ -126,6 +179,7 @@ export type AgentContext = {
   message: string;
   conversationSummary?: string;
   conversationHistory?: ConversationMemoryItem[];
+  salesState?: SalesStateSnapshot;
   knowledgeContext?: KnowledgeSnapshot[];
   serviceKnowledge?: ServiceKnowledgeSnapshot[];
   activePrompts?: Partial<Record<AgentName, ActivePromptSnapshot>>;
