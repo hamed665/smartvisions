@@ -1,7 +1,15 @@
+import { selectFirstPartyContactEmail } from '@/lib/hunters/business/contact-evidence';
+
 export type EvidencePipelineAuditSnapshot = {
   status?: string | null;
   auditedAt?: string | null;
   createdAt?: string | null;
+  audited_at?: string | null;
+  created_at?: string | null;
+  sourceUrl?: string | null;
+  source_url?: string | null;
+  contactEmails?: string[] | null;
+  contact_emails?: string[] | null;
 };
 
 export type EvidencePipelineCandidateInput = {
@@ -27,11 +35,21 @@ export function evidencePipelineAuditDecision(
   cacheDays = 30,
 ): EvidencePipelineAuditDecision {
   if (!audit) return 'FETCH';
-  const timestamp = Date.parse(String(audit.auditedAt ?? audit.createdAt ?? ''));
+  const timestamp = Date.parse(String(audit.auditedAt ?? audit.audited_at ?? audit.createdAt ?? audit.created_at ?? ''));
   if (!Number.isFinite(timestamp)) return 'FETCH';
   const ageMs = Math.max(0, now.getTime() - timestamp);
   const status = String(audit.status ?? '').toUpperCase();
-  if (status === 'SUCCEEDED' && ageMs <= Math.max(1, cacheDays) * 86_400_000) return 'USE_CACHED';
+
+  if (status === 'SUCCEEDED' && ageMs <= Math.max(1, cacheDays) * 86_400_000) {
+    const sourceUrl = String(audit.sourceUrl ?? audit.source_url ?? '');
+    const contactEmails = audit.contactEmails ?? audit.contact_emails ?? [];
+    // Reuse a fresh audit only when it can advance the launch pipeline. A fresh
+    // successful audit with no verified first-party email gets a 24h-style cooldown
+    // so the same business cannot monopolize every scheduled tick.
+    return selectFirstPartyContactEmail(sourceUrl, Array.isArray(contactEmails) ? contactEmails : [])
+      ? 'USE_CACHED'
+      : 'WAIT_AFTER_FAILURE';
+  }
   if (status === 'FAILED' && ageMs <= 24 * 60 * 60 * 1000) return 'WAIT_AFTER_FAILURE';
   return 'FETCH';
 }
