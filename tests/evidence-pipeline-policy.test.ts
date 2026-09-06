@@ -36,23 +36,35 @@ describe('controlled evidence pipeline policy', () => {
     })).toBeNull();
   });
 
-  it('reuses fresh successful evidence instead of refetching', () => {
+  it('reuses a fresh real Supabase audit only when it contains a first-party email', () => {
     const now = new Date('2026-09-06T10:00:00Z');
     expect(evidencePipelineAuditDecision({
       status: 'SUCCEEDED',
-      auditedAt: '2026-09-05T10:00:00Z',
+      audited_at: '2026-09-05T10:00:00Z',
+      source_url: 'https://www.example.om/contact',
+      contact_emails: ['sales@example.om'],
     }, now, 30)).toBe('USE_CACHED');
+  });
+
+  it('does not let a fresh no-email success monopolize every scheduled tick', () => {
+    const now = new Date('2026-09-06T10:00:00Z');
+    expect(evidencePipelineAuditDecision({
+      status: 'SUCCEEDED',
+      audited_at: '2026-09-05T10:00:00Z',
+      source_url: 'https://example.om',
+      contact_emails: [],
+    }, now, 30)).toBe('WAIT_AFTER_FAILURE');
   });
 
   it('does not automatically retry a failed website inside 24 hours', () => {
     const now = new Date('2026-09-06T10:00:00Z');
     expect(evidencePipelineAuditDecision({
       status: 'FAILED',
-      auditedAt: '2026-09-06T09:00:00Z',
+      audited_at: '2026-09-06T09:00:00Z',
     }, now, 30)).toBe('WAIT_AFTER_FAILURE');
     expect(evidencePipelineAuditDecision({
       status: 'FAILED',
-      auditedAt: '2026-09-05T08:00:00Z',
+      audited_at: '2026-09-05T08:00:00Z',
     }, now, 30)).toBe('FETCH');
   });
 });
