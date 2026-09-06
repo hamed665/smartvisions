@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AgentContext, MarketLocaleStyleSnapshot } from './contracts';
 import { resolveCanonicalLeadQuote } from './canonical-quote';
 import { hydrateAgentContext as hydrateCore, type HydratedRuntimeEvidence } from './context-hydrator-core';
+import { isRejectedCanonicalService } from '@/lib/conversations/service-key';
 import { persistConversationSalesState } from '@/lib/conversations/sales-state-store';
 import { resolveReplyLanguage } from '@/lib/outreach/locale';
 
@@ -31,12 +32,12 @@ async function hydrateCanonicalLeadQuote(input: {
   if (leadError) throw new Error(`Canonical quote lead hydration failed: ${leadError.message}`);
   if (!lead) return input.hydrated;
 
-  const rejected = new Set(context.salesState?.rejectedServices ?? []);
+  const rejectedServices = context.salesState?.rejectedServices ?? [];
   const leadOffer = String(lead.recommended_offer ?? '').trim();
   let quote = resolveCanonicalLeadQuote({
     countryCode,
     serviceKnowledge: context.serviceKnowledge,
-    leadRecommendedOffer: rejected.has(leadOffer) ? undefined : lead.recommended_offer,
+    leadRecommendedOffer: isRejectedCanonicalService(leadOffer, rejectedServices) ? undefined : lead.recommended_offer,
   });
 
   if (!quote && lead.business_id) {
@@ -52,12 +53,12 @@ async function hydrateCanonicalLeadQuote(input: {
     quote = resolveCanonicalLeadQuote({
       countryCode,
       serviceKnowledge: context.serviceKnowledge,
-      growthOpportunityServiceId: rejected.has(opportunityService) ? undefined : opportunity?.primary_service_id,
+      growthOpportunityServiceId: isRejectedCanonicalService(opportunityService, rejectedServices) ? undefined : opportunity?.primary_service_id,
       growthOpportunityCatalogReady: opportunity?.catalog_ready,
     });
   }
 
-  if (!quote || rejected.has(quote.serviceId)) return input.hydrated;
+  if (!quote || isRejectedCanonicalService(quote.serviceId, rejectedServices)) return input.hydrated;
 
   return {
     ...input.hydrated,
