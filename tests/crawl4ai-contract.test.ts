@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Crawl4AiAuditor, WebsiteAuditProviderError } from '@/lib/audit/crawl4ai';
+import { Crawl4AiAuditor } from '@/lib/audit/crawl4ai';
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe('Crawl4AI audit contract', () => {
   it('normalizes provider quality values to the database contract', async () => {
@@ -28,25 +31,25 @@ describe('Crawl4AI audit contract', () => {
   it('separates provider HTTP failures and retryability', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('down', { status: 503 })));
     await expect(new Crawl4AiAuditor('https://audit.internal').audit('https://example.com/'))
-      .rejects.toMatchObject<Partial<WebsiteAuditProviderError>>({ code: 'HTTP', retryable: true });
+      .rejects.toMatchObject({ code: 'HTTP', retryable: true });
   });
 
   it('marks malformed provider JSON as non-retryable parse failure', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('{bad-json', { status: 200 })));
     await expect(new Crawl4AiAuditor('https://audit.internal').audit('https://example.com/'))
-      .rejects.toMatchObject<Partial<WebsiteAuditProviderError>>({ code: 'PARSE', retryable: false });
+      .rejects.toMatchObject({ code: 'PARSE', retryable: false });
   });
 
   it('marks a non-object provider payload as validation failure', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(['unexpected']), { status: 200 })));
     await expect(new Crawl4AiAuditor('https://audit.internal').audit('https://example.com/'))
-      .rejects.toMatchObject<Partial<WebsiteAuditProviderError>>({ code: 'VALIDATION', retryable: false });
+      .rejects.toMatchObject({ code: 'VALIDATION', retryable: false });
   });
 
   it('classifies fetch failures without automatically retrying them', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('network unavailable'); }));
     await expect(new Crawl4AiAuditor('https://audit.internal').audit('https://example.com/'))
-      .rejects.toMatchObject<Partial<WebsiteAuditProviderError>>({ code: 'FETCH', retryable: true });
+      .rejects.toMatchObject({ code: 'FETCH', retryable: true });
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
