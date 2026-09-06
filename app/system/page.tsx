@@ -3,28 +3,34 @@ import { updateApprovalRule } from '@/app/control-center-actions';
 import { updateSystemControls } from '@/app/management-actions';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { buildLaunchReadiness } from '@/lib/reliability/launch-readiness';
+import { runtimeEvidenceSummary, runtimeFreshness } from '@/lib/reliability/operational-truth';
 export const dynamic='force-dynamic';
 
 export default async function SystemPage(){
   const {supabase,organizationId,role}=await getCurrentOrganization();
   const monthStart=new Date();monthStart.setUTCDate(1);monthStart.setUTCHours(0,0,0,0);
-  const [{data:ruleData},{data:controls},{data:costGuard},{data:integrations},{data:usage},{data:outreach}]=await Promise.all([
+  const [{data:ruleData},{data:controls},{data:costGuard},{data:integrations},{data:usage},{data:outreach},{data:runtimeAudit}]=await Promise.all([
     supabase.from('approval_rules').select('id,action_key,requires_approval,config').eq('organization_id',organizationId).order('action_key'),
     supabase.from('system_controls').select('organization_id,global_kill_switch,email_paused,whatsapp_ai_paused,agents_paused,shadow_mode,updated_at').eq('organization_id',organizationId).maybeSingle(),
     supabase.from('cost_guard_settings').select('*').eq('organization_id',organizationId).maybeSingle(),
     supabase.from('integration_connections').select('provider,channel,enabled,status,last_checked_at,last_error').eq('organization_id',organizationId),
     supabase.from('usage_events').select('cost_usd').eq('organization_id',organizationId).gte('created_at',monthStart.toISOString()),
-    supabase.from('outreach_policies').select('enabled,manual_review_required').eq('organization_id',organizationId)
+    supabase.from('outreach_policies').select('enabled,manual_review_required').eq('organization_id',organizationId),
+    supabase.from('audit_logs').select('after_data,created_at').eq('organization_id',organizationId).eq('action','OPERATIONS_SCHEDULED_RESULT').order('created_at',{ascending:false}).limit(1).maybeSingle(),
   ]);
   const rules=ruleData??[];const editable=role==='OWNER';
   const monthSpend=(usage??[]).reduce((sum,row)=>sum+Number(row.cost_usd??0),0);
   const enabledMarkets=(outreach??[]).filter(row=>row.enabled).length;
   const manualMarkets=(outreach??[]).filter(row=>row.enabled&&row.manual_review_required).length;
   const readiness=buildLaunchReadiness({controls,costGuard,monthSpendUsd:monthSpend,integrations:integrations??[],enabledOutreachMarkets:enabledMarkets,manualReviewMarkets:manualMarkets});
+  const runtimeState=runtimeFreshness({createdAt:runtimeAudit?.created_at});
+  const runtimeEvidence=runtimeEvidenceSummary(runtimeAudit?.after_data);
   return <div>
     <div className="headerRow"><div><h1>System & Safety</h1><p className="muted">Runtime automation safety, emergency controls, approval boundaries and launch readiness.</p></div><span className={`status ${controls?.global_kill_switch?'dangerStatus':''}`}>{controls?.global_kill_switch?'KILL SWITCH ON':readiness.liveAutomationReady?'Live-ready':readiness.codeReady?'Code-ready / gated':'Blocked'}</span></div>
 
     <section className="panel dangerPanel"><h2>Runtime controls</h2><p className="muted">These values are live database controls. Agents and dispatchers must honor them before every autonomous action. Budget limits have one canonical source in Cost & Usage.</p><form action={updateSystemControls} className="settingsGrid"><label className="toggleLabel"><input type="checkbox" name="global_kill_switch" defaultChecked={controls?.global_kill_switch??false} disabled={!editable}/> Global kill switch</label><label className="toggleLabel"><input type="checkbox" name="shadow_mode" defaultChecked={controls?.shadow_mode??true} disabled={!editable}/> Shadow mode</label><label className="toggleLabel"><input type="checkbox" name="email_paused" defaultChecked={controls?.email_paused??false} disabled={!editable}/> Pause email</label><label className="toggleLabel"><input type="checkbox" name="whatsapp_ai_paused" defaultChecked={controls?.whatsapp_ai_paused??false} disabled={!editable}/> Pause WhatsApp AI</label><label className="toggleLabel"><input type="checkbox" name="agents_paused" defaultChecked={controls?.agents_paused??false} disabled={!editable}/> Pause all AI agents</label><button disabled={!editable}>Save runtime controls</button></form><p className="muted smallText">Canonical budget: <strong>${Number(costGuard?.monthly_total_budget_usd??0).toFixed(2)}</strong> · Month spend ${monthSpend.toFixed(2)} · <Link className="textLink" href="/cost-usage">Manage Cost Guard →</Link></p></section>
+
+    <section className="panel"><div className="headerRow"><div><h2>Scheduled runtime evidence</h2><p className="muted">Production trigger is expected every 2 minutes; durable heartbeat evidence is deliberately sampled every {runtimeEvidence.sampleMinutes || 10} minutes. Missing samples become stale instead of being mistaken for a healthy scheduler.</p></div><span className={`status ${runtimeState==='STALE'||runtimeState==='ERROR'?'dangerStatus':''}`}>{runtimeState}</span></div><div className="settingsList"><div className="settingsRow"><strong>Observed cron</strong><span>{runtimeEvidence.cron||'Not observed'}</span></div><div className="settingsRow"><strong>Last sampled result</strong><span>{runtimeAudit?.created_at?new Date(runtimeAudit.created_at).toLocaleString():'Never'}</span></div><div className="settingsRow"><strong>Worker version</strong><span>{runtimeEvidence.workerVersionId||'Legacy heartbeat / version not recorded'}</span></div><div className="settingsRow"><strong>Outcome</strong><span>failed {runtimeEvidence.failed} · throttled {runtimeEvidence.throttled} · safety blocked {runtimeEvidence.safetyBlocked}</span></div><div className="settingsRow"><strong>Evidence path</strong><span>{runtimeEvidence.evidenceAction||'—'}{runtimeEvidence.evidenceReason?` · ${runtimeEvidence.evidenceReason}`:''}</span></div></div></section>
 
     <section className="panel"><div className="headerRow"><div><h2>Production V1 launch gates</h2><p className="muted">Code-ready is different from live-autonomous. Pending provider verification keeps outbound fail-closed rather than pretending a green badge is a business strategy.</p></div><span className={`status ${readiness.codeReady?'':'dangerStatus'}`}>{readiness.liveAutomationReady?'LIVE AUTOMATION READY':readiness.codeReady?'CONTROLLED PILOT READY':'BLOCKED'}</span></div><div className="settingsList">{readiness.gates.map(gate=><div className="settingsRow" key={gate.key}><div><strong>{gate.label}</strong><span className="muted smallText">{gate.detail}</span></div><span className={`status ${gate.state==='BLOCKED'?'dangerStatus':''}`}>{gate.state}</span></div>)}</div></section>
 
