@@ -27,7 +27,7 @@ export default async function ConversationDetailPage({ params }: { params: Promi
       .select('id,direction,media_type,original_text,transcript,detected_language,detected_dialect,persian_translation,intent_label,sentiment_label,confidence,status,requires_approval,approval_reason,provider_message_id,metadata,created_at,sent_at')
       .eq('organization_id', organizationId)
       .eq('conversation_id', id)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
       .limit(250),
     supabase
       .from('operator_briefs')
@@ -69,7 +69,7 @@ export default async function ConversationDetailPage({ params }: { params: Promi
 
   const initialSnapshot: LiveConversationSnapshot = {
     conversation,
-    messages: messagesResult.data ?? [],
+    messages: [...(messagesResult.data ?? [])].reverse(),
     lead: leadResult.data ?? null,
     editable: role === 'OWNER',
     serverTime: new Date().toISOString(),
