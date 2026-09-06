@@ -1,11 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { buildConversationMemory, customerMessages, sentReplies } from '@/lib/conversations/memory-read-model';
+import { deriveSalesState } from '@/lib/conversations/sales-state';
 import { matchPortfolio, type PortfolioItem } from '@/lib/portfolio/matcher';
 import type {
   ActivePromptSnapshot,
   AgentContext,
   AgentName,
   AgentSettingSnapshot,
-  ConversationMemoryItem,
   KnowledgeSnapshot,
   ServiceKnowledgeSnapshot,
 } from './contracts';
@@ -50,6 +51,9 @@ function stringTags(value: unknown) {
 export type HydratedRuntimeEvidence = {
   conversationId?: string;
   historyCount: number;
+  customerMessageCount: number;
+  sentReplyCount: number;
+  salesStateVersion?: number;
   promptVersions: Partial<Record<AgentName, number>>;
   knowledgeVersions: Record<string, number>;
   serviceKnowledgeCount: number;
@@ -67,10 +71,11 @@ export async function hydrateAgentContext(input: {
   if (!organizationId) throw new Error('organizationId is required to hydrate agent context');
 
   let conversation: Record<string, unknown> | null = null;
+  const conversationSelect = 'id,lead_id,channel,summary,persian_summary,stage,agent_mode,detected_language,detected_dialect,last_message_at,sales_state,sales_state_updated_at';
   if (input.trustedConversationId) {
     const result = await supabase
       .from('sales_conversations')
-      .select('id,lead_id,summary,persian_summary,stage,agent_mode,detected_language,detected_dialect,last_message_at')
+      .select(conversationSelect)
       .eq('organization_id', organizationId)
       .eq('id', input.trustedConversationId)
       .maybeSingle();
@@ -79,7 +84,7 @@ export async function hydrateAgentContext(input: {
   } else if (base.leadId) {
     const result = await supabase
       .from('sales_conversations')
-      .select('id,lead_id,summary,persian_summary,stage,agent_mode,detected_language,detected_dialect,last_message_at')
+      .select(conversationSelect)
       .eq('organization_id', organizationId)
       .eq('lead_id', base.leadId)
       .order('last_message_at', { ascending: false })
@@ -123,17 +128,32 @@ export async function hydrateAgentContext(input: {
   const industry = clip(business?.category, 240) || base.industry;
   const businessName = clip(business?.name, 240) || base.businessName;
   const recommendedOffer = clip(lead?.recommended_offer, 120) || base.quotedService;
+  const conversationId = clip(conversation?.id, 80) || input.trustedConversationId || base.conversationId;
+  const conversationChannel = clip(conversation?.channel, 40).toUpperCase();
 
-  const [messagesResult, knowledgeResult, promptsResult, settingsResult, servicesResult, pricesResult, portfolioResult] = await Promise.all([
-    authoritativeLeadId
+  const [outreachMessagesResult, conversationMessagesResult, knowledgeResult, promptsResult, settingsResult, servicesResult, pricesResult, portfolioResult] = await Promise.all([
+    authoritativeLeadId && conversationId && conversationChannel
       ? supabase
         .from('outreach_messages')
-        .select('direction,channel,body,received_at,sent_at,created_at')
+        .select('id,provider_message_id,direction,channel,status,body,received_at,sent_at,created_at,metadata')
         .eq('organization_id', organizationId)
         .eq('lead_id', authoritativeLeadId)
-        .in('direction', ['INBOUND','OUTBOUND'])
+        .eq('channel', conversationChannel)
+        .in('status', ['RECEIVED','SENT'])
+        .contains('metadata', { conversation_id: conversationId })
         .order('created_at', { ascending: false })
-        .limit(14)
+        .limit(40)
+      : Promise.resolve({ data: [], error: null }),
+    conversationId && conversationChannel
+      ? supabase
+        .from('conversation_messages')
+        .select('id,conversation_id,provider_message_id,direction,channel,status,original_text,transcript,sent_at,created_at,metadata')
+        .eq('organization_id', organizationId)
+        .eq('conversation_id', conversationId)
+        .eq('channel', conversationChannel)
+        .in('status', ['RECEIVED','SENT'])
+        .order('created_at', { ascending: false })
+        .limit(40)
       : Promise.resolve({ data: [], error: null }),
     supabase
       .from('knowledge_versions')
@@ -174,20 +194,20 @@ export async function hydrateAgentContext(input: {
       : Promise.resolve({ data: [], error: null }),
   ]);
 
-  const firstError = [messagesResult, knowledgeResult, promptsResult, settingsResult, servicesResult, pricesResult, portfolioResult]
+  const firstError = [outreachMessagesResult, conversationMessagesResult, knowledgeResult, promptsResult, settingsResult, servicesResult, pricesResult, portfolioResult]
     .map((result) => result.error)
     .find(Boolean);
   if (firstError) throw new Error(`Agent context hydration failed: ${firstError.message}`);
 
-  const conversationHistory: ConversationMemoryItem[] = ((messagesResult.data ?? []) as Array<Record<string, unknown>>)
-    .map((row) => ({
-      direction: String(row.direction) === 'OUTBOUND' ? 'OUTBOUND' as const : 'INBOUND' as const,
-      channel: clip(row.channel, 40) || undefined,
-      body: clip(row.body),
-      at: clip(row.received_at ?? row.sent_at ?? row.created_at, 80) || undefined,
-    }))
-    .filter((item) => item.body)
-    .reverse();
+  const conversationHistory = conversationId
+    ? buildConversationMemory({
+      conversationId,
+      channel: conversationChannel,
+      outreachRows: outreachMessagesResult.data ?? [],
+      conversationRows: conversationMessagesResult.data ?? [],
+      limit: 30,
+    })
+    : [];
 
   const knowledgeContext: KnowledgeSnapshot[] = ((knowledgeResult.data ?? []) as Array<Record<string, unknown>>)
     .map((row) => ({ key: clip(row.knowledge_key, 120), version: numberOrZero(row.version), payload: row.payload }))
@@ -265,33 +285,49 @@ export async function hydrateAgentContext(input: {
     promptVersions[agent] = prompt.version;
   }
   const knowledgeVersions = Object.fromEntries(knowledgeContext.map((item) => [item.key, item.version]));
-  const conversationSummary = clip(conversation?.summary, 3000) || clip(conversation?.persian_summary, 3000) || base.conversationSummary;
+  const stage = stageValue(conversation?.stage) ?? base.stage;
+  const conversationLanguage = clip(conversation?.detected_language, 80) || base.language || undefined;
+  const salesState = deriveSalesState({
+    previous: conversation?.sales_state,
+    history: conversationHistory,
+    stage,
+    language: conversationLanguage,
+  });
+  const persistedSummary = clip(conversation?.summary, 3000) || clip(conversation?.persian_summary, 3000) || base.conversationSummary;
+  const conversationSummary = [persistedSummary, salesState.rollingSummary ? `Current sales state: ${salesState.rollingSummary}` : '']
+    .filter(Boolean)
+    .join('\n')
+    .slice(0, 3600) || undefined;
 
   return {
     context: {
       ...base,
       leadId: authoritativeLeadId,
-      conversationId: clip(conversation?.id, 80) || input.trustedConversationId || base.conversationId,
+      conversationId,
       businessName,
       countryCode,
       industry,
       conversationSummary,
       conversationHistory,
+      salesState,
       knowledgeContext,
       serviceKnowledge,
       activePrompts,
       agentSettings,
       approvedPortfolio,
-      stage: stageValue(conversation?.stage) ?? base.stage,
+      stage,
       agentMode: modeValue(lead?.agent_mode) ?? modeValue(conversation?.agent_mode) ?? base.agentMode,
       intentScore: lead?.intent_score == null ? base.intentScore : numberOrZero(lead.intent_score),
       opportunityScore: lead?.opportunity_score == null ? base.opportunityScore : numberOrZero(lead.opportunity_score),
-      language: base.language || clip(conversation?.detected_language, 80) || undefined,
-      dialect: base.dialect || clip(conversation?.detected_dialect, 120) || undefined,
+      language: conversationLanguage,
+      dialect: clip(conversation?.detected_dialect, 120) || base.dialect || undefined,
     },
     evidence: {
-      conversationId: clip(conversation?.id, 80) || input.trustedConversationId || base.conversationId,
+      conversationId,
       historyCount: conversationHistory.length,
+      customerMessageCount: customerMessages(conversationHistory).length,
+      sentReplyCount: sentReplies(conversationHistory).length,
+      salesStateVersion: salesState.version,
       promptVersions,
       knowledgeVersions,
       serviceKnowledgeCount: serviceKnowledge.length,
