@@ -4,6 +4,10 @@ import type { CommandExecutionResult, TelegramOwnerCommand } from './contracts';
 import type { ExecutedMutation, PreparedMutation } from './commands-core';
 import * as core from './commands-core';
 import {
+  executeCatalogComposeMutation,
+  prepareCatalogComposeMutation,
+} from './catalog-composer';
+import {
   executeControlMutation,
   executeControlReadCommand,
   executeControlRevert,
@@ -83,6 +87,13 @@ export async function prepareMutation(input: {
   ownerUserId: string;
   command: TelegramOwnerCommand;
 }): Promise<PreparedMutation> {
+  if (input.command.type === 'CATALOG_COMPOSE') {
+    return prepareCatalogComposeMutation({
+      supabase: input.supabase,
+      organizationId: input.organizationId,
+      command: input.command,
+    });
+  }
   if (input.command.type === 'PANEL_ACTION') {
     const { preparePanelAction } = await import('./panel-parity');
     return preparePanelAction({ ...input, command:input.command });
@@ -109,6 +120,16 @@ export async function executePreparedMutation(input: {
     });
     if (await revertTargetsControlMutation(input)) return executeControlRevert(input);
     return core.executePreparedMutation(input);
+  }
+
+  if (input.command.type === 'CATALOG_COMPOSE') {
+    return executeCatalogComposeMutation({
+      supabase: input.supabase,
+      organizationId: input.organizationId,
+      ownerUserId: input.ownerUserId,
+      command: input.command,
+      preview: input.preview,
+    });
   }
 
   if (input.command.type === 'PANEL_ACTION') {
