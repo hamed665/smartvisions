@@ -10,6 +10,9 @@
   "vars": {
     "DEPLOYMENT_ENV": "candidate"
   },
+  "version_metadata": {
+    "binding": "CF_VERSION_METADATA"
+  },
   "triggers": {
     "crons": [
       "*/2 * * * *"
