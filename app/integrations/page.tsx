@@ -4,6 +4,7 @@ import { transcribeLatestWhatsAppVoicePilot, verifyWhatsAppIntegration } from '@
 import { updateIntegration } from '@/app/management-actions';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { evaluateBudgetMode } from '@/lib/reliability/cost-guard';
+import { integrationFreshness } from '@/lib/reliability/operational-truth';
 
 export const dynamic = 'force-dynamic';
 
@@ -122,7 +123,7 @@ export default async function IntegrationsPage() {
     <div className="headerRow">
       <div>
         <h1>Integrations</h1>
-        <p className="muted">Credential readiness is channel-specific and separate from a verified end-to-end connection. Secrets remain in secure environment storage and checks never run merely because this page loaded.</p>
+        <p className="muted">Connection state and health freshness are separate. Merely having credentials or an old CONNECTED result does not claim that a provider was checked recently.</p>
       </div>
       <div>
         <span className="status">{rows.filter((r) => credentialReady(String(r.provider), String(r.channel))).length}/{rows.length} credentials present</span>
@@ -141,17 +142,24 @@ export default async function IntegrationsPage() {
         const channel = String(r.channel);
         const credential = credentialReady(provider, channel);
         const status = effectiveStatus(String(r.status), credential);
+        const freshness = integrationFreshness({
+          status: r.status,
+          enabled: r.enabled,
+          lastCheckedAt: r.last_checked_at,
+          lastError: r.last_error,
+          credentialPresent: credential,
+        });
         const latency = latencyByProvider.get(provider);
         const isWhatsApp = provider === 'META' && channel === 'WHATSAPP';
         return <form action={updateIntegration} className="settingsRow" key={r.id}>
           <input type="hidden" name="id" value={r.id} />
           <div>
             <strong>{provider}</strong>
-            <span className="muted smallText">{channel} · Health {status}</span>
-            <span className={`smallText ${credential ? 'credentialReady' : 'credentialMissing'}`}>{credential ? (status === 'CONNECTED' ? 'Credential present · production verified' : 'Credential present · not production verified') : 'Credential missing'}</span>
+            <span className="muted smallText">{channel} · Connection {status} · Health {freshness}</span>
+            <span className={`smallText ${credential ? 'credentialReady' : 'credentialMissing'}`}>{credential ? (status === 'CONNECTED' ? 'Credential present · prior production verification exists' : 'Credential present · not production verified') : 'Credential missing'}</span>
             {provider === 'GOOGLE_PLACES' ? <Link className="textLink smallText" href="/hunters/google-places">Controlled discovery test →</Link> : null}
             {provider === 'CRAWL4AI' ? <span className="muted smallText">Smoke test uses one fixed example.com audit only when you click Verify.</span> : null}
-            {provider === 'EMAIL_PROVIDER' ? <span className="muted smallText">Verification sends one owner-triggered email only. Provider stays disabled until delivery is confirmed.</span> : null}
+            {provider === 'EMAIL_PROVIDER' ? <span className="muted smallText">Verification sends one owner-triggered email only. No background health check sends provider traffic.</span> : null}
             {isWhatsApp ? <>
               <span className="muted smallText">Enter the destination number only for the legacy provider verification. The controlled voice proof never sends outbound and uses only the latest real linked INTERNAL_TEST voice.</span>
               <span className="muted smallText">Voice pilot: {latestVoice ? (latestVoiceEvidence ? `${latestVoiceEvidence.status}${latestVoiceEvidence.detected_language ? ` · ${latestVoiceEvidence.detected_language}` : ''}` : 'real voice ready for transcription') : 'waiting for a real INTERNAL_TEST voice note'}</span>
@@ -161,7 +169,8 @@ export default async function IntegrationsPage() {
           <label>Account label<input name="account_label" defaultValue={r.account_label ?? ''} disabled={!editable} /></label>
           <label className="toggleLabel"><input type="checkbox" name="enabled" defaultChecked={r.enabled} disabled={!editable || !credential} /> Enabled</label>
           <div className="healthList compactHealth">
-            <span>Status <strong>{status}</strong></span>
+            <span>Connection <strong>{status}</strong></span>
+            <span>Health <strong>{freshness}</strong></span>
             <span>Latency <strong>{latency !== undefined ? `${latency} ms` : '—'}</strong></span>
             <span>Last check <strong>{r.last_checked_at ? new Date(r.last_checked_at).toLocaleString() : 'Never'}</strong></span>
             {r.last_error ? <span>Error <strong>{r.last_error}</strong></span> : null}
@@ -185,7 +194,7 @@ export default async function IntegrationsPage() {
 
     <section className="panel settingsCreate">
       <h2>Security and cost note</h2>
-      <p className="muted">READY means credentials exist for that exact provider/channel but the provider is not yet verified. CONNECTED means durable production evidence exists. Manual provider verification is intentionally explicit so health monitoring cannot quietly become a paid traffic generator.</p>
+      <p className="muted">CONNECTED means durable verification exists. HEALTHY means that verification is also recent. STALE and NOT_CHECKED never trigger provider traffic automatically; all provider checks remain explicit owner actions.</p>
     </section>
   </div>;
 }
