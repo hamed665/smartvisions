@@ -28,7 +28,7 @@ export async function GET(
     const [{ data: messages, error: messagesError }, leadResult] = await Promise.all([
       supabase
         .from('conversation_messages')
-        .select('id,direction,media_type,original_text,transcript,detected_language,detected_dialect,persian_translation,intent_label,sentiment_label,confidence,status,requires_approval,approval_reason,provider_message_id,created_at,sent_at')
+        .select('id,direction,media_type,original_text,transcript,detected_language,detected_dialect,persian_translation,intent_label,sentiment_label,confidence,status,requires_approval,approval_reason,provider_message_id,metadata,created_at,sent_at')
         .eq('organization_id', organizationId)
         .eq('conversation_id', id)
         .order('created_at', { ascending: true })
