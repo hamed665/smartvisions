@@ -37,15 +37,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
-    setMobileMenuOpen(false);
-  }, [pathname]);
-
-  useEffect(() => {
     if (!mobileMenuOpen) return;
     const previous = document.body.style.overflow;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileMenuOpen(false);
+    };
     document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKeyDown);
     return () => {
       document.body.style.overflow = previous;
+      window.removeEventListener('keydown', onKeyDown);
     };
   }, [mobileMenuOpen]);
 
@@ -94,7 +95,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <nav className="mobileBottomNav" aria-label="Primary mobile navigation">
         {mobilePrimary.map(([label, href, icon]) => (
-          <Link className={isActive(pathname, href) ? 'active' : undefined} href={href} key={href}>
+          <Link
+            className={isActive(pathname, href) ? 'active' : undefined}
+            href={href}
+            key={href}
+            onClick={() => setMobileMenuOpen(false)}
+          >
             <span className="mobileNavIcon" aria-hidden="true">{icon}</span>
             <span>{label}</span>
           </Link>
@@ -134,7 +140,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <span className="navLabel">{group}</span>
                   <div className="mobileNavGrid">
                     {items.map(([item, href]) => (
-                      <Link className={isActive(pathname, href) ? 'active' : undefined} href={href} key={item}>
+                      <Link
+                        className={isActive(pathname, href) ? 'active' : undefined}
+                        href={href}
+                        key={item}
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
                         {item}
                       </Link>
                     ))}
