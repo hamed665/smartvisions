@@ -52,6 +52,19 @@ function explicitSafetyBlock(input: string): TelegramOwnerCommand | null {
   return null;
 }
 
+function catalogCommand(rawInput: string): TelegramOwnerCommand | null {
+  const normalized = toLatinDigits(rawInput).replace(/\r/g, '').trim();
+  const slash = normalized.match(/^\/catalog(?:@[A-Za-z0-9_]+)?(?:\s+|\n)([\s\S]+)$/i);
+  const natural = normalized.match(/^(?:کاتالوگ|catalog)\s*:\s*([\s\S]+)$/i);
+  const body = (slash?.[1] ?? natural?.[1] ?? '').trim();
+  if (!body) {
+    if (/^\/catalog(?:@[A-Za-z0-9_]+)?\s*$/i.test(normalized) || /^(?:کاتالوگ|catalog)\s*:\s*$/i.test(normalized)) return { type: 'HELP' };
+    return null;
+  }
+  if (body.length > 8000) return { type: 'HELP' };
+  return { type: 'CATALOG_COMPOSE', rawText: body };
+}
+
 function panelArgs(input: string): PanelParityArgs {
   const args: PanelParityArgs = {};
   const pattern = /([A-Za-z0-9_.-]+)=("([^"]*)"|'([^']*)'|([^\s]+))/g;
@@ -119,6 +132,8 @@ export function parseTelegramOwnerCommand(rawInput: string): TelegramOwnerComman
   if (/^\/alert_?test(?:@[A-Za-z0-9_]+)?$/i.test(input)) return { type: 'TEST_OWNER_ALERT' };
   const safety = explicitSafetyBlock(input);
   if (safety) return safety;
+  const catalog = catalogCommand(rawInput);
+  if (catalog) return catalog;
   const panel = panelCommand(rawInput);
   if (panel) return panel;
   const cost = realCostCommand(input);
