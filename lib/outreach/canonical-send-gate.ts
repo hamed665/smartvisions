@@ -11,6 +11,7 @@ export type CanonicalSendSafetySnapshot = {
   agentsPaused: boolean;
   shadowMode: boolean;
   shadowModeExceptionVerified?: boolean;
+  ownerManualSendVerified?: boolean;
   leadStatus?: string | null;
   leadAgentMode?: string | null;
   conversationStage?: string | null;
@@ -27,9 +28,16 @@ export function evaluateCanonicalSendSafety(input: CanonicalSendSafetySnapshot) 
   if (input.globalKillSwitch) blocks.push('GLOBAL_KILL_SWITCH');
   if (input.channelPaused) blocks.push('CHANNEL_PAUSED');
   if (input.agentsPaused) blocks.push('AGENTS_PAUSED');
-  if (input.shadowMode && !input.shadowModeExceptionVerified) blocks.push('SHADOW_MODE_ENABLED');
+  if (input.shadowMode && !input.shadowModeExceptionVerified && !input.ownerManualSendVerified) blocks.push('SHADOW_MODE_ENABLED');
   if (input.leadStatus === 'DO_NOT_CONTACT') blocks.push('DO_NOT_CONTACT');
-  if (input.leadAgentMode === 'HUMAN' || input.conversationAgentMode === 'HUMAN' || input.conversationRequiresHuman) blocks.push('HUMAN_TAKEOVER');
+  const humanTakeover = input.leadAgentMode === 'HUMAN'
+    || input.conversationAgentMode === 'HUMAN'
+    || input.conversationRequiresHuman;
+  const fullHumanTakeover = input.leadAgentMode === 'HUMAN'
+    && input.conversationAgentMode === 'HUMAN'
+    && input.conversationRequiresHuman === true;
+  if (input.ownerManualSendVerified && !fullHumanTakeover) blocks.push('OWNER_MANUAL_REQUIRES_HUMAN_TAKEOVER');
+  if (humanTakeover && !input.ownerManualSendVerified) blocks.push('HUMAN_TAKEOVER');
   if (input.leadAgentMode === 'PAUSED' || input.conversationAgentMode === 'PAUSED' || input.conversationStage === 'PAUSED') blocks.push('AGENT_PAUSED');
   if (input.conversationStage === 'DO_NOT_CONTACT') blocks.push('CONVERSATION_DO_NOT_CONTACT');
   if (input.conversationStage === 'SPAM') blocks.push('CONVERSATION_SPAM');
@@ -67,6 +75,7 @@ type AssertCanonicalSendAllowedInput = {
   recipient: string;
   templateName?: string | null;
   shadowModeExceptionVerified?: boolean;
+  ownerManualSendVerified?: boolean;
   marketWindowExceptionVerified?: boolean;
   nowUtc?: Date;
 };
@@ -201,6 +210,7 @@ export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllow
     agentsPaused: Boolean(controls.agents_paused),
     shadowMode: Boolean(controls.shadow_mode),
     shadowModeExceptionVerified: input.shadowModeExceptionVerified,
+    ownerManualSendVerified: input.ownerManualSendVerified,
     leadStatus: lead.status,
     leadAgentMode: lead.agent_mode,
     conversationStage: conversation.stage,
