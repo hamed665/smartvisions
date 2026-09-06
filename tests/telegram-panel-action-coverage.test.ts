@@ -9,6 +9,9 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
   'app/control-center-actions.ts': {
     updateService:'service.update', createService:'service.create', updatePrice:'price.update', updateMarket:'market.update', updateAgent:'agent.update', updateApprovalRule:'approval.require',
   },
+  'app/daily-target-actions.ts': {
+    setDailyOutreachTarget:'SPECIALIZED:DAILY_OUTREACH_TARGET',
+  },
   'app/management-actions.ts': {
     updateSystemControls:'SPECIALIZED:SAFE_CONTROLS',
     createCampaign:'campaign.create', updateCampaign:'campaign.update', updateOutreachPolicy:'outreach.update',
@@ -101,5 +104,6 @@ describe('Control Center ↔ Telegram action coverage', () => {
     expect(CLASSIFICATION['app/management-actions.ts'].approveMessage).toBe('SPECIALIZED:/approve');
     expect(CLASSIFICATION['app/management-actions.ts'].rejectMessage).toBe('SPECIALIZED:/reject');
     expect(CLASSIFICATION['app/management-actions.ts'].releaseHumanTakeover).toBe('SPECIALIZED:OWNER_RELEASE');
+    expect(CLASSIFICATION['app/daily-target-actions.ts'].setDailyOutreachTarget).toBe('SPECIALIZED:DAILY_OUTREACH_TARGET');
   });
 });
