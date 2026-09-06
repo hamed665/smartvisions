@@ -1,4 +1,5 @@
 import handler from 'vinext/server/fetch-handler';
+import { POST as evidencePipelinePost } from '../app/api/operations/evidence-pipeline/route';
 import { POST as pilotAcquisitionPost } from '../app/api/operations/pilot-acquisition/route';
 import { shouldRunScheduledOperations } from './schedule-policy';
 
@@ -25,6 +26,8 @@ type ScheduledMetrics = {
   failed: number;
   reconciliationAttention: number;
   tickStatus: number;
+  evidenceStatus?: number;
+  evidenceFailedOutcomes?: number;
   pilotStatus?: number;
   pilotFailedOutcomes?: number;
 };
@@ -188,11 +191,28 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
     }
   }
 
+  // Use already-discovered first-party websites before buying more Google Places detail work.
+  // This route is deterministic and can only produce Shadow drafts; it never calls an LLM,
+  // paid enrichment provider, or outbound provider. One evidence candidate is processed per tick.
+  try {
+    const evidenceResponse = await evidencePipelinePost(internalJsonRequest(env, '/api/operations/evidence-pipeline', {}));
+    metrics.evidenceStatus = evidenceResponse.status;
+    if (evidenceResponse.status === 429) metrics.throttled += 1;
+    else if (evidenceResponse.status === 409 || evidenceResponse.status === 423) metrics.safetyBlocked += 1;
+    else if (!evidenceResponse.ok) metrics.failed += 1;
+    else {
+      const evidence = await evidenceResponse.json().catch(() => null) as { action?: string } | null;
+      metrics.evidenceFailedOutcomes = evidence?.action === 'FAILED' ? 1 : 0;
+      if (metrics.evidenceFailedOutcomes) metrics.failed += 1;
+    }
+  } catch {
+    metrics.failed += 1;
+  }
+
   // Acquisition is deliberately isolated from inbound Agent work. It is a no-op unless
   // an Oman campaign is explicitly time-boxed with Shadow/manual-review safeguards.
-  // Cloudflare routed Workers have already shown that self-routing can be unreliable for
-  // controlled internal work, so call the exact canonical route handler in-process. This
-  // does not bypass its internal-auth, Cost Guard, dedupe, policy, or fail-closed logic.
+  // It runs after deterministic website evidence so we never spend on a new Place detail
+  // while a cheaper, already-discovered first-party evidence path is available.
   try {
     const pilotResponse = await pilotAcquisitionPost(internalJsonRequest(env, '/api/operations/pilot-acquisition', {}));
     metrics.pilotStatus = pilotResponse.status;
