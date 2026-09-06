@@ -33,6 +33,10 @@ export function evaluateCanonicalSendSafety(input: CanonicalSendSafetySnapshot) 
   const humanTakeover = input.leadAgentMode === 'HUMAN'
     || input.conversationAgentMode === 'HUMAN'
     || input.conversationRequiresHuman;
+  const fullHumanTakeover = input.leadAgentMode === 'HUMAN'
+    && input.conversationAgentMode === 'HUMAN'
+    && input.conversationRequiresHuman === true;
+  if (input.ownerManualSendVerified && !fullHumanTakeover) blocks.push('OWNER_MANUAL_REQUIRES_HUMAN_TAKEOVER');
   if (humanTakeover && !input.ownerManualSendVerified) blocks.push('HUMAN_TAKEOVER');
   if (input.leadAgentMode === 'PAUSED' || input.conversationAgentMode === 'PAUSED' || input.conversationStage === 'PAUSED') blocks.push('AGENT_PAUSED');
   if (input.conversationStage === 'DO_NOT_CONTACT') blocks.push('CONVERSATION_DO_NOT_CONTACT');
