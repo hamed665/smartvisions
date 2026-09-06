@@ -15,6 +15,7 @@ describe('Oman first-touch language policy', () => {
     expect(plan.languages).toEqual(['en', 'ar-OM']);
     expect(plan.languageMode).toBe('BILINGUAL_FIRST_TOUCH');
     expect(plan.dialect).toBe('omani');
+    expect(plan.compositionRules).toContain('English section first, Omani Arabic section second.');
     expect(plan.compositionRules).toContain('After the customer replies, stop bilingual outreach and mirror the customer language.');
   });
 
@@ -52,12 +53,33 @@ describe('Oman first-touch language policy', () => {
       key: 'SEO_AUDIT_WEAK',
       sourceEvidence,
     });
-    expect(draft.sections.english).toContain('the verified website audit found weak SEO quality');
-    expect(draft.sections.english).toContain('targeted SEO improvements');
-    expect(draft.sections.omaniArabic).toContain('فحص الموقع المتحقق منه أظهر إن جودة السيو تحتاج تحسين');
-    expect(draft.sections.omaniArabic).toContain('تحسينات مركزة للظهور في محركات البحث');
+    expect(draft.sections.english).toContain('your website audit shows that the SEO performance could be improved');
+    expect(draft.sections.english).toContain('Based on that, targeted SEO improvements could be useful.');
+    expect(draft.sections.omaniArabic).toContain('السيو في موقعكم يحتاج تحسين');
+    expect(draft.sections.omaniArabic).toContain('ممكن نساعدكم من خلال تحسينات مركزة للظهور في محركات البحث');
     expect(draft.text.indexOf(draft.sections.english)).toBe(0);
     expect(draft.text.indexOf(draft.sections.omaniArabic)).toBeGreaterThan(draft.sections.english.length);
+  });
+
+  it('keeps the Arabic opener light, professional and grammatically stable across offer types', () => {
+    const seo = buildOmanFirstTouchDraft({
+      marketCode: 'OM',
+      businessName: 'Example Dental',
+      evidence: ['A cached deterministic website audit marks SEO quality as weak/poor.'],
+      recommendedOffer: 'seo_growth',
+    });
+    const bilingual = buildOmanFirstTouchDraft({
+      marketCode: 'OM',
+      businessName: 'Example Clinic',
+      evidence: ['Arabic support is missing.'],
+      recommendedOffer: 'premium_bilingual_website',
+    });
+
+    expect(seo.sections.omaniArabic).toContain('هلا Example Dental');
+    expect(seo.sections.omaniArabic).toContain('إذا حابين، نرسل لكم ملخص قصير؟');
+    expect(seo.sections.omaniArabic).not.toContain('ممكن يكون مناسب');
+    expect(bilingual.sections.omaniArabic).toContain('موقعكم حالياً ما يدعم اللغة العربية');
+    expect(bilingual.sections.omaniArabic).toContain('تطوير الموقع بشكل ثنائي اللغة');
   });
 
   it.each([
