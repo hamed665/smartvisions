@@ -31,7 +31,7 @@ const CANONICAL_OFFER_COPY: Record<string, CanonicalOfferCopy> = {
   },
   premium_bilingual_website: {
     english: 'a focused bilingual website upgrade',
-    omaniArabic: 'تطوير مركز للموقع ليكون ثنائي اللغة',
+    omaniArabic: 'تطوير الموقع بشكل ثنائي اللغة',
   },
   custom_website: {
     english: 'a tailored website upgrade',
@@ -47,15 +47,15 @@ const CANONICAL_OFFER_COPY: Record<string, CanonicalOfferCopy> = {
   },
   ai_reels_4: {
     english: 'a focused AI reels package',
-    omaniArabic: 'باقة ريلز بالذكاء الاصطناعي بشكل مركز',
+    omaniArabic: 'باقة ريلز مركزة بالذكاء الاصطناعي',
   },
   ai_reels_8: {
     english: 'a focused AI reels package',
-    omaniArabic: 'باقة ريلز بالذكاء الاصطناعي بشكل مركز',
+    omaniArabic: 'باقة ريلز مركزة بالذكاء الاصطناعي',
   },
   whatsapp_ai_setup: {
     english: 'a focused WhatsApp AI setup',
-    omaniArabic: 'إعداد واتساب ذكي بشكل مركز',
+    omaniArabic: 'إعداد واتساب ذكي بشكل عملي',
   },
 };
 
@@ -71,8 +71,8 @@ function canonicalOmanObservation(sourceEvidence: string): CanonicalFirstTouchOb
     return {
       key: 'NO_STANDALONE_WEBSITE',
       sourceEvidence: evidence,
-      english: 'your current public web presence appears to be mainly directory, social, or contact pages rather than a standalone website',
-      omaniArabic: 'حضوركم الحالي على الويب ظاهر بشكل أساسي عبر صفحات دليل أو تواصل أو سوشال، بدل موقع مستقل',
+      english: 'your current public web presence appears to rely mainly on directory, social, or contact pages rather than a standalone website',
+      omaniArabic: 'حضوركم الحالي على الويب ظاهر بشكل أساسي عبر صفحات دليل أو تواصل أو سوشال بدل موقع مستقل',
     };
   }
 
@@ -80,8 +80,8 @@ function canonicalOmanObservation(sourceEvidence: string): CanonicalFirstTouchOb
     return {
       key: 'SEO_AUDIT_WEAK',
       sourceEvidence: evidence,
-      english: 'the verified website audit found weak SEO quality',
-      omaniArabic: 'فحص الموقع المتحقق منه أظهر إن جودة السيو تحتاج تحسين',
+      english: 'your website audit shows that the SEO performance could be improved',
+      omaniArabic: 'السيو في موقعكم يحتاج تحسين',
     };
   }
 
@@ -89,8 +89,8 @@ function canonicalOmanObservation(sourceEvidence: string): CanonicalFirstTouchOb
     return {
       key: 'ARABIC_SUPPORT_MISSING',
       sourceEvidence: evidence,
-      english: 'the verified website audit found that Arabic support is missing',
-      omaniArabic: 'فحص الموقع المتحقق منه أظهر إن دعم اللغة العربية غير موجود',
+      english: 'your website does not currently appear to support Arabic',
+      omaniArabic: 'موقعكم حالياً ما يدعم اللغة العربية',
     };
   }
 
@@ -98,8 +98,8 @@ function canonicalOmanObservation(sourceEvidence: string): CanonicalFirstTouchOb
     return {
       key: 'MOBILE_QUALITY_WEAK',
       sourceEvidence: evidence,
-      english: 'the verified website audit found weak mobile quality',
-      omaniArabic: 'فحص الموقع المتحقق منه أظهر إن تجربة الموقع على الجوال تحتاج تحسين',
+      english: "your website's mobile experience could be improved",
+      omaniArabic: 'تجربة موقعكم على الجوال تحتاج تحسين',
     };
   }
 
@@ -107,8 +107,8 @@ function canonicalOmanObservation(sourceEvidence: string): CanonicalFirstTouchOb
     return {
       key: 'CTA_QUALITY_WEAK',
       sourceEvidence: evidence,
-      english: 'the verified website audit found a weak call-to-action and conversion flow',
-      omaniArabic: 'فحص الموقع المتحقق منه أظهر إن مسار الدعوة للإجراء والتحويل يحتاج تحسين',
+      english: "your website's call-to-action and conversion flow could be improved",
+      omaniArabic: 'مسار الدعوة للإجراء والتحويل في موقعكم يحتاج تحسين',
     };
   }
 
@@ -116,8 +116,8 @@ function canonicalOmanObservation(sourceEvidence: string): CanonicalFirstTouchOb
     return {
       key: 'BOOKING_FLOW_MISSING',
       sourceEvidence: evidence,
-      english: 'the verified website audit did not detect a booking flow',
-      omaniArabic: 'فحص الموقع المتحقق منه ما رصد مسار واضح للحجز',
+      english: 'your website does not appear to have a clear booking flow',
+      omaniArabic: 'ما ظهر في موقعكم مسار واضح للحجز',
     };
   }
 
@@ -127,8 +127,8 @@ function canonicalOmanObservation(sourceEvidence: string): CanonicalFirstTouchOb
     return {
       key: 'BROKEN_LINKS',
       sourceEvidence: evidence,
-      english: `the verified website audit detected ${count} broken link${count === '1' ? '' : 's'}`,
-      omaniArabic: `فحص الموقع المتحقق منه رصد ${count} رابط${count === '1' ? '' : 'اً'} لا يعمل`,
+      english: `your website audit detected ${count} broken link${count === '1' ? '' : 's'}`,
+      omaniArabic: `فحص موقعكم رصد ${count} رابط${count === '1' ? '' : 'اً'} ما يشتغل`,
     };
   }
 
@@ -136,8 +136,8 @@ function canonicalOmanObservation(sourceEvidence: string): CanonicalFirstTouchOb
     return {
       key: 'INSTAGRAM_INACTIVE',
       sourceEvidence: evidence,
-      english: 'the Instagram presence was verified as inactive',
-      omaniArabic: 'حساب الإنستغرام تم التحقق منه وظهر إنه غير نشط',
+      english: 'your Instagram presence appears to be inactive based on the verified account activity',
+      omaniArabic: 'حساب الإنستغرام عندكم ظاهر غير نشط حسب النشاط المتحقق منه',
     };
   }
 
@@ -145,8 +145,8 @@ function canonicalOmanObservation(sourceEvidence: string): CanonicalFirstTouchOb
     return {
       key: 'INSTAGRAM_CONTENT_WEAK',
       sourceEvidence: evidence,
-      english: 'the Instagram content quality was verified as weak',
-      omaniArabic: 'جودة محتوى الإنستغرام تم التحقق منها وظهرت إنها تحتاج تحسين',
+      english: 'your Instagram content quality could be improved based on the verified account review',
+      omaniArabic: 'محتوى الإنستغرام عندكم يحتاج تحسين حسب المراجعة المتحققة',
     };
   }
 
@@ -154,8 +154,8 @@ function canonicalOmanObservation(sourceEvidence: string): CanonicalFirstTouchOb
     return {
       key: 'WHATSAPP_WITHOUT_BOOKING',
       sourceEvidence: evidence,
-      english: 'WhatsApp is a verified contact path and the website audit did not detect a booking flow',
-      omaniArabic: 'واتساب مسار تواصل متحقق منه، وفحص الموقع ما رصد مسار واضح للحجز',
+      english: 'WhatsApp is available as a verified contact channel, but your website does not appear to have a clear booking flow',
+      omaniArabic: 'واتساب متوفر عندكم كوسيلة تواصل متحققة، لكن ما ظهر في الموقع مسار واضح للحجز',
     };
   }
 
@@ -252,8 +252,8 @@ export function buildOmanFirstTouchDraft(input: MessagePlanInput) {
   const businessName = input.businessName.trim();
   if (!businessName) throw new Error('businessName is required');
 
-  const english = `Hi ${businessName}, I noticed ${observation.english}. ${offer.english} could be relevant based on that. Would a short outline be useful?`;
-  const omaniArabic = `هلا ${businessName}، لاحظنا إن ${observation.omaniArabic}. بناءً على هالمعلومة، ${offer.omaniArabic} ممكن يكون مناسب. إذا يناسبكم، نرسل لكم ملخص قصير؟`;
+  const english = `Hi ${businessName}, I noticed ${observation.english}. Based on that, ${offer.english} could be useful. Would it help if I sent you a short outline?`;
+  const omaniArabic = `هلا ${businessName}، لاحظنا إن ${observation.omaniArabic}. وبناءً على هالمعلومة، ممكن نساعدكم من خلال ${offer.omaniArabic}. إذا حابين، نرسل لكم ملخص قصير؟`;
 
   return {
     plan,
