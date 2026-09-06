@@ -175,13 +175,18 @@ async function queueEmailFirstTouch(input: {
   const { data: existing, error: existingError } = await input.supabase.from('conversation_messages')
     .select('id,status')
     .eq('organization_id', input.organizationId)
+    .eq('channel', 'EMAIL')
     .eq('provider_message_id', providerMessageId)
     .maybeSingle();
   if (existingError) throw new Error(`First-touch duplicate lookup failed: ${existingError.message}`);
   if (existing) return { status: 'DUPLICATE', messageId: String(existing.id) } as const;
 
   const [conversationMessageCount, outreachMessageCount] = await Promise.all([
-    input.supabase.from('conversation_messages').select('id', { count: 'exact', head: true }).eq('organization_id', input.organizationId).eq('lead_id', input.leadId),
+    input.supabase.from('conversation_messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', input.organizationId)
+      .eq('lead_id', input.leadId)
+      .neq('status', 'BLOCKED'),
     input.supabase.from('outreach_messages').select('id', { count: 'exact', head: true }).eq('organization_id', input.organizationId).eq('lead_id', input.leadId),
   ]);
   if (conversationMessageCount.error || outreachMessageCount.error) {
