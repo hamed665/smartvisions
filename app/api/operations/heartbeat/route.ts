@@ -23,6 +23,12 @@ type HeartbeatMetrics = {
   pilotFailedOutcomes?: number;
 };
 
+type WorkerVersion = {
+  id?: string;
+  tag?: string;
+  timestamp?: string;
+};
+
 const ACTION_BY_PHASE: Record<HeartbeatPhase, string> = {
   START: 'OPERATIONS_SCHEDULED_START',
   RESULT: 'OPERATIONS_SCHEDULED_RESULT',
@@ -70,6 +76,16 @@ function sanitizeMetrics(value: unknown): HeartbeatMetrics {
   };
 }
 
+function sanitizeWorkerVersion(value: unknown): WorkerVersion {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const raw = value as Record<string, unknown>;
+  return {
+    id: boundedText(raw.id, 80),
+    tag: boundedText(raw.tag, 120),
+    timestamp: boundedText(raw.timestamp, 80),
+  };
+}
+
 export async function POST(request: Request) {
   const authError = requireInternalApiKey(request);
   if (authError) return authError;
@@ -80,6 +96,7 @@ export async function POST(request: Request) {
     cron?: string;
     scheduledTime?: number;
     metrics?: HeartbeatMetrics;
+    workerVersion?: WorkerVersion;
   } | null;
   const phase = String(body?.phase ?? '').toUpperCase() as HeartbeatPhase;
   const cron = String(body?.cron ?? '').trim().slice(0, 80);
@@ -89,6 +106,7 @@ export async function POST(request: Request) {
 
   const scheduledTime = Number.isFinite(Number(body?.scheduledTime)) ? Number(body?.scheduledTime) : null;
   const metrics = sanitizeMetrics(body?.metrics);
+  const workerVersion = sanitizeWorkerVersion(body?.workerVersion);
   const supabase = serviceClient();
   const { data: controls, error: controlsError } = await supabase.from('system_controls').select('organization_id');
   if (controlsError) return NextResponse.json({ error: `Heartbeat organization lookup failed: ${controlsError.message}` }, { status: 503 });
@@ -126,6 +144,7 @@ export async function POST(request: Request) {
         scheduledTime,
         sampleStart,
         sampleMinutes: HEARTBEAT_SAMPLE_MS / 60_000,
+        workerVersion,
         metrics,
       },
     }));
