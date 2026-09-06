@@ -1,5 +1,4 @@
 import type { AgentContext, ReplyDraft, SalesStateSnapshot } from '@/lib/agents/contracts';
-import { hasPaymentExecutionIntent } from '@/lib/handoff/policy';
 
 const SERVICE_PATTERNS: Record<string, RegExp[]> = {
   CONTENT_REELS: [/\bcontent\b/i, /\breels?\b/i, /\bstor(?:y|ies)\b/i, /محتو[ىا]/i, /ريل/i],
@@ -11,14 +10,48 @@ const SERVICE_PATTERNS: Record<string, RegExp[]> = {
   AI_AGENT: [/\bai agent\b/i, /artificial intelligence agent/i, /وكيل.*ذكاء/i, /ایجنت.*هوش/i],
 };
 
+export function hasFinancialPaymentIntent(message: string) {
+  const text = message.trim();
+  if (!text) return false;
+  return [
+    /\b(?:how|where|when)\s+(?:do|can|should|would)\s+i\s+(?:pay|make (?:the )?payment)\b/i,
+    /\b(?:ready to pay|want to pay|pay (?:now|today|the invoice|the deposit)|make (?:a )?payment|payment (?:link|method|methods|terms|option|options|details)|send (?:me )?(?:an? )?invoice|invoice me|bank (?:account|details)|card payment|checkout|deposit)\b/i,
+    /(?:كيف|وين|أين|متى)\s*(?:أدفع|ادفع)|(?:أريد|ابي|أبغى)\s*(?:أدفع|ادفع)|رابط\s*الدفع|(?:أرسل|ارسل)\s*(?:لي\s*)?فاتورة|فاتورة\s*(?:الدفع)?|عربون|حساب\s*بنكي|بيانات\s*البنك/i,
+    /(?:چطور|چجوری|کجا|کی)\s*(?:پرداخت|واریز)\s*(?:کنم)?|می[‌\s-]?(?:خوام|خواهم)\s*(?:پرداخت|واریز)\s*(?:کنم)?|لینک\s*پرداخت|فاکتور\s*(?:رو|را)?\s*(?:بفرست|ارسال)|بیعانه|شماره\s*حساب|اطلاعات\s*بانکی/i,
+  ].some((pattern) => pattern.test(text));
+}
+
+export function hasContractExecutionIntent(message: string) {
+  const text = message.trim();
+  if (!text) return false;
+  return [
+    /\b(?:send|share|prepare|sign|accept|execute)\s+(?:me\s+)?(?:the\s+)?(?:contract|agreement)\b/i,
+    /\b(?:contract|agreement)\s+(?:to sign|for signature|ready to sign)\b/i,
+    /(?:أرسل|ارسل|جهز|وقّع|وقع|أوقع|اوقع)\s*(?:لي\s*)?(?:العقد|الاتفاقية)|(?:العقد|الاتفاقية)\s*(?:للتوقيع|جاهز للتوقيع)/i,
+    /(?:قرارداد|توافقنامه)\s*(?:رو|را)?\s*(?:بفرست|ارسال|آماده)|(?:قرارداد|توافقنامه)\s*(?:برای\s*)?(?:امضا|امضاء)/i,
+  ].some((pattern) => pattern.test(text));
+}
+
+export function hasAvailabilityExecutionIntent(message: string) {
+  const text = message.trim();
+  if (!text) return false;
+  return [
+    /\b(?:are you|are they|is (?:he|she|it)|will you be)\s+available\b/i,
+    /\b(?:do you have|have you got|can you check|please check|check)\s+(?:any\s+)?(?:availability|an?\s+slot|slots?)\b/i,
+    /\b(?:can|could|please)\s+(?:you\s+)?(?:book|reserve|hold)\s+(?:it|this|a slot|the slot|a date|the date)\b/i,
+    /\b(?:do you have|can you provide|can you arrange)\s+(?:an?\s+|any\s+|\d+\s+)?(?:videographer|photographer|models?|actors?)\b/i,
+    /(?:هل|انتو|عندكم).*?(?:متاح|متوفر)|(?:شيك|تأكد|تشيك).*?(?:التوفر|الموعد)|(?:احجز|حجز|ثبّت|ثبت).*?(?:الموعد|الوقت)|(?:عندكم|توفرون).*?(?:مصور|مودل|عارض|ممثل)/i,
+    /(?:آیا|هستید|هستن).*?(?:آزاد|موجود)|(?:چک|بررسی).*?(?:موجودی|وقت خالی)|(?:رزرو|نگه دار).*?(?:وقت|تاریخ)|(?:دارید|فراهم می‌کنید).*?(?:فیلمبردار|عکاس|مدل|بازیگر)/i,
+  ].some((pattern) => pattern.test(text));
+}
+
 export function inferSalesHandoffSignals(message: string, state?: SalesStateSnapshot) {
-  const asksPayment = hasPaymentExecutionIntent(message);
   return {
     asksHuman: /(human|person|manager|someone|موظف|شخص|مدير|مسؤول|انسان|مدیر)/i.test(message),
     asksMeeting: /(meeting|call|zoom|meet|consultation|consult|مكالمة|اجتماع|استشارة|تماس|جلسه)/i.test(message),
-    asksPayment,
-    asksContract: /\b(?:contract|agreement|sign)\b|(?:العقد|الاتفاقية|توقيع)|(?:قرارداد|امضا)/i.test(message),
-    asksAvailability: /\b(?:availability|available|slot|book(?:ing)?|reserve|reservation|do you have|can you provide)\b|(?:متاح|متوفر|موعد|حجز|عندكم)|(?:وقت خالی|رزرو|موجود دارید)/i.test(message),
+    asksPayment: hasFinancialPaymentIntent(message),
+    asksContract: hasContractExecutionIntent(message),
+    asksAvailability: hasAvailabilityExecutionIntent(message),
     customQuote: state?.customQuoteRequired === true || /custom (?:quote|package|scope)|bespoke|عرض مخصص|باقة مخصصة|پکیج اختصاصی|قیمت اختصاصی/i.test(message),
     specialDiscount: /\b(?:discount|best price|last price|reduce (?:the )?price)\b|(?:خصم|تخفيض|آخر سعر)|(?:تخفیف|قیمت بهتر)/i.test(message),
     complaint: /(complaint|unhappy|bad service|شكوى|مشكلة|غير راضي|شکایت|ناراضی)/i.test(message),
@@ -104,8 +137,6 @@ export function evaluateSalesReplyPolicy(input: {
       reasons.push('RECOMMENDS_REJECTED_SERVICE');
     }
 
-    // Budget is not a universal qualification ritual. This state model only marks information
-    // as required when the next safe action actually depends on it.
     if (!state.budget && !state.missingRequiredInfo.includes('budget') && asksBudget(text)) {
       reasons.push('UNNECESSARY_BUDGET_QUESTION');
     }
