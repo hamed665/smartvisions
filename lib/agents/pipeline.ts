@@ -3,20 +3,10 @@ import { buildSelectiveRoutePlan } from './selective-routing';
 import { checkRelevance, decideCommercialAction, secretaryCompose } from './executor';
 import { draftOffersUnrequestedCustomPreview } from './preview-policy';
 import { deterministicAgentRuntime, type AgentRuntime } from './runtime';
-import { canAutoSend, evaluateHandoff, hasPaymentExecutionIntent } from '@/lib/handoff/policy';
+import { canAutoSend, evaluateHandoff } from '@/lib/handoff/policy';
+import { evaluateSalesReplyPolicy, inferSalesHandoffSignals } from '@/lib/conversations/sales-behavior';
 import { resolveSmartVisionsCatalogRecommendation } from '@/lib/whatsapp/catalog';
 import { replyMatchesHighConfidenceMessageLanguage } from '@/lib/outreach/locale';
-
-const inferHandoffSignals = (message: string) => {
-  const text = message.toLowerCase();
-  return {
-    asksHuman: /(human|person|manager|someone|موظف|شخص|مدير|مسؤول)/i.test(text),
-    asksMeeting: /(meeting|call|zoom|meet|consultation|consult|مكالمة|اجتماع|استشارة|نتكلم)/i.test(text),
-    asksPayment: hasPaymentExecutionIntent(message),
-    specialDiscount: /(discount|better price|best price|reduce the price|cheaper|خصم|تخفيض|سعر أفضل|آخر سعر|ارخص|أرخص)/i.test(text),
-    complaint: /(complaint|unhappy|bad service|شكوى|مشكلة|غير راضي)/i.test(text),
-  };
-};
 
 function applyConfidenceThreshold(context: AgentContext, result: AgentResult) {
   const threshold = context.agentSettings?.[result.agent]?.confidenceThreshold;
@@ -67,11 +57,11 @@ export async function processInboundMessage(
   const agentResults: AgentResult[] = orchestratorResult ? [...specialistResults, orchestratorResult] : [...specialistResults];
   const decision = decideCommercialAction(context, agentResults);
   const confidence = agentResults.length ? Math.min(...agentResults.map((result) => result.confidence)) : 0.9;
-  const inferred = inferHandoffSignals(context.message);
+  const inferred = inferSalesHandoffSignals(context.message, context.salesState);
   const handoff = evaluateHandoff({
     intentScore: context.intentScore,
     ...inferred,
-    customQuote: decision.action === 'HUMAN' && !!context.quotedService,
+    customQuote: inferred.customQuote || (decision.action === 'HUMAN' && !!context.quotedService),
     confidence,
   });
 
@@ -95,7 +85,11 @@ export async function processInboundMessage(
     replyLanguage: draft.language,
     replyText: draft.text,
   });
-  const deterministicRelevance = checkRelevance(context, draft) && previewPolicyPassed && languagePolicyPassed;
+  const salesBehavior = evaluateSalesReplyPolicy({ context, draft });
+  const deterministicRelevance = checkRelevance(context, draft)
+    && previewPolicyPassed
+    && languagePolicyPassed
+    && salesBehavior.passed;
 
   const relevanceContext: AgentContext = {
     ...context,
@@ -123,6 +117,7 @@ export async function processInboundMessage(
   const guardrails: string[] = [];
   if (!previewPolicyPassed) guardrails.push('UNREQUESTED_CUSTOM_PREVIEW');
   if (!languagePolicyPassed) guardrails.push('REPLY_LANGUAGE_MISMATCH');
+  if (!salesBehavior.passed) guardrails.push(...salesBehavior.reasons);
   if (!relevancePassed) guardrails.push('RELEVANCE_GATE_FAILED');
   if (!humanStyle.passed) guardrails.push('HUMAN_STYLE_GATE_FAILED', ...humanStyle.reasons);
   if (!routedAgents.includes('secretary')) guardrails.push('SECRETARY_DISABLED');
@@ -146,7 +141,7 @@ export async function processInboundMessage(
     routedAgents,
     agentResults,
     decision,
-    guardrails,
+    guardrails: [...new Set(guardrails)],
     handoffReasons: handoff.reasons,
     relevancePassed,
     humanStylePassed: humanStyle.passed,
