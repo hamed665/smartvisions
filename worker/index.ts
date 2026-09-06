@@ -3,7 +3,8 @@ import { POST as evidencePipelinePost } from '../app/api/operations/evidence-pip
 import { POST as pilotAcquisitionPost } from '../app/api/operations/pilot-acquisition/route';
 import { shouldRunScheduledOperations } from './schedule-policy';
 
-type WorkerEnv = { INTERNAL_API_KEY?: string; DEPLOYMENT_ENV?: string };
+type WorkerVersionMetadata = { id?: string; tag?: string; timestamp?: string };
+type WorkerEnv = { INTERNAL_API_KEY?: string; DEPLOYMENT_ENV?: string; CF_VERSION_METADATA?: WorkerVersionMetadata };
 type ScheduledController = { scheduledTime?: number; cron?: string };
 type ExecutionContextLike = { waitUntil(promise: Promise<unknown>): void };
 
@@ -28,6 +29,10 @@ type ScheduledMetrics = {
   tickStatus: number;
   evidenceStatus?: number;
   evidenceFailedOutcomes?: number;
+  evidenceAction?: string;
+  evidenceReason?: string;
+  evidenceFirstTouchStatus?: string;
+  evidenceFirstTouchReason?: string;
   pilotStatus?: number;
   pilotFailedOutcomes?: number;
 };
@@ -69,6 +74,7 @@ async function recordScheduledHeartbeat(
       phase,
       cron,
       scheduledTime: controller?.scheduledTime,
+      workerVersion: env.CF_VERSION_METADATA ?? {},
       metrics,
     });
   } catch {
@@ -201,7 +207,15 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
     else if (evidenceResponse.status === 409 || evidenceResponse.status === 423) metrics.safetyBlocked += 1;
     else if (!evidenceResponse.ok) metrics.failed += 1;
     else {
-      const evidence = await evidenceResponse.json().catch(() => null) as { action?: string } | null;
+      const evidence = await evidenceResponse.json().catch(() => null) as {
+        action?: string;
+        reason?: string;
+        firstTouch?: { status?: string; reason?: string };
+      } | null;
+      metrics.evidenceAction = typeof evidence?.action === 'string' ? evidence.action : undefined;
+      metrics.evidenceReason = typeof evidence?.reason === 'string' ? evidence.reason : undefined;
+      metrics.evidenceFirstTouchStatus = typeof evidence?.firstTouch?.status === 'string' ? evidence.firstTouch.status : undefined;
+      metrics.evidenceFirstTouchReason = typeof evidence?.firstTouch?.reason === 'string' ? evidence.firstTouch.reason : undefined;
       metrics.evidenceFailedOutcomes = evidence?.action === 'FAILED' ? 1 : 0;
       if (metrics.evidenceFailedOutcomes) metrics.failed += 1;
     }

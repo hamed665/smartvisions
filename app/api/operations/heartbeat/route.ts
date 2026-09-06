@@ -13,14 +13,27 @@ type HeartbeatMetrics = {
   failed?: number;
   reconciliationAttention?: number;
   tickStatus?: number;
+  evidenceStatus?: number;
+  evidenceFailedOutcomes?: number;
+  evidenceAction?: string;
+  evidenceReason?: string;
+  evidenceFirstTouchStatus?: string;
+  evidenceFirstTouchReason?: string;
   pilotStatus?: number;
   pilotFailedOutcomes?: number;
+};
+
+type WorkerVersion = {
+  id?: string;
+  tag?: string;
+  timestamp?: string;
 };
 
 const ACTION_BY_PHASE: Record<HeartbeatPhase, string> = {
   START: 'OPERATIONS_SCHEDULED_START',
   RESULT: 'OPERATIONS_SCHEDULED_RESULT',
 };
+const HEARTBEAT_SAMPLE_MS = 10 * 60 * 1000;
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -35,6 +48,11 @@ function boundedInteger(value: unknown) {
   return Math.max(0, Math.min(10000, Math.round(numeric)));
 }
 
+function boundedText(value: unknown, max = 120) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return text ? text.slice(0, max) : undefined;
+}
+
 function sanitizeMetrics(value: unknown): HeartbeatMetrics {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const raw = value as Record<string, unknown>;
@@ -47,8 +65,24 @@ function sanitizeMetrics(value: unknown): HeartbeatMetrics {
     failed: boundedInteger(raw.failed),
     reconciliationAttention: boundedInteger(raw.reconciliationAttention),
     tickStatus: boundedInteger(raw.tickStatus),
+    evidenceStatus: boundedInteger(raw.evidenceStatus),
+    evidenceFailedOutcomes: boundedInteger(raw.evidenceFailedOutcomes),
+    evidenceAction: boundedText(raw.evidenceAction),
+    evidenceReason: boundedText(raw.evidenceReason),
+    evidenceFirstTouchStatus: boundedText(raw.evidenceFirstTouchStatus),
+    evidenceFirstTouchReason: boundedText(raw.evidenceFirstTouchReason),
     pilotStatus: boundedInteger(raw.pilotStatus),
     pilotFailedOutcomes: boundedInteger(raw.pilotFailedOutcomes),
+  };
+}
+
+function sanitizeWorkerVersion(value: unknown): WorkerVersion {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const raw = value as Record<string, unknown>;
+  return {
+    id: boundedText(raw.id, 80),
+    tag: boundedText(raw.tag, 120),
+    timestamp: boundedText(raw.timestamp, 80),
   };
 }
 
@@ -62,6 +96,7 @@ export async function POST(request: Request) {
     cron?: string;
     scheduledTime?: number;
     metrics?: HeartbeatMetrics;
+    workerVersion?: WorkerVersion;
   } | null;
   const phase = String(body?.phase ?? '').toUpperCase() as HeartbeatPhase;
   const cron = String(body?.cron ?? '').trim().slice(0, 80);
@@ -71,6 +106,7 @@ export async function POST(request: Request) {
 
   const scheduledTime = Number.isFinite(Number(body?.scheduledTime)) ? Number(body?.scheduledTime) : null;
   const metrics = sanitizeMetrics(body?.metrics);
+  const workerVersion = sanitizeWorkerVersion(body?.workerVersion);
   const supabase = serviceClient();
   const { data: controls, error: controlsError } = await supabase.from('system_controls').select('organization_id');
   if (controlsError) return NextResponse.json({ error: `Heartbeat organization lookup failed: ${controlsError.message}` }, { status: 503 });
@@ -79,12 +115,16 @@ export async function POST(request: Request) {
   if (!organizationIds.length) return NextResponse.json({ recorded: 0, sampled: true });
 
   const action = ACTION_BY_PHASE[phase];
-  const hourStart = new Date(Math.floor(Date.now() / 3_600_000) * 3_600_000).toISOString();
+  const sampleBasis = scheduledTime ?? Date.now();
+  const sampleStartMs = Math.floor(sampleBasis / HEARTBEAT_SAMPLE_MS) * HEARTBEAT_SAMPLE_MS;
+  const sampleStart = new Date(sampleStartMs).toISOString();
+  const sampleEnd = new Date(sampleStartMs + HEARTBEAT_SAMPLE_MS).toISOString();
   const { data: existing, error: existingError } = await supabase.from('audit_logs')
     .select('organization_id')
     .in('organization_id', organizationIds)
     .eq('action', action)
-    .gte('created_at', hourStart);
+    .gte('created_at', sampleStart)
+    .lt('created_at', sampleEnd);
   if (existingError) return NextResponse.json({ error: `Heartbeat sampling lookup failed: ${existingError.message}` }, { status: 503 });
 
   const alreadyRecorded = new Set((existing ?? []).map((row) => String(row.organization_id)));
@@ -96,12 +136,15 @@ export async function POST(request: Request) {
       actor_id: 'cloudflare_cron',
       action,
       entity_type: 'operations',
-      entity_id: `${cron}:${hourStart}`.slice(0, 240),
+      entity_id: `${cron}:${phase}:${sampleStart}`.slice(0, 240),
       after_data: {
         source: 'CLOUDFLARE_CRON',
         phase,
         cron,
         scheduledTime,
+        sampleStart,
+        sampleMinutes: HEARTBEAT_SAMPLE_MS / 60_000,
+        workerVersion,
         metrics,
       },
     }));
@@ -111,5 +154,5 @@ export async function POST(request: Request) {
     if (insertError) return NextResponse.json({ error: `Heartbeat persistence failed: ${insertError.message}` }, { status: 503 });
   }
 
-  return NextResponse.json({ recorded: rows.length, sampled: true });
+  return NextResponse.json({ recorded: rows.length, sampled: true, sampleStart });
 }
