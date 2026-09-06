@@ -25,13 +25,13 @@ export async function GET(
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
     }
 
-    const [{ data: messages, error: messagesError }, leadResult] = await Promise.all([
+    const [{ data: newestMessages, error: messagesError }, leadResult] = await Promise.all([
       supabase
         .from('conversation_messages')
         .select('id,direction,media_type,original_text,transcript,detected_language,detected_dialect,persian_translation,intent_label,sentiment_label,confidence,status,requires_approval,approval_reason,provider_message_id,metadata,created_at,sent_at')
         .eq('organization_id', organizationId)
         .eq('conversation_id', id)
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: false })
         .limit(250),
       conversation.lead_id
         ? supabase
@@ -50,10 +50,11 @@ export async function GET(
       return NextResponse.json({ error: leadResult.error.message }, { status: 500 });
     }
 
+    const messages = [...(newestMessages ?? [])].reverse();
     return NextResponse.json(
       {
         conversation,
-        messages: messages ?? [],
+        messages,
         lead: leadResult.data ?? null,
         editable: role === 'OWNER',
         serverTime: new Date().toISOString(),
