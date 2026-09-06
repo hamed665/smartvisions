@@ -27,10 +27,10 @@ export function safeWebsiteEvidenceError(error: unknown, fallback = 'Website aud
   return text && text !== '[object Object]' ? text.slice(0, 240) : fallback;
 }
 
-async function readLimitedText(response: Response) {
+async function readLimitedText(response: Response): Promise<{ text: string; bytes: number }> {
   const contentLength = Number(response.headers.get('content-length') || 0);
   if (contentLength > MAX_BYTES) throw new Error('Website response is larger than the audit limit');
-  if (!response.body) return '';
+  if (!response.body) return { text: '', bytes: 0 };
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let bytes = 0;
