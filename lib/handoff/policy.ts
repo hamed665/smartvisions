@@ -3,6 +3,8 @@ export type HandoffInput = {
   asksHuman?: boolean;
   asksMeeting?: boolean;
   asksPayment?: boolean;
+  asksContract?: boolean;
+  asksAvailability?: boolean;
   customQuote?: boolean;
   specialDiscount?: boolean;
   complaint?: boolean;
@@ -29,6 +31,8 @@ export function evaluateHandoff(input: HandoffInput) {
   if (input.asksHuman) reasons.push('ASKED_FOR_HUMAN');
   if (input.asksMeeting) reasons.push('MEETING_REQUEST');
   if (input.asksPayment) reasons.push('PAYMENT_DISCUSSION');
+  if (input.asksContract) reasons.push('CONTRACT_CONFIRMATION');
+  if (input.asksAvailability) reasons.push('AVAILABILITY_CONFIRMATION');
   if (input.customQuote) reasons.push('CUSTOM_QUOTE');
   if (input.specialDiscount) reasons.push('SPECIAL_DISCOUNT');
   if (input.complaint) reasons.push('COMPLAINT');
