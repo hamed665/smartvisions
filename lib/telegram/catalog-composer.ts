@@ -2,8 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CommandExecutionResult } from './contracts';
 
 export type CatalogComposeCommand = { type: 'CATALOG_COMPOSE'; rawText: string };
-
 type CapabilityKey = 'videographer' | 'photographer' | 'model' | 'actor' | 'voiceTalent';
+type Gender = 'female' | 'male';
 
 type PackageIntent = {
   reels?: number;
@@ -11,7 +11,6 @@ type PackageIntent = {
   price?: number;
   customQuote: boolean;
   filmed: boolean;
-  sourceLine: string;
 };
 
 type CapabilityIntent = {
@@ -19,6 +18,7 @@ type CapabilityIntent = {
   enabled?: boolean;
   requiresAvailabilityConfirmation: boolean;
   pricingMode?: 'CUSTOM_QUOTE';
+  supportedGenders?: Gender[];
 };
 
 type CatalogDraft = {
@@ -69,16 +69,16 @@ export type CatalogBatchPlan = {
   prices: PriceOperation[];
 };
 
-const COUNTRY_ALIASES: Array<{ code: string; currency: string; pattern: RegExp }> = [
-  { code: 'OM', currency: 'OMR', pattern: /\b(?:oman|om)\b|عمان/i },
-  { code: 'AE', currency: 'AED', pattern: /\b(?:uae|emirates|ae)\b|امارات/i },
-  { code: 'SA', currency: 'SAR', pattern: /\b(?:saudi|ksa|sa)\b|عربستان|سعودی/i },
-  { code: 'QA', currency: 'QAR', pattern: /\b(?:qatar|qa)\b|قطر/i },
-  { code: 'GB', currency: 'GBP', pattern: /\b(?:uk|britain|england|gb)\b|انگلیس|بریتانیا/i },
-  { code: 'US', currency: 'USD', pattern: /\b(?:usa|united states|us)\b|آمریکا/i },
+const MARKETS: Array<{ code: string; currency: string; pattern: RegExp }> = [
+  { code: 'OM', currency: 'OMR', pattern: /\b(?:oman|om|omr)\b|عمان/i },
+  { code: 'AE', currency: 'AED', pattern: /\b(?:uae|emirates|ae|aed)\b|امارات/i },
+  { code: 'SA', currency: 'SAR', pattern: /\b(?:saudi|ksa|sa|sar)\b|عربستان|سعودی/i },
+  { code: 'QA', currency: 'QAR', pattern: /\b(?:qatar|qa|qar)\b|قطر/i },
+  { code: 'GB', currency: 'GBP', pattern: /\b(?:uk|britain|england|gb|gbp)\b|انگلیس|بریتانیا/i },
+  { code: 'US', currency: 'USD', pattern: /\b(?:usa|united states|us|usd)\b|آمریکا/i },
 ];
 
-const CAPABILITY_PATTERNS: Array<{ key: CapabilityKey; pattern: RegExp }> = [
+const CAPABILITIES: Array<{ key: CapabilityKey; pattern: RegExp }> = [
   { key: 'videographer', pattern: /videograph(?:er|y)|film\s*crew|فیلم\s*بردار|فیلمبردار/i },
   { key: 'photographer', pattern: /photograph(?:er|y)|عکاس/i },
   { key: 'model', pattern: /\bmodels?\b|مدل/i },
@@ -89,27 +89,31 @@ const CAPABILITY_PATTERNS: Array<{ key: CapabilityKey; pattern: RegExp }> = [
 const toLatinDigits = (value: string) => value
   .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
   .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
-
-const cleanLine = (value: string) => toLatinDigits(value)
-  .replace(/[–—]/g, '-')
-  .replace(/\s+/g, ' ')
-  .trim();
-
+const cleanLine = (value: string) => toLatinDigits(value).replace(/[–—]/g, '-').replace(/\s+/g, ' ').trim();
 const safeRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
-
 const asNumber = (value: unknown) => Number.isFinite(Number(value)) ? Number(value) : 0;
 
 function mergeRecord(base: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {
   const output: Record<string, unknown> = { ...base };
   for (const [key, value] of Object.entries(patch)) {
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      output[key] = mergeRecord(safeRecord(output[key]), value as Record<string, unknown>);
-    } else {
-      output[key] = value;
-    }
+    output[key] = value && typeof value === 'object' && !Array.isArray(value)
+      ? mergeRecord(safeRecord(output[key]), value as Record<string, unknown>)
+      : value;
   }
   return output;
+}
+
+function stableJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableJson);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, item]) => [key, stableJson(item)]),
+    );
+  }
+  return value;
 }
 
 function quantity(line: string, kind: 'reels' | 'stories') {
@@ -123,40 +127,36 @@ function quantity(line: string, kind: 'reels' | 'stories') {
 }
 
 function explicitPrice(line: string) {
-  const suffix = line.match(/(\d+(?:\.\d{1,3})?)\s*(?:OMR|AED|SAR|QAR|GBP|USD|ریال(?:\s*عمان)?|rial(?:s)?|درهم|dirham(?:s)?|pounds?|dollars?)\b/i);
+  const currency = '(?:OMR|AED|SAR|QAR|GBP|USD|ریال(?:\\s*عمان)?|rial(?:s)?|درهم|dirham(?:s)?|pounds?|dollars?)';
+  const suffix = line.match(new RegExp(`(\\d+(?:\\.\\d{1,3})?)\\s*${currency}(?=\\s|$|[،,.])`, 'i'));
   if (suffix) return Number(suffix[1]);
-  const prefix = line.match(/(?:OMR|AED|SAR|QAR|GBP|USD)\s*(\d+(?:\.\d{1,3})?)/i);
+  const prefix = line.match(new RegExp(`${currency}\\s*(\\d+(?:\\.\\d{1,3})?)`, 'i'));
   return prefix ? Number(prefix[1]) : undefined;
 }
 
-function hasCustomQuote(line: string) {
-  return /custom\s*quote|quote\s*required|توافقی|قیمت.*(?:هماهنگ|تایید|تأیید)|(?:هماهنگ|تایید|تأیید).*قیمت/i.test(line);
+const hasCustomQuote = (line: string) => /custom\s*quote|quote\s*required|توافقی|قیمت.*(?:هماهنگ|تایید|تأیید)|(?:هماهنگ|تایید|تأیید).*قیمت/i.test(line);
+const isDisabled = (line: string) => /\b(?:off|disabled|unavailable|do\s*not\s*offer|not\s*available)\b|غیرفعال|نداریم|ارائه\s*نمی/i.test(line);
+const isEnabled = (line: string) => /\b(?:on|enabled|available|offer|arrange|coordination|coordinate)\b|داریم|فعال|قابل\s*هماهنگی|هماهنگ\s*می|ارائه\s*می/i.test(line);
+
+function genders(line: string): Gender[] | undefined {
+  const values: Gender[] = [];
+  if (/\bfemale\b|\bwoman\b|\bwomen\b|زن|خانم/i.test(line)) values.push('female');
+  if (/\bmale\b|\bman\b|\bmen\b|مرد|آقا/i.test(line)) values.push('male');
+  return values.length ? values : undefined;
 }
 
-function isDisabled(line: string) {
-  return /\b(?:off|disabled|unavailable|do\s*not\s*offer|not\s*available)\b|غیرفعال|نداریم|ارائه\s*نمی/i.test(line);
-}
-
-function isEnabled(line: string) {
-  return /\b(?:on|enabled|available|offer|arrange|coordination|coordinate)\b|داریم|فعال|قابل\s*هماهنگی|هماهنگ\s*می|ارائه\s*می/i.test(line);
-}
-
-function isHarmlessHeading(line: string) {
+function isHeading(line: string) {
   return /^(?:پکیج|پکیج\s*محتوا|catalog|content\s*(?:packages?|catalog)|services?)(?:\s+.*)?$/i.test(line)
-    && COUNTRY_ALIASES.some((item) => item.pattern.test(line));
+    && MARKETS.some((market) => market.pattern.test(line));
 }
 
 export function parseCatalogComposerText(rawText: string): CatalogDraft {
   const normalized = toLatinDigits(rawText).replace(/\r/g, '');
-  const lines = normalized
-    .split(/\n|؛|;/)
-    .map(cleanLine)
-    .filter(Boolean)
-    .slice(0, 60);
-
-  const countryMatches = COUNTRY_ALIASES.filter((item) => item.pattern.test(normalized));
-  const uniqueCountries = [...new Set(countryMatches.map((item) => item.code))];
-  const selected = uniqueCountries.length === 1 ? COUNTRY_ALIASES.find((item) => item.code === uniqueCountries[0])! : null;
+  const allLines = normalized.split(/\n|؛|;/).map(cleanLine).filter(Boolean);
+  const lines = allLines.slice(0, 60);
+  const marketMatches = MARKETS.filter((market) => market.pattern.test(normalized));
+  const uniqueMarkets = [...new Set(marketMatches.map((market) => market.code))];
+  const selected = uniqueMarkets.length === 1 ? MARKETS.find((market) => market.code === uniqueMarkets[0])! : null;
   const draft: CatalogDraft = {
     countryCode: selected?.code ?? null,
     currency: selected?.currency ?? null,
@@ -165,12 +165,13 @@ export function parseCatalogComposerText(rawText: string): CatalogDraft {
     flexibleStories: false,
     capabilities: {},
     intakeRequiredFields: [],
-    unresolved: uniqueCountries.length > 1 ? ['چند بازار مختلف در یک دستور تشخیص داده شد؛ هر Batch باید فقط یک بازار داشته باشد.'] : [],
+    unresolved: [],
   };
+  if (allLines.length > 60) draft.unresolved.push('Batch بیش از 60 خط است؛ آن را به چند Batch کوچک‌تر تقسیم کن.');
+  if (uniqueMarkets.length > 1) draft.unresolved.push('چند بازار مختلف در یک دستور تشخیص داده شد؛ هر Batch باید فقط یک بازار داشته باشد.');
 
   for (const line of lines) {
-    if (isHarmlessHeading(line)) continue;
-
+    if (isHeading(line)) continue;
     const reels = quantity(line, 'reels');
     const stories = quantity(line, 'stories');
     const price = explicitPrice(line);
@@ -190,19 +191,25 @@ export function parseCatalogComposerText(rawText: string): CatalogDraft {
         ...(price != null ? { price } : {}),
         customQuote,
         filmed: /filmed|shoot|videograph|فیلم\s*بردار|فیلمبردار|تصویربرداری/i.test(line),
-        sourceLine: line,
       });
       continue;
     }
 
-    if (anyQuantity && (mentionsReel || mentionsStory)) {
+    if (anyQuantity) {
       if (mentionsReel) draft.flexibleReels = true;
       if (mentionsStory) draft.flexibleStories = true;
-      continue;
+      if (!mentionsReel && !mentionsStory && customQuote) {
+        const onlyReelPackages = draft.packages.length > 0 && draft.packages.every((item) => item.reels && !item.stories);
+        const onlyStoryPackages = draft.packages.length > 0 && draft.packages.every((item) => item.stories && !item.reels);
+        if (onlyReelPackages) draft.flexibleReels = true;
+        else if (onlyStoryPackages) draft.flexibleStories = true;
+        else draft.unresolved.push(line);
+      }
+      if (mentionsReel || mentionsStory || customQuote) continue;
     }
 
-    const matchedCapabilities = CAPABILITY_PATTERNS.filter((item) => item.pattern.test(line));
-    if (matchedCapabilities.length) {
+    const capabilityMatches = CAPABILITIES.filter((capability) => capability.pattern.test(line));
+    if (capabilityMatches.length) {
       const disabled = isDisabled(line);
       const enabled = isEnabled(line);
       const pricing = hasCustomQuote(line) || /قیمت.*توافقی|pricing.*custom/i.test(line);
@@ -210,13 +217,15 @@ export function parseCatalogComposerText(rawText: string): CatalogDraft {
         draft.unresolved.push(line);
         continue;
       }
-      for (const capability of matchedCapabilities) {
+      for (const capability of capabilityMatches) {
         const previous = draft.capabilities[capability.key];
+        const supportedGenders = genders(line) ?? previous?.supportedGenders;
         draft.capabilities[capability.key] = {
           key: capability.key,
           enabled: disabled ? false : enabled ? true : previous?.enabled,
           requiresAvailabilityConfirmation: disabled ? false : true,
           pricingMode: pricing ? 'CUSTOM_QUOTE' : previous?.pricingMode,
+          ...(supportedGenders ? { supportedGenders } : {}),
         };
       }
       continue;
@@ -231,11 +240,14 @@ export function parseCatalogComposerText(rawText: string): CatalogDraft {
       draft.intakeRequiredFields.push(...fields);
       continue;
     }
-
     draft.unresolved.push(line);
   }
 
+  for (const [key, capability] of Object.entries(draft.capabilities)) {
+    if (capability?.enabled == null) draft.unresolved.push(`وضعیت ارائه ${key} مشخص نیست؛ بنویس فعال/غیرفعال یا داریم/نداریم.`);
+  }
   draft.intakeRequiredFields = [...new Set(draft.intakeRequiredFields)];
+  draft.unresolved = [...new Set(draft.unresolved)];
   if (!draft.countryCode) draft.unresolved.unshift('بازار مشخص نیست؛ مثلاً «عمان» یا OMR را در دستور بنویس.');
   if (!draft.packages.length && !draft.flexibleReels && !draft.flexibleStories && !Object.keys(draft.capabilities).length && !draft.intakeRequiredFields.length) {
     draft.unresolved.push('هیچ تغییر قابل اعمالی از متن استخراج نشد.');
@@ -260,8 +272,7 @@ function packageName(intent: PackageIntent) {
 }
 
 function serviceSnapshot(row: Record<string, unknown> | undefined): ServiceSnapshot | null {
-  if (!row) return null;
-  return { name: String(row.name), enabled: Boolean(row.enabled), config: safeRecord(row.config) };
+  return row ? { name: String(row.name), enabled: Boolean(row.enabled), config: safeRecord(row.config) } : null;
 }
 
 function priceSnapshot(row: Record<string, unknown> | undefined): PriceSnapshot | null {
@@ -275,12 +286,8 @@ function priceSnapshot(row: Record<string, unknown> | undefined): PriceSnapshot 
   };
 }
 
-function stableJson(value: unknown) {
-  if (Array.isArray(value)) return value.map(stableJson);
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, stableJson(item)]));
-  }
-  return value;
+function sameJson(a: unknown, b: unknown) {
+  return JSON.stringify(stableJson(a)) === JSON.stringify(stableJson(b));
 }
 
 export function isCatalogBatchPlan(value: unknown): value is CatalogBatchPlan {
@@ -305,7 +312,6 @@ export async function prepareCatalogComposeMutation(input: {
   }
   const countryCode = draft.countryCode!;
   const currency = draft.currency!;
-
   const [{ data: serviceRows, error: serviceError }, { data: priceRows, error: priceError }] = await Promise.all([
     input.supabase.from('services').select('id,name,enabled,config').eq('organization_id', input.organizationId),
     input.supabase.from('service_prices')
@@ -341,16 +347,18 @@ export async function prepareCatalogComposeMutation(input: {
     }
     if (intent.price != null) {
       const before = priceSnapshot(existingPrice);
-      priceOps.set(serviceId, {
-        serviceId,
-        countryCode,
-        currency,
-        price: intent.price,
-        minimumPrice: before?.minimumPrice ?? null,
-        maxAutoDiscountPct: before?.maxAutoDiscountPct ?? 0,
-        maxDiscountWithApprovalPct: before?.maxDiscountWithApprovalPct ?? 0,
-        expectedBefore: before,
-      });
+      if (!before || before.currency !== currency || before.price !== intent.price) {
+        priceOps.set(serviceId, {
+          serviceId,
+          countryCode,
+          currency,
+          price: intent.price,
+          minimumPrice: before?.minimumPrice ?? null,
+          maxAutoDiscountPct: before?.maxAutoDiscountPct ?? 0,
+          maxDiscountWithApprovalPct: before?.maxDiscountWithApprovalPct ?? 0,
+          expectedBefore: before,
+        });
+      }
     }
   }
 
@@ -359,13 +367,21 @@ export async function prepareCatalogComposeMutation(input: {
     const serviceId = 'custom_content_production';
     const existing = servicesById.get(serviceId);
     const before = serviceSnapshot(existing);
+    const currentConfig = before?.config ?? {};
+    const currentCountries = Array.isArray(currentConfig.availableCountries)
+      ? currentConfig.availableCountries.filter((value): value is string => typeof value === 'string')
+      : [];
+    const currentFields = Array.isArray(currentConfig.intakeRequiredFields)
+      ? currentConfig.intakeRequiredFields.filter((value): value is string => typeof value === 'string')
+      : [];
     const capabilityPatch: Record<string, unknown> = {};
     for (const key of capabilityKeys) {
       const item = draft.capabilities[key]!;
       capabilityPatch[key] = {
-        ...(item.enabled != null ? { enabled: item.enabled } : {}),
+        enabled: item.enabled,
         requiresAvailabilityConfirmation: item.requiresAvailabilityConfirmation,
         ...(item.pricingMode ? { pricingMode: item.pricingMode } : {}),
+        ...(item.supportedGenders ? { supportedGenders: item.supportedGenders } : {}),
       };
     }
     const patch: Record<string, unknown> = {
@@ -377,26 +393,29 @@ export async function prepareCatalogComposeMutation(input: {
         ...(draft.flexibleStories ? { stories: true } : {}),
       },
       ...(capabilityKeys.length ? { capabilities: capabilityPatch } : {}),
-      ...(draft.intakeRequiredFields.length ? { intakeRequiredFields: draft.intakeRequiredFields } : {}),
+      intakeRequiredFields: [...new Set([...currentFields, ...draft.intakeRequiredFields])],
       salesPolicy: {
         doNotClaimUnavailableWhenEnabled: true,
         availabilityRequiresHumanConfirmation: true,
         customPricingRequiresHumanConfirmation: true,
       },
-      availableCountries: [countryCode],
+      availableCountries: [...new Set([...currentCountries, countryCode])],
     };
-    serviceOps.set(serviceId, {
-      id: serviceId,
-      name: before?.name ?? 'Custom Content Production',
-      enabled: before?.enabled ?? true,
-      config: mergeRecord(before?.config ?? {}, patch),
-      expectedBefore: before,
-    });
+    const afterConfig = mergeRecord(currentConfig, patch);
+    if (!before || !sameJson(before.config, afterConfig)) {
+      serviceOps.set(serviceId, {
+        id: serviceId,
+        name: before?.name ?? 'Custom Content Production',
+        enabled: before?.enabled ?? true,
+        config: afterConfig,
+        expectedBefore: before,
+      });
+    }
   }
 
   const services = [...serviceOps.values()].sort((a, b) => a.id.localeCompare(b.id));
   const prices = [...priceOps.values()].sort((a, b) => a.serviceId.localeCompare(b.serviceId));
-  if (!services.length && !prices.length) throw new Error('متن قابل فهم بود، اما هیچ تغییری نسبت به Catalog موجود لازم نیست.');
+  if (!services.length && !prices.length) throw new Error('متن درست فهمیده شد، اما نسبت به Catalog فعلی هیچ تغییری لازم نیست.');
 
   const plan: CatalogBatchPlan = {
     version: 1,
@@ -406,21 +425,18 @@ export async function prepareCatalogComposeMutation(input: {
     services: stableJson(services) as ServiceOperation[],
     prices: stableJson(prices) as PriceOperation[],
   };
-
-  const lines = [
-    `بازار: ${countryCode} / ${currency}`,
-    ...services.map((op) => `${op.expectedBefore ? '✏️' : '➕'} Service: ${op.name} (${op.id})`),
-    ...prices.map((op) => `${op.expectedBefore ? '💰' : '➕💰'} Price: ${op.serviceId} → ${op.price} ${op.currency}`),
-    '',
-    'هیچ تغییری هنوز اعمال نشده است.',
-    'تأیید = اجرای اتمیک همه تغییرات؛ لغو = هیچ تغییر.',
-  ];
-
   return {
     command: input.command,
     preview: {
       title: 'پیش‌نمایش Owner Catalog Composer',
-      text: lines.join('\n'),
+      text: [
+        `بازار: ${countryCode} / ${currency}`,
+        ...services.map((op) => `${op.expectedBefore ? '✏️' : '➕'} Service: ${op.name} (${op.id})`),
+        ...prices.map((op) => `${op.expectedBefore ? '💰' : '➕💰'} Price: ${op.serviceId} → ${op.price} ${op.currency}`),
+        '',
+        'هیچ تغییری هنوز اعمال نشده است.',
+        'تأیید = اجرای اتمیک همه تغییرات؛ لغو = هیچ تغییر.',
+      ].join('\n'),
       before: {
         services: services.map((op) => ({ id: op.id, value: op.expectedBefore })),
         prices: prices.map((op) => ({ serviceId: op.serviceId, value: op.expectedBefore })),
@@ -444,7 +460,6 @@ export async function executeCatalogComposeMutation(input: {
   const plan = input.preview.after;
   if (plan.countryCode.length !== 2 || plan.currency.length !== 3) throw new Error('Stored catalog batch market metadata is invalid');
   if (plan.services.length + plan.prices.length > 50) throw new Error('Catalog batch exceeds the 50-operation safety limit');
-
   const { data, error } = await input.supabase.rpc('apply_owner_catalog_batch', {
     p_organization_id: input.organizationId,
     p_plan: plan,
