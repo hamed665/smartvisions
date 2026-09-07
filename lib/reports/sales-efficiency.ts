@@ -26,8 +26,8 @@ function record(value: unknown): JsonRecord {
 }
 
 function finiteNumber(value: unknown) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return value;
 }
 
 function booleanValue(value: unknown) {
