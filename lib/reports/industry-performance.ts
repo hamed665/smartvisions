@@ -51,18 +51,14 @@ export function buildIndustryPerformance(input:{leads:LeadRow[];businesses:Busin
     if(current==null||at<current)firstOutboundAt.set(id,at);
   }
   const contacted=new Set(firstOutboundAt.keys());
-  // Reply existence comes from durable inbound provider evidence after actual outbound contact.
-  // reply_events remains useful for semantic classification, but a missing classifier row must
-  // not erase a real reply.
-  const durableReplies=input.messages.filter(row=>{
+  // Existence of a reply is provider evidence, not a classifier opinion. A reply_events row
+  // may describe sentiment/intent, but only a durable inbound after first outbound contact
+  // can move the reply numerator.
+  const replied=new Set(input.messages.filter(row=>{
     if(row.direction!=='INBOUND'||!row.lead_id)return false;
     const received=validTime(row.received_at);const firstSent=firstOutboundAt.get(String(row.lead_id));
     return received!=null&&firstSent!=null&&received>=firstSent;
-  }).map(row=>String(row.lead_id));
-  const replied=new Set([
-    ...durableReplies,
-    ...input.replies.filter(row=>row.lead_id&&contacted.has(String(row.lead_id))).map(row=>String(row.lead_id)),
-  ]);
+  }).map(row=>String(row.lead_id)));
   const positive=new Set(input.replies.filter(row=>{
     const signals=asRecord(row.signals);
     return row.lead_id&&(row.category==='positive'||signals.positive===true);
