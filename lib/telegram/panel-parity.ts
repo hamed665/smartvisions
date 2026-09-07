@@ -68,7 +68,7 @@ const SPECS: Record<PanelParityActionName, PanelParitySpec> = {
   'hunter.enrich': { label:'Enrich one Google candidate', source:'hunter-actions#enrichGooglePlaceCandidate', allowed:['placeId'], required:['placeId'], impact:'May perform one paid Google lookup; Cost Guard applies', outreach:'NONE' },
   'hunter.batch': { label:'Qualify Google priority batch', source:'hunter-batch-actions#qualifyGooglePlacesPriorityBatch', allowed:['maxChecks','targetLeads'], impact:'May perform selective paid Google qualification; Cost Guard applies', outreach:'NONE' },
   'google.refresh': { label:'Refresh Google business intelligence', source:'intelligence-actions#refreshGoogleBusinessIntelligence', allowed:['leadId'], required:['leadId'], impact:'May perform paid Google lookup when cache is stale; Cost Guard applies', outreach:'NONE' },
-  'integration.email_verify': { label:'Verify email provider', source:'integration-health-actions#verifyEmailIntegration', allowed:['test_email'], required:['test_email'], impact:'Sends one controlled verification email', outreach:'CONTROLLED_TEST_ONLY' },
+  'integration.email_verify': { label:'Check email evidence', source:'integration-health-actions#verifyEmailIntegration', allowed:[], impact:'Reads existing email evidence and rolling quota; records audit only; sends nothing', outreach:'NONE' },
   'integration.crawl4ai_verify': { label:'Verify Crawl4AI', source:'integration-health-actions#verifyCrawl4AiIntegration', allowed:[], impact:'One controlled Crawl4AI smoke test to example.com', outreach:'NONE' },
   'preview.generate_pilot': { label:'Generate controlled Preview pilot', source:'preview-actions#generateControlledPreviewPilot', allowed:['site_language'], required:['site_language'], impact:'Controlled INTERNAL_TEST pilot; current production path records zero generation provider cost', outreach:'NONE' },
   'preview.approve': { label:'Approve Preview', source:'preview-actions#approvePreview', allowed:['preview_id'], required:['preview_id'], impact:'DB transition only', outreach:'NONE' },
@@ -222,7 +222,7 @@ async function invokePanelServerAction(action: PanelParityActionName, args: Pane
     case 'hunter.enrich': return hunter.enrichGooglePlaceCandidate(form);
     case 'hunter.batch': return hunterBatch.qualifyGooglePlacesPriorityBatch(form);
     case 'google.refresh': return intelligence.refreshGoogleBusinessIntelligence(form);
-    case 'integration.email_verify': return integrationHealth.verifyEmailIntegration(form);
+    case 'integration.email_verify': return integrationHealth.verifyEmailIntegration();
     case 'integration.crawl4ai_verify': return integrationHealth.verifyCrawl4AiIntegration();
     case 'preview.generate_pilot': return preview.generateControlledPreviewPilot(form);
     case 'preview.approve': return preview.approvePreview(form);

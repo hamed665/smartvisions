@@ -48,6 +48,7 @@ export function hasAvailabilityExecutionIntent(message: string) {
 export function hasReadyToStartIntent(message: string) {
   const text = message.trim();
   if (!text) return false;
+  if (/\b(?:not|never)\s+(?:yet\s+)?ready\b|\b(?:don['’]?t|do not|cannot|can't)\s+(?:want to\s+)?(?:start|begin|proceed)|(?:مو|مش|غير|ماني)\s*جاهز|آماده\s*نیستم|شروع\s*نکن/i.test(text)) return false;
   return [
     /\b(?:let['’]?s|lets)\s+(?:start|begin|go ahead|do it|move forward)\b/i,
     /\b(?:i(?:'m| am)|we(?:'re| are))\s+ready\s+to\s+(?:start|begin|proceed|go ahead|move forward)\b/i,
@@ -82,16 +83,17 @@ function wordCount(text: string) {
   return text.trim() ? text.trim().split(/\s+/u).length : 0;
 }
 
-function asksLocation(text: string) {
+export function asksLocation(text: string) {
   return [
     /\b(?:where|which|what)\b.{0,28}\b(?:location|place|area)\b/i,
+    /\bwhere\b.{0,28}\b(?:shoot|filming|business)\b/i,
     /\b(?:can|could|would|please)\s+(?:you\s+)?(?:share|send|confirm|tell me)\b.{0,28}\b(?:location|area)\b/i,
-    /(?:وين|أين)\b|(?:ما|شو)\s*(?:هو|هي)?\s*(?:الموقع|اللوكيشن)/i,
+    /(?:وين|أين)(?:.{0,20}(?:التصوير|الشوت))?|(?:ما|شو)\s*(?:هو|هي)?\s*(?:الموقع|اللوكيشن)/i,
     /(?:کجا|چه\s*(?:لوکیشن|موقعیت)|لوکیشن\s*کجاست)/i,
   ].some((pattern) => pattern.test(text));
 }
 
-function asksDate(text: string) {
+export function asksDate(text: string) {
   return [
     /\bwhen\b/i,
     /\b(?:which|what)\s+(?:date|day)\b/i,
@@ -101,7 +103,7 @@ function asksDate(text: string) {
   ].some((pattern) => pattern.test(text));
 }
 
-function asksBudget(text: string) {
+export function asksBudget(text: string) {
   return [
     /\b(?:what(?:'s| is)|how much is)\s+(?:your\s+)?budget\b/i,
     /\b(?:how much can you spend|what can you spend|what budget do you have)\b/i,
@@ -173,12 +175,13 @@ function canonicalPrice(context: AgentContext, decision?: CommercialDecision) {
 }
 
 function containsCanonicalPrice(text: string, quote: { price: number; currency: string }) {
-  const amount = quote.price.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 2 });
-  const amountPattern = new RegExp(`\\b${amount.replace('.', '\\.')}(?:\\.00)?\\b`);
+  const normalized = text.replace(/[٠-٩۰-۹]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.includes(digit)
+    ? '٠١٢٣٤٥٦٧٨٩'.indexOf(digit) : '۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)));
+  const amounts = normalized.match(/(?<![\d.,-])\d+(?:\.\d+)?(?![\d.]|,\d)/g) ?? [];
   const currency = quote.currency.toUpperCase();
-  const currencyPresent = new RegExp(`\\b${currency}\\b`, 'i').test(text)
-    || (currency === 'OMR' && /(?:ر\.?\s*ع\.?|ريال\s*ع[ُ]?ماني|ریال\s*عمان)/i.test(text));
-  return amountPattern.test(text) && currencyPresent;
+  const currencyPresent = new RegExp('\\b' + currency + '\\b', 'i').test(normalized)
+    || (currency === 'OMR' && /(?:ر\.?\s*ع\.?|ريال\s*ع[ُ]?ماني|ریال\s*عمان)/i.test(normalized));
+  return amounts.some((value) => Number(value) === quote.price) && currencyPresent;
 }
 
 export function evaluateSalesReplyPolicy(input: {
