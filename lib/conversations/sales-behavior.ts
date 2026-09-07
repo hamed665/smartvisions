@@ -83,15 +83,32 @@ function wordCount(text: string) {
 }
 
 function asksLocation(text: string) {
-  return /(where|which location|what location|location\?|وين|أين|الموقع|کجا|لوکیشن)/i.test(text);
+  return [
+    /\b(?:where|which|what)\b.{0,28}\b(?:location|place|area)\b/i,
+    /\b(?:can|could|would|please)\s+(?:you\s+)?(?:share|send|confirm|tell me)\b.{0,28}\b(?:location|area)\b/i,
+    /(?:وين|أين)\b|(?:ما|شو)\s*(?:هو|هي)?\s*(?:الموقع|اللوكيشن)/i,
+    /(?:کجا|چه\s*(?:لوکیشن|موقعیت)|لوکیشن\s*کجاست)/i,
+  ].some((pattern) => pattern.test(text));
 }
 
 function asksDate(text: string) {
-  return /(when|which date|what date|date\?|متى|تاريخ|موعد|چه تاریخ|کی\s)/i.test(text);
+  return [
+    /\bwhen\b/i,
+    /\b(?:which|what)\s+(?:date|day)\b/i,
+    /\b(?:can|could|would|please)\s+(?:you\s+)?(?:share|send|confirm|tell me)\b.{0,28}\b(?:date|day)\b/i,
+    /(?:متى|أي\s*(?:تاريخ|يوم)|ما\s*(?:هو|هي)?\s*(?:التاريخ|الموعد))/i,
+    /(?:چه\s*تاریخ|چه\s*روزی|کی\s*(?:مناسبه|میاد|هست)|تاریخ\s*چیه)/i,
+  ].some((pattern) => pattern.test(text));
 }
 
 function asksBudget(text: string) {
-  return /(budget|how much can you spend|what can you spend|ميزانية|بودجه)/i.test(text);
+  return [
+    /\b(?:what(?:'s| is)|how much is)\s+(?:your\s+)?budget\b/i,
+    /\b(?:how much can you spend|what can you spend|what budget do you have)\b/i,
+    /\b(?:can|could|would|please)\s+(?:you\s+)?(?:share|confirm|tell me)\b.{0,24}\bbudget\b/i,
+    /(?:كم\s*(?:ميزانيتك|الميزانية)|ما\s*(?:هي|هو)?\s*الميزانية)/i,
+    /(?:بودجه(?:‌|\s)*(?:تون|شما)\s*(?:چقدره|چقدر است)|چقدر\s*بودجه)/i,
+  ].some((pattern) => pattern.test(text));
 }
 
 function asksDecisionMaker(text: string) {
@@ -138,14 +155,21 @@ function simpleGreeting(text: string) {
 }
 
 function canonicalPrice(context: AgentContext, decision?: CommercialDecision) {
+  const serviceId = decision?.serviceId || context.quotedService;
+  if (serviceId) {
+    const service = context.serviceKnowledge?.find((item) => item.id === serviceId);
+    if (service?.marketPrice && Number.isFinite(service.marketPrice.price) && service.marketPrice.currency) {
+      return { price: Number(service.marketPrice.price), currency: service.marketPrice.currency };
+    }
+    if (serviceId === context.quotedService && Number.isFinite(context.quotedPrice) && context.quotedCurrency) {
+      return { price: Number(context.quotedPrice), currency: context.quotedCurrency };
+    }
+    return null;
+  }
   if (Number.isFinite(context.quotedPrice) && context.quotedCurrency) {
     return { price: Number(context.quotedPrice), currency: context.quotedCurrency };
   }
-  const serviceId = decision?.serviceId || context.quotedService;
-  if (!serviceId) return null;
-  const service = context.serviceKnowledge?.find((item) => item.id === serviceId);
-  if (!service?.marketPrice || !Number.isFinite(service.marketPrice.price) || !service.marketPrice.currency) return null;
-  return { price: Number(service.marketPrice.price), currency: service.marketPrice.currency };
+  return null;
 }
 
 function containsCanonicalPrice(text: string, quote: { price: number; currency: string }) {

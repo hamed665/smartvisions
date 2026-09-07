@@ -151,23 +151,34 @@ function serviceMatches(message: string) {
   return SERVICE_ALIASES.filter((service) => service.patterns.some((pattern) => pattern.test(message))).map((service) => service.key);
 }
 
+const SERVICE_REJECTION = /(don['’]?t want|do not want|not interested in|no (?:need|website|seo)|remove|without|ما (?:أريد|ابغى|أبغى)|ما نبي|لا أريد|نمی[‌\s-]?خوام|نمیخوام|نمی خواهم)/i;
+const SERVICE_POSITIVE = /(i|we)\s+(?:need|want|would like)|interested in|price (?:for|of)|cost (?:for|of)|how much.*(?:website|seo|content|social|whatsapp|automation|agent)|condition for|package.*(?:website|seo|content|social|whatsapp|automation|agent)|أريد|ابغى|أبغى|نبي|مهتم|سعر|أحتاج|می[‌\s-]?(?:خوام|خواهم)|نیاز/i;
+
+function serviceClauses(message: string) {
+  if (!SERVICE_REJECTION.test(message)) return [message];
+  return message
+    .split(/(?:[.!?؟;]|,\s*|\bbut\b|\bhowever\b|\binstead\b|\band\b|اما|ولی|لكن|بس)/i)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
 function rejectedServiceMatches(message: string) {
-  const rejection = /(don['’]?t want|do not want|not interested in|no (?:need|website|seo)|remove|without|ما (?:أريد|ابغى|أبغى)|ما نبي|لا أريد|نمی[‌\s-]?خوام|نمیخوام|نمی خواهم)/i.test(message);
-  return rejection ? serviceMatches(message) : [];
+  return unique(serviceClauses(message).flatMap((clause) => SERVICE_REJECTION.test(clause) ? serviceMatches(clause) : []));
 }
 
 function positiveServiceIntent(message: string) {
-  if (rejectedServiceMatches(message).length) return [];
-  const positive = /(i|we)\s+(?:need|want|would like)|interested in|price (?:for|of)|cost (?:for|of)|how much.*(?:website|seo|content|social|whatsapp|automation|agent)|condition for|package.*(?:website|seo|content|social|whatsapp|automation|agent)|أريد|ابغى|أبغى|نبي|مهتم|سعر|أحتاج|می[‌\s-]?(?:خوام|خواهم)|نیاز/i.test(message);
-  return positive ? serviceMatches(message) : [];
+  return unique(serviceClauses(message).flatMap((clause) => {
+    if (!SERVICE_POSITIVE.test(clause) || SERVICE_REJECTION.test(clause)) return [];
+    return serviceMatches(clause);
+  }));
 }
 
 function parseDeliverables(message: string) {
   const values = new Map<string, SalesDeliverable>();
-  const pattern = /(\d{1,4})\s*(reels?|stories?|posts?|videos?|models?|actors?|photos?|designs?)/gi;
+  const pattern = /(\d{1,4})\s*(?:(female|male)\s+)?(reels?|stories?|posts?|videos?|models?|actors?|photos?|designs?)/gi;
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(message))) {
-    const rawKind = match[2].toLowerCase();
+    const rawKind = match[3].toLowerCase();
     const kind = rawKind.startsWith('reel') ? 'REEL'
       : rawKind.startsWith('stor') ? 'STORY'
         : rawKind.startsWith('post') ? 'POST'
@@ -175,7 +186,12 @@ function parseDeliverables(message: string) {
             : rawKind.startsWith('model') ? 'MODEL'
               : rawKind.startsWith('actor') ? 'ACTOR'
                 : rawKind.startsWith('photo') ? 'PHOTO' : 'DESIGN';
-    values.set(kind, { kind, quantity: Number(match[1]) });
+    const gender = match[2]?.toLowerCase();
+    values.set(kind, {
+      kind,
+      quantity: Number(match[1]),
+      ...(gender && ['MODEL','ACTOR'].includes(kind) ? { detail: `gender:${gender}` } : {}),
+    });
   }
   return [...values.values()];
 }
@@ -225,14 +241,18 @@ function parseBudget(message: string, allowBareNumber = false) {
 }
 
 function questionTarget(message: string): QuestionTarget {
-  const textValue = message.toLowerCase();
-  if (/(where|which location|what location|location\?|وين|أين|الموقع)/i.test(textValue)) return 'LOCATION';
-  if (/(when|which date|what date|date\?|month|day|متى|تاريخ|موعد)/i.test(textValue)) return 'DATE';
-  if (/(budget|spend|ميزانية|بودجه)/i.test(textValue)) return 'BUDGET';
-  if (/(how many).*(model|actor)|(?:model|actor).*(how many)|كم.*(?:مودل|عارض|ممثل)/i.test(textValue)) return 'MODEL_COUNT';
-  if (/(male|female|gender).*(model|actor)|(?:model|actor).*(male|female|gender)|جنس.*(?:مودل|عارض)/i.test(textValue)) return 'MODEL_GENDER';
-  if (/(need|want).*(videographer)|videographer.*\?|مصور.*\?/i.test(textValue)) return 'VIDEOGRAPHER';
-  if (/(how many|quantity|number).*(reel|story|post|video)|كم.*(?:ريل|ستوري|فيديو)/i.test(textValue)) return 'DELIVERABLES';
+  const value = text(message, 500);
+  const questionLike = /[?؟]/.test(value)
+    || QUESTION_WORDS.test(value)
+    || /^(?:please|can|could|would)\b/i.test(value);
+  if (!questionLike) return undefined;
+  if (/\b(?:where|which location|what location)\b|(?:share|confirm|tell me).{0,28}\blocation\b|(?:وين|أين|الموقع)|(?:کجا|لوکیشن)/i.test(value)) return 'LOCATION';
+  if (/\b(?:when|which date|what date|which day|what day)\b|(?:share|confirm|tell me).{0,28}\b(?:date|day)\b|(?:متى|تاريخ|موعد)|(?:چه تاریخ|چه روز|کی)/i.test(value)) return 'DATE';
+  if (/\b(?:what(?:'s| is) your budget|how much can you spend|what can you spend|share.{0,20}budget|confirm.{0,20}budget)\b|(?:ميزانية|بودجه)/i.test(value)) return 'BUDGET';
+  if (/(how many).*(model|actor)|(?:model|actor).*(how many)|كم.*(?:مودل|عارض|ممثل)/i.test(value)) return 'MODEL_COUNT';
+  if (/(male|female|gender).*(model|actor)|(?:model|actor).*(male|female|gender)|جنس.*(?:مودل|عارض)/i.test(value)) return 'MODEL_GENDER';
+  if (/(need|want).*(videographer)|videographer.*\?|مصور.*\?/i.test(value)) return 'VIDEOGRAPHER';
+  if (/(how many|quantity|number).*(reel|story|post|video)|كم.*(?:ريل|ستوري|فيديو)/i.test(value)) return 'DELIVERABLES';
   return undefined;
 }
 

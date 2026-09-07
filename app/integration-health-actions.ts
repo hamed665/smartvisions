@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
 import { Crawl4AiAuditor } from '@/lib/audit/crawl4ai';
+import { countMailboxSendsLast24Hours } from '@/lib/outreach/mailbox-usage';
 import { ResendEmailProvider } from '@/lib/outreach/resend-provider';
 import { recordUsage } from '@/lib/reliability/cost-guard';
 import { getCurrentOrganization } from '@/lib/supabase/org';
@@ -55,7 +56,7 @@ export async function verifyEmailIntegration(formData: FormData) {
 
     const { data: mailbox, error: mailboxError } = await db
       .from('mailboxes')
-      .select('id,address,enabled,daily_limit,sent_today,health_status')
+      .select('id,address,enabled,daily_limit,sent_today,warmup_status,health_status')
       .eq('organization_id', ctx.organizationId)
       .eq('provider', 'RESEND')
       .eq('enabled', true)
@@ -64,7 +65,13 @@ export async function verifyEmailIntegration(formData: FormData) {
       .maybeSingle();
     if (mailboxError) throw mailboxError;
     if (!mailbox) throw new Error('No enabled Resend mailbox is configured');
-    if (Number(mailbox.sent_today ?? 0) >= Number(mailbox.daily_limit ?? 0)) throw new Error('Mailbox daily limit reached');
+
+    const sentLast24Hours = await countMailboxSendsLast24Hours({
+      supabase: db,
+      organizationId: ctx.organizationId,
+      mailboxId: String(mailbox.id),
+    });
+    if (sentLast24Hours >= Number(mailbox.daily_limit ?? 0)) throw new Error('Mailbox rolling 24-hour limit reached');
 
     const idempotencyKey = `email-provider-verification:${ctx.organizationId}:${recipient}:${verificationWindow()}`;
     const result = await new ResendEmailProvider().sendEmail({
@@ -112,6 +119,8 @@ export async function verifyEmailIntegration(formData: FormData) {
         integrationEnabled: wasConnected,
         preservedConnectedState: wasConnected,
         awaitingHumanDeliveryConfirmation: !wasConnected,
+        quotaAuthority: 'ROLLING_LEDGER_PLUS_PROVIDER_EVENT',
+        sentLast24HoursBeforeVerification: sentLast24Hours,
       },
     });
     if (auditError) throw auditError;
