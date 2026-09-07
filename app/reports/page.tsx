@@ -1,6 +1,7 @@
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { buildCatalogConversionAttribution } from '@/lib/reports/catalog-conversion';
 import { buildIndustryPerformance } from '@/lib/reports/industry-performance';
+import { buildSalesEfficiencySummary } from '@/lib/reports/sales-efficiency';
 
 export const dynamic='force-dynamic';
 
@@ -25,7 +26,7 @@ export default async function ReportsPage(){
     supabase.from('previews').select('status,quality_score').eq('organization_id',organizationId),
     supabase.from('preview_events').select('event_type').eq('organization_id',organizationId),
     supabase.from('message_variants').select('variant_key,sent_count,reply_count,positive_count,hot_count,won_count').eq('organization_id',organizationId),
-    supabase.from('agent_runs').select('status').eq('organization_id',organizationId),
+    supabase.from('agent_runs').select('status,result_payload').eq('organization_id',organizationId),
     supabase.from('whatsapp_events').select('provider_message_id,lead_id,conversation_id,direction,event_type,payload,created_at').eq('organization_id',organizationId),
     supabase.from('handoff_events').select('lead_id,conversation_id,to_mode,created_at').eq('organization_id',organizationId),
   ]);
@@ -81,6 +82,10 @@ export default async function ReportsPage(){
     })),
     leads:l.map(x=>({id:String(x.id),status:String(x.status)})),
   });
+  const salesEfficiency=buildSalesEfficiencySummary(ar.map(run=>({
+    status:run.status?String(run.status):null,
+    result_payload:run.result_payload,
+  })));
   const actionable=industry.filter(x=>x.sampleStatus==='ACTIONABLE');
   const best=actionable[0]??null;
   const metrics:[string,string|number][]=[
@@ -95,6 +100,7 @@ export default async function ReportsPage(){
     ['HOT / Contacted',contactedLeadIds.size?`${Math.round(hotLeadIds.size/contactedLeadIds.size*100)}%`:'—'],
     ['Catalog sends',catalog.sent],
     ['Catalog replies',catalog.replied],
+    ['Measured sales drafts',salesEfficiency.evaluatedDrafts],
     ['Previews',p.length],
     ['Preview Views',pe.filter(x=>x.event_type==='VIEWED').length],
     ['Agent Runs',ar.length],
@@ -102,7 +108,7 @@ export default async function ReportsPage(){
   ];
 
   return <div>
-    <div className="headerRow"><div><h1>Reports</h1><p className="muted">Live funnel plus sample-aware industry and catalog learning, so higher volume follows durable evidence rather than one lucky reply.</p></div><span className="status">Production data</span></div>
+    <div className="headerRow"><div><h1>Reports</h1><p className="muted">Live funnel plus evidence-based catalog, response-discipline and industry learning. Historical data is never retroactively scored just to make a chart look experienced.</p></div><span className="status">Production data</span></div>
     <div className="grid">{metrics.map(([label,value])=><div className="card" key={label}><div className="muted">{label}</div><div className="value">{value}</div></div>)}</div>
 
     <section className="panel">
@@ -110,6 +116,21 @@ export default async function ReportsPage(){
       <div className="healthList"><span>Sent <strong>{catalog.sent}</strong></span><span>Delivered <strong>{catalog.delivered}</strong></span><span>Read <strong>{catalog.read}</strong></span><span>Replied <strong>{catalog.replied}</strong></span><span>Human handoff <strong>{catalog.handoff}</strong></span><span>Current WON + catalog send <strong>{catalog.won}</strong></span></div>
       <div className="tableWrap"><table className="dataTable"><thead><tr><th>Catalog product</th><th>Sent</th><th>Delivered</th><th>Read</th><th>Replied</th><th>Reply %</th><th>Human</th><th>Won*</th></tr></thead><tbody>{catalog.rows.map(row=><tr key={row.contentId}><td><strong>{row.contentId}</strong><br/><span className="muted">{row.label}</span></td><td>{row.sent}</td><td>{row.delivered}</td><td>{row.read}</td><td>{row.replied}</td><td>{row.replyRate==null?'—':`${row.replyRate}%`}</td><td>{row.handoff}</td><td>{row.won}</td></tr>)}</tbody></table></div>
       <p className="muted">No fake click metric is shown because the current Meta webhook evidence does not provide a reliable product-view/click event. *Won means the Lead is currently WON and also has a catalog send. Without a timestamped win ledger, this is deliberately not presented as causal or click-to-win attribution.</p>
+    </section>
+
+    <section className="panel">
+      <div className="headerRow"><div><h2>Sales response efficiency</h2><p className="muted">Measures reply discipline from explicit `salesEfficiency` evidence stored on new Agent runs. Historical runs without this trace are ignored, not guessed. These are quality/efficiency indicators, not proof of higher conversion.</p></div><span className="pill">{salesEfficiency.evaluatedDrafts?`${salesEfficiency.evaluatedDrafts} measured drafts`:'Awaiting measured drafts'}</span></div>
+      <div className="healthList">
+        <span>Policy pass <strong>{salesEfficiency.policyPassRate==null?'—':`${salesEfficiency.policyPassRate}%`} ({salesEfficiency.policyPassedDrafts}/{salesEfficiency.evaluatedDrafts})</strong></span>
+        <span>Average words <strong>{salesEfficiency.averageWords??'—'}</strong></span>
+        <span>Average primary questions <strong>{salesEfficiency.averageQuestions??'—'}</strong></span>
+        <span>Direct price answered <strong>{salesEfficiency.directPriceAnswered}/{salesEfficiency.directPriceRequired}</strong></span>
+        <span>Ready-to-start signals <strong>{salesEfficiency.readyToStartSignals}</strong></span>
+        <span>Avoidable qualification blocked <strong>{salesEfficiency.avoidableQualificationBlocks}</strong></span>
+        <span>Reply word-limit blocked <strong>{salesEfficiency.marketWordLimitBlocks}</strong></span>
+        <span>Canonical price misses blocked <strong>{salesEfficiency.canonicalPriceMissBlocks}</strong></span>
+      </div>
+      <p className="muted">The goal is fewer unnecessary turns: answer known facts directly, ask at most one necessary question, and hand explicit start/payment/contract/meeting intent to a Human instead of extending the sales script.</p>
     </section>
 
     <section className="panel">

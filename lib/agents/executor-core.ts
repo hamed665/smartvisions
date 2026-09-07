@@ -15,6 +15,30 @@ function normalizedAction(value: unknown): CommercialDecision['action'] | undefi
   return VALID_ACTIONS.has(action) ? action : undefined;
 }
 
+function directPriceQuestion(message: string) {
+  return /\b(?:price|cost|how much|pricing|what does .* cost)\b|(?:كم\s*(?:السعر|يكلف|تكلف)|السعر|سعر|تكلفة)|(?:قیمت|هزینه|چقدر\s*(?:قیمت|هزینه|می[‌\s-]?شه|میشه|درمیاد|است|هست))/i.test(message);
+}
+
+function canonicalQuote(context: AgentContext, decision: CommercialDecision) {
+  if (Number.isFinite(context.quotedPrice) && context.quotedCurrency) {
+    return { price: Number(context.quotedPrice), currency: context.quotedCurrency };
+  }
+  const serviceId = decision.serviceId || context.quotedService;
+  if (!serviceId) return null;
+  const price = context.serviceKnowledge?.find((service) => service.id === serviceId)?.marketPrice;
+  if (!price || !Number.isFinite(price.price) || !price.currency) return null;
+  return { price: Number(price.price), currency: price.currency };
+}
+
+function canonicalPriceReply(message: string, locale: string, quote: { price: number; currency: string }) {
+  const amount = `${quote.price} ${quote.currency}`;
+  if (/[\u0600-\u06FF]/.test(message)) {
+    if (/^(?:fa|fa-|persian)/i.test(locale) || /[پچژگک]/.test(message)) return `قیمت ثبت‌شده این سرویس ${amount} است.`;
+    return `السعر المعتمد للخدمة هو ${amount}.`;
+  }
+  return `The configured price for this service is ${amount}.`;
+}
+
 export async function executeAgent(agent: AgentName, context: AgentContext): Promise<AgentResult> {
   const text = lower(context.message);
   const evidence = context.verifiedEvidence ?? [];
@@ -24,7 +48,7 @@ export async function executeAgent(agent: AgentName, context: AgentContext): Pro
 
   switch (agent) {
     case 'intent_discovery': {
-      const askedPrice = /(price|cost|how much|discount|best price|السعر|كم|تكلفة|خصم|تخفيض|آخر سعر)/i.test(text);
+      const askedPrice = directPriceQuestion(context.message) || /(discount|best price|خصم|تخفيض|آخر سعر|تخفیف)/i.test(text);
       const askedMeeting = /(meeting|call|zoom|consultation|consult|مكالمة|اجتماع|استشارة)/i.test(text);
       const askedPayment = hasPaymentExecutionIntent(context.message);
       return { agent, confidence: 0.92, summary: 'Detected explicit commercial intent signals.', data: { askedPrice, askedMeeting, askedPayment, askedPreview: previewSignals.customPreviewRequested, askedPortfolio: previewSignals.portfolioRequested }, evidence: [], blockers: [] };
@@ -169,15 +193,16 @@ export function secretaryCompose(context: AgentContext, decision: CommercialDeci
     return { text: runtimeText, language: runtimeLanguage, generatedBy: 'secretary' };
   }
 
-  const asksPrice = /(price|cost|how much|السعر|كم|تكلفة)/i.test(context.message);
+  const asksPrice = directPriceQuestion(context.message);
+  const quote = canonicalQuote(context, decision);
   const preview = decidePreviewStrategy({ message: context.message, approvedPortfolio: context.approvedPortfolio });
   const simpleThanks = /^(thanks|thank you|thx|شكرا|شكراً|مشكور|مشكورة|تسلم|تسلمين)[.!\s]*$/i.test(context.message.trim());
 
   let text: string;
   if (simpleThanks) {
     text = /[\u0600-\u06FF]/.test(context.message) ? 'العفو، حاضرين.' : 'You’re welcome.';
-  } else if (asksPrice && context.quotedPrice != null && context.quotedCurrency) {
-    text = `The configured price is ${context.quotedPrice} ${context.quotedCurrency}.`;
+  } else if (asksPrice && quote) {
+    text = canonicalPriceReply(context.message, locale, quote);
   } else if (preview.strategy === 'SHOW_PORTFOLIO') {
     text = `Here are relevant approved examples: ${preview.approvedExamples.slice(0, 2).join(' | ')}`;
   } else if (preview.strategy === 'CUSTOM_PREVIEW' && decision.action === 'SHOW_PREVIEW') {
@@ -190,8 +215,8 @@ export function secretaryCompose(context: AgentContext, decision: CommercialDeci
 }
 
 export function checkRelevance(context: AgentContext, draft: ReplyDraft) {
-  const asksPrice = /(price|cost|how much|السعر|كم|تكلفة)/i.test(context.message);
-  if (asksPrice && !/(price|cost|OMR|AED|SAR|QAR|GBP|USD|ريال|درهم|دولار|£|\$)/i.test(draft.text)) return false;
+  const asksPrice = directPriceQuestion(context.message);
+  if (asksPrice && !/(price|cost|OMR|AED|SAR|QAR|GBP|USD|ريال|درهم|دولار|قیمت|هزینه|£|\$)/i.test(draft.text)) return false;
   const asksExample = /(preview|sample|example|mockup|portfolio|past work|معاينة|نموذج|مثال|نمونه.?کار|أمثلة|امثلة)/i.test(context.message);
   if (asksExample && !/(preview|concept|sample|example|portfolio|approved|معاينة|نموذج|تصور|مثال|نمونه|أمثلة|امثلة)/i.test(draft.text)) return false;
   return true;

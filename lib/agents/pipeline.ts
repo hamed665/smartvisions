@@ -85,7 +85,7 @@ export async function processInboundMessage(
     replyLanguage: draft.language,
     replyText: draft.text,
   });
-  const salesBehavior = evaluateSalesReplyPolicy({ context, draft });
+  const salesBehavior = evaluateSalesReplyPolicy({ context, draft, decision });
   const deterministicRelevance = checkRelevance(context, draft)
     && previewPolicyPassed
     && languagePolicyPassed
@@ -147,6 +147,7 @@ export async function processInboundMessage(
     humanStylePassed: humanStyle.passed,
     delivery,
     catalogRecommendation,
+    salesEfficiency: salesBehavior.metrics,
   };
 
   return {

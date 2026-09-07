@@ -1,4 +1,4 @@
-import type { AgentContext, ReplyDraft, SalesStateSnapshot } from '@/lib/agents/contracts';
+import type { AgentContext, CommercialDecision, ReplyDraft, SalesStateSnapshot } from '@/lib/agents/contracts';
 
 const SERVICE_PATTERNS: Record<string, RegExp[]> = {
   CONTENT_REELS: [/\bcontent\b/i, /\breels?\b/i, /\bstor(?:y|ies)\b/i, /محتو[ىا]/i, /ريل/i],
@@ -45,6 +45,19 @@ export function hasAvailabilityExecutionIntent(message: string) {
   ].some((pattern) => pattern.test(text));
 }
 
+export function hasReadyToStartIntent(message: string) {
+  const text = message.trim();
+  if (!text) return false;
+  return [
+    /\b(?:let['’]?s|lets)\s+(?:start|begin|go ahead|do it|move forward)\b/i,
+    /\b(?:i(?:'m| am)|we(?:'re| are))\s+ready\s+to\s+(?:start|begin|proceed|go ahead|move forward)\b/i,
+    /\bready\s+to\s+get\s+started\b/i,
+    /\b(?:how do we|how can we|what(?:'s| is) the next step to)\s+(?:start|begin|proceed)\b/i,
+    /(?:يلا|خلنا|خلينا)\s*(?:نبدأ|نبتدي)|(?:أنا|انا|نحن|احنا)\s*(?:جاهز|جاهزين|مستعد|مستعدين)\s*(?:نبدأ|نبتدي|نبدأ معكم|نبتدي معكم)?|كيف\s*(?:نبدأ|نبتدي)|(?:ابدأوا|ابدوا)\s*(?:معنا|معانا)?/i,
+    /(?:شروع کنیم|بریم جلو|بزن بریم)|(?:آماده[‌\s-]?ام|آماده هستیم)\s*(?:برای\s*)?(?:شروع|ادامه)|(?:چطور|چجوری)\s*شروع\s*کنیم|مرحله\s*بعد\s*(?:چیه|چیست)/i,
+  ].some((pattern) => pattern.test(text));
+}
+
 export function inferSalesHandoffSignals(message: string, state?: SalesStateSnapshot) {
   return {
     asksHuman: /(human|person|manager|someone|موظف|شخص|مدير|مسؤول|انسان|مدیر)/i.test(message),
@@ -52,6 +65,7 @@ export function inferSalesHandoffSignals(message: string, state?: SalesStateSnap
     asksPayment: hasFinancialPaymentIntent(message),
     asksContract: hasContractExecutionIntent(message),
     asksAvailability: hasAvailabilityExecutionIntent(message),
+    readyToStart: hasReadyToStartIntent(message),
     customQuote: state?.customQuoteRequired === true || /custom (?:quote|package|scope)|bespoke|عرض مخصص|باقة مخصصة|پکیج اختصاصی|قیمت اختصاصی/i.test(message),
     specialDiscount: /\b(?:discount|best price|last price|reduce (?:the )?price)\b|(?:خصم|تخفيض|آخر سعر)|(?:تخفیف|قیمت بهتر)/i.test(message),
     complaint: /(complaint|unhappy|bad service|شكوى|مشكلة|غير راضي|شکایت|ناراضی)/i.test(message),
@@ -62,6 +76,10 @@ function questionCount(text: string) {
   const punctuation = (text.match(/[?؟]/g) ?? []).length;
   if (punctuation > 0) return punctuation;
   return text.split(/(?<=[.!])\s+/).filter((sentence) => /^(?:who|what|when|where|why|how|which|can|could|do|does|is|are|كم|كيف|وين|أين|متى|هل|شو|چی|چطور|کجا)\b/i.test(sentence.trim())).length;
+}
+
+function wordCount(text: string) {
+  return text.trim() ? text.trim().split(/\s+/u).length : 0;
 }
 
 function asksLocation(text: string) {
@@ -78,6 +96,10 @@ function asksBudget(text: string) {
 
 function asksDecisionMaker(text: string) {
   return /(decision[ -]?maker|who decides|who approves|صاحب القرار|من يقرر|تصمیم گیرنده|چه کسی تصمیم)/i.test(text);
+}
+
+function asksPrice(text: string) {
+  return /\b(?:how much|price|pricing|cost|what does .* cost)\b|(?:كم\s*(?:السعر|يكلف|تكلف)|السعر|سعر|تكلفة)|(?:قیمت|هزینه|چقدر\s*(?:قیمت|هزینه|می[‌\s-]?شه|میشه|درمیاد|است|هست))/i.test(text);
 }
 
 function asksKnownDeliverable(text: string, state: SalesStateSnapshot) {
@@ -115,20 +137,61 @@ function simpleGreeting(text: string) {
   return /^(?:hi|hello|hey|salam|سلام|هلا|مرحبا|السلام عليكم|السلام علیکم)[!.,\s]*$/i.test(text.trim());
 }
 
+function canonicalPrice(context: AgentContext, decision?: CommercialDecision) {
+  if (Number.isFinite(context.quotedPrice) && context.quotedCurrency) {
+    return { price: Number(context.quotedPrice), currency: context.quotedCurrency };
+  }
+  const serviceId = decision?.serviceId || context.quotedService;
+  if (!serviceId) return null;
+  const service = context.serviceKnowledge?.find((item) => item.id === serviceId);
+  if (!service?.marketPrice || !Number.isFinite(service.marketPrice.price) || !service.marketPrice.currency) return null;
+  return { price: Number(service.marketPrice.price), currency: service.marketPrice.currency };
+}
+
+function containsCanonicalPrice(text: string, quote: { price: number; currency: string }) {
+  const amount = quote.price.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 2 });
+  const amountPattern = new RegExp(`\\b${amount.replace('.', '\\.')}(?:\\.00)?\\b`);
+  const currency = quote.currency.toUpperCase();
+  const currencyPresent = new RegExp(`\\b${currency}\\b`, 'i').test(text)
+    || (currency === 'OMR' && /(?:ر\.?\s*ع\.?|ريال\s*ع[ُ]?ماني|ریال\s*عمان)/i.test(text));
+  return amountPattern.test(text) && currencyPresent;
+}
+
 export function evaluateSalesReplyPolicy(input: {
   context: AgentContext;
   draft: ReplyDraft;
+  decision?: CommercialDecision;
 }) {
   const reasons: string[] = [];
   const text = input.draft.text.trim();
   const state = input.context.salesState;
+  const questions = questionCount(text);
+  const words = wordCount(text);
+  const maxReplyWords = input.context.marketLocaleStyle?.maxReplyWords;
+  const closeSignal = hasReadyToStartIntent(input.context.message);
+  const quote = canonicalPrice(input.context, input.decision);
+  const directPriceAnswerRequired = asksPrice(input.context.message) && quote != null && input.decision?.action !== 'HUMAN';
+  const directPriceAnswered = !directPriceAnswerRequired || (quote != null && containsCanonicalPrice(text, quote));
+  const qualificationQuestions = [
+    asksLocation(text) ? 'location' : null,
+    asksDate(text) ? 'date' : null,
+    asksBudget(text) ? 'budget' : null,
+    asksDecisionMaker(text) ? 'decision_maker' : null,
+  ].filter((value): value is string => Boolean(value));
 
-  if (questionCount(text) > 1) reasons.push('TOO_MANY_PRIMARY_QUESTIONS');
+  if (questions > 1) reasons.push('TOO_MANY_PRIMARY_QUESTIONS');
   if (positiveOperationalCommitment(text)) reasons.push('UNVERIFIED_OPERATIONAL_COMMITMENT');
+  if (Number.isFinite(maxReplyWords) && Number(maxReplyWords) > 0 && words > Number(maxReplyWords)) {
+    reasons.push('REPLY_EXCEEDS_MARKET_WORD_LIMIT');
+  }
+  if (directPriceAnswerRequired && !directPriceAnswered) reasons.push('MISSES_CANONICAL_PRICE_ANSWER');
+  if (closeSignal && questions > 0) reasons.push('QUALIFICATION_AFTER_READY_TO_START');
 
   if (state) {
     if (state.location && asksLocation(text)) reasons.push('REPEATED_KNOWN_LOCATION_QUESTION');
+    if (!state.location && !state.missingRequiredInfo.includes('location') && asksLocation(text)) reasons.push('UNNECESSARY_LOCATION_QUESTION');
     if (state.date?.precision === 'EXPLICIT' && asksDate(text)) reasons.push('REPEATED_KNOWN_DATE_QUESTION');
+    if (!state.date && !state.missingRequiredInfo.includes('date') && asksDate(text)) reasons.push('UNNECESSARY_DATE_QUESTION');
     if (state.budget && asksBudget(text)) reasons.push('REPEATED_KNOWN_BUDGET_QUESTION');
     if (asksKnownDeliverable(text, state)) reasons.push('REPEATED_KNOWN_DELIVERABLE_QUESTION');
 
@@ -150,5 +213,19 @@ export function evaluateSalesReplyPolicy(input: {
     reasons.push('CATALOG_DUMP_AFTER_GREETING');
   }
 
-  return { passed: reasons.length === 0, reasons };
+  const uniqueReasons = [...new Set(reasons)];
+  return {
+    passed: uniqueReasons.length === 0,
+    reasons: uniqueReasons,
+    metrics: {
+      policyPassed: uniqueReasons.length === 0,
+      wordCount: words,
+      questionCount: questions,
+      maxReplyWords: Number.isFinite(maxReplyWords) && Number(maxReplyWords) > 0 ? Number(maxReplyWords) : undefined,
+      directPriceAnswerRequired,
+      directPriceAnswered,
+      readyToStart: closeSignal,
+      qualificationQuestions,
+    },
+  };
 }
