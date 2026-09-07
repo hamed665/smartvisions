@@ -1,9 +1,8 @@
 import type { AgentContext, AgentName, AgentResult, CommercialDecision, ReplyDraft } from './contracts';
 import * as core from './executor-core';
 import { resolveReplyLanguage } from '@/lib/outreach/locale';
-import { resolveSeptember2026Offer } from '@/lib/conversations/september-offer';
+import { applyPercentageDiscount, resolveSeptember2026Offer } from '@/lib/conversations/september-offer';
 import { salesServiceKeyForCanonicalId } from '@/lib/conversations/service-key';
-import { evaluateCanonicalQuote } from '@/lib/outreach/canonical-pricing';
 
 function contextWithCurrentQuoteBoundary(context: AgentContext): AgentContext {
   const selectedService = context.salesState?.selectedService;
@@ -36,30 +35,10 @@ function canonicalQuote(context: AgentContext, decision: CommercialDecision) {
   const serviceId = service?.id ?? (candidateMatchesSelection ? candidateServiceId : undefined);
   const marketPrice = service?.marketPrice;
   if (marketPrice && Number.isFinite(marketPrice.price) && marketPrice.currency) {
-    return {
-      serviceId: service!.id,
-      serviceName: service!.name,
-      price: Number(marketPrice.price),
-      currency: marketPrice.currency,
-      minimumPrice: Number(marketPrice.minimumPrice ?? 0),
-      maxAutoDiscountPct: Number(marketPrice.maxAutoDiscountPct ?? 0),
-      maxDiscountWithApprovalPct: Number(marketPrice.maxDiscountWithApprovalPct ?? 0),
-      startingFrom: service?.config?.startingFrom === true,
-      requiresCustomQuote: service?.config?.requiresCustomQuote === true,
-    };
+    return { serviceId: service!.id, serviceName: service!.name, price: Number(marketPrice.price), currency: marketPrice.currency };
   }
   if (candidateMatchesSelection && Number.isFinite(context.quotedPrice) && context.quotedCurrency && serviceId) {
-    return {
-      serviceId,
-      serviceName: service?.name ?? serviceId,
-      price: Number(context.quotedPrice),
-      currency: context.quotedCurrency,
-      minimumPrice: 0,
-      maxAutoDiscountPct: 0,
-      maxDiscountWithApprovalPct: 0,
-      startingFrom: false,
-      requiresCustomQuote: false,
-    };
+    return { serviceId, serviceName: service?.name ?? serviceId, price: Number(context.quotedPrice), currency: context.quotedCurrency };
   }
   return null;
 }
@@ -84,22 +63,7 @@ function septemberOfferLine(context: AgentContext, decision: CommercialDecision,
 
   const quote = canonicalQuote(context, decision);
   if (quote) {
-    const campaignQuote = evaluateCanonicalQuote({
-      serviceId: quote.serviceId,
-      serviceName: quote.serviceName,
-      servicePrice: quote.price,
-      currency: quote.currency,
-      minimumPrice: quote.minimumPrice,
-      maxAutoDiscountPct: quote.maxAutoDiscountPct,
-      maxDiscountWithApprovalPct: quote.maxDiscountWithApprovalPct,
-      requestedDiscountPct: offer.discountPct,
-      authorizedCampaignDiscountPct: offer.discountPct,
-      authorizedCampaignId: offer.campaignId,
-      startingFrom: quote.startingFrom,
-      requiresCustomQuote: quote.requiresCustomQuote,
-    });
-    if (!campaignQuote.allowed || campaignQuote.finalPrice == null) return null;
-    const finalPrice = campaignQuote.finalPrice;
+    const finalPrice = applyPercentageDiscount(quote.price, offer.discountPct);
     if (persian) return `برای سپتامبر، این سرویس ${offer.discountPct}٪ تخفیف دارد و قیمت کمپین ${finalPrice} ${quote.currency} می‌شود.`;
     if (arabic) return `لعرض سبتمبر، هالخدمة عليها خصم ${offer.discountPct}٪، ويصير سعر الحملة ${finalPrice} ${quote.currency}.`;
     return `For September, this service has ${offer.discountPct}% off, so the campaign price is ${finalPrice} ${quote.currency}.`;
