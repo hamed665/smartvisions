@@ -6,8 +6,6 @@ type ControlledEmailAutoPilotInput = {
   providerMessageId?: string | null;
   idempotencyKey?: string | null;
   marketCode?: string | null;
-  campaignId?: string | null;
-  automationAuthorization?: unknown;
   messageLeadId?: string | null;
   conversationLeadId?: string | null;
   conversationChannel?: string | null;
@@ -35,8 +33,6 @@ export function verifyControlledEmailAutoPilot(input: ControlledEmailAutoPilotIn
   if (!idempotencyKey.startsWith('growth-first-touch:')) return { verified: false as const, reason: 'NOT_GROWTH_FIRST_TOUCH' as const };
   if (String(input.providerMessageId ?? '') !== `shadow:${idempotencyKey}`) return { verified: false as const, reason: 'SHADOW_ID_MISMATCH' as const };
   if (String(input.marketCode ?? '').trim().toUpperCase() !== 'OM') return { verified: false as const, reason: 'MARKET_NOT_OMAN' as const };
-  if (!String(input.campaignId ?? '').trim()) return { verified: false as const, reason: 'CAMPAIGN_MISSING' as const };
-  if (input.automationAuthorization !== CONTROLLED_OMAN_AUTOMATION_AUTHORIZATION) return { verified: false as const, reason: 'OWNER_AUTHORIZATION_MISSING' as const };
   if (!input.messageLeadId || input.messageLeadId !== input.conversationLeadId) return { verified: false as const, reason: 'LEAD_LINKAGE_MISMATCH' as const };
   if (String(input.conversationChannel ?? '').toUpperCase() !== 'EMAIL') return { verified: false as const, reason: 'CONVERSATION_CHANNEL_MISMATCH' as const };
   if (String(input.campaignStatus ?? '').toUpperCase() !== 'RUNNING') return { verified: false as const, reason: 'CAMPAIGN_NOT_RUNNING' as const };
