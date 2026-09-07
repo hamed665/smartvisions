@@ -130,10 +130,21 @@ describe('controlled WhatsApp pilot verification', () => {
     });
   });
 
-  it('rejects allowlisted catalog content whose external price parity is not verified', () => {
+  it('accepts the reconciled Website item only when the existing controlled-pilot gates also pass', () => {
     expect(verifyControlledWhatsAppPilot({ ...base, catalogContentId: 'SV-WEB-001' })).toEqual({
+      verified: true,
+      mode: 'CATALOG',
+      catalogContentId: 'SV-WEB-001',
+      recipient: '96877511053',
+    });
+    expect(verifyControlledWhatsAppPilot({
+      ...base,
+      catalogContentId: 'SV-WEB-001',
+      messageStatus: 'APPROVAL_REQUIRED',
+      requiresApproval: true,
+    })).toEqual({
       verified: false,
-      reason: 'CATALOG_CONTENT_NOT_SEND_VERIFIED',
+      reason: 'MESSAGE_NOT_OWNER_APPROVED',
     });
   });
 });
