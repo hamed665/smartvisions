@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyPercentageDiscount, resolveSeptember2026Offer, SEPTEMBER_2026_OFFER } from '@/lib/conversations/september-offer';
+import { evaluateCanonicalQuote } from '@/lib/outreach/canonical-pricing';
 
 describe('September 2026 Oman chat offer', () => {
   const now = new Date('2026-09-07T12:00:00+04:00');
@@ -44,5 +45,40 @@ describe('September 2026 Oman chat offer', () => {
   it('calculates campaign prices deterministically', () => {
     expect(applyPercentageDiscount(149, 25)).toBe(111.75);
     expect(applyPercentageDiscount(199, 15)).toBe(169.15);
+  });
+
+  it('allows only the explicitly authorized campaign discount to cross normal discount ceilings', () => {
+    const common = {
+      serviceId: 'seo_growth',
+      serviceName: 'SEO Growth',
+      servicePrice: 149,
+      currency: 'OMR',
+      minimumPrice: 135,
+      maxAutoDiscountPct: 5,
+      maxDiscountWithApprovalPct: 10,
+    };
+    expect(evaluateCanonicalQuote({ ...common, requestedDiscountPct: 25 })).toMatchObject({ allowed: false });
+    expect(evaluateCanonicalQuote({
+      ...common,
+      requestedDiscountPct: 25,
+      authorizedCampaignDiscountPct: 25,
+      authorizedCampaignId: SEPTEMBER_2026_OFFER.campaignId,
+    })).toMatchObject({ allowed: true, finalPrice: 111.75, reason: 'authorized_campaign_quote', campaignId: SEPTEMBER_2026_OFFER.campaignId });
+  });
+
+  it('does not discount add-ons when applying the package campaign', () => {
+    expect(evaluateCanonicalQuote({
+      serviceId: 'business_website',
+      serviceName: 'Business Website',
+      servicePrice: 179,
+      currency: 'OMR',
+      minimumPrice: 0,
+      maxAutoDiscountPct: 5,
+      maxDiscountWithApprovalPct: 10,
+      requestedDiscountPct: 20,
+      authorizedCampaignDiscountPct: 20,
+      authorizedCampaignId: SEPTEMBER_2026_OFFER.campaignId,
+      addons: [{ addonId: 'x', name: 'Addon', price: 20 }],
+    })).toMatchObject({ allowed: true, finalPrice: 163.2 });
   });
 });
