@@ -44,8 +44,7 @@ export default async function ReportsPage(){
     const received=Date.parse(String(message.received_at));const firstSent=firstOutboundAt.get(String(message.lead_id));
     return Number.isFinite(received)&&firstSent!=null&&received>=firstSent;
   }).map(message=>String(message.lead_id)));
-  for(const reply of r){if(reply.lead_id&&contactedLeadIds.has(String(reply.lead_id)))repliedLeadIds.add(String(reply.lead_id));}
-  const hotLeadIds=new Set(r.filter(x=>x.lead_id&&contactedLeadIds.has(String(x.lead_id))&&x.hot===true).map(x=>String(x.lead_id)));
+  const hotLeadIds=new Set(r.filter(x=>x.lead_id&&repliedLeadIds.has(String(x.lead_id))&&x.hot===true).map(x=>String(x.lead_id)));
   const won=l.filter(x=>x.status==='WON').length;
   const sent=m.filter(x=>x.direction==='OUTBOUND'&&Boolean(x.sent_at)).length;
   const industry=buildIndustryPerformance({
@@ -114,7 +113,7 @@ export default async function ReportsPage(){
     </section>
 
     <section className="panel">
-      <div className="headerRow"><div><h2>Industry response efficiency</h2><p className="muted">Contacted and replied use durable provider message timestamps. Positive/HOT classification still requires classified reply evidence; an unclassified real inbound counts as a reply but never as a fabricated positive result.</p></div><span className="pill">{best?`Best actionable: ${best.industry}`:'Learning phase'}</span></div>
+      <div className="headerRow"><div><h2>Industry response efficiency</h2><p className="muted">Contacted and replied use durable provider message timestamps. Positive/HOT classification receives credit only when a real inbound reply exists.</p></div><span className="pill">{best?`Best actionable: ${best.industry}`:'Learning phase'}</span></div>
       {industry.length?<div className="tableWrap"><table className="dataTable"><thead><tr><th>Industry</th><th>Sample</th><th>Contacted</th><th>Reply %</th><th>Positive %</th><th>Engaged %</th><th>HOT %</th><th>Won %</th><th>Score</th><th>Top offer</th></tr></thead><tbody>{industry.map(row=><tr key={row.industry}><td>{row.industry}</td><td>{row.sampleStatus}</td><td>{row.contacted}</td><td>{row.replyRate}%</td><td>{row.positiveRate}%</td><td>{row.engagedRate}%</td><td>{row.hotRate}%</td><td>{row.winRate}%</td><td>{row.performanceScore}</td><td>{row.topOffer??'—'}</td></tr>)}</tbody></table></div>:<p className="muted">No contacted prospects yet. Industry ranking starts only after real outreach/replies exist.</p>}
       <div className="healthList"><span>INSUFFICIENT <strong>1–2 contacted prospects; never scale from this.</strong></span><span>LEARNING <strong>3–9; useful direction, still cautious.</strong></span><span>ACTIONABLE <strong>10+; eligible to influence future industry allocation.</strong></span></div>
     </section>
