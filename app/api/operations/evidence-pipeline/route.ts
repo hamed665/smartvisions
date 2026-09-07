@@ -11,7 +11,7 @@ import { buildOmanFirstTouchDraft } from '@/lib/outreach/message-plan';
 import { omanDayUtcRange } from '@/lib/outreach/daily-target';
 import { countMailboxSendsLast24Hours } from '@/lib/outreach/mailbox-usage';
 import { queueShadowDraft, shadowProviderMessageId } from '@/lib/outreach/shadow-approval';
-import { evidencePipelineAuditDecision, evidencePipelineCandidatePriority } from '@/lib/operations/evidence-pipeline-policy';
+import { evidencePipelineAuditDecision, evidencePipelineCandidatePriority, evidencePipelineTargetMatches } from '@/lib/operations/evidence-pipeline-policy';
 
 const MAX_CANDIDATE_SCAN = 30;
 const MAX_EVIDENCE_PER_TICK = 1;
@@ -289,7 +289,7 @@ export async function POST(request: Request) {
   const utcDayStart = new Date(now); utcDayStart.setUTCHours(0, 0, 0, 0);
 
   const { data: target, error: targetError } = await supabase.from('campaigns')
-    .select('id,organization_id,target_count,status,config')
+    .select('id,organization_id,target_count,status,city,industry,config')
     .eq('status', 'RUNNING')
     .eq('country_code', 'OM')
     .contains('config', { dailyOutreachTarget: true, targetDate: omanDay.dateKey, marketCode: 'OM' })
@@ -355,7 +355,16 @@ export async function POST(request: Request) {
 
   const candidates = ((growthRows ?? []) as GrowthRow[]).map((row) => {
     const business = relation(row.businesses);
-    const priority = business && String(business.country_code ?? '').toUpperCase() === 'OM'
+    const priority = business
+      && String(business.country_code ?? '').toUpperCase() === 'OM'
+      && evidencePipelineTargetMatches({
+        targetCity: target.city,
+        targetIndustry: target.industry,
+        businessCity: business.city,
+        formattedAddress: business.formatted_address,
+        category: business.category,
+        primaryType: business.google_primary_type_display_name,
+      })
       ? evidencePipelineCandidatePriority({
         prospectTier: row.prospect_tier,
         shouldContact: row.should_contact,

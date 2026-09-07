@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { evidencePipelineAuditDecision, evidencePipelineCandidatePriority } from '@/lib/operations/evidence-pipeline-policy';
+import { evidencePipelineAuditDecision, evidencePipelineCandidatePriority, evidencePipelineTargetMatches } from '@/lib/operations/evidence-pipeline-policy';
 
 describe('controlled evidence pipeline policy', () => {
+  it('keeps a scoped Muscat dental campaign inside its city and industry', () => {
+    expect(evidencePipelineTargetMatches({ targetCity: 'Muscat', targetIndustry: 'Dental', businessCity: 'Muscat', category: 'Dentist' })).toBe(true);
+    expect(evidencePipelineTargetMatches({ targetCity: 'Muscat', targetIndustry: 'Dental', businessCity: 'Salalah', category: 'Dental clinic' })).toBe(false);
+    expect(evidencePipelineTargetMatches({ targetCity: 'Muscat', targetIndustry: 'Dental', formattedAddress: 'Muscat, Oman', category: 'Beauty salon' })).toBe(false);
+  });
+
   it('prioritizes Tier A prospects that have a website but still lack email', () => {
     expect(evidencePipelineCandidatePriority({
       prospectTier: 'A',

@@ -13,6 +13,7 @@ describe('controlled evidence pipeline wiring', () => {
     expect(route).toContain('SHADOW_DRAFT_CAP_REQUIRED');
     expect(route).toContain('DAILY_SHADOW_DRAFT_CAP_REACHED');
     expect(route).toContain(".like('provider_message_id', 'shadow:growth-first-touch:%')");
+    expect(route).toContain('evidencePipelineTargetMatches');
   });
 
   it('uses deterministic first-party evidence and never calls an LLM or provider sender', () => {

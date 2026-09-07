@@ -22,6 +22,26 @@ export type EvidencePipelineCandidateInput = {
 
 export type EvidencePipelineAuditDecision = 'USE_CACHED' | 'FETCH' | 'WAIT_AFTER_FAILURE';
 
+export function evidencePipelineTargetMatches(input: {
+  targetCity?: string | null;
+  targetIndustry?: string | null;
+  businessCity?: string | null;
+  formattedAddress?: string | null;
+  category?: string | null;
+  primaryType?: string | null;
+}) {
+  const normalize = (value?: string | null) => String(value ?? '').toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const targetCity = normalize(input.targetCity);
+  const location = normalize(`${input.businessCity ?? ''} ${input.formattedAddress ?? ''}`);
+  if (targetCity && !location.includes(targetCity)) return false;
+
+  const targetIndustry = normalize(input.targetIndustry);
+  if (!targetIndustry) return true;
+  const businessType = normalize(`${input.category ?? ''} ${input.primaryType ?? ''}`);
+  if (targetIndustry === 'dental') return /(?:dental|dentist|dentistry|orthodont|oral\s+(?:care|clinic))/.test(businessType);
+  return businessType.includes(targetIndustry);
+}
+
 export function evidencePipelineCandidatePriority(input: EvidencePipelineCandidateInput) {
   if (!input.hasStandaloneWebsite) return null;
   if (String(input.prospectTier ?? '').toUpperCase() === 'A' && input.shouldContact === true && !input.hasEmail) return 0;
