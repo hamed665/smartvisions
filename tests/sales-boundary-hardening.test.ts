@@ -140,6 +140,29 @@ describe('sales boundary hardening', () => {
     expect(result.selectedService).toBe('SEO');
   });
 
+  it('splits an and-boundary only when a new explicit intent begins', () => {
+    const result = deriveSalesState({
+      history: [customer('mixed-and', "I don't want a website and I want SEO")],
+      stage: 'ACTIVE',
+      language: 'en',
+    });
+
+    expect(result.rejectedServices).toContain('BUSINESS_WEBSITE');
+    expect(result.rejectedServices).not.toContain('SEO');
+    expect(result.selectedService).toBe('SEO');
+  });
+
+  it('keeps coordinated services inside the same negated clause', () => {
+    const result = deriveSalesState({
+      history: [customer('negated-list', "I don't want a website and SEO")],
+      stage: 'ACTIVE',
+      language: 'en',
+    });
+
+    expect(result.rejectedServices).toEqual(expect.arrayContaining(['BUSINESS_WEBSITE', 'SEO']));
+    expect(result.selectedService).toBeUndefined();
+  });
+
   it('retains model count and explicit gender from one compact production brief', () => {
     const result = deriveSalesState({
       history: [customer('production-brief', 'I need 12 reels, 20 stories, a videographer and 2 female models in Muscat on June 23 2027')],
