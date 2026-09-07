@@ -11,6 +11,8 @@ export function evaluateCanonicalQuote(input: {
   maxAutoDiscountPct: number;
   maxDiscountWithApprovalPct: number;
   requestedDiscountPct?: number;
+  authorizedCampaignDiscountPct?: number;
+  authorizedCampaignId?: string;
   addons?: CanonicalAddonLine[];
   startingFrom?: boolean;
   requiresCustomQuote?: boolean;
@@ -20,6 +22,13 @@ export function evaluateCanonicalQuote(input: {
   const minimumPrice = Math.max(0, roundMoney(Number(input.minimumPrice ?? 0)));
   const autoMax = Math.max(0, Number(input.maxAutoDiscountPct ?? 0));
   const approvalMax = Math.max(autoMax, Number(input.maxDiscountWithApprovalPct ?? autoMax));
+  const campaignDiscount = input.authorizedCampaignDiscountPct == null
+    ? null
+    : Math.max(0, Number(input.authorizedCampaignDiscountPct));
+  const campaignAuthorized = campaignDiscount != null
+    && Number.isFinite(campaignDiscount)
+    && requested === campaignDiscount
+    && Boolean(input.authorizedCampaignId);
   const addons = input.addons ?? [];
   const addonsTotal = roundMoney(addons.reduce((sum, item) => sum + Number(item.price || 0), 0));
   const basePrice = roundMoney(servicePrice + addonsTotal);
@@ -31,7 +40,7 @@ export function evaluateCanonicalQuote(input: {
     throw new Error('Canonical price floor is inconsistent with the configured service price');
   }
 
-  if (requested > approvalMax) {
+  if (!campaignAuthorized && requested > approvalMax) {
     return {
       allowed: false,
       requiresHuman: true,
@@ -51,7 +60,7 @@ export function evaluateCanonicalQuote(input: {
   }
 
   const discountedServicePrice = roundMoney(servicePrice * (1 - requested / 100));
-  if (discountedServicePrice < minimumPrice) {
+  if (!campaignAuthorized && discountedServicePrice < minimumPrice) {
     return {
       allowed: false,
       requiresHuman: true,
@@ -69,12 +78,18 @@ export function evaluateCanonicalQuote(input: {
     };
   }
 
-  const requiresHuman = requested > autoMax || Boolean(input.requiresCustomQuote);
-  const finalPrice = roundMoney(basePrice * (1 - requested / 100));
+  const requiresHuman = (!campaignAuthorized && requested > autoMax) || Boolean(input.requiresCustomQuote);
+  const finalPrice = campaignAuthorized
+    ? roundMoney(discountedServicePrice + addonsTotal)
+    : roundMoney(basePrice * (1 - requested / 100));
   return {
     allowed: true,
     requiresHuman,
-    reason: requiresHuman ? 'human_approval_required' as const : 'configured_quote' as const,
+    reason: campaignAuthorized
+      ? 'authorized_campaign_quote' as const
+      : requiresHuman
+        ? 'human_approval_required' as const
+        : 'configured_quote' as const,
     serviceId: input.serviceId,
     serviceName: input.serviceName,
     servicePrice,
@@ -89,6 +104,7 @@ export function evaluateCanonicalQuote(input: {
     maxDiscountWithApprovalPct: approvalMax,
     startingFrom: Boolean(input.startingFrom),
     customQuote: Boolean(input.requiresCustomQuote),
+    campaignId: campaignAuthorized ? input.authorizedCampaignId : undefined,
     priceSource: 'service_prices' as const,
   };
 }
