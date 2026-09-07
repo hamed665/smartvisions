@@ -4,6 +4,9 @@ import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { approvedSendFailureDisposition, evaluateApprovedSendPolicy } from '@/lib/outreach/approved-send-policy';
 import { assertCanonicalSendAllowed } from '@/lib/outreach/canonical-send-gate';
 import { verifyControlledWhatsAppCatalogPilot } from '@/lib/outreach/controlled-whatsapp-pilot';
+import { verifyControlledEmailAutoPilot, mailboxWarmupAllowsAutomaticSend } from '@/lib/outreach/controlled-email-auto-pilot';
+import { omanDateKey } from '@/lib/outreach/daily-target';
+import { evidencePipelineTargetMatches } from '@/lib/operations/evidence-pipeline-policy';
 import { evaluateLocalWindow, type MarketCode } from '@/lib/outreach/scheduler';
 import { evaluateMailboxHealth } from '@/lib/outreach/mailbox-health';
 import { countMailboxSendsLast24Hours } from '@/lib/outreach/mailbox-usage';
@@ -43,6 +46,7 @@ export async function POST(request: Request) {
     messageId?: string;
     priority?: 'LOW'|'NORMAL'|'HIGH'|'CRITICAL';
     controlledShadowPilot?: boolean;
+    controlledEmailPilot?: boolean;
   };
   if (!body.organizationId || !body.messageId) {
     return NextResponse.json({ error: 'organizationId and messageId are required' }, { status: 400 });
@@ -158,6 +162,57 @@ export async function POST(request: Request) {
     });
   }
 
+  if (body.controlledEmailPilot) {
+    if (!controls.shadow_mode) return NextResponse.json({ error: 'Controlled email autopilot requires Shadow Mode to remain ON' }, { status: 409 });
+    if (message.channel !== 'EMAIL' || !message.lead_id || !message.conversation_id || !lead?.business_id) {
+      return NextResponse.json({ error: 'Controlled email autopilot is missing canonical email linkage' }, { status: 409 });
+    }
+    const dateKey = omanDateKey(new Date());
+    const [{ data: conversation, error: conversationError }, { data: business, error: businessError }, { data: campaign, error: campaignError }] = await Promise.all([
+      supabase.from('sales_conversations').select('id,lead_id,channel').eq('organization_id', body.organizationId).eq('id', message.conversation_id).maybeSingle(),
+      supabase.from('businesses').select('id,city,category,formatted_address,google_primary_type_display_name').eq('organization_id', body.organizationId).eq('id', lead.business_id).maybeSingle(),
+      supabase.from('campaigns')
+        .select('id,status,country_code,city,industry,config')
+        .eq('organization_id', body.organizationId)
+        .eq('status', 'RUNNING')
+        .eq('country_code', 'OM')
+        .contains('config', { dailyOutreachTarget: true, targetDate: dateKey, marketCode: 'OM' })
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    if (conversationError || businessError || campaignError || !conversation || !business || !campaign) {
+      return NextResponse.json({ error: 'Controlled email autopilot campaign/linkage verification failed' }, { status: 409 });
+    }
+    if (!evidencePipelineTargetMatches({
+      targetCity: campaign.city,
+      targetIndustry: campaign.industry,
+      businessCity: business.city,
+      formattedAddress: business.formatted_address,
+      category: business.category,
+      primaryType: business.google_primary_type_display_name,
+    })) return NextResponse.json({ error: 'Controlled email autopilot target mismatch' }, { status: 409 });
+
+    const verification = verifyControlledEmailAutoPilot({
+      messageStatus: message.status,
+      requiresApproval: Boolean(message.requires_approval),
+      channel: message.channel,
+      metadataSource: metadata.source,
+      providerMessageId: message.provider_message_id,
+      idempotencyKey,
+      marketCode: String(sendContext.market_code),
+      messageLeadId: message.lead_id,
+      conversationLeadId: conversation.lead_id,
+      conversationChannel: conversation.channel,
+      campaignStatus: campaign.status,
+      campaignCountryCode: campaign.country_code,
+      campaignConfig: campaign.config,
+      currentOmanDateKey: dateKey,
+    });
+    if (!verification.verified) return NextResponse.json({ error: 'Controlled email autopilot evidence failed closed', reason: verification.reason }, { status: 409 });
+    shadowModeExceptionVerified = true;
+  }
+
   const policy = evaluateApprovedSendPolicy({
     messageStatus: message.status,
     requiresApproval: Boolean(message.requires_approval),
@@ -238,11 +293,14 @@ export async function POST(request: Request) {
       if (!sendContext.mailbox_id || !sendContext.subject) throw new Error('Approved email is missing mailbox_id or subject');
       const { data: mailbox, error: mailboxError } = await supabase
         .from('mailboxes')
-        .select('id,enabled,daily_limit,bounce_rate,complaint_rate')
+        .select('id,enabled,daily_limit,bounce_rate,complaint_rate,warmup_status,health_status')
         .eq('organization_id', body.organizationId)
         .eq('id', sendContext.mailbox_id)
         .maybeSingle();
       if (mailboxError || !mailbox) throw new Error(mailboxError?.message ?? 'Mailbox not found');
+      if (body.controlledEmailPilot && (!mailboxWarmupAllowsAutomaticSend(mailbox.warmup_status) || String(mailbox.health_status ?? '').toUpperCase() !== 'HEALTHY')) {
+        throw new Error(`Controlled email autopilot mailbox readiness blocks sending: warmup=${mailbox.warmup_status ?? 'UNKNOWN'}, health=${mailbox.health_status ?? 'UNKNOWN'}`);
+      }
 
       const sentLast24Hours = await countMailboxSendsLast24Hours({
         supabase,
@@ -350,7 +408,7 @@ export async function POST(request: Request) {
     const conversationUpdate = await supabase.from('sales_conversations').update({ last_outbound_at: new Date().toISOString(), last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('organization_id', body.organizationId).eq('id', message.conversation_id);
     if (conversationUpdate.error) throw new Error(`Conversation reconciliation failed: ${conversationUpdate.error.message}`);
 
-    return NextResponse.json({ sent: true, channel: message.channel, providerMessageId, idempotencyKey, controlledShadowPilot: shadowModeExceptionVerified });
+    return NextResponse.json({ sent: true, channel: message.channel, providerMessageId, idempotencyKey, controlledShadowPilot: Boolean(body.controlledShadowPilot), controlledEmailPilot: Boolean(body.controlledEmailPilot) });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Approved send failed';
     const disposition = approvedSendFailureDisposition(providerAccepted);

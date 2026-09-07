@@ -1,5 +1,6 @@
 import handler from 'vinext/server/fetch-handler';
 import { POST as evidencePipelinePost } from '../app/api/operations/evidence-pipeline/route';
+import { POST as controlledAutoDispatchPost } from '../app/api/operations/controlled-auto-dispatch/route';
 import { POST as pilotAcquisitionPost } from '../app/api/operations/pilot-acquisition/route';
 import { shouldRunScheduledOperations } from './schedule-policy';
 
@@ -33,6 +34,9 @@ type ScheduledMetrics = {
   evidenceReason?: string;
   evidenceFirstTouchStatus?: string;
   evidenceFirstTouchReason?: string;
+  autoDispatchStatus?: number;
+  autoDispatchAction?: string;
+  autoDispatchReason?: string;
   pilotStatus?: number;
   pilotFailedOutcomes?: number;
 };
@@ -197,9 +201,8 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
     }
   }
 
-  // Use already-discovered first-party websites before buying more Google Places detail work.
-  // This route is deterministic and can only produce Shadow drafts; it never calls an LLM,
-  // paid enrichment provider, or outbound provider. One evidence candidate is processed per tick.
+  // Preparation is allowed around the clock in Production. This deterministic evidence
+  // path can only create Shadow drafts and never calls an outbound provider itself.
   try {
     const evidenceResponse = await evidencePipelinePost(internalJsonRequest(env, '/api/operations/evidence-pipeline', {}));
     metrics.evidenceStatus = evidenceResponse.status;
@@ -223,10 +226,24 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
     metrics.failed += 1;
   }
 
-  // Acquisition is deliberately isolated from inbound Agent work. It is a no-op unless
-  // an Oman campaign is explicitly time-boxed with Shadow/manual-review safeguards.
-  // It runs after deterministic website evidence so we never spend on a new Place detail
-  // while a cheaper, already-discovered first-party evidence path is available.
+  // The controlled auto-dispatch route may auto-approve only evidence-backed Oman first
+  // touches authorized by today's RUNNING campaign. It holds them outside the canonical
+  // 09:00-19:00 Muscat send window and also holds them until mailbox warmup is ready.
+  try {
+    const autoDispatchResponse = await controlledAutoDispatchPost(internalJsonRequest(env, '/api/operations/controlled-auto-dispatch', {}));
+    metrics.autoDispatchStatus = autoDispatchResponse.status;
+    if (autoDispatchResponse.status === 429) metrics.throttled += 1;
+    else if (autoDispatchResponse.status === 409 || autoDispatchResponse.status === 423) metrics.safetyBlocked += 1;
+    else if (!autoDispatchResponse.ok) metrics.failed += 1;
+    const dispatch = await autoDispatchResponse.json().catch(() => null) as { action?: string; reason?: string } | null;
+    metrics.autoDispatchAction = typeof dispatch?.action === 'string' ? dispatch.action : undefined;
+    metrics.autoDispatchReason = typeof dispatch?.reason === 'string' ? dispatch.reason : undefined;
+  } catch {
+    metrics.failed += 1;
+  }
+
+  // Acquisition remains isolated and fail-closed. It is a no-op unless an Oman campaign
+  // explicitly authorizes acquisition under its own cost and safety policy.
   try {
     const pilotResponse = await pilotAcquisitionPost(internalJsonRequest(env, '/api/operations/pilot-acquisition', {}));
     metrics.pilotStatus = pilotResponse.status;
@@ -252,7 +269,7 @@ const worker = {
     return handler.fetch(request);
   },
   scheduled(controller: ScheduledController, env: WorkerEnv, ctx: ExecutionContextLike) {
-    if (!shouldRunScheduledOperations(env, controller.scheduledTime)) return;
+    if (!shouldRunScheduledOperations(env)) return;
     ctx.waitUntil(runScheduledOperations(env, controller));
   },
 };

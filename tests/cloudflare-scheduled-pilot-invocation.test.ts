@@ -3,19 +3,20 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('Cloudflare scheduled pilot invocation', () => {
-  it('invokes the canonical pilot acquisition handler in-process', () => {
+  it('invokes canonical evidence, controlled dispatch and acquisition handlers in-process', () => {
     const source = readFileSync(resolve(process.cwd(), 'worker/index.ts'), 'utf8');
 
-    expect(source).toContain("import { POST as pilotAcquisitionPost } from '../app/api/operations/pilot-acquisition/route'");
+    expect(source).toContain("import { POST as controlledAutoDispatchPost } from '../app/api/operations/controlled-auto-dispatch/route'");
+    expect(source).toContain("controlledAutoDispatchPost(internalJsonRequest(env, '/api/operations/controlled-auto-dispatch', {}))");
     expect(source).toContain("pilotAcquisitionPost(internalJsonRequest(env, '/api/operations/pilot-acquisition', {}))");
     expect(source).not.toContain("internalPost(env, '/api/operations/pilot-acquisition', {})");
   });
 
-  it('keeps normal Worker fetch routing and gates scheduled work by environment plus scheduled time', () => {
+  it('keeps normal Worker fetch routing and gates scheduled work only by production environment', () => {
     const source = readFileSync(resolve(process.cwd(), 'worker/index.ts'), 'utf8');
 
     expect(source).toContain('return handler.fetch(request)');
-    expect(source).toContain('if (!shouldRunScheduledOperations(env, controller.scheduledTime)) return');
+    expect(source).toContain('if (!shouldRunScheduledOperations(env)) return');
     expect(source).toContain("internalPost(env, '/api/operations/tick', {})");
   });
 
