@@ -1,15 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { shouldRunScheduledOperations } from '@/worker/schedule-policy';
+import { isInsideMuscatAgentWindow, shouldRunScheduledOperations } from '@/worker/schedule-policy';
+
+function atMuscat(isoLocal: string) {
+  return new Date(`${isoLocal}+04:00`).getTime();
+}
 
 describe('Cloudflare scheduled environment policy', () => {
-  it('allows scheduled operations only in production', () => {
-    expect(shouldRunScheduledOperations({ DEPLOYMENT_ENV: 'production' })).toBe(true);
-    expect(shouldRunScheduledOperations({ DEPLOYMENT_ENV: ' production ' })).toBe(true);
+  it('allows scheduled operations only in production and inside 09:00-19:00 Muscat', () => {
+    expect(shouldRunScheduledOperations({ DEPLOYMENT_ENV: 'production' }, atMuscat('2026-09-08T09:00:00'))).toBe(true);
+    expect(shouldRunScheduledOperations({ DEPLOYMENT_ENV: ' production ' }, atMuscat('2026-09-08T18:59:59'))).toBe(true);
   });
 
-  it('blocks candidate, missing, and arbitrary environments', () => {
-    expect(shouldRunScheduledOperations({ DEPLOYMENT_ENV: 'candidate' })).toBe(false);
-    expect(shouldRunScheduledOperations({ DEPLOYMENT_ENV: 'preview' })).toBe(false);
-    expect(shouldRunScheduledOperations({})).toBe(false);
+  it('uses an exact start-inclusive and end-exclusive Muscat window', () => {
+    expect(isInsideMuscatAgentWindow(atMuscat('2026-09-08T08:59:59'))).toBe(false);
+    expect(isInsideMuscatAgentWindow(atMuscat('2026-09-08T09:00:00'))).toBe(true);
+    expect(isInsideMuscatAgentWindow(atMuscat('2026-09-08T18:59:59'))).toBe(true);
+    expect(isInsideMuscatAgentWindow(atMuscat('2026-09-08T19:00:00'))).toBe(false);
+  });
+
+  it('blocks non-production environments even during business hours', () => {
+    const inside = atMuscat('2026-09-08T12:00:00');
+    expect(shouldRunScheduledOperations({ DEPLOYMENT_ENV: 'candidate' }, inside)).toBe(false);
+    expect(shouldRunScheduledOperations({ DEPLOYMENT_ENV: 'preview' }, inside)).toBe(false);
+    expect(shouldRunScheduledOperations({}, inside)).toBe(false);
   });
 });
