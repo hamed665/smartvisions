@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentContext, CommercialDecision, SalesStateSnapshot } from '@/lib/agents/contracts';
+import type { AgentContext, CommercialDecision, ConversationMemoryItem, SalesStateSnapshot } from '@/lib/agents/contracts';
 import { evaluateSalesReplyPolicy } from '@/lib/conversations/sales-behavior';
+import { deriveSalesState } from '@/lib/conversations/sales-state';
 
 function salesState(overrides: Partial<SalesStateSnapshot> = {}): SalesStateSnapshot {
   return {
@@ -27,6 +28,21 @@ function context(overrides: Partial<AgentContext> = {}): AgentContext {
     salesState: salesState(),
     ...overrides,
   } as AgentContext;
+}
+
+function customer(id: string, body: string): ConversationMemoryItem {
+  return {
+    sourceId: id,
+    providerMessageId: `provider-${id}`,
+    source: 'OUTREACH',
+    scope: 'CONVERSATION',
+    senderType: 'CUSTOMER',
+    direction: 'INBOUND',
+    channel: 'WHATSAPP',
+    status: 'RECEIVED',
+    body,
+    at: '2026-09-07T08:00:00Z',
+  };
 }
 
 describe('sales boundary hardening', () => {
@@ -110,5 +126,30 @@ describe('sales boundary hardening', () => {
 
     expect(correct.reasons).not.toContain('MISSES_CANONICAL_PRICE_ANSWER');
     expect(stale.reasons).toContain('MISSES_CANONICAL_PRICE_ANSWER');
+  });
+
+  it('keeps a rejected service rejected while selecting a different service in the same customer message', () => {
+    const result = deriveSalesState({
+      history: [customer('mixed-service', "I don't want a website, I want SEO")],
+      stage: 'ACTIVE',
+      language: 'en',
+    });
+
+    expect(result.rejectedServices).toContain('BUSINESS_WEBSITE');
+    expect(result.rejectedServices).not.toContain('SEO');
+    expect(result.selectedService).toBe('SEO');
+  });
+
+  it('retains model count and explicit gender from one compact production brief', () => {
+    const result = deriveSalesState({
+      history: [customer('production-brief', 'I need 12 reels, 20 stories, a videographer and 2 female models in Muscat on June 23 2027')],
+      stage: 'ACTIVE',
+      language: 'en',
+    });
+
+    expect(result.deliverables).toContainEqual({ kind: 'MODEL', quantity: 2, detail: 'gender:female' });
+    expect(result.productionNeeds).toContain('VIDEOGRAPHER');
+    expect(result.location).toBe('Muscat');
+    expect(result.date).toEqual({ raw: 'June 23 2027', precision: 'EXPLICIT' });
   });
 });
