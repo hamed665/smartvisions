@@ -83,22 +83,38 @@ function wordCount(text: string) {
   return text.trim() ? text.trim().split(/\s+/u).length : 0;
 }
 
-// Match a request for a fact, not the mere presence of that fact in a brief.
-// These predicates are also used to interpret short answers to sent questions.
 export function asksLocation(text: string) {
-  return /\bwhere\s+(?:are|is|will|would|should|do|does)|\b(?:which|what)\s+(?:(?:is|will be)\s+(?:your|the)\s+)?location\b|\b(?:share|provide|confirm|tell me)\s+(?:your\s+|the\s+)?location\b|^\s*location\s*[?؟]|(?:وين|أين|کجا)|(?:ما|شو)\s*(?:هو\s*)?الموقع|(?:أرسل|ارسل|حدد)\s*(?:لنا\s*)?الموقع|لوکیشن\s*(?:کجاست|رو بفرست|را بفرست)/i.test(text);
+  return [
+    /\b(?:where|which|what)\b.{0,28}\b(?:location|place|area)\b/i,
+    /\bwhere\b.{0,28}\b(?:shoot|filming|business)\b/i,
+    /\b(?:can|could|would|please)\s+(?:you\s+)?(?:share|send|confirm|tell me)\b.{0,28}\b(?:location|area)\b/i,
+    /(?:وين|أين)(?:.{0,20}(?:التصوير|الشوت))?|(?:ما|شو)\s*(?:هو|هي)?\s*(?:الموقع|اللوكيشن)/i,
+    /(?:کجا|چه\s*(?:لوکیشن|موقعیت)|لوکیشن\s*کجاست)/i,
+  ].some((pattern) => pattern.test(text));
 }
 
 export function asksDate(text: string) {
-  return /\bwhen\s+(?:are|is|will|would|should|do|does)|\b(?:which|what)\s+(?:(?:is|will be)\s+(?:your|the)\s+)?(?:date|day|month)\b|\b(?:share|provide|confirm|tell me)\s+(?:your\s+|the\s+)?(?:date|day|month)\b|^\s*date\s*[?؟]|(?:متى|چه تاریخی|چه تاریخ|کی برگزار)|(?:ما|شو|أي)\s*(?:هو\s*)?(?:التاريخ|الموعد)|(?:حدد|أرسل|ارسل)\s*(?:لنا\s*)?(?:التاريخ|الموعد)/i.test(text);
+  return [
+    /\bwhen\b/i,
+    /\b(?:which|what)\s+(?:date|day)\b/i,
+    /\b(?:can|could|would|please)\s+(?:you\s+)?(?:share|send|confirm|tell me)\b.{0,28}\b(?:date|day)\b/i,
+    /(?:متى|أي\s*(?:تاريخ|يوم)|ما\s*(?:هو|هي)?\s*(?:التاريخ|الموعد))/i,
+    /(?:چه\s*تاریخ|چه\s*روزی|کی\s*(?:مناسبه|میاد|هست)|تاریخ\s*چیه)/i,
+  ].some((pattern) => pattern.test(text));
 }
 
 export function asksBudget(text: string) {
-  return /\b(?:what|which)\s+(?:is\s+)?(?:your\s+|the\s+)?budget\b|\b(?:share|provide|confirm|tell me)\s+(?:your\s+|the\s+)?budget\b|\b(?:how much|what)\s+can\s+you\s+spend\b|^\s*budget\s*[?؟]|(?:كم|شو|ما)\s*(?:هي\s*)?(?:الميزانية|ميزانيتك|ميزانيتكم)|بودجه\s*(?:چقدر|چقدره|شما چقدر)/i.test(text);
+  return [
+    /\b(?:what(?:'s| is)|how much is)\s+(?:your\s+)?budget\b/i,
+    /\b(?:how much can you spend|what can you spend|what budget do you have)\b/i,
+    /\b(?:can|could|would|please)\s+(?:you\s+)?(?:share|confirm|tell me)\b.{0,24}\bbudget\b/i,
+    /(?:كم\s*(?:ميزانيتك|الميزانية)|ما\s*(?:هي|هو)?\s*الميزانية)/i,
+    /(?:بودجه(?:‌|\s)*(?:تون|شما)\s*(?:چقدره|چقدر است)|چقدر\s*بودجه)/i,
+  ].some((pattern) => pattern.test(text));
 }
 
 function asksDecisionMaker(text: string) {
-  return /\bwho\s+(?:is\s+(?:the\s+)?decision[ -]?maker|decides|approves)|(?:من|مين)\s*(?:هو\s*)?(?:صاحب القرار|يقرر)|چه کسی\s*(?:تصمیم|تأیید)/i.test(text);
+  return /(decision[ -]?maker|who decides|who approves|صاحب القرار|من يقرر|تصمیم گیرنده|چه کسی تصمیم)/i.test(text);
 }
 
 function asksPrice(text: string) {
@@ -141,14 +157,21 @@ function simpleGreeting(text: string) {
 }
 
 function canonicalPrice(context: AgentContext, decision?: CommercialDecision) {
+  const serviceId = decision?.serviceId || context.quotedService;
+  if (serviceId) {
+    const service = context.serviceKnowledge?.find((item) => item.id === serviceId);
+    if (service?.marketPrice && Number.isFinite(service.marketPrice.price) && service.marketPrice.currency) {
+      return { price: Number(service.marketPrice.price), currency: service.marketPrice.currency };
+    }
+    if (serviceId === context.quotedService && Number.isFinite(context.quotedPrice) && context.quotedCurrency) {
+      return { price: Number(context.quotedPrice), currency: context.quotedCurrency };
+    }
+    return null;
+  }
   if (Number.isFinite(context.quotedPrice) && context.quotedCurrency) {
     return { price: Number(context.quotedPrice), currency: context.quotedCurrency };
   }
-  const serviceId = decision?.serviceId || context.quotedService;
-  if (!serviceId) return null;
-  const service = context.serviceKnowledge?.find((item) => item.id === serviceId);
-  if (!service?.marketPrice || !Number.isFinite(service.marketPrice.price) || !service.marketPrice.currency) return null;
-  return { price: Number(service.marketPrice.price), currency: service.marketPrice.currency };
+  return null;
 }
 
 function containsCanonicalPrice(text: string, quote: { price: number; currency: string }) {
