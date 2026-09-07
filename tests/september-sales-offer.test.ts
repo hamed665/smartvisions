@@ -1,0 +1,78 @@
+import { describe, expect, it } from 'vitest';
+import type { AgentContext, AgentResult } from '@/lib/agents/contracts';
+import { decideCommercialAction, secretaryCompose } from '@/lib/agents/executor';
+
+const baseResults: AgentResult[] = [];
+
+function context(overrides: Partial<AgentContext> = {}): AgentContext {
+  return {
+    countryCode: 'OM',
+    message: 'How much is SEO?',
+    quotedService: 'seo_growth',
+    quotedPrice: 149,
+    quotedCurrency: 'OMR',
+    salesState: {
+      version: 1,
+      selectedService: 'SEO',
+      deliverables: [],
+      productionNeeds: [],
+      rejectedServices: [],
+      missingRequiredInfo: [],
+      nextAction: 'ANSWER',
+      customQuoteRequired: false,
+      humanConfirmationRequired: false,
+      pendingHandoffReasons: [],
+      evidence: {},
+      revisions: [],
+      processedEvidenceIds: [],
+    },
+    ...overrides,
+  };
+}
+
+describe('September chat-only sales offer', () => {
+  it('injects the configured SEO offer only after price intent', () => {
+    const ctx = context();
+    const decision = decideCommercialAction(ctx, baseResults);
+    expect(decision).toMatchObject({ useDiscount: true, discountPct: 25 });
+    const draft = secretaryCompose(ctx, decision, baseResults);
+    expect(draft.text).toContain('149 OMR');
+    expect(draft.text).toContain('25% off');
+    expect(draft.text).toContain('111.75 OMR');
+  });
+
+  it('does not reveal the offer in a generic first-touch conversation', () => {
+    const ctx = context({ message: 'Tell me about SEO' });
+    const decision = decideCommercialAction(ctx, baseResults);
+    expect(decision.useDiscount).toBe(false);
+    expect(secretaryCompose(ctx, decision, baseResults).text).not.toMatch(/September|25%/i);
+  });
+
+  it('can reveal a percentage for a catalog service without inventing a price', () => {
+    const ctx = context({
+      message: 'Do you have an offer for business automation?',
+      quotedService: undefined,
+      quotedPrice: undefined,
+      quotedCurrency: undefined,
+      salesState: { ...context().salesState!, selectedService: 'BUSINESS_AUTOMATION' },
+    });
+    const decision = decideCommercialAction(ctx, baseResults);
+    const draft = secretaryCompose(ctx, decision, baseResults);
+    expect(decision).toMatchObject({ useDiscount: true, discountPct: 15 });
+    expect(draft.text).toContain('15% off');
+    expect(draft.text).not.toMatch(/\b\d+(?:\.\d+)?\s+OMR\b/);
+  });
+
+  it('keeps AI Agent as the single no-discount package', () => {
+    const ctx = context({
+      message: 'Any discount on the AI Agent?',
+      quotedService: undefined,
+      quotedPrice: undefined,
+      quotedCurrency: undefined,
+      salesState: { ...context().salesState!, selectedService: 'AI_AGENT' },
+    });
+    const decision = decideCommercialAction(ctx, baseResults);
+    expect(decision.useDiscount).toBe(false);
+    expect(secretaryCompose(ctx, decision, baseResults).text).toContain('not discounted');
+  });
+});
