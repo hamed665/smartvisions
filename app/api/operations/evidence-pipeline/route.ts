@@ -328,7 +328,7 @@ export async function POST(request: Request) {
   }
 
   const { data: growthRows, error: growthError } = await supabase.from('growth_opportunities')
-    .select('id,business_id,prospect_tier,should_contact,cheapest_next_action,digital_presence_evidence,businesses(id,name,country_code,city,category,google_place_id,official_website,phone,international_phone,email,instagram,whatsapp,formatted_address,google_maps_uri,google_rating,google_user_rating_count,google_business_status,google_price_level,google_primary_type_display_name)')
+    .select('id,business_id,prospect_tier,should_contact,cheapest_next_action,digital_presence_evidence,businesses(id,name,country_code,city,category,google_place_id,official_website,phone,international_phone,email,instagram,whatsapp,formatted_address,google_maps_uri,google_rating,google_user_rating_count,google_business_status,google_primary_type_display_name)')
     .eq('organization_id', organizationId)
     .order('qualification_score', { ascending: false })
     .limit(MAX_CANDIDATE_SCAN);
