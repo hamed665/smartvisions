@@ -9,6 +9,7 @@ import { classifyWebsiteUri } from '@/lib/hunters/business/selective-enrichment'
 import type { DiscoveredBusiness } from '@/lib/hunters/business/types';
 import { buildOmanFirstTouchDraft } from '@/lib/outreach/message-plan';
 import { omanDayUtcRange } from '@/lib/outreach/daily-target';
+import { countMailboxSendsLast24Hours } from '@/lib/outreach/mailbox-usage';
 import { queueShadowDraft, shadowProviderMessageId } from '@/lib/outreach/shadow-approval';
 import { evidencePipelineAuditDecision, evidencePipelineCandidatePriority } from '@/lib/operations/evidence-pipeline-policy';
 
@@ -303,7 +304,7 @@ export async function POST(request: Request) {
     supabase.from('system_controls').select('global_kill_switch,agents_paused,shadow_mode,email_paused').eq('organization_id', organizationId).maybeSingle(),
     supabase.from('market_settings').select('enabled,config').eq('organization_id', organizationId).eq('country_code', 'OM').maybeSingle(),
     supabase.from('cost_guard_settings').select('daily_website_audits,audit_cache_days').eq('organization_id', organizationId).maybeSingle(),
-    supabase.from('mailboxes').select('id,enabled,daily_limit,sent_today,warmup_status,health_status').eq('organization_id', organizationId).eq('enabled', true).order('created_at', { ascending: true }).limit(10),
+    supabase.from('mailboxes').select('id,enabled,daily_limit,warmup_status,health_status').eq('organization_id', organizationId).eq('enabled', true).order('created_at', { ascending: true }).limit(10),
     supabase.from('services').select('id').eq('organization_id', organizationId).eq('enabled', true),
     supabase.from('service_prices').select('service_id,country_code,price').eq('organization_id', organizationId).eq('country_code', 'OM'),
   ]);
@@ -513,7 +514,25 @@ export async function POST(request: Request) {
     .gte('created_at', omanDay.startIso)
     .lt('created_at', omanDay.endIso);
   if (pendingEmailError) return NextResponse.json({ error: `Email approval capacity lookup failed: ${pendingEmailError.message}` }, { status: 503 });
-  const mailboxRemaining = mailbox ? Math.max(0, Number(mailbox.daily_limit ?? 0) - Number(mailbox.sent_today ?? 0) - Number(pendingEmail ?? 0)) : 0;
+
+  let mailboxSentLast24Hours = 0;
+  if (mailbox) {
+    try {
+      mailboxSentLast24Hours = await countMailboxSendsLast24Hours({
+        supabase,
+        organizationId,
+        mailboxId: String(mailbox.id),
+        now,
+      });
+    } catch (error) {
+      return NextResponse.json({
+        error: error instanceof Error ? error.message : 'Mailbox usage reconciliation failed',
+      }, { status: 503 });
+    }
+  }
+  const mailboxRemaining = mailbox
+    ? Math.max(0, Number(mailbox.daily_limit ?? 0) - mailboxSentLast24Hours - Number(pendingEmail ?? 0))
+    : 0;
 
   let firstTouch: Record<string, unknown> = { status: 'SKIPPED', reason: 'NOT_EMAIL_READY' };
   if (leadId && verifiedEmail && qualification.primaryServiceId && mailbox && controls.email_paused !== true && marketConfig.coldEmailEnabled === true && mailboxRemaining > 0) {
@@ -548,6 +567,8 @@ export async function POST(request: Request) {
     leadId,
     leadCreated,
     firstTouch,
+    mailboxSentLast24Hours,
+    pendingEmailReservations: Number(pendingEmail ?? 0),
     mailboxRemainingBeforeDraft: mailboxRemaining,
     providerCalls: 0,
     llmCalls: 0,

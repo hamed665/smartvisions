@@ -23,9 +23,12 @@ describe('controlled evidence pipeline wiring', () => {
     expect(route).not.toContain('sendEmail');
   });
 
-  it('can only queue an email Shadow first touch within mailbox capacity', () => {
+  it('can only queue an email Shadow first touch within reconciled mailbox capacity', () => {
     expect(route).toContain("channel: 'EMAIL'");
     expect(route).toContain('queueShadowDraft');
+    expect(route).toContain('countMailboxSendsLast24Hours');
+    expect(route).toContain('mailboxSentLast24Hours');
+    expect(route).not.toContain('mailbox.sent_today');
     expect(route).toContain('mailboxRemaining > 0');
     expect(route).toContain('marketConfig.coldEmailEnabled === true');
     expect(route).toContain('MAILBOX_DAILY_CAPACITY_RESERVED');
