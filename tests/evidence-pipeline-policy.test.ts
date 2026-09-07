@@ -8,14 +8,21 @@ describe('controlled evidence pipeline policy', () => {
     expect(evidencePipelineTargetMatches({ targetCity: 'Muscat', targetIndustry: 'Dental', formattedAddress: 'Muscat, Oman', category: 'Beauty salon' })).toBe(false);
   });
 
-  it('prioritizes Tier A prospects that have a website but still lack email', () => {
+  it('prioritizes contact-ready Tier A prospects with an existing email before enrichment candidates', () => {
+    expect(evidencePipelineCandidatePriority({
+      prospectTier: 'A',
+      shouldContact: true,
+      cheapestNextAction: 'CONTACT_READY',
+      hasStandaloneWebsite: true,
+      hasEmail: true,
+    })).toBe(0);
     expect(evidencePipelineCandidatePriority({
       prospectTier: 'A',
       shouldContact: true,
       cheapestNextAction: 'CONTACT_READY',
       hasStandaloneWebsite: true,
       hasEmail: false,
-    })).toBe(0);
+    })).toBe(1);
   });
 
   it('then accepts website-evidence candidates and rejects unrelated or no-website rows', () => {
@@ -25,13 +32,13 @@ describe('controlled evidence pipeline policy', () => {
       cheapestNextAction: 'WEBSITE_EVIDENCE',
       hasStandaloneWebsite: true,
       hasEmail: false,
-    })).toBe(1);
+    })).toBe(2);
     expect(evidencePipelineCandidatePriority({
       prospectTier: 'A',
       shouldContact: true,
       cheapestNextAction: 'CONTACT_READY',
       hasStandaloneWebsite: false,
-      hasEmail: false,
+      hasEmail: true,
     })).toBeNull();
     expect(evidencePipelineCandidatePriority({
       prospectTier: 'B',
