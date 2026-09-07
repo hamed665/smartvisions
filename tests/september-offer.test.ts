@@ -22,6 +22,16 @@ describe('September 2026 Oman chat offer', () => {
       .toMatchObject({ discountPct: 25, reveal: true, surface: 'CHAT_ONLY', serviceKey: 'SEO' });
   });
 
+  it('prefers the customer current selection over an older quoted service', () => {
+    expect(resolveSeptember2026Offer({
+      countryCode: 'OM',
+      serviceId: 'seo_growth',
+      selectedService: 'WHATSAPP_AUTOMATION',
+      message: 'What is the price for WhatsApp automation?',
+      now,
+    })).toMatchObject({ discountPct: 15, serviceKey: 'WHATSAPP_AUTOMATION', reveal: true });
+  });
+
   it('does not expose the offer on a generic first-touch message', () => {
     expect(resolveSeptember2026Offer({ countryCode: 'OM', serviceId: 'business_website', message: 'Tell me about your services', now }))
       .toMatchObject({ discountPct: 20, reveal: false });
