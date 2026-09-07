@@ -99,7 +99,7 @@ function asksDecisionMaker(text: string) {
 }
 
 function asksPrice(text: string) {
-  return /\b(?:how much|price|pricing|cost|what does .* cost)\b|(?:كم\s*(?:السعر|يكلف|تكلف)|السعر|سعر|تكلفة)|(?:قیمت|چقدر|هزینه)/i.test(text);
+  return /\b(?:how much|price|pricing|cost|what does .* cost)\b|(?:كم\s*(?:السعر|يكلف|تكلف)|السعر|سعر|تكلفة)|(?:قیمت|هزینه|چقدر\s*(?:قیمت|هزینه|می[‌\s-]?شه|میشه|درمیاد|است|هست))/i.test(text);
 }
 
 function asksKnownDeliverable(text: string, state: SalesStateSnapshot) {
