@@ -44,8 +44,13 @@ export function evidencePipelineTargetMatches(input: {
 
 export function evidencePipelineCandidatePriority(input: EvidencePipelineCandidateInput) {
   if (!input.hasStandaloneWebsite) return null;
-  if (String(input.prospectTier ?? '').toUpperCase() === 'A' && input.shouldContact === true && !input.hasEmail) return 0;
-  if (String(input.cheapestNextAction ?? '').toUpperCase() === 'WEBSITE_EVIDENCE') return 1;
+  if (String(input.prospectTier ?? '').toUpperCase() === 'A' && input.shouldContact === true) {
+    // Contact-ready Tier A businesses with an existing email should be checked first.
+    // The email is still not trusted here: the latest official-site audit must prove
+    // a first-party address before any Shadow draft can be queued.
+    return input.hasEmail ? 0 : 1;
+  }
+  if (String(input.cheapestNextAction ?? '').toUpperCase() === 'WEBSITE_EVIDENCE') return 2;
   return null;
 }
 
