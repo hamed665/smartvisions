@@ -27,8 +27,6 @@ export type ShadowDraftInput = {
   persianTranslation?: string;
   persianSummary?: string;
   rememberCustomerLanguage?: boolean;
-  campaignId?: string;
-  automationAuthorization?: string;
 };
 
 function serviceClient() {
@@ -162,8 +160,6 @@ export async function queueShadowDraft(input: ShadowDraftInput) {
     metadata: {
       source: 'SHADOW_MODE',
       idempotency_key: input.idempotencyKey,
-      campaign_id: input.campaignId ?? null,
-      automation_authorization: input.automationAuthorization ?? null,
       send_context: {
         to: input.to,
         subject: input.subject ?? null,
