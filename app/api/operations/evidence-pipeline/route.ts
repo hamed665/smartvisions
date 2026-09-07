@@ -299,6 +299,25 @@ export async function POST(request: Request) {
   if (targetError) return NextResponse.json({ error: `Daily target lookup failed: ${targetError.message}` }, { status: 503 });
   if (!target) return NextResponse.json({ ok: true, action: 'SKIPPED', reason: 'NO_ACTIVE_DAILY_TARGET' });
   const organizationId = String(target.organization_id);
+  const targetConfig = record(target.config);
+  const requestedDraftLimit = Number(targetConfig.maxShadowDrafts);
+  const campaignTarget = Math.max(0, Math.floor(Number(target.target_count ?? 0)));
+  if (!Number.isFinite(requestedDraftLimit) || requestedDraftLimit < 1 || campaignTarget < 1) {
+    return NextResponse.json({ ok: true, action: 'SKIPPED', reason: 'SHADOW_DRAFT_CAP_REQUIRED' });
+  }
+  const dailyDraftLimit = Math.min(campaignTarget, Math.floor(requestedDraftLimit));
+  const { count: dailyDrafts, error: dailyDraftCountError } = await supabase.from('conversation_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', organizationId)
+    .eq('channel', 'EMAIL')
+    .eq('direction', 'OUTBOUND')
+    .like('provider_message_id', 'shadow:growth-first-touch:%')
+    .gte('created_at', omanDay.startIso)
+    .lt('created_at', omanDay.endIso);
+  if (dailyDraftCountError) return NextResponse.json({ error: `Daily Shadow draft count failed: ${dailyDraftCountError.message}` }, { status: 503 });
+  if (Number(dailyDrafts ?? 0) >= dailyDraftLimit) {
+    return NextResponse.json({ ok: true, action: 'SKIPPED', reason: 'DAILY_SHADOW_DRAFT_CAP_REACHED', dailyDrafts, dailyDraftLimit });
+  }
 
   const [controlsResult, marketResult, costResult, mailboxResult, servicesResult, pricesResult] = await Promise.all([
     supabase.from('system_controls').select('global_kill_switch,agents_paused,shadow_mode,email_paused').eq('organization_id', organizationId).maybeSingle(),
@@ -570,6 +589,8 @@ export async function POST(request: Request) {
     mailboxSentLast24Hours,
     pendingEmailReservations: Number(pendingEmail ?? 0),
     mailboxRemainingBeforeDraft: mailboxRemaining,
+    dailyDraftsBeforeCycle: Number(dailyDrafts ?? 0),
+    dailyDraftLimit,
     providerCalls: 0,
     llmCalls: 0,
     providerSendTriggered: false,
@@ -588,6 +609,8 @@ export async function POST(request: Request) {
     priorityQualified,
     leadCreated,
     firstTouch,
+    dailyDraftsBeforeCycle: Number(dailyDrafts ?? 0),
+    dailyDraftLimit,
     providerCalls: 0,
     llmCalls: 0,
     providerSendTriggered: false,

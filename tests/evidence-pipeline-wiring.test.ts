@@ -10,6 +10,9 @@ describe('controlled evidence pipeline wiring', () => {
     expect(route).toContain("contains('config', { dailyOutreachTarget: true, targetDate: omanDay.dateKey, marketCode: 'OM' })");
     expect(route).toContain('controls.global_kill_switch || controls.agents_paused || !controls.shadow_mode');
     expect(route).toContain('DAILY_WEBSITE_AUDIT_CAP_REACHED');
+    expect(route).toContain('SHADOW_DRAFT_CAP_REQUIRED');
+    expect(route).toContain('DAILY_SHADOW_DRAFT_CAP_REACHED');
+    expect(route).toContain(".like('provider_message_id', 'shadow:growth-first-touch:%')");
   });
 
   it('uses deterministic first-party evidence and never calls an LLM or provider sender', () => {
