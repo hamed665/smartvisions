@@ -5,6 +5,7 @@ export type HandoffInput = {
   asksPayment?: boolean;
   asksContract?: boolean;
   asksAvailability?: boolean;
+  readyToStart?: boolean;
   customQuote?: boolean;
   specialDiscount?: boolean;
   complaint?: boolean;
@@ -33,6 +34,7 @@ export function evaluateHandoff(input: HandoffInput) {
   if (input.asksPayment) reasons.push('PAYMENT_DISCUSSION');
   if (input.asksContract) reasons.push('CONTRACT_CONFIRMATION');
   if (input.asksAvailability) reasons.push('AVAILABILITY_CONFIRMATION');
+  if (input.readyToStart) reasons.push('READY_TO_START');
   if (input.customQuote) reasons.push('CUSTOM_QUOTE');
   if (input.specialDiscount) reasons.push('SPECIAL_DISCOUNT');
   if (input.complaint) reasons.push('COMPLAINT');
