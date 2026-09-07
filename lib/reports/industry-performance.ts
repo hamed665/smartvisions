@@ -35,16 +35,33 @@ function industryKey(business:BusinessRow|undefined){
   return segment==='GENERIC'?'OTHER':segment;
 }
 
+function validTime(value:string|null|undefined){
+  const parsed=Date.parse(String(value??''));
+  return Number.isFinite(parsed)?parsed:null;
+}
+
 export function buildIndustryPerformance(input:{leads:LeadRow[];businesses:BusinessRow[];messages:MessageRow[];replies:ReplyRow[]}):IndustryPerformance[]{
   const businessById=new Map(input.businesses.map(row=>[row.id,row]));
   const leadById=new Map(input.leads.map(row=>[row.id,row]));
-  // `status` is mutable after provider delivery/read webhooks. `sent_at` is the durable fact that outbound contact happened.
-  const contacted=new Set(input.messages.filter(row=>row.direction==='OUTBOUND'&&Boolean(row.sent_at)&&row.lead_id).map(row=>String(row.lead_id)));
-  // Reply existence comes from durable inbound provider evidence. reply_events remains useful for
-  // semantic classification, but a missing classifier row must not erase a real customer reply.
+  const firstOutboundAt=new Map<string,number>();
+  for(const row of input.messages){
+    if(row.direction!=='OUTBOUND'||!row.lead_id)continue;
+    const at=validTime(row.sent_at);if(at==null)continue;
+    const id=String(row.lead_id);const current=firstOutboundAt.get(id);
+    if(current==null||at<current)firstOutboundAt.set(id,at);
+  }
+  const contacted=new Set(firstOutboundAt.keys());
+  // Reply existence comes from durable inbound provider evidence after actual outbound contact.
+  // reply_events remains useful for semantic classification, but a missing classifier row must
+  // not erase a real reply.
+  const durableReplies=input.messages.filter(row=>{
+    if(row.direction!=='INBOUND'||!row.lead_id)return false;
+    const received=validTime(row.received_at);const firstSent=firstOutboundAt.get(String(row.lead_id));
+    return received!=null&&firstSent!=null&&received>=firstSent;
+  }).map(row=>String(row.lead_id));
   const replied=new Set([
-    ...input.messages.filter(row=>row.direction==='INBOUND'&&Boolean(row.received_at)&&row.lead_id).map(row=>String(row.lead_id)),
-    ...input.replies.filter(row=>row.lead_id).map(row=>String(row.lead_id)),
+    ...durableReplies,
+    ...input.replies.filter(row=>row.lead_id&&contacted.has(String(row.lead_id))).map(row=>String(row.lead_id)),
   ]);
   const positive=new Set(input.replies.filter(row=>{
     const signals=asRecord(row.signals);
