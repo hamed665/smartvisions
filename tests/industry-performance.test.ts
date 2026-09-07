@@ -3,6 +3,7 @@ import { buildIndustryPerformance } from '../lib/reports/industry-performance';
 
 function lead(id:string,businessId:string,status='CONTACTED',offer='business_website'){return{id,business_id:businessId,status,recommended_offer:offer};}
 const sent=(leadId:string,status='SENT')=>({lead_id:leadId,direction:'OUTBOUND',status,sent_at:'2026-09-02T00:00:00.000Z'});
+const inbound=(leadId:string)=>({lead_id:leadId,direction:'INBOUND',status:'RECEIVED',sent_at:null,received_at:'2026-09-02T01:00:00.000Z'});
 
 describe('industry performance learning',()=>{
   it('does not let a one-contact lucky industry outrank an actionable sample',()=>{
@@ -35,6 +36,18 @@ describe('industry performance learning',()=>{
     expect(row.engaged).toBe(2);
     expect(row.positive).toBe(1);
     expect(row.sampleStatus).toBe('LEARNING');
+  });
+
+  it('counts durable inbound as a reply even when reply_events has not classified it',()=>{
+    const businesses=[{id:'b1',name:'Clinic One',category:'medical clinic',google_primary_type_display_name:null}];
+    const leads=[lead('l1','b1')];
+    const messages=[sent('l1'),inbound('l1')];
+    const [row]=buildIndustryPerformance({leads,businesses,messages,replies:[]});
+    expect(row.contacted).toBe(1);
+    expect(row.replied).toBe(1);
+    expect(row.replyRate).toBe(100);
+    expect(row.positive).toBe(0);
+    expect(row.engaged).toBe(0);
   });
 
   it('penalizes unsubscribe/DNC rather than treating raw reply count as success',()=>{
