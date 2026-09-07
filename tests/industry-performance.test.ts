@@ -60,7 +60,7 @@ describe('industry performance learning',()=>{
     expect(row.replyRate).toBe(0);
   });
 
-  it('does not let a classifier row manufacture reply existence without inbound evidence',()=>{
+  it('does not let a classifier row manufacture reply or positive existence without inbound evidence',()=>{
     const businesses=[{id:'b1',name:'Clinic One',category:'medical clinic',google_primary_type_display_name:null}];
     const leads=[lead('l1','b1')];
     const messages=[sent('l1')];
@@ -68,7 +68,8 @@ describe('industry performance learning',()=>{
     const [row]=buildIndustryPerformance({leads,businesses,messages,replies});
     expect(row.replied).toBe(0);
     expect(row.replyRate).toBe(0);
-    expect(row.positive).toBe(1);
+    expect(row.positive).toBe(0);
+    expect(row.hot).toBe(0);
   });
 
   it('penalizes unsubscribe/DNC rather than treating raw reply count as success',()=>{
