@@ -147,7 +147,7 @@ export async function executeAgent(agent: AgentName, context: AgentContext): Pro
     case 'relevance_checker': {
       const proposed = context.collaboration?.proposedReply?.text?.trim();
       if (!proposed) return { agent, confidence: 1, summary: 'No actual draft was supplied for relevance checking.', data: { proposedReplyPresent: false }, evidence: [], blockers: ['MISSING_PROPOSED_REPLY'] };
-      return { agent, confidence: 0.94, summary: 'The actual proposed reply is available for direct relevance checking.', data: { proposedReplyPresent: true }, evidence, blockers: [] };
+      return { agent, confidence: 0.94, summary: 'The actual proposed reply is available for direct relevance checking.', data: { proposedReplyPresent: true }, evidence: [], blockers: [] };
     }
   }
 }
