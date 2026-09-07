@@ -5,8 +5,6 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
 import { Crawl4AiAuditor } from '@/lib/audit/crawl4ai';
 import { countMailboxSendsLast24Hours } from '@/lib/outreach/mailbox-usage';
-import { ResendEmailProvider } from '@/lib/outreach/resend-provider';
-import { recordUsage } from '@/lib/reliability/cost-guard';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 
 const TEST_URL = 'https://example.com';
@@ -23,140 +21,43 @@ function safeMessage(value: unknown) {
   return message.replace(/https?:\/\/[^\s]+/g, '[url]').slice(0, 220);
 }
 
-function requiredEmail(formData: FormData) {
-  const value = String(formData.get('test_email') ?? '').trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) throw new Error('A valid test email is required');
-  return value;
-}
-
-function verificationWindow(nowMs = Date.now()) {
-  return Math.floor(nowMs / 60_000);
-}
-
-export async function verifyEmailIntegration(formData: FormData) {
+export async function verifyEmailIntegration() {
   const ctx = await getCurrentOrganization(true);
   const db = serviceClient();
   let destination = '/integrations';
-  const startedAt = Date.now();
-
-  const { data: currentIntegration } = await db
-    .from('integration_connections')
-    .select('status,enabled')
-    .eq('organization_id', ctx.organizationId)
-    .eq('provider', 'EMAIL_PROVIDER')
-    .eq('channel', 'EMAIL')
-    .maybeSingle();
-  const wasConnected = currentIntegration?.status === 'CONNECTED' && currentIntegration?.enabled === true;
-
   try {
-    const recipient = requiredEmail(formData);
     const provider = String(process.env.EMAIL_PROVIDER ?? '').trim().toUpperCase();
-    const apiKeyPresent = Boolean(process.env.EMAIL_PROVIDER_API_KEY?.trim());
-    if (provider !== 'RESEND' || !apiKeyPresent) throw new Error('Resend email credentials are not configured');
-
-    const { data: mailbox, error: mailboxError } = await db
-      .from('mailboxes')
-      .select('id,address,enabled,daily_limit,sent_today,warmup_status,health_status')
-      .eq('organization_id', ctx.organizationId)
-      .eq('provider', 'RESEND')
-      .eq('enabled', true)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    if (mailboxError) throw mailboxError;
+    if (provider !== 'RESEND' || !process.env.EMAIL_PROVIDER_API_KEY?.trim()) {
+      throw new Error('Resend email credentials are not configured');
+    }
+    const { data: mailbox, error } = await db.from('mailboxes')
+      .select('id,daily_limit').eq('organization_id', ctx.organizationId)
+      .eq('provider', 'RESEND').eq('enabled', true).order('created_at', { ascending: true })
+      .limit(1).maybeSingle();
+    if (error) throw error;
     if (!mailbox) throw new Error('No enabled Resend mailbox is configured');
-
-    const sentLast24Hours = await countMailboxSendsLast24Hours({
-      supabase: db,
-      organizationId: ctx.organizationId,
-      mailboxId: String(mailbox.id),
-    });
-    if (sentLast24Hours >= Number(mailbox.daily_limit ?? 0)) throw new Error('Mailbox rolling 24-hour limit reached');
-
-    const idempotencyKey = `email-provider-verification:${ctx.organizationId}:${recipient}:${verificationWindow()}`;
-    const result = await new ResendEmailProvider().sendEmail({
-      mailboxId: String(mailbox.id),
-      to: recipient,
-      subject: 'Smart Visions email verification',
-      text: 'This is a controlled production verification email from Smart Visions Growth OS. No action is required.',
-      idempotencyKey,
-    });
-
-    const checkedAt = new Date().toISOString();
-    const latencyMs = Date.now() - startedAt;
-    const { error: mailboxUpdateError } = await db.from('mailboxes').update({
-      sent_today: Number(mailbox.sent_today ?? 0) + 1,
-      health_status: wasConnected ? (mailbox.health_status ?? 'HEALTHY') : 'VERIFYING',
-      updated_at: checkedAt,
-    }).eq('organization_id', ctx.organizationId).eq('id', mailbox.id);
-    if (mailboxUpdateError) throw mailboxUpdateError;
-
-    const { error: integrationUpdateError } = await db.from('integration_connections').update({
-      enabled: wasConnected,
-      status: wasConnected ? 'CONNECTED' : 'NOT_CONFIGURED',
-      account_label: mailbox.address,
-      last_checked_at: checkedAt,
-      last_error: null,
-      updated_at: checkedAt,
-    }).eq('organization_id', ctx.organizationId).eq('provider', 'EMAIL_PROVIDER').eq('channel', 'EMAIL');
-    if (integrationUpdateError) throw integrationUpdateError;
-
+    const usage = await countMailboxSendsLast24Hours({ supabase: db, organizationId: ctx.organizationId, mailboxId: mailbox.id });
+    const { data: evidence, error: evidenceError } = await db.from('email_events')
+      .select('event_type,created_at').eq('organization_id', ctx.organizationId)
+      .in('event_type', ['email.sent', 'email.delivered'])
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (evidenceError) throw evidenceError;
     const { error: auditError } = await db.from('audit_logs').insert({
-      organization_id: ctx.organizationId,
-      actor_type: 'USER',
-      actor_id: ctx.userId,
-      action: 'EMAIL_PROVIDER_CONTROLLED_VERIFICATION_SENT',
-      entity_type: 'integration',
-      entity_id: ctx.organizationId,
-      after_data: {
-        provider: 'RESEND',
-        mailbox: mailbox.address,
-        recipient_domain: recipient.split('@')[1],
-        providerMessageId: result.providerMessageId,
-        latencyMs,
-        providerCalls: 1,
-        outreachTriggered: false,
-        integrationEnabled: wasConnected,
-        preservedConnectedState: wasConnected,
-        awaitingHumanDeliveryConfirmation: !wasConnected,
-        quotaAuthority: 'ROLLING_LEDGER_PLUS_PROVIDER_EVENT',
-        sentLast24HoursBeforeVerification: sentLast24Hours,
-      },
+      organization_id: ctx.organizationId, actor_type: 'USER', actor_id: ctx.userId,
+      action: 'EMAIL_PROVIDER_EVIDENCE_CHECKED', entity_type: 'integration', entity_id: ctx.organizationId,
+      after_data: { provider: 'RESEND', quotaUsedLast24Hours: usage, dailyLimit: mailbox.daily_limit,
+        latestEvidenceAt: evidence?.created_at ?? null, latestEvidenceType: evidence?.event_type ?? null,
+        providerCalls: 0, outreachTriggered: false, liveConnectivityTested: false },
     });
     if (auditError) throw auditError;
-
-    await recordUsage({
-      organizationId: ctx.organizationId,
-      provider: 'EMAIL',
-      operation: 'EMAIL_PROVIDER_VERIFICATION',
-      costUsd: 0,
-      units: 1,
-      metadata: { provider: 'RESEND', provider_message_id: result.providerMessageId, verification_only: true },
-    });
-
-    destination = `/integrations?email=sent&latencyMs=${latencyMs}`;
+    // A local evidence read must never refresh the date of a real provider verification.
+    const message = evidence
+      ? `Configuration present; quota used in 24h: ${usage}/${mailbox.daily_limit}. Latest provider evidence: ${evidence.created_at}. No email sent.`
+      : 'Configuration present; no sent/delivered evidence yet. Use the approved conversation send flow for a controlled delivery test.';
+    destination = `/integrations?email=checked&detail=${encodeURIComponent(message)}`;
   } catch (error) {
-    const message = safeMessage(error);
-    const checkedAt = new Date().toISOString();
-    await db.from('integration_connections').update({
-      enabled: wasConnected,
-      status: wasConnected ? 'CONNECTED' : 'NOT_CONFIGURED',
-      last_checked_at: checkedAt,
-      last_error: message,
-      updated_at: checkedAt,
-    }).eq('organization_id', ctx.organizationId).eq('provider', 'EMAIL_PROVIDER').eq('channel', 'EMAIL');
-    await db.from('audit_logs').insert({
-      organization_id: ctx.organizationId,
-      actor_type: 'USER',
-      actor_id: ctx.userId,
-      action: 'EMAIL_PROVIDER_CONTROLLED_VERIFICATION_FAILED',
-      entity_type: 'integration',
-      entity_id: ctx.organizationId,
-      after_data: { provider: 'RESEND', error: message, outreachTriggered: false, preservedConnectedState: wasConnected },
-    });
-    destination = `/integrations?email=error&message=${encodeURIComponent(message)}`;
+    destination = `/integrations?email=error&message=${encodeURIComponent(safeMessage(error))}`;
   }
-
   revalidatePath('/integrations');
   redirect(destination);
 }

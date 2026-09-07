@@ -34,7 +34,12 @@ async function hydrateCanonicalLeadQuote(input: {
 
   const rejectedServices = context.salesState?.rejectedServices ?? [];
   const leadOffer = String(lead.recommended_offer ?? '').trim();
+  const customerScope = {
+    selectedServiceKey: context.salesState?.selectedService,
+    customQuoteRequired: context.salesState?.customQuoteRequired,
+  };
   let quote = resolveCanonicalLeadQuote({
+    ...customerScope,
     countryCode,
     serviceKnowledge: context.serviceKnowledge,
     leadRecommendedOffer: isRejectedCanonicalService(leadOffer, rejectedServices) ? undefined : lead.recommended_offer,
@@ -51,6 +56,7 @@ async function hydrateCanonicalLeadQuote(input: {
 
     const opportunityService = String(opportunity?.primary_service_id ?? '').trim();
     quote = resolveCanonicalLeadQuote({
+      ...customerScope,
       countryCode,
       serviceKnowledge: context.serviceKnowledge,
       growthOpportunityServiceId: isRejectedCanonicalService(opportunityService, rejectedServices) ? undefined : opportunity?.primary_service_id,
@@ -58,7 +64,9 @@ async function hydrateCanonicalLeadQuote(input: {
     });
   }
 
-  if (!quote || isRejectedCanonicalService(quote.serviceId, rejectedServices)) return input.hydrated;
+  if (!quote || isRejectedCanonicalService(quote.serviceId, rejectedServices)) {
+    return { ...input.hydrated, context: { ...context, quotedService: undefined, quotedPrice: undefined, quotedCurrency: undefined } };
+  }
 
   return {
     ...input.hydrated,

@@ -10,6 +10,9 @@ import {
   hasAvailabilityExecutionIntent,
   hasContractExecutionIntent,
   hasFinancialPaymentIntent,
+  asksLocation,
+  asksDate,
+  asksBudget,
 } from '@/lib/conversations/sales-behavior';
 
 const SERVICE_ALIASES: Array<{ key: string; patterns: RegExp[] }> = [
@@ -32,6 +35,11 @@ type PersistableScalar = string | number | boolean | null | undefined;
 
 function text(value: unknown, max = 500) {
   return String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
+}
+
+function normalizeDigits(value: string) {
+  return value.replace(/[٠-٩۰-۹]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.includes(digit)
+    ? '٠١٢٣٤٥٦٧٨٩'.indexOf(digit) : '۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)));
 }
 
 function unique(values: string[]) {
@@ -176,23 +184,18 @@ function positiveServiceIntent(message: string) {
 
 function parseDeliverables(message: string) {
   const values = new Map<string, SalesDeliverable>();
-  const pattern = /(\d{1,4})\s*(?:(female|male)\s+)?(reels?|stories?|posts?|videos?|models?|actors?|photos?|designs?)/gi;
+  const pattern = /(\d{1,4})\s*(?:(female|male)\s+)?(reels?|stories?|posts?|videos?|models?|actors?|photos?|designs?|ريلز?|ریلز?|ا?ستور[یي]|مودل|مدل|ممثل|بازیگر|عکس|صور)(?![\p{L}])/giu;
   let match: RegExpExecArray | null;
-  while ((match = pattern.exec(message))) {
+  while ((match = pattern.exec(normalizeDigits(message)))) {
     const rawKind = match[3].toLowerCase();
-    const kind = rawKind.startsWith('reel') ? 'REEL'
-      : rawKind.startsWith('stor') ? 'STORY'
+    const kind = /^(?:reel|ريل|ریل)/.test(rawKind) ? 'REEL'
+      : /^(?:stor|ا?ستور)/.test(rawKind) ? 'STORY'
         : rawKind.startsWith('post') ? 'POST'
           : rawKind.startsWith('video') ? 'VIDEO'
-            : rawKind.startsWith('model') ? 'MODEL'
-              : rawKind.startsWith('actor') ? 'ACTOR'
-                : rawKind.startsWith('photo') ? 'PHOTO' : 'DESIGN';
-    const gender = match[2]?.toLowerCase();
-    values.set(kind, {
-      kind,
-      quantity: Number(match[1]),
-      ...(gender && ['MODEL','ACTOR'].includes(kind) ? { detail: `gender:${gender}` } : {}),
-    });
+            : /^(?:model|مودل|مدل)/.test(rawKind) ? 'MODEL'
+              : /^(?:actor|ممثل|بازیگر)/.test(rawKind) ? 'ACTOR'
+                : /^(?:photo|عکس|صور)/.test(rawKind) ? 'PHOTO' : 'DESIGN';
+    values.set(kind, { kind, quantity: Number(match[1]), ...(match[2] ? { detail: `gender:${match[2].toLowerCase()}` } : {}) });
   }
   return [...values.values()];
 }
@@ -215,7 +218,11 @@ function explicitLocation(message: string) {
 }
 
 function datePrecision(raw: string): 'AMBIGUOUS' | 'EXPLICIT' {
-  if (/\b\d{4}-\d{2}-\d{2}\b/.test(raw)) return 'EXPLICIT';
+  const iso = raw.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (iso) {
+    const parsed = new Date(`${iso[0]}T00:00:00Z`);
+    return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === iso[0] ? 'EXPLICIT' : 'AMBIGUOUS';
+  }
   if (new RegExp(`\\b${MONTH_PATTERN}\\s+\\d{1,2}(?:st|nd|rd|th)?[,]?\\s+20\\d{2}\\b`, 'i').test(raw)) return 'EXPLICIT';
   if (new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s+${MONTH_PATTERN}[,]?\\s+20\\d{2}\\b`, 'i').test(raw)) return 'EXPLICIT';
   return 'AMBIGUOUS';
@@ -242,18 +249,14 @@ function parseBudget(message: string, allowBareNumber = false) {
 }
 
 function questionTarget(message: string): QuestionTarget {
-  const value = text(message, 500);
-  const questionLike = /[?؟]/.test(value)
-    || QUESTION_WORDS.test(value)
-    || /^(?:please|can|could|would)\b/i.test(value);
-  if (!questionLike) return undefined;
-  if (/\b(?:where|which location|what location)\b|(?:share|confirm|tell me).{0,28}\blocation\b|(?:وين|أين|الموقع)|(?:کجا|لوکیشن)/i.test(value)) return 'LOCATION';
-  if (/\b(?:when|which date|what date|which day|what day)\b|(?:share|confirm|tell me).{0,28}\b(?:date|day)\b|(?:متى|تاريخ|موعد)|(?:چه تاریخ|چه روز|کی)/i.test(value)) return 'DATE';
-  if (/\b(?:what(?:'s| is) your budget|how much can you spend|what can you spend|share.{0,20}budget|confirm.{0,20}budget)\b|(?:ميزانية|بودجه)/i.test(value)) return 'BUDGET';
-  if (/(how many).*(model|actor)|(?:model|actor).*(how many)|كم.*(?:مودل|عارض|ممثل)/i.test(value)) return 'MODEL_COUNT';
-  if (/(male|female|gender).*(model|actor)|(?:model|actor).*(male|female|gender)|جنس.*(?:مودل|عارض)/i.test(value)) return 'MODEL_GENDER';
-  if (/(need|want).*(videographer)|videographer.*\?|مصور.*\?/i.test(value)) return 'VIDEOGRAPHER';
-  if (/(how many|quantity|number).*(reel|story|post|video)|كم.*(?:ريل|ستوري|فيديو)/i.test(value)) return 'DELIVERABLES';
+  const textValue = message.toLowerCase();
+  if (asksLocation(textValue)) return 'LOCATION';
+  if (asksDate(textValue)) return 'DATE';
+  if (asksBudget(textValue)) return 'BUDGET';
+  if (/(how many).*(model|actor)|(?:model|actor).*(how many)|كم.*(?:مودل|عارض|ممثل)/i.test(textValue)) return 'MODEL_COUNT';
+  if (/(male|female|gender).*(model|actor)|(?:model|actor).*(male|female|gender)|جنس.*(?:مودل|عارض)/i.test(textValue)) return 'MODEL_GENDER';
+  if (/(need|want).*(videographer)|videographer.*\?|مصور.*\?/i.test(textValue)) return 'VIDEOGRAPHER';
+  if (/(how many|quantity|number).*(reel|story|post|video)|كم.*(?:ريل|ستوري|فيديو)/i.test(textValue)) return 'DELIVERABLES';
   return undefined;
 }
 
@@ -282,13 +285,14 @@ function objectiveCandidate(message: string) {
 
 function shortAnswer(message: string) {
   const value = text(message, 120);
-  return value.length > 0 && value.length <= 80 && !YES.test(value) && !NO.test(value) ? value : undefined;
+  return value.length > 0 && value.length <= 80 && !YES.test(value) && !NO.test(value) && !isQuestion(value)
+    && !/\b(?:i|we)\s+(?:need|want)|\b(?:thanks|thank you|not sure|don't know)\b|أريد|أحتاج|نمی[‌\s]?دانم/i.test(value) ? value : undefined;
 }
 
 function applyQuestionAnswer(state: SalesStateSnapshot, target: QuestionTarget, message: string, item: ConversationMemoryItem) {
   const short = shortAnswer(message);
   if (!target) return;
-  if (target === 'LOCATION' && short) setScalar(state, 'location', short, item);
+  if (target === 'LOCATION' && short && /[\p{L}]/u.test(short) && !/\d/.test(short)) setScalar(state, 'location', short, item);
   if (target === 'DATE' && short) {
     const previous = state.date?.raw;
     recordRevision(state, 'date', previous, short, item);

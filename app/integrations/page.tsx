@@ -40,7 +40,8 @@ function recordValue(value: unknown) {
   return value && typeof value === 'object' ? value as Record<string, unknown> : {};
 }
 
-export default async function IntegrationsPage() {
+export default async function IntegrationsPage({ searchParams }: { searchParams: Promise<{ email?: string; message?: string; detail?: string }> }) {
+  const feedback = await searchParams;
   const { supabase, organizationId, role } = await getCurrentOrganization();
   const monthStart = new Date();
   monthStart.setUTCDate(1);
@@ -177,8 +178,8 @@ export default async function IntegrationsPage() {
           </div>
           <div>
             {provider === 'EMAIL_PROVIDER' && channel === 'EMAIL' ? <>
-              <input name="test_email" type="email" placeholder="Verification recipient" disabled={!editable || !credential} />
-              <button type="submit" formAction={verifyEmailIntegration} disabled={!editable || !credential}>Send verification email</button>
+              <button type="submit" formAction={verifyEmailIntegration} disabled={!editable || !credential}>Check email evidence</button>
+              {feedback.email && (feedback.detail || feedback.message) ? <p role="status" className="muted smallText">{(feedback.detail ?? feedback.message ?? '').slice(0, 500)}</p> : null}
             </> : null}
             {isWhatsApp ? <>
               <input name="test_whatsapp" inputMode="tel" autoComplete="tel" placeholder="e.g. 9689XXXXXXX" disabled={!editable} />
