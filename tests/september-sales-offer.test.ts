@@ -48,6 +48,30 @@ describe('September chat-only sales offer', () => {
     expect(draft.text).toContain('111.75 OMR');
   });
 
+  it('uses the current selected service instead of a stale earlier quote', () => {
+    const ctx = context({
+      message: 'What is the price for WhatsApp automation?',
+      salesState: { ...context().salesState!, selectedService: 'WHATSAPP_AUTOMATION' },
+      serviceKnowledge: [{
+        id: 'whatsapp_ai_setup',
+        name: 'WhatsApp AI Setup',
+        marketPrice: {
+          countryCode: 'OM',
+          currency: 'OMR',
+          price: 199,
+          minimumPrice: 199,
+          maxAutoDiscountPct: 0,
+          maxDiscountWithApprovalPct: 0,
+        },
+      }],
+    });
+    const decision = decideCommercialAction(ctx, baseResults);
+    const draft = secretaryCompose(ctx, decision, baseResults);
+    expect(decision).toMatchObject({ useDiscount: true, discountPct: 15 });
+    expect(draft.text).toContain('169.15 OMR');
+    expect(draft.text).not.toContain('111.75 OMR');
+  });
+
   it('does not reveal the offer in a generic first-touch conversation', () => {
     const ctx = context({ message: 'Tell me about SEO' });
     const decision = decideCommercialAction(ctx, baseResults);
