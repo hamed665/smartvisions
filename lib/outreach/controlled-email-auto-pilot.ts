@@ -25,8 +25,10 @@ export const CONTROLLED_OMAN_AUTOMATION_AUTHORIZATION = 'OWNER_REQUESTED_FULL_AU
 
 export function verifyControlledEmailAutoPilot(input: ControlledEmailAutoPilotInput) {
   if (String(input.channel ?? '').toUpperCase() !== 'EMAIL') return { verified: false as const, reason: 'CHANNEL_NOT_EMAIL' as const };
-  if (String(input.messageStatus ?? '').toUpperCase() !== 'APPROVED') return { verified: false as const, reason: 'MESSAGE_NOT_APPROVED' as const };
-  if (input.requiresApproval) return { verified: false as const, reason: 'APPROVAL_STILL_REQUIRED' as const };
+  const messageStatus = String(input.messageStatus ?? '').toUpperCase();
+  if (!['APPROVAL_REQUIRED', 'APPROVED'].includes(messageStatus)) return { verified: false as const, reason: 'MESSAGE_STATE_NOT_AUTOPILOT_ELIGIBLE' as const };
+  if (messageStatus === 'APPROVAL_REQUIRED' && !input.requiresApproval) return { verified: false as const, reason: 'PREAPPROVAL_STATE_INVALID' as const };
+  if (messageStatus === 'APPROVED' && input.requiresApproval) return { verified: false as const, reason: 'APPROVAL_STILL_REQUIRED' as const };
   if (input.metadataSource !== 'SHADOW_MODE') return { verified: false as const, reason: 'SOURCE_NOT_SHADOW_MODE' as const };
 
   const idempotencyKey = String(input.idempotencyKey ?? '').trim();
