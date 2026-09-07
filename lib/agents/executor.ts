@@ -125,7 +125,15 @@ export async function executeAgent(agent: AgentName, context: AgentContext): Pro
 export function decideCommercialAction(context: AgentContext, results: AgentResult[]): CommercialDecision {
   const decision = core.decideCommercialAction(context, results);
   const offer = activeSeptemberOffer(context, decision);
-  if (!offer?.reveal || offer.noDiscount) return decision;
+  if (!offer?.reveal) return decision;
+  if (offer.noDiscount) {
+    return {
+      ...decision,
+      useDiscount: false,
+      discountPct: undefined,
+      reasons: [...decision.reasons, offer.campaignId, 'CAMPAIGN_NO_DISCOUNT'],
+    };
+  }
   return {
     ...decision,
     useDiscount: true,
