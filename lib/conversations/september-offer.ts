@@ -50,7 +50,8 @@ export function resolveSeptember2026Offer(input: {
   const endsAt = new Date(SEPTEMBER_2026_OFFER.endsAtExclusive);
   if (now < startsAt || now >= endsAt) return null;
 
-  const serviceKey = salesServiceKeyForCanonicalId(input.serviceId) ?? normalizeSalesServiceKey(input.selectedService);
+  // Current customer selection wins over an older quoted/prospecting service.
+  const serviceKey = normalizeSalesServiceKey(input.selectedService) ?? salesServiceKeyForCanonicalId(input.serviceId);
   if (!serviceKey) return null;
 
   const discountPct = SEPTEMBER_2026_OFFER.discounts[serviceKey];
