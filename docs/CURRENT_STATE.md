@@ -14,7 +14,7 @@ This is the current operational handoff for Growth OS. Current `main`, routed Cl
 - Production Worker Route: `app.smartvisionsai.com/* -> smartvisions-growth-os-production`
 - Production Supabase: `pkypexzpyfbikdnkrzvw`
 - Latest runtime-changing Production merge: PR #145, merge commit `fc569a460039afb43eded9ec96f4a9f049d44e47`
-- Latest verified Production Worker version: `18168cc7-170d-4999-94fc-2c7a44bb83f4`
+- PR #145 runtime Worker version at verification: `18168cc7-170d-4999-94fc-2c7a44bb83f4`
 - Main CI: #673, green on the exact merge SHA
 - Cloudflare Production Deploy: #145, green on the exact merge SHA
 - Production cron: exactly `*/2 * * * *`
@@ -200,7 +200,7 @@ The permanent deploy path proves:
 - routed Production smoke;
 - safe API/webhook rejection smoke with no outbound provider send.
 
-For PR #145 the exact Production Worker version is `18168cc7-170d-4999-94fc-2c7a44bb83f4` and the Cron remains exactly `*/2 * * * *`.
+The runtime bundle introduced by PR #145 was verified as Production Worker version `18168cc7-170d-4999-94fc-2c7a44bb83f4`; the Production Cron remained exactly `*/2 * * * *` at that verification.
 
 ## Cost and paid-boundary rules
 
