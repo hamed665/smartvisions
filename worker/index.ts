@@ -252,7 +252,7 @@ const worker = {
     return handler.fetch(request);
   },
   scheduled(controller: ScheduledController, env: WorkerEnv, ctx: ExecutionContextLike) {
-    if (!shouldRunScheduledOperations(env)) return;
+    if (!shouldRunScheduledOperations(env, controller.scheduledTime)) return;
     ctx.waitUntil(runScheduledOperations(env, controller));
   },
 };
