@@ -11,11 +11,11 @@ describe('Cloudflare scheduled pilot invocation', () => {
     expect(source).not.toContain("internalPost(env, '/api/operations/pilot-acquisition', {})");
   });
 
-  it('keeps normal Worker fetch routing and scheduled environment gating unchanged', () => {
+  it('keeps normal Worker fetch routing and gates scheduled work by environment plus scheduled time', () => {
     const source = readFileSync(resolve(process.cwd(), 'worker/index.ts'), 'utf8');
 
     expect(source).toContain('return handler.fetch(request)');
-    expect(source).toContain('if (!shouldRunScheduledOperations(env)) return');
+    expect(source).toContain('if (!shouldRunScheduledOperations(env, controller.scheduledTime)) return');
     expect(source).toContain("internalPost(env, '/api/operations/tick', {})");
   });
 
