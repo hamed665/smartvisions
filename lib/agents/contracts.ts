@@ -204,6 +204,17 @@ export type CatalogRecommendation = {
   source: 'SERVICE_ID' | 'EXPLICIT_MESSAGE';
 };
 
+export type SalesEfficiencyTrace = {
+  policyPassed: boolean;
+  wordCount: number;
+  questionCount: number;
+  maxReplyWords?: number;
+  directPriceAnswerRequired: boolean;
+  directPriceAnswered: boolean;
+  readyToStart: boolean;
+  qualificationQuestions: string[];
+};
+
 export type PipelineTrace = {
   reasoningTier?: 'ZERO_COST' | 'LIGHT' | 'FULL';
   routeReasons?: string[];
@@ -218,4 +229,5 @@ export type PipelineTrace = {
   humanStylePassed?: boolean;
   delivery: 'SEND' | 'REVIEW' | 'BLOCK';
   catalogRecommendation: CatalogRecommendation | null;
+  salesEfficiency?: SalesEfficiencyTrace;
 };
