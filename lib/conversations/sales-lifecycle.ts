@@ -139,30 +139,80 @@ export async function persistCustomerDoNotContact(input: {
   return { persisted: true as const, suppression };
 }
 
+function validRequestKey(value?: string | null) {
+  const key = String(value ?? '').trim();
+  return /^[A-Za-z0-9:_-]{8,240}$/.test(key) ? key : null;
+}
+
+function agentMode(value: unknown): 'AUTO' | 'PAUSED' | 'HUMAN' {
+  const mode = String(value ?? '').toUpperCase();
+  return mode === 'PAUSED' || mode === 'HUMAN' ? mode : 'AUTO';
+}
+
 export async function persistHumanHandoff(input: {
   supabase: SalesLifecycleSupabase;
   organizationId: string;
   leadId?: string | null;
   conversationId?: string | null;
   reasons?: string[];
+  requestKey?: string | null;
+  actorType?: 'SYSTEM' | 'USER';
+  actorId?: string | null;
 }) {
   if (!input.leadId && !input.conversationId) {
     throw new Error('Human handoff requires durable lead or conversation linkage');
   }
 
   let terminal = false;
+  let leadMode: 'AUTO' | 'PAUSED' | 'HUMAN' = 'AUTO';
   if (input.leadId) {
     const { data: lead, error: leadLookupError } = await input.supabase.from('leads')
-      .select('id,status')
+      .select('id,status,agent_mode')
       .eq('organization_id', input.organizationId)
       .eq('id', input.leadId)
       .maybeSingle();
     if (leadLookupError) throw new Error(`Human handoff lead lookup failed: ${leadLookupError.message}`);
     if (!lead) throw new Error('Human handoff lead not found');
     terminal = ['DO_NOT_CONTACT', 'WON', 'LOST'].includes(String(lead.status));
+    leadMode = agentMode(lead.agent_mode);
   }
 
-  if (terminal) return { persisted: false as const, terminal: true as const };
+  let conversationMode = leadMode;
+  if (input.conversationId) {
+    let conversationQuery = input.supabase.from('sales_conversations')
+      .select('id,lead_id,stage,agent_mode,requires_human')
+      .eq('organization_id', input.organizationId)
+      .eq('id', input.conversationId);
+    if (input.leadId) conversationQuery = conversationQuery.eq('lead_id', input.leadId);
+    const { data: conversation, error: conversationLookupError } = await conversationQuery.maybeSingle();
+    if (conversationLookupError) throw new Error(`Human handoff conversation lookup failed: ${conversationLookupError.message}`);
+    if (!conversation) throw new Error('Human handoff conversation not found');
+    if (['WON','LOST','DO_NOT_CONTACT','SPAM'].includes(String(conversation.stage))) terminal = true;
+    conversationMode = agentMode(conversation.agent_mode);
+  }
+
+  if (terminal) return { persisted: false as const, terminal: true as const, eventRecorded: false as const };
+
+  const reasons = [...new Set((input.reasons ?? []).map(String).map((value) => value.trim()).filter(Boolean))].slice(0, 20);
+  const requestKey = validRequestKey(input.requestKey);
+  let eventRecorded = false;
+  if (requestKey) {
+    const eventInsert = await input.supabase.from('handoff_events').insert({
+      organization_id: input.organizationId,
+      lead_id: input.leadId ?? null,
+      conversation_id: input.conversationId ?? null,
+      from_mode: conversationMode,
+      to_mode: 'HUMAN',
+      reasons,
+      actor_type: input.actorType ?? 'SYSTEM',
+      actor_id: input.actorId ?? 'agent_runtime',
+      request_key: requestKey,
+    });
+    if (eventInsert.error && eventInsert.error.code !== '23505') {
+      throw new Error(`Human handoff journal failed: ${eventInsert.error.message}`);
+    }
+    eventRecorded = !eventInsert.error;
+  }
 
   const now = new Date().toISOString();
   if (input.leadId) {
@@ -180,7 +230,7 @@ export async function persistHumanHandoff(input: {
       agent_mode: 'HUMAN',
       requires_human: true,
       awaiting_party: 'HUMAN',
-      stage_reason: (input.reasons ?? []).length ? `HANDOFF:${input.reasons!.join(',')}`.slice(0, 500) : 'HANDOFF',
+      stage_reason: reasons.length ? `HANDOFF:${reasons.join(',')}`.slice(0, 500) : 'HANDOFF',
       updated_at: now,
     }).eq('organization_id', input.organizationId).eq('id', input.conversationId);
     if (conversationError) throw new Error(`Human handoff conversation persistence failed: ${conversationError.message}`);
@@ -194,5 +244,6 @@ export async function persistHumanHandoff(input: {
     if (followupError) throw new Error(`Human handoff follow-up cancellation failed: ${followupError.message}`);
   }
 
-  return { persisted: true as const, terminal: false as const };
+  const alreadyHuman = leadMode === 'HUMAN' && conversationMode === 'HUMAN';
+  return { persisted: !alreadyHuman as boolean, terminal: false as const, eventRecorded };
 }

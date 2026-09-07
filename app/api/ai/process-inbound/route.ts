@@ -121,6 +121,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid request' }, { status: 400 });
   }
+  const handoffRequestKey = requestKey.replaceAll('.', '_');
 
   const supabase = serviceClient();
   const organizationId = body.context.organizationId;
@@ -176,6 +177,7 @@ export async function POST(request: Request) {
         leadId: linkage.leadId,
         conversationId: linkage.conversationId,
         reasons: humanHandoffReasons(result),
+        requestKey: handoffRequestKey,
       });
       return { ...state, reconciliationRequired: false as const };
     } catch (error) {
@@ -183,6 +185,31 @@ export async function POST(request: Request) {
         persisted: false as const,
         reconciliationRequired: true as const,
         error: error instanceof Error ? error.message.slice(0, 600) : 'Human handoff reconciliation failed',
+      };
+    }
+  };
+
+  const persistFailureHandoff = async (reason: string) => {
+    const leadId = effectiveContext.leadId ?? trustedContext.leadId;
+    const conversationId = effectiveContext.conversationId ?? deliveryContext?.conversationId ?? requestedDeliveryContext?.conversationId;
+    if (!leadId && !conversationId) {
+      return { persisted: false as const, reconciliationRequired: true as const, error: 'No durable lead/conversation linkage for human fallback' };
+    }
+    try {
+      const state = await persistHumanHandoff({
+        supabase,
+        organizationId,
+        leadId,
+        conversationId,
+        reasons: [reason],
+        requestKey: handoffRequestKey,
+      });
+      return { ...state, reconciliationRequired: false as const };
+    } catch (error) {
+      return {
+        persisted: false as const,
+        reconciliationRequired: true as const,
+        error: error instanceof Error ? error.message.slice(0, 600) : 'Human fallback persistence failed',
       };
     }
   };
@@ -282,16 +309,21 @@ export async function POST(request: Request) {
         settings: costState.settings,
       });
       if (!quota.allowed) {
+        const handoffState = await persistFailureHandoff('AI_QUOTA_BLOCKED');
         return NextResponse.json({
           error: `Paid AI run blocked by configured quota (${quota.reason})`,
           quota,
           reasoningTier: routePlan.tier,
+          handoffState,
           automaticRetry: false,
         }, { status: 429 });
       }
     } catch (error) {
+      const handoffState = await persistFailureHandoff('AI_QUOTA_PREFLIGHT_FAILED');
       return NextResponse.json({
         error: error instanceof Error ? error.message : 'AI quota preflight unavailable; paid operation blocked',
+        handoffState,
+        automaticRetry: false,
       }, { status: 503 });
     }
   }
@@ -353,13 +385,11 @@ export async function POST(request: Request) {
       conversationId: effectiveContext.conversationId,
     });
 
-    // Telegram is an owner-side operational notification only. A Telegram failure must never
-    // fail the already-completed Agent run, trigger an AI retry, or change customer delivery.
     try {
       const alert = buildSalesTelegramAlert({ context: effectiveContext, trace: result.trace, runId: claimed.id });
       if (alert) await notifyTelegramOwner({ ...alert, supabase });
     } catch {
-      // Notification journal is fail-closed/no-auto-retry; the sales run remains authoritative.
+      // Notification failure cannot fail an already-completed sales run or trigger a retry.
     }
 
     if (handoffState?.reconciliationRequired) {
@@ -372,8 +402,6 @@ export async function POST(request: Request) {
       }, { status: 202 });
     }
 
-    // The paid/AI boundary is complete before queueing. A queue failure must never turn a
-    // successfully completed AI run into FAILED or cause the model to be called again.
     const approvalQueue = await reconcileApproval(payload);
     const responsePayload = {
       ...payload,
@@ -393,6 +421,12 @@ export async function POST(request: Request) {
       trace: { error: message, automatic_retry: false, runtimeContext: runtimeEvidence },
       completed_at: new Date().toISOString(),
     }).eq('organization_id', organizationId).eq('id', claimed.id).eq('status', 'PROCESSING');
-    return NextResponse.json({ error: message, runId: claimed.id, automaticRetry: false }, { status: 502 });
+    const handoffState = await persistFailureHandoff('AI_RUNTIME_FAILURE');
+    return NextResponse.json({
+      error: message,
+      runId: claimed.id,
+      handoffState,
+      automaticRetry: false,
+    }, { status: 502 });
   }
 }

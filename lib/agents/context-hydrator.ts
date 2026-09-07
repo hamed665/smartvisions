@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AgentContext, MarketLocaleStyleSnapshot } from './contracts';
 import { resolveCanonicalLeadQuote } from './canonical-quote';
 import { hydrateAgentContext as hydrateCore, type HydratedRuntimeEvidence } from './context-hydrator-core';
+import { isRejectedCanonicalService } from '@/lib/conversations/service-key';
+import { persistConversationSalesState } from '@/lib/conversations/sales-state-store';
 import { resolveReplyLanguage } from '@/lib/outreach/locale';
 
 export type { HydratedRuntimeEvidence } from './context-hydrator-core';
@@ -30,10 +32,12 @@ async function hydrateCanonicalLeadQuote(input: {
   if (leadError) throw new Error(`Canonical quote lead hydration failed: ${leadError.message}`);
   if (!lead) return input.hydrated;
 
+  const rejectedServices = context.salesState?.rejectedServices ?? [];
+  const leadOffer = String(lead.recommended_offer ?? '').trim();
   let quote = resolveCanonicalLeadQuote({
     countryCode,
     serviceKnowledge: context.serviceKnowledge,
-    leadRecommendedOffer: lead.recommended_offer,
+    leadRecommendedOffer: isRejectedCanonicalService(leadOffer, rejectedServices) ? undefined : lead.recommended_offer,
   });
 
   if (!quote && lead.business_id) {
@@ -45,15 +49,16 @@ async function hydrateCanonicalLeadQuote(input: {
       .maybeSingle();
     if (opportunityError) throw new Error(`Canonical quote opportunity hydration failed: ${opportunityError.message}`);
 
+    const opportunityService = String(opportunity?.primary_service_id ?? '').trim();
     quote = resolveCanonicalLeadQuote({
       countryCode,
       serviceKnowledge: context.serviceKnowledge,
-      growthOpportunityServiceId: opportunity?.primary_service_id,
+      growthOpportunityServiceId: isRejectedCanonicalService(opportunityService, rejectedServices) ? undefined : opportunity?.primary_service_id,
       growthOpportunityCatalogReady: opportunity?.catalog_ready,
     });
   }
 
-  if (!quote) return input.hydrated;
+  if (!quote || isRejectedCanonicalService(quote.serviceId, rejectedServices)) return input.hydrated;
 
   return {
     ...input.hydrated,
@@ -86,6 +91,16 @@ export async function hydrateAgentContext(input: {
   trustedConversationId?: string;
 }) {
   const coreHydrated = await hydrateCore(input);
+  if (coreHydrated.context.organizationId && coreHydrated.context.conversationId && coreHydrated.context.salesState) {
+    await persistConversationSalesState({
+      supabase: input.supabase,
+      organizationId: coreHydrated.context.organizationId,
+      conversationId: coreHydrated.context.conversationId,
+      leadId: coreHydrated.context.leadId,
+      state: coreHydrated.context.salesState,
+    });
+  }
+
   const hydrated = await hydrateCanonicalLeadQuote({ supabase: input.supabase, hydrated: coreHydrated });
   const countryCode = String(hydrated.context.countryCode ?? '').trim().toUpperCase();
   if (!countryCode) return hydrated;
