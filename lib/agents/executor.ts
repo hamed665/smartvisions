@@ -1,7 +1,8 @@
 import type { AgentContext, AgentName, AgentResult, CommercialDecision, ReplyDraft } from './contracts';
 import * as core from './executor-core';
 import { resolveReplyLanguage } from '@/lib/outreach/locale';
-import { applyPercentageDiscount, resolveSeptember2026Offer } from '@/lib/conversations/september-offer';
+import { resolveSeptember2026Offer } from '@/lib/conversations/september-offer';
+import { evaluateCanonicalQuote } from '@/lib/outreach/canonical-pricing';
 
 function activeSeptemberOffer(context: AgentContext, decision?: CommercialDecision) {
   return resolveSeptember2026Offer({
@@ -15,14 +16,36 @@ function activeSeptemberOffer(context: AgentContext, decision?: CommercialDecisi
 }
 
 function canonicalQuote(context: AgentContext, decision: CommercialDecision) {
-  if (Number.isFinite(context.quotedPrice) && context.quotedCurrency) {
-    return { price: Number(context.quotedPrice), currency: context.quotedCurrency };
-  }
   const serviceId = decision.serviceId || context.quotedService;
-  if (!serviceId) return null;
-  const price = context.serviceKnowledge?.find((service) => service.id === serviceId)?.marketPrice;
-  if (!price || !Number.isFinite(price.price) || !price.currency) return null;
-  return { price: Number(price.price), currency: price.currency };
+  const service = serviceId ? context.serviceKnowledge?.find((item) => item.id === serviceId) : undefined;
+  const marketPrice = service?.marketPrice;
+  if (marketPrice && Number.isFinite(marketPrice.price) && marketPrice.currency) {
+    return {
+      serviceId: service!.id,
+      serviceName: service!.name,
+      price: Number(marketPrice.price),
+      currency: marketPrice.currency,
+      minimumPrice: Number(marketPrice.minimumPrice ?? 0),
+      maxAutoDiscountPct: Number(marketPrice.maxAutoDiscountPct ?? 0),
+      maxDiscountWithApprovalPct: Number(marketPrice.maxDiscountWithApprovalPct ?? 0),
+      startingFrom: service?.config?.startingFrom === true,
+      requiresCustomQuote: service?.config?.requiresCustomQuote === true,
+    };
+  }
+  if (Number.isFinite(context.quotedPrice) && context.quotedCurrency && serviceId) {
+    return {
+      serviceId,
+      serviceName: service?.name ?? serviceId,
+      price: Number(context.quotedPrice),
+      currency: context.quotedCurrency,
+      minimumPrice: 0,
+      maxAutoDiscountPct: 0,
+      maxDiscountWithApprovalPct: 0,
+      startingFrom: false,
+      requiresCustomQuote: false,
+    };
+  }
+  return null;
 }
 
 function discountSpecificQuestion(message: string) {
@@ -45,7 +68,22 @@ function septemberOfferLine(context: AgentContext, decision: CommercialDecision,
 
   const quote = canonicalQuote(context, decision);
   if (quote) {
-    const finalPrice = applyPercentageDiscount(quote.price, offer.discountPct);
+    const campaignQuote = evaluateCanonicalQuote({
+      serviceId: quote.serviceId,
+      serviceName: quote.serviceName,
+      servicePrice: quote.price,
+      currency: quote.currency,
+      minimumPrice: quote.minimumPrice,
+      maxAutoDiscountPct: quote.maxAutoDiscountPct,
+      maxDiscountWithApprovalPct: quote.maxDiscountWithApprovalPct,
+      requestedDiscountPct: offer.discountPct,
+      authorizedCampaignDiscountPct: offer.discountPct,
+      authorizedCampaignId: offer.campaignId,
+      startingFrom: quote.startingFrom,
+      requiresCustomQuote: quote.requiresCustomQuote,
+    });
+    if (!campaignQuote.allowed || campaignQuote.finalPrice == null) return null;
+    const finalPrice = campaignQuote.finalPrice;
     if (persian) return `برای سپتامبر، این سرویس ${offer.discountPct}٪ تخفیف دارد و قیمت کمپین ${finalPrice} ${quote.currency} می‌شود.`;
     if (arabic) return `لعرض سبتمبر، هالخدمة عليها خصم ${offer.discountPct}٪، ويصير سعر الحملة ${finalPrice} ${quote.currency}.`;
     return `For September, this service has ${offer.discountPct}% off, so the campaign price is ${finalPrice} ${quote.currency}.`;
