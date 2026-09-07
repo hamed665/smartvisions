@@ -6,7 +6,11 @@ import type {
   SalesStateRevision,
   SalesStateSnapshot,
 } from '@/lib/agents/contracts';
-import { hasPaymentExecutionIntent } from '@/lib/handoff/policy';
+import {
+  hasAvailabilityExecutionIntent,
+  hasContractExecutionIntent,
+  hasFinancialPaymentIntent,
+} from '@/lib/conversations/sales-behavior';
 
 const SERVICE_ALIASES: Array<{ key: string; patterns: RegExp[] }> = [
   { key: 'CONTENT_REELS', patterns: [/\bcontent\b/i, /\breels?\b/i, /\bstor(?:y|ies)\b/i, /محتو[ىا]/i, /ريل/i, /استور[یي]/i] },
@@ -24,7 +28,6 @@ const YES = /^(?:yes|yeah|yep|sure|ok|okay|نعم|ايوه|أيوه|اي|بله|
 const NO = /^(?:no|nope|لا|نه)[.!\s]*$/i;
 
 type QuestionTarget = 'LOCATION' | 'DATE' | 'BUDGET' | 'MODEL_COUNT' | 'MODEL_GENDER' | 'VIDEOGRAPHER' | 'DELIVERABLES' | undefined;
-
 type PersistableScalar = string | number | boolean | null | undefined;
 
 function text(value: unknown, max = 500) {
@@ -65,6 +68,7 @@ export function normalizeSalesState(value: unknown, stage?: ConversationStage, l
   const rawBudget = raw.budget && typeof raw.budget === 'object' && !Array.isArray(raw.budget) ? raw.budget as Record<string, unknown> : undefined;
   const evidenceRaw = raw.evidence && typeof raw.evidence === 'object' && !Array.isArray(raw.evidence) ? raw.evidence as Record<string, unknown> : {};
   const evidenceMap: Record<string, SalesStateEvidence> = {};
+  const storedStage = text(raw.stage, 40);
   for (const [key, item] of Object.entries(evidenceRaw).slice(0, 40)) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
     const entry = item as Record<string, unknown>;
@@ -117,7 +121,7 @@ export function normalizeSalesState(value: unknown, stage?: ConversationStage, l
     humanConfirmationRequired: raw.humanConfirmationRequired === true,
     pendingHandoffReasons: unique(Array.isArray(raw.pendingHandoffReasons) ? raw.pendingHandoffReasons.map((item) => text(item, 80)) : []).slice(0, 12),
     language: text(raw.language, 80) || text(language, 80) || undefined,
-    stage: stage ?? (text(raw.stage, 40) as ConversationStage || undefined),
+    stage: stage ?? (storedStage ? storedStage as ConversationStage : undefined),
     rollingSummary: text(raw.rollingSummary, 1400) || undefined,
     evidence: evidenceMap,
     revisions,
@@ -238,9 +242,9 @@ function isQuestion(message: string) {
 }
 
 function operationalSignals(message: string) {
-  const payment = hasPaymentExecutionIntent(message);
-  const contract = /\b(?:contract|agreement|sign)\b|(?:العقد|الاتفاقية|توقيع)|(?:قرارداد|امضا)/i.test(message);
-  const availability = /\b(?:availability|available|slot|book(?:ing)?|reserve|reservation|can you provide|do you have)\b|(?:متاح|متوفر|موعد|حجز|عندكم)|(?:وقت خالی|رزرو|موجود دارید)/i.test(message);
+  const payment = hasFinancialPaymentIntent(message);
+  const contract = hasContractExecutionIntent(message);
+  const availability = hasAvailabilityExecutionIntent(message);
   const discount = /\b(?:discount|best price|last price|cheaper|reduce (?:the )?price)\b|(?:خصم|تخفيض|آخر سعر|أرخص)|(?:تخفیف|قیمت بهتر|ارزان)/i.test(message);
   return { payment, contract, availability, discount };
 }
@@ -401,7 +405,7 @@ export function deriveSalesState(input: {
       if (isQuestion(body)) setScalar(state, 'lastQuestion', text(body, 500), item);
 
       const signals = operationalSignals(body);
-      const hasProductionComplexity = state.productionNeeds.length > 0 || state.deliverables.filter((item) => item.quantity != null).length >= 2;
+      const hasProductionComplexity = state.productionNeeds.length > 0 || state.deliverables.filter((entry) => entry.quantity != null).length >= 2;
       if (/custom (?:quote|package|scope)|bespoke|عرض مخصص|باقة مخصصة|پکیج اختصاصی|قیمت اختصاصی/i.test(body) || hasProductionComplexity) {
         state.customQuoteRequired = true;
         state.evidence.customQuoteRequired = evidence(item);
@@ -433,9 +437,7 @@ export function deriveSalesState(input: {
     ? 'HUMAN'
     : state.missingRequiredInfo.length
       ? 'ASK'
-      : state.lastQuestion
-        ? 'ANSWER'
-        : 'ANSWER';
+      : 'ANSWER';
   state.rollingSummary = buildSalesStateSummary(state) || undefined;
   return state;
 }
