@@ -16,7 +16,7 @@ function normalizedAction(value: unknown): CommercialDecision['action'] | undefi
 }
 
 function directPriceQuestion(message: string) {
-  return /\b(?:price|cost|how much|pricing|what does .* cost)\b|(?:كم\s*(?:السعر|يكلف|تكلف)|السعر|سعر|تكلفة)|(?:قیمت|چقدر|هزینه)/i.test(message);
+  return /\b(?:price|cost|how much|pricing|what does .* cost)\b|(?:كم\s*(?:السعر|يكلف|تكلف)|السعر|سعر|تكلفة)|(?:قیمت|هزینه|چقدر\s*(?:قیمت|هزینه|می[‌\s-]?شه|میشه|درمیاد|است|هست))/i.test(message);
 }
 
 function canonicalQuote(context: AgentContext, decision: CommercialDecision) {
@@ -34,7 +34,7 @@ function canonicalPriceReply(message: string, locale: string, quote: { price: nu
   const amount = `${quote.price} ${quote.currency}`;
   if (/[\u0600-\u06FF]/.test(message)) {
     if (/^(?:fa|fa-|persian)/i.test(locale) || /[پچژگک]/.test(message)) return `قیمت ثبت‌شده این سرویس ${amount} است.`;
-    return `السعر المعتمد لهالخدمة هو ${amount}.`;
+    return `السعر المعتمد للخدمة هو ${amount}.`;
   }
   return `The configured price for this service is ${amount}.`;
 }
