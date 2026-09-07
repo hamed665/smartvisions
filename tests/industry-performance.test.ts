@@ -12,7 +12,7 @@ describe('industry performance learning',()=>{
       {id:'s1',name:'Salon One',category:'hair salon',google_primary_type_display_name:null},
     ];
     const leads=[...Array.from({length:10},(_,i)=>lead(`ld${i}`,`d${i}`)),lead('ls1','s1')];
-    const messages=[...leads.map(x=>sent(x.id)),...['ld0','ld1','ld2','ld3','ls1'].map(inbound)];
+    const messages=[...leads.map(x=>sent(x.id)),...['ld0','ld1','ld2','ld3','ls1'].map(id=>inbound(id))];
     const replies=[
       ...[0,1,2,3].map(i=>({lead_id:`ld${i}`,category:'positive',hot:i<2,signals:{positive:true}})),
       {lead_id:'ls1',category:'positive',hot:true,signals:{positive:true}},
