@@ -69,11 +69,33 @@ describe('sales boundary hardening', () => {
       quotedPrice: 179,
       quotedCurrency: 'OMR',
       serviceKnowledge: [
-        { id: 'website-service', marketPrice: { price: 179, currency: 'OMR' } },
-        { id: 'seo-service', marketPrice: { price: 149, currency: 'OMR' } },
+        {
+          id: 'website-service',
+          name: 'Business Website',
+          marketPrice: {
+            countryCode: 'OM', currency: 'OMR', price: 179, minimumPrice: 179,
+            maxAutoDiscountPct: 0, maxDiscountWithApprovalPct: 0,
+          },
+        },
+        {
+          id: 'seo-service',
+          name: 'SEO Growth',
+          marketPrice: {
+            countryCode: 'OM', currency: 'OMR', price: 149, minimumPrice: 149,
+            maxAutoDiscountPct: 0, maxDiscountWithApprovalPct: 0,
+          },
+        },
       ],
-    } as Partial<AgentContext>);
-    const decision = { action: 'REPLY', serviceId: 'seo-service' } as CommercialDecision;
+    });
+    const decision: CommercialDecision = {
+      action: 'ANSWER',
+      serviceId: 'seo-service',
+      useDiscount: false,
+      explainValue: false,
+      askLowPressureCta: false,
+      requiresHuman: false,
+      reasons: [],
+    };
 
     const correct = evaluateSalesReplyPolicy({
       context: ctx,
