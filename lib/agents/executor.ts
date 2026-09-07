@@ -5,6 +5,13 @@ import { resolveSeptember2026Offer } from '@/lib/conversations/september-offer';
 import { salesServiceKeyForCanonicalId } from '@/lib/conversations/service-key';
 import { evaluateCanonicalQuote } from '@/lib/outreach/canonical-pricing';
 
+function contextWithCurrentQuoteBoundary(context: AgentContext): AgentContext {
+  const selectedService = context.salesState?.selectedService;
+  if (!selectedService || !context.quotedService) return context;
+  if (salesServiceKeyForCanonicalId(context.quotedService) === selectedService) return context;
+  return { ...context, quotedService: undefined, quotedPrice: undefined, quotedCurrency: undefined };
+}
+
 function activeSeptemberOffer(context: AgentContext, decision?: CommercialDecision) {
   return resolveSeptember2026Offer({
     countryCode: context.countryCode,
@@ -132,7 +139,8 @@ export async function executeAgent(agent: AgentName, context: AgentContext): Pro
 }
 
 export function decideCommercialAction(context: AgentContext, results: AgentResult[]): CommercialDecision {
-  const decision = core.decideCommercialAction(context, results);
+  const safeContext = contextWithCurrentQuoteBoundary(context);
+  const decision = core.decideCommercialAction(safeContext, results);
   const offer = activeSeptemberOffer(context, decision);
   if (!offer?.reveal) return decision;
   if (offer.noDiscount) {
@@ -152,7 +160,7 @@ export function decideCommercialAction(context: AgentContext, results: AgentResu
 }
 
 export function secretaryCompose(context: AgentContext, decision: CommercialDecision, results: AgentResult[]): ReplyDraft {
-  const draft = core.secretaryCompose(context, decision, results);
+  const draft = core.secretaryCompose(contextWithCurrentQuoteBoundary(context), decision, results);
   const offerLine = septemberOfferLine(context, decision, draft.language);
   if (!offerLine || draft.text.includes(offerLine)) return draft;
   if (decision.useDiscount && decision.discountPct != null && new RegExp(`${decision.discountPct}\\s*%|${decision.discountPct}\\s*٪`).test(draft.text)) return draft;
