@@ -2,6 +2,7 @@ import type { AgentContext, AgentName, AgentResult, CommercialDecision, ReplyDra
 import * as core from './executor-core';
 import { resolveReplyLanguage } from '@/lib/outreach/locale';
 import { resolveSeptember2026Offer } from '@/lib/conversations/september-offer';
+import { salesServiceKeyForCanonicalId } from '@/lib/conversations/service-key';
 import { evaluateCanonicalQuote } from '@/lib/outreach/canonical-pricing';
 
 function activeSeptemberOffer(context: AgentContext, decision?: CommercialDecision) {
@@ -16,8 +17,16 @@ function activeSeptemberOffer(context: AgentContext, decision?: CommercialDecisi
 }
 
 function canonicalQuote(context: AgentContext, decision: CommercialDecision) {
-  const serviceId = decision.serviceId || context.quotedService;
-  const service = serviceId ? context.serviceKnowledge?.find((item) => item.id === serviceId) : undefined;
+  const selectedService = context.salesState?.selectedService;
+  const candidateServiceId = decision.serviceId || context.quotedService;
+  const candidateMatchesSelection = !selectedService || salesServiceKeyForCanonicalId(candidateServiceId) === selectedService;
+  const eligible = selectedService
+    ? (context.serviceKnowledge ?? []).filter((item) => salesServiceKeyForCanonicalId(item.id) === selectedService)
+    : (context.serviceKnowledge ?? []);
+  const service = candidateMatchesSelection
+    ? eligible.find((item) => item.id === candidateServiceId)
+    : eligible.length === 1 ? eligible[0] : undefined;
+  const serviceId = service?.id ?? (candidateMatchesSelection ? candidateServiceId : undefined);
   const marketPrice = service?.marketPrice;
   if (marketPrice && Number.isFinite(marketPrice.price) && marketPrice.currency) {
     return {
@@ -32,7 +41,7 @@ function canonicalQuote(context: AgentContext, decision: CommercialDecision) {
       requiresCustomQuote: service?.config?.requiresCustomQuote === true,
     };
   }
-  if (Number.isFinite(context.quotedPrice) && context.quotedCurrency && serviceId) {
+  if (candidateMatchesSelection && Number.isFinite(context.quotedPrice) && context.quotedCurrency && serviceId) {
     return {
       serviceId,
       serviceName: service?.name ?? serviceId,
