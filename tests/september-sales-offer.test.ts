@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentContext, AgentResult } from '@/lib/agents/contracts';
 import { decideCommercialAction, secretaryCompose } from '@/lib/agents/executor';
 
@@ -31,6 +31,13 @@ function context(overrides: Partial<AgentContext> = {}): AgentContext {
 }
 
 describe('September chat-only sales offer', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-07T12:00:00+04:00'));
+  });
+
+  afterEach(() => vi.useRealTimers());
+
   it('injects the configured SEO offer only after price intent', () => {
     const ctx = context();
     const decision = decideCommercialAction(ctx, baseResults);
