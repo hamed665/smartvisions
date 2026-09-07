@@ -153,11 +153,12 @@ function serviceMatches(message: string) {
 
 const SERVICE_REJECTION = /(don['’]?t want|do not want|not interested in|no (?:need|website|seo)|remove|without|ما (?:أريد|ابغى|أبغى)|ما نبي|لا أريد|نمی[‌\s-]?خوام|نمیخوام|نمی خواهم)/i;
 const SERVICE_POSITIVE = /(i|we)\s+(?:need|want|would like)|interested in|price (?:for|of)|cost (?:for|of)|how much.*(?:website|seo|content|social|whatsapp|automation|agent)|condition for|package.*(?:website|seo|content|social|whatsapp|automation|agent)|أريد|ابغى|أبغى|نبي|مهتم|سعر|أحتاج|می[‌\s-]?(?:خوام|خواهم)|نیاز/i;
+const EXPLICIT_INTENT_AFTER_AND = /\band\s+(?=(?:(?:i|we)\s+(?:need|want|would like|do not want|don['’]?t want|are not interested|am not interested)|(?:أريد|ابغى|أبغى|نبي|لا أريد)|(?:می[‌\s-]?(?:خوام|خواهم)|نمی[‌\s-]?(?:خوام|خواهم))))/i;
 
 function serviceClauses(message: string) {
   if (!SERVICE_REJECTION.test(message)) return [message];
   return message
-    .split(/(?:[.!?؟;]|,\s*|\bbut\b|\bhowever\b|\binstead\b|\band\b|اما|ولی|لكن|بس)/i)
+    .split(new RegExp(`(?:[.!?؟;]|,\\s*|\\bbut\\b|\\bhowever\\b|\\binstead\\b|${EXPLICIT_INTENT_AFTER_AND.source}|اما|ولی|لكن|بس)`, 'i'))
     .map((part) => part.trim())
     .filter(Boolean);
 }
