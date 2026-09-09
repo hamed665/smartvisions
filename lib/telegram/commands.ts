@@ -19,6 +19,7 @@ import {
 import { normalizePersistedPreview } from './persisted-preview';
 import { assertTelegramRevertFresh } from './revert-guard';
 import { notifyTelegramOwner } from './notifications';
+import { buildOutreachReport, executeDailyEmailOutreach, prepareDailyEmailOutreach } from './outreach-command-center';
 
 export type { ExecutedMutation, PreparedMutation } from './commands-core';
 export { isSafeServiceOptionKey } from './commands-core';
@@ -28,6 +29,10 @@ export async function executeReadCommand(input: {
   organizationId: string;
   command: TelegramOwnerCommand;
 }): Promise<CommandExecutionResult> {
+  if (input.command.type === 'SHOW_OUTREACH_REPORT') {
+    return buildOutreachReport({ supabase: input.supabase, organizationId: input.organizationId, countryCode: input.command.countryCode });
+  }
+
   if (input.command.type === 'SHOW_PANEL_CAPABILITIES') {
     const { panelParityHelpText } = await import('./panel-parity');
     return { title:'Control Center ↔ Telegram', text:panelParityHelpText() };
@@ -87,6 +92,10 @@ export async function prepareMutation(input: {
   ownerUserId: string;
   command: TelegramOwnerCommand;
 }): Promise<PreparedMutation> {
+  if (input.command.type === 'SET_DAILY_EMAIL_OUTREACH') {
+    const prepared = await prepareDailyEmailOutreach({ supabase: input.supabase, organizationId: input.organizationId, command: input.command });
+    return { command: prepared.command, preview: prepared.preview };
+  }
   if (input.command.type === 'CATALOG_COMPOSE') {
     return prepareCatalogComposeMutation({
       supabase: input.supabase,
@@ -111,6 +120,16 @@ export async function executePreparedMutation(input: {
   command: TelegramOwnerCommand;
   preview: CommandExecutionResult;
 }): Promise<ExecutedMutation> {
+  if (input.command.type === 'SET_DAILY_EMAIL_OUTREACH') {
+    return executeDailyEmailOutreach({
+      supabase: input.supabase,
+      organizationId: input.organizationId,
+      ownerUserId: input.ownerUserId,
+      command: input.command,
+      preview: input.preview,
+    });
+  }
+
   if (input.command.type === 'REVERT_LAST_CHANGE') {
     if (!input.command.targetRunId) throw new Error('Revert target is missing');
     await assertTelegramRevertFresh({
