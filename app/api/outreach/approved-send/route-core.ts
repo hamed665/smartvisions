@@ -34,6 +34,7 @@ type SendContext = {
   last_customer_message_at?: string | null;
   template_name?: string | null;
   template_language_code?: string | null;
+  template_body_parameters?: string[] | null;
   catalog_content_id?: string | null;
 };
 
@@ -376,7 +377,14 @@ export async function POST(request: Request) {
         whatsappOperation = 'SEND_PRODUCT';
         whatsappEventType = 'PRODUCT_SENT';
       } else if (whatsappPolicy.mode === 'TEMPLATE') {
-        result = await provider.sendTemplate({ to: sendContext.to, templateName: sendContext.template_name!, languageCode: sendContext.template_language_code ?? 'en' });
+        result = await provider.sendTemplate({
+          to: sendContext.to,
+          templateName: sendContext.template_name!,
+          languageCode: sendContext.template_language_code ?? 'en',
+          bodyParameters: Array.isArray(sendContext.template_body_parameters)
+            ? sendContext.template_body_parameters.map((value) => String(value))
+            : undefined,
+        });
         whatsappOperation = 'SEND_TEMPLATE';
         whatsappEventType = 'TEMPLATE_SENT';
       } else {
