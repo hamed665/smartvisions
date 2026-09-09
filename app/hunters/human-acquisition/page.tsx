@@ -6,6 +6,7 @@ import {
   isGccHumanAcquisitionCandidate,
   type HumanAcquisitionOpportunity,
 } from '@/lib/hunters/business/human-acquisition';
+import { buildGccHumanOpener } from '@/lib/outreach/gcc-human-script';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,6 +74,11 @@ export default async function HumanAcquisitionPage() {
           const business = humanAcquisitionBusiness(row) as QueueBusiness | null;
           const instagram = safeInstagram(business?.instagram);
           const phone = phoneDigits(business?.whatsapp || business?.international_phone || business?.phone);
+          const opener = buildGccHumanOpener({
+            marketCode: business?.country_code,
+            businessName: business?.name,
+            primaryServiceId: row.primary_service_id,
+          });
           return <article className="conversationCard" key={row.id}>
             <div className="conversationTopline">
               <div>
@@ -83,6 +89,11 @@ export default async function HumanAcquisitionPage() {
             </div>
             <p><strong>Primary offer:</strong> {row.primary_service_id || 'Owner review required'}</p>
             <p className="muted">{row.acquisition_routing_reason || humanAcquisitionReason(row)}</p>
+            {opener ? <div className="card">
+              <p className="muted">Suggested opener · human send only</p>
+              <p dir="rtl">{opener.arabic}</p>
+              <p>{opener.english}</p>
+            </div> : null}
             <div className="buttonRow">
               {instagram ? <a className="secondaryButton" href={instagram} target="_blank" rel="noreferrer">Open Instagram</a> : null}
               {phone.length >= 8 ? <a className="secondaryButton" href={`https://wa.me/${phone}`} target="_blank" rel="noreferrer">Open WhatsApp manually</a> : null}
