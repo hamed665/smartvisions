@@ -73,7 +73,7 @@ export function buildGrowthOpportunity(
 
   const personalization = {
     ...basePersonalization,
-    contactabilityScore: qualification.contactabilityScore,
+    contactabilityScore: revenuePriority.acquisitionContactabilityScore,
     needScore: qualification.needScore,
     serviceFitScore: qualification.serviceFitScore,
     revenuePotentialScore: qualification.revenuePotentialScore,
