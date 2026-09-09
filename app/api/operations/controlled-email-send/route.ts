@@ -60,7 +60,7 @@ export async function POST(request: Request) {
 
   const localWindow = evaluateLocalWindow({ marketCode: marketCode as MarketCode, leadTimezone: send.lead_timezone ? String(send.lead_timezone) : undefined });
   if (!localWindow.allowed) return NextResponse.json({ error: 'Outside recipient local send window', window: localWindow }, { status: 409 });
-  const gate = await assertCanonicalSendAllowed({ supabase, organizationId: body.organizationId, leadId: message.lead_id, conversationId: message.conversation_id, channel: 'EMAIL', recipient, shadowModeExceptionVerified: true, marketWindowExceptionVerified: false });
+  await assertCanonicalSendAllowed({ supabase, organizationId: body.organizationId, leadId: message.lead_id, conversationId: message.conversation_id, channel: 'EMAIL', recipient, shadowModeExceptionVerified: true, marketWindowExceptionVerified: false });
   try { assertPaidOperationAllowed(await getCostGuardState(body.organizationId), body.priority ?? 'NORMAL'); } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : 'Cost Guard block' }, { status: 409 }); }
   const sentLast24Hours = await countMailboxSendsLast24Hours({ supabase, organizationId: body.organizationId, mailboxId });
   const provider = new ResendEmailProvider(); const providerHealth = await provider.health();
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     if (accepted.error) throw new Error(`Provider-accepted email reconciliation failed: ${accepted.error.message}`);
     const outreach = await supabase.from('outreach_messages').upsert({ organization_id: body.organizationId, lead_id: message.lead_id, mailbox_id: mailboxId, channel: 'EMAIL', direction: 'OUTBOUND', status: 'SENT', provider_message_id: providerMessageId, subject, body: message.original_text, sent_at: nowIso, metadata: { marketCode, campaignId: campaign.id, source: 'CONTROLLED_MULTI_MARKET_AUTOPILOT' } }, { onConflict: 'organization_id,provider_message_id' });
     if (outreach.error) throw new Error(`Outbound ledger reconciliation failed: ${outreach.error.message}`);
-    await recordUsage({ organizationId: body.organizationId, provider: 'EMAIL_PROVIDER', operation: 'EMAIL_SEND', costUsd: 0, units: 1, metadata: { marketCode, mailboxId, campaignId: campaign.id, providerMessageId, canonicalGate: gate.reason, controlledMultiMarket: true } });
+    await recordUsage({ organizationId: body.organizationId, provider: 'EMAIL_PROVIDER', operation: 'EMAIL_SEND', costUsd: 0, units: 1, metadata: { marketCode, mailboxId, campaignId: campaign.id, providerMessageId, canonicalGateVerified: true, controlledMultiMarket: true } });
     return NextResponse.json({ ok: true, action: 'SENT', marketCode, messageId: message.id, providerMessageId });
   } catch (error) {
     const text = error instanceof Error ? error.message : 'Controlled email send failed';
