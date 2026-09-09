@@ -5,7 +5,7 @@ export interface FollowupPolicy {
   delaysDays: number[];
   stopOnReply: boolean;
   stopOnUnsubscribe: boolean;
-  stopOnSpam: boolean;
+  stopOnSpam?: boolean;
 }
 
 export const emailFollowupPolicy: FollowupPolicy = {
@@ -60,7 +60,7 @@ export function buildFollowupSchedule(input: {
   if (
     (policy.stopOnReply && input.hasReply)
     || (policy.stopOnUnsubscribe && input.unsubscribed)
-    || (policy.stopOnSpam && input.spam)
+    || (policy.stopOnSpam !== false && input.spam)
   ) return [];
 
   return policy.delaysDays
