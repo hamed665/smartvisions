@@ -1,6 +1,6 @@
 # Smart Visions Growth OS — Current Production State
 
-**Reconciled:** 2026-09-07 (Oman, UTC+4)
+**Reconciled:** 2026-09-09 (Oman, UTC+4)
 
 This is the current operational handoff for Growth OS. Current `main`, routed Cloudflare Production and Production Supabase evidence override older planning documents, stale issue text and chat history.
 
@@ -11,12 +11,14 @@ This is the current operational handoff for Growth OS. Current `main`, routed Cl
 - Primary Production: `https://app.smartvisionsai.com`
 - Runtime: Cloudflare Workers Paid
 - Production Worker: `smartvisions-growth-os-production`
-- Production Worker Route: `app.smartvisionsai.com/* -> smartvisions-growth-os-production`
+- Production route: `app.smartvisionsai.com/* -> smartvisions-growth-os-production`
 - Production Supabase: `pkypexzpyfbikdnkrzvw`
-- Latest runtime-changing Production merge: PR #145, merge commit `fc569a460039afb43eded9ec96f4a9f049d44e47`
-- PR #145 runtime Worker version at verification: `18168cc7-170d-4999-94fc-2c7a44bb83f4`
-- Main CI: #673, green on the exact merge SHA
-- Cloudflare Production Deploy: #145, green on the exact merge SHA
+- Latest runtime-changing merge: PR #157
+- Production merge commit: `2ece56d5b09e1d71e9e112a019d9a532d26c4e06`
+- PR #157 head verified by CI: `9ca83256550113edb4a474f5eff7bd51d0a14cbd`
+- Main CI on merge: #713, green
+- Cloudflare Production Deploy on merge: #185, green
+- Production Worker version after PR #157: `159ef50a-aa7e-453e-b2f7-bf28b2408cda`
 - Production cron: exactly `*/2 * * * *`
 - Release candidate: no scheduled trigger
 - Old Vercel deployment: frozen rollback/history only; not a Production health source
@@ -24,84 +26,155 @@ This is the current operational handoff for Growth OS. Current `main`, routed Cl
 
 The Smart Visions Website repository and its Supabase project are separate and out of scope. The frozen historical Website paths inside this repository remain out of scope.
 
-## Controlled-launch status
+## Current controlled-launch state
 
-The core system is beyond platform construction and is in **controlled Oman launch validation**. This is not permission for broad autonomous outreach.
+Growth OS is in **controlled Oman launch operation**, not broad unrestricted outreach.
 
-Current verified safety state after PR #145 Production deploy:
+Production controls verified on 2026-09-09:
 
 - Shadow Mode: **ON**
 - Global Kill Switch: OFF
 - Email pause: OFF
 - WhatsApp AI pause: OFF
 - Agents pause: OFF
-- zero outbound `SENT` outreach rows created from the PR #145 merge through post-deploy verification
-- zero Email `SENT` rows in that window
-- zero WhatsApp `SENT` rows in that window
-- zero WhatsApp outbound events in that window
-- zero Conversation `SENT` rows in that window
-- zero new Agent runs created by the deploy/smoke process
+- Oman market: enabled
+- Oman timezone: `Asia/Muscat`
+- canonical send window: `09:00-19:00`
+- cold Email: enabled
+- cold WhatsApp: disabled and not an authorization source
+- verified-opt-in WhatsApp lane: enabled
+- approved WhatsApp template: `smartvisions_business_intro_om`
+- approved WhatsApp template language: `ar`
 
-Do not disable Shadow Mode merely because CI, transport or Production deployment are green. Scale only from measured real pilot evidence and an explicit owner decision.
+Do not globally disable Shadow Mode. Narrow, evidence-backed exceptions implemented in the canonical send path are the only supported way to cross the provider boundary.
 
-## Recent Production work packages
+## Daily Oman target — 2026-09-09
 
-### PR #142 — Runtime reliability and operational truth
+Production had a stale RUNNING daily target for `2026-09-08` and no current target for `2026-09-09`. On 2026-09-09 the stale target was paused and a new canonical daily target was activated using the existing campaign model and the existing owner full-automation authorization.
 
-Closed observed Production drift without a new subsystem:
+Current target:
 
-- Production scheduled cadence remains `*/2`;
-- durable runtime evidence carries Worker-version provenance and bounded freshness;
-- effective campaign/integration state is derived from real runtime evidence;
-- Website Audit provider output is normalized before persistence;
-- email quota reconciliation uses the existing outbound/provider event ledgers rather than a stale counter.
+- name: `Daily Controlled Oman Pilot — 2026-09-09`
+- country: Oman
+- city: Muscat
+- target count: 5
+- status: RUNNING
+- `dailyOutreachTarget=true`
+- `targetDate=2026-09-09`
+- `outreachMode=CONTROLLED`
+- `shadowModeRequired=true`
+- `outreachEnabled=true`
+- `autoApprovalEnabled=true`
+- `automatedSendingEnabled=true`
+- `manualReviewOnly=false`
+- `automationAuthorization=OWNER_REQUESTED_FULL_AUTOMATION`
+- `maxShadowDrafts=5`
+- `autoAcquisitionEnabled=false`
 
-### PR #143 — Conversation memory and grounded sales behavior
+The activation is audit-logged. Auto acquisition remains intentionally OFF while existing real Oman leads are available; do not spend provider calls merely to inflate CRM volume.
 
-Extended the existing conversation/handoff/CRM stores:
+Immediate post-activation verification showed zero Email outbound rows and zero WhatsApp outbound rows for the Oman day at that check. This is expected until the scheduled evidence pipeline produces an eligible draft.
 
-- conversation-scoped memory uses only real customer `RECEIVED` messages and actually `SENT` Agent/Human replies;
-- Draft/Approval Required/Blocked/Failed text is excluded from customer-visible memory;
-- durable `sales_state` tracks corrections, rejected services, deliverables, production needs, location/date/budget evidence and human-confirmation requirements;
-- repeated-known questions, rejected-service recommendations and fake operational commitments are deterministically blocked;
-- HUMAN → AUTO resume clears resolved handoff flags while preserving durable sales facts;
-- handoff idempotency reuses `handoff_events`; no parallel task/journal system was created.
+## Email autopilot truth
 
-Production migrations `0063_conversation_sales_state_and_handoff_idempotency` and `0064_clear_resolved_sales_handoff_on_resume` are applied and verified on Growth OS Supabase.
+PR #156 added the narrow controlled Oman Email autopilot while retaining global Shadow Mode.
 
-### PR #144 — Approved catalog integration and conversion attribution
+The path is allowed only when all canonical checks pass, including:
 
-Reconciled the approved seven-item Meta/WhatsApp catalog with the existing Growth OS code without creating a second pricing or analytics system:
+- current-day RUNNING Oman daily target;
+- exact owner automation authorization in campaign config;
+- evidence-backed Growth first touch;
+- canonical Lead/Conversation/Business linkage;
+- DNC/suppression and channel/agent state;
+- market scope and `09:00-19:00` Muscat send window;
+- mailbox quota and rolling send ledger;
+- provider health;
+- Cost Guard;
+- mailbox health `HEALTHY`;
+- explicit mailbox warmup readiness.
 
-- approved catalog content IDs and service aliases are mapped to existing Growth services;
-- `service_prices` remains the only quote-pricing source;
-- automatic product-card recommendation is suppressed on direct price questions where provider-side catalog price could conflict with the canonical quote;
-- deterministic Product Sent → Delivered / Read → reply / Human handoff attribution reuses existing WhatsApp, outreach and handoff ledgers;
-- no fabricated product click/view metric is shown;
-- Reports extends the existing analytics surface rather than creating a new store/UI stack.
+Current mailbox evidence on 2026-09-09:
 
-### PR #145 — Sales efficiency guardrails and measured learning
+- enabled: true
+- health: `HEALTHY`
+- warmup: `NOT_STARTED`
+- configured daily limit: 5
 
-Improved reply discipline without claiming unproven conversion lift:
+Therefore automatic Email provider sends must remain held by the existing readiness gate. Do **not** mark the mailbox warmed merely to make automation move. Warmup state must reflect genuine operational readiness.
 
-- explicit ready-to-start intent in English, Gulf/Omani Arabic and Persian moves to Human instead of extending qualification;
-- unnecessary location/date/budget/decision-maker questions are blocked when canonical sales state does not require them;
-- genuinely required operational questions remain allowed for custom production scopes;
-- direct price questions use the exact canonical configured service amount/currency when available;
-- Secretary fallback may read canonical `serviceKnowledge.marketPrice`; no duplicate pricing table exists;
-- existing market `maxReplyWords` is enforced;
-- response-efficiency metrics are attached to the existing Agent trace;
-- Reports aggregates only explicit new `salesEfficiency` evidence and does not retroactively score historical runs.
+## WhatsApp first-touch truth
 
-Production baseline after deploy: **37 historical Agent runs and 0 `salesEfficiency` samples**. Reports therefore correctly begins at `0 measured drafts`; future learning must come from new real Agent runs.
+PR #157 added a verified-opt-in Oman WhatsApp lane. It does **not** authorize cold WhatsApp.
+
+Canonical rules:
+
+- public/Hunter-discovered WhatsApp numbers are lead/contact evidence only;
+- `whatsappColdEnabled=false` remains correct;
+- a durable, verified, purpose-bound marketing opt-in is required before first touch;
+- allowed evidence types are `CUSTOMER_WHATSAPP_MESSAGE`, `CLICK_TO_WHATSAPP`, `WEBSITE_FORM`, or `SIGNED_OR_VERBAL_PERMISSION`;
+- evidence must identify Smart Visions, marketing purpose, canonical recipient, opt-in time, verification time and source reference;
+- latest opt-out overrides earlier opt-in;
+- owner-recorded opt-in queues the approved Oman introduction in Shadow Approval;
+- the approved template is `smartvisions_business_intro_om`, language `ar`, with exactly one business-name body parameter;
+- owner approval and explicit controlled send are required for this lane;
+- provider boundary rechecks current opt-in, canonical recipient/linkage, DNC/suppression, runtime controls, market window, provider state and Cost Guard;
+- opt-out persists durable evidence, marks the Lead DNC and adds phone suppression;
+- WhatsApp follow-up templates outside the 24-hour customer-service window also require durable marketing opt-in.
+
+Production evidence at reconciliation:
+
+- verified WhatsApp marketing opt-ins: 0
+- WhatsApp opt-in Shadow drafts: 0
+- WhatsApp outbound rows today: 0
+- WhatsApp `SENT` rows today: 0
+- WhatsApp provider usage events today: 0
+- existing Oman Leads: 15
+- existing Oman Leads in AUTO mode: 13
+- existing Oman businesses with WhatsApp or phone contact evidence: 14
+
+Do not fabricate opt-in for these existing businesses. The clean conversion path is permission first, then the controlled WhatsApp lane.
+
+## Recent production work after PR #145
+
+### PR #147 — mailbox quota truth
+
+The evidence pipeline now uses the canonical rolling 24-hour outbound/provider ledger rather than legacy `mailboxes.sent_today` as quota authority.
+
+### PR #148–#150 — sales and email boundary hardening
+
+These fixes tightened current-service quote selection, mixed service rejection/selection parsing, qualification-summary boundaries and read-only email health verification. They did not activate outreach or create a new subsystem.
+
+### PR #151 — daily Shadow cap
+
+A daily evidence target must carry an explicit positive `maxShadowDrafts`; the pipeline clamps this to `target_count` and stops when the Oman-day cap is reached.
+
+### PR #152–#153 — scoped evidence candidate ordering
+
+Evidence candidates are restricted to active campaign city/industry scope, and contact-ready Tier A first-party evidence is prioritized before weaker candidates. No fabricated contact data is allowed.
+
+### PR #154 — September chat-only offer
+
+September 2026 Oman discounts are deterministic and chat-only. They are revealed only on price/discount intent, HOT/CLOSING state or strong buying intent. Meta/WhatsApp catalog pricing is unchanged. The AI Agent service remains the no-discount product.
+
+### PR #155 — Muscat scheduled-agent window
+
+Scheduled Growth OS work is allowed only from `09:00 <= Asia/Muscat < 19:00`. Exact boundary tests cover 08:59, 09:00, 18:59 and 19:00. Canonical provider send windows remain independently authoritative.
+
+### PR #156 — controlled Oman Email autopilot
+
+The existing scheduled pipeline may prepare evidence/drafts continuously, but only a current-day owner-authorized Oman target can auto-approve eligible Email Growth first touches. Provider sending additionally requires canonical market window, healthy provider/mailbox state, explicit warmup readiness, Cost Guard, DNC/suppression and exact linkage checks.
+
+### PR #157 — verified-opt-in Oman WhatsApp lane
+
+Added durable opt-in/opt-out evidence, approved Oman template wiring, Shadow Approval UI/action, provider-boundary rechecks and opt-out suppression. Cold WhatsApp remains disabled.
 
 ## Canonical runtime architecture — do not rebuild
 
-The following remain canonical and should be extended rather than duplicated:
+Extend these existing primitives rather than duplicating them:
 
 - Business / Lead / Campaign / Conversation CRM model;
 - Google Places Hunter and deterministic qualification/service-fit logic;
-- Website Audit cache/quota/idempotency path;
+- deterministic Website Audit cache/quota/idempotency path;
 - Multi-Agent pipeline: Intent Discovery, Conversation Psychology, Business Analyst, Culture/Locale, Sales & Marketing, Evidence Checker, Preview Director, Decision Orchestrator, Secretary and Relevance Checker;
 - Context Hydrator with real conversation memory, Knowledge/Prompt versions, Services, Pricing, locale and approved Portfolio evidence;
 - `ZERO_COST / LIGHT / FULL` selective routing;
@@ -109,7 +182,7 @@ The following remain canonical and should be extended rather than duplicated:
 - canonical provider-bound outbound send gate;
 - Email/WhatsApp webhook journals and idempotency;
 - `agent_runs.request_key` logical-run claim/replay boundary;
-- existing Follow-up / Automation primitives;
+- Follow-up / Automation primitives;
 - Cloudflare scheduled executor;
 - Telegram Owner Assistant/control plane;
 - versioned `knowledge_versions` / `prompt_versions`;
@@ -119,42 +192,23 @@ Do not add a second CRM, conversation store, Knowledge Base, pricing store, reco
 
 ## Canonical outbound safety
 
-Every provider-bound outbound action must re-read canonical persisted state and fail closed as applicable on:
+Every provider-bound outbound action must re-read persisted state and fail closed as applicable on:
 
 - global Kill Switch;
 - channel / Agent pause;
-- Shadow Mode and any narrowly proven exception;
+- Shadow Mode and the exact narrow exception being used;
 - Lead DNC/status/mode;
 - Conversation stage/mode/Human takeover;
 - suppression;
 - canonical recipient identity;
 - market enabled/timezone/local send window;
-- WhatsApp durable inbound evidence and exact 24-hour/template policy;
-- Email mailbox health/ledger;
+- WhatsApp 24-hour/template and verified marketing opt-in policy;
+- Email mailbox health, warmup readiness and rolling quota ledger;
 - approval state;
-- Cost Guard/provider quota.
+- Cost Guard/provider quota;
+- canonical campaign authorization for controlled autopilot paths.
 
 Approval earlier in the flow never bypasses a later safety-state change.
-
-## Conversation / sales intelligence truth
-
-The Agent stack is collaborative and real:
-
-`Specialists -> Decision Orchestrator -> Secretary -> Relevance Checker`
-
-Runtime context includes authoritative Lead/Business/Conversation state, recent durable memory, current `sales_state`, enabled Services, canonical market pricing/floors/discount boundaries, locale style, active Knowledge/Prompts and approved Portfolio evidence.
-
-Important behavioral rules now enforced deterministically include:
-
-- Evidence Before Offer;
-- `NO_RECOMMENDATION` is valid when evidence is insufficient;
-- Portfolio Before Free Custom Work;
-- no repeated questions for facts already known;
-- no invented operational confirmation;
-- no recommendation of an explicitly rejected service unless the customer reopens it;
-- direct canonical price answer when the relevant configured price is known;
-- at most the necessary qualification question, not a generic interrogation script;
-- explicit start/payment/contract/meeting/custom-quote/high-risk cases remain Human-controlled.
 
 ## Services, catalog and pricing
 
@@ -162,12 +216,13 @@ Important behavioral rules now enforced deterministically include:
 - approved Meta/WhatsApp Catalog contract: 7 items;
 - canonical quote pricing remains `services` + `service_prices`;
 - Meta product identity is separate from Growth OS quote-pricing truth;
+- September discount behavior is chat-only and does not mutate Meta Catalog;
 - flexible/custom production scope may require Human confirmation rather than an invented price;
 - no second pricing table or catalog-pricing source is allowed.
 
 ## Provider/runtime state
 
-Durable provider state at the latest launch reconciliation:
+Latest durable launch reconciliation retains these provider states unless fresher runtime evidence supersedes them:
 
 - `GOOGLE_PLACES / DISCOVERY`: CONNECTED, enabled
 - `OPENAI / AI`: CONNECTED, enabled
@@ -180,77 +235,41 @@ Durable provider state at the latest launch reconciliation:
 - `META / INSTAGRAM`: NOT_CONFIGURED and intentionally deferred
 - `REDIS / QUEUE`: NOT_CONFIGURED and unnecessary at current scale
 
-`CONNECTED` is durable evidence, not merely secret presence. Stale provider verification should render as stale operational evidence rather than silently becoming “healthy now.”
+`CONNECTED` is durable evidence, not a substitute for current provider health. Provider-boundary checks remain authoritative.
 
-## Cloudflare deployment truth
-
-Cloudflare is the Production baseline.
-
-The permanent deploy path proves:
-
-- exact green `main` SHA checkout;
-- Growth Supabase read-only credential validation;
-- Vinext compatibility/build;
-- provider secret binding-name presence without printing values;
-- isolated candidate with no Production route or Cron;
-- safe candidate smoke and controlled SSR load;
-- exact bundle promotion to Production;
-- Production Growth Supabase binding re-assertion;
-- Production Worker Route attachment;
-- routed Production smoke;
-- safe API/webhook rejection smoke with no outbound provider send.
-
-The runtime bundle introduced by PR #145 was verified as Production Worker version `18168cc7-170d-4999-94fc-2c7a44bb83f4`; the Production Cron remained exactly `*/2 * * * *` at that verification.
-
-## Cost and paid-boundary rules
+## Cost rules
 
 Canonical Cost Guard remains the budget source of truth; legacy `system_controls.monthly_budget_usd` is not a second budget authority.
 
-Rules remain:
+Rules:
 
 - deterministic/cache work before paid AI/provider work;
+- existing real candidates before paid acquisition when useful supply exists;
 - atomic reservation/accounting at paid boundaries;
 - no blind retry after ambiguous provider acceptance;
 - deep AI and acquisition remain quota-bound;
 - no paid smoke solely to refresh a dashboard badge when durable evidence already proves the path.
 
-## Known manual/account-level hardening items
+## Manual/account-level hardening
 
-These are not reasons to create application subsystems:
+These remain account settings, not excuses to create application subsystems:
 
-- Supabase Auth leaked-password protection was previously reported disabled; enable it in the Supabase project setting when the available plan/control permits it.
-- GitHub `main` was previously reported unprotected; repository settings should require PR/CI and block force-push/delete when repository permissions allow it.
+- Supabase Auth leaked-password protection was previously reported disabled; enable it when the available plan/control permits it.
+- GitHub `main` was previously reported unprotected; repository settings should require PR/CI and block force-push/delete when permissions permit it.
 
-Do not add broad RLS policies merely to silence INFO-level advisor messages on intentionally service-only tables.
+## Next clean work
 
-## Controlled Oman pilot rule
+Do not invent another feature roadmap. Continue only from verified operational evidence:
 
-The next business-learning phase is a **tiny controlled pilot**, not another architecture phase:
+`real business evidence -> deterministic qualification/service fit -> smallest useful recommendation or NO_RECOMMENDATION -> selective Agent reasoning -> Shadow/approval/human gates -> canonical provider boundary -> durable result evidence -> measured learning`
 
-- real evidence-qualified Oman businesses only;
-- no fake CRM population;
-- low volume;
-- Shadow Mode stays ON;
-- approvals/Human handoff stay authoritative;
-- no blind follow-up sends;
-- no free custom Preview as the default opener;
-- no Instagram automation expansion;
-- no Redis/queue expansion without measured need;
-- monitor DNC/suppression, campaign state, Agent run idempotency, response-efficiency trace, approval state, Cost Guard, provider outcomes and replies;
-- only after real samples exist should message/locale/industry/service allocation be tuned from measured results.
+Immediate operational priorities after this reconciliation:
 
-There is currently **no generic cold-outreach `SENT` cohort large enough to claim a winning script or conversion lift**. Response-discipline telemetry exists specifically so the pilot can create honest evidence instead of retrospective storytelling.
+1. let the current `2026-09-09` target consume existing eligible Oman evidence up to the explicit cap;
+2. verify any generated Email draft is evidence-backed and that automatic provider send remains held while mailbox warmup is `NOT_STARTED`;
+3. do not create WhatsApp marketing opt-in evidence unless real permission exists;
+4. once genuine opt-in exists, exercise the PR #157 Shadow Approval path with the exact approved Meta template and verify durable provider outcome;
+5. enable additional Hunter acquisition only after existing useful supply is exhausted and only within Cost Guard/provider quotas;
+6. tune copy, industry allocation or service allocation only from real delivery/reply/handoff evidence.
 
-## Definition of next clean work
-
-Do not invent another feature roadmap. Continue from the existing canonical path:
-
-`real business evidence -> deterministic qualification/service fit -> smallest useful recommendation or NO_RECOMMENDATION -> selective Agent reasoning -> Shadow/approval/human gates -> canonical provider-boundary safety -> durable result evidence -> measured learning`
-
-After the PR #145 reconciliation, the next code/config change must correspond to one of these:
-
-1. a real Production defect;
-2. a provider/configuration requirement needed for the controlled pilot;
-3. measured pilot evidence showing a specific reply/qualification/handoff/market-allocation weakness.
-
-If the proposal is merely another Agent, another CRM/store, another analytics stack or broader autonomy without pilot evidence, stop rather than adding architecture for decoration.
+The next code/config change must correspond to a real Production defect, a genuine provider/readiness requirement, or measured pilot evidence. Broader autonomy without evidence is not a reason to add architecture.
