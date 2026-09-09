@@ -70,6 +70,10 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
   }
 
   async sendTemplate(input: WhatsAppTemplateSendInput): Promise<WhatsAppSendResult> {
+    const bodyParameters = (input.bodyParameters ?? []).map((value) => value.trim());
+    if (bodyParameters.some((value) => !value)) {
+      throw new Error('WhatsApp template body parameters must be non-empty text');
+    }
     return this.sendPayload({
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
@@ -78,6 +82,12 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
       template: {
         name: input.templateName,
         language: { code: input.languageCode },
+        ...(bodyParameters.length ? {
+          components: [{
+            type: 'body',
+            parameters: bodyParameters.map((text) => ({ type: 'text', text })),
+          }],
+        } : {}),
       },
     });
   }
