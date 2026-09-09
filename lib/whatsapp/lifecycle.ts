@@ -100,14 +100,16 @@ async function resolveExactBusinessByPhone(organizationId: string, from: string)
 
   const { data: businesses, error: businessError } = await supabase
     .from('businesses')
-    .select('id,phone,whatsapp')
+    .select('id,phone,international_phone,whatsapp')
     .eq('organization_id', organizationId)
-    .or(`phone.ilike.%${suffix}%,whatsapp.ilike.%${suffix}%`)
+    .or(`phone.ilike.%${suffix}%,international_phone.ilike.%${suffix}%,whatsapp.ilike.%${suffix}%`)
     .limit(20);
   if (businessError) throw new Error(`WhatsApp business lookup failed: ${businessError.message}`);
 
   const exact = (businesses ?? []).filter(row =>
-    phonesRepresentSameNumber(target, row.phone) || phonesRepresentSameNumber(target, row.whatsapp),
+    phonesRepresentSameNumber(target, row.phone)
+      || phonesRepresentSameNumber(target, row.international_phone)
+      || phonesRepresentSameNumber(target, row.whatsapp),
   );
   if (exact.length > 1) return { business: null, ambiguous: true };
   return { business: exact[0] ?? null, ambiguous: false };
