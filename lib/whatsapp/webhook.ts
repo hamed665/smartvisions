@@ -10,6 +10,16 @@ export function verifyMetaSignature(rawBody: string, signatureHeader: string | n
   return received.length === expected.length && timingSafeEqual(received, expected);
 }
 
+export type WhatsAppReferralContext = {
+  sourceUrl?: string;
+  sourceId?: string;
+  sourceType?: string;
+  headline?: string;
+  body?: string;
+  mediaType?: string;
+  ctwaClid?: string;
+};
+
 export type NormalizedWhatsAppInbound = {
   providerMessageId: string;
   from: string;
@@ -20,6 +30,7 @@ export type NormalizedWhatsAppInbound = {
   mediaId?: string;
   mimeType?: string;
   voice?: boolean;
+  referral?: WhatsAppReferralContext;
 };
 
 export type NormalizedWhatsAppStatus = {
@@ -45,6 +56,15 @@ type WhatsAppWebhookRoot = {
           type?: string;
           text?: { body?: string };
           audio?: { id?: string; mime_type?: string; voice?: boolean };
+          referral?: {
+            source_url?: string;
+            source_id?: string;
+            source_type?: string;
+            headline?: string;
+            body?: string;
+            media_type?: string;
+            ctwa_clid?: string;
+          };
         }>;
         statuses?: Array<{
           id?: string;
@@ -62,6 +82,24 @@ type WhatsAppWebhookRoot = {
 
 function webhookRoot(payload: unknown) {
   return payload as WhatsAppWebhookRoot;
+}
+
+function clean(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function referralContext(referral: NonNullable<NonNullable<NonNullable<WhatsAppWebhookRoot['entry']>[number]['changes']>[number]['value']>['messages'] extends Array<infer M> ? M extends { referral?: infer R } ? R : never : never) {
+  if (!referral) return undefined;
+  const normalized: WhatsAppReferralContext = {
+    sourceUrl: clean(referral.source_url),
+    sourceId: clean(referral.source_id),
+    sourceType: clean(referral.source_type),
+    headline: clean(referral.headline),
+    body: clean(referral.body),
+    mediaType: clean(referral.media_type),
+    ctwaClid: clean(referral.ctwa_clid),
+  };
+  return Object.values(normalized).some(Boolean) ? normalized : undefined;
 }
 
 export function extractWhatsAppInbound(payload: unknown): NormalizedWhatsAppInbound[] {
@@ -82,6 +120,7 @@ export function extractWhatsAppInbound(payload: unknown): NormalizedWhatsAppInbo
           mediaId: message.audio?.id,
           mimeType: message.audio?.mime_type,
           voice: message.audio?.voice,
+          referral: referralContext(message.referral),
         });
       }
     }
