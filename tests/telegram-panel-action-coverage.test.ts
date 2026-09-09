@@ -57,6 +57,11 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
     processLatestWhatsAppInboundPilot:'whatsapp.process_pilot',
     sendApprovedWhatsAppCatalogPilot:'whatsapp.send_approved_pilot',
   },
+  'app/whatsapp-opt-in-actions.ts': {
+    recordWhatsAppMarketingOptIn:'SPECIALIZED:VERIFIED_WHATSAPP_OPT_IN',
+    recordWhatsAppMarketingOptOut:'SPECIALIZED:WHATSAPP_OPT_OUT',
+    sendApprovedWhatsAppOptInFirstTouch:'SPECIALIZED:OWNER_APPROVED_OPT_IN_SEND',
+  },
   'app/whatsapp-verification-actions.ts': {
     verifyWhatsAppIntegration:'whatsapp.verify', transcribeLatestWhatsAppVoicePilot:'whatsapp.voice_transcribe',
   },
@@ -105,5 +110,8 @@ describe('Control Center ↔ Telegram action coverage', () => {
     expect(CLASSIFICATION['app/management-actions.ts'].rejectMessage).toBe('SPECIALIZED:/reject');
     expect(CLASSIFICATION['app/management-actions.ts'].releaseHumanTakeover).toBe('SPECIALIZED:OWNER_RELEASE');
     expect(CLASSIFICATION['app/daily-target-actions.ts'].setDailyOutreachTarget).toBe('SPECIALIZED:DAILY_OUTREACH_TARGET');
+    expect(CLASSIFICATION['app/whatsapp-opt-in-actions.ts'].recordWhatsAppMarketingOptIn).toBe('SPECIALIZED:VERIFIED_WHATSAPP_OPT_IN');
+    expect(CLASSIFICATION['app/whatsapp-opt-in-actions.ts'].recordWhatsAppMarketingOptOut).toBe('SPECIALIZED:WHATSAPP_OPT_OUT');
+    expect(CLASSIFICATION['app/whatsapp-opt-in-actions.ts'].sendApprovedWhatsAppOptInFirstTouch).toBe('SPECIALIZED:OWNER_APPROVED_OPT_IN_SEND');
   });
 });
