@@ -22,7 +22,7 @@ const CANONICAL_OFFER_COPY:Record<string,CanonicalOfferCopy>={
 function canonicalObservation(sourceEvidence:string):CanonicalFirstTouchObservation|null{
   const evidence=sourceEvidence.trim();const lower=evidence.toLowerCase();
   if(lower.includes('known web presence is a directory/social/contact page rather than a standalone website')||lower.includes('only a social/contact/directory presence is known; no standalone website is present')||lower.includes('no standalone website is currently known'))return{key:'NO_STANDALONE_WEBSITE',sourceEvidence:evidence,english:'your current public web presence appears to rely mainly on directory, social, or contact pages rather than a standalone website',arabic:'حضوركم الحالي على الويب ظاهر بشكل أساسي عبر صفحات دليل أو تواصل أو سوشال بدل موقع مستقل'};
-  if(lower.includes('cached deterministic website audit marks seo quality as weak/poor'))return{key:'SEO_AUDIT_WEAK',sourceEvidence:evidence,english:'your website audit shows that the SEO performance could be improved',arabic:'فحص الموقع يوضح أن أداء السيو يمكن تحسينه'};
+  if(lower.includes('cached deterministic website audit marks seo quality as weak/poor'))return{key:'SEO_AUDIT_WEAK',sourceEvidence:evidence,english:'your website audit shows that the SEO performance could be improved',arabic:'السيو في موقعكم يحتاج تحسين'};
   if(lower.includes('arabic support is missing'))return{key:'ARABIC_SUPPORT_MISSING',sourceEvidence:evidence,english:'your website does not currently appear to support Arabic',arabic:'موقعكم حالياً ما يظهر فيه دعم واضح للغة العربية'};
   if(lower.includes('mobile quality is weak'))return{key:'MOBILE_QUALITY_WEAK',sourceEvidence:evidence,english:"your website's mobile experience could be improved",arabic:'تجربة موقعكم على الجوال تحتاج تحسين'};
   if(lower.includes('cta/conversion quality is weak'))return{key:'CTA_QUALITY_WEAK',sourceEvidence:evidence,english:"your website's call-to-action and conversion flow could be improved",arabic:'مسار الدعوة للإجراء والتحويل في موقعكم يحتاج تحسين'};
@@ -43,4 +43,14 @@ export function buildCanonicalFirstTouchDraft(input:MessagePlanInput){
   if(GULF_MARKETS.has(input.marketCode)){const arabic=`هلا ${businessName}، لاحظنا إن ${observation.arabic}. وبناءً على هالمعلومة، ممكن نساعدكم من خلال ${offer.arabic}. إذا حابين، نرسل لكم ملخص قصير؟`;sections={english,arabic,omaniArabic:arabic};text=`${english}\n\n${arabic}`;}
   return{plan,observation,offer,sections,text,subject:`A quick idea for ${businessName}`};
 }
-export function buildOmanFirstTouchDraft(input:MessagePlanInput){if(input.marketCode!=='OM')throw new Error('Canonical Oman first-touch rendering is only available for market OM');return buildCanonicalFirstTouchDraft(input);}
+
+type OmanFirstTouchDraft = Omit<ReturnType<typeof buildCanonicalFirstTouchDraft>, 'sections'> & {
+  sections: { english:string; arabic:string; omaniArabic:string };
+};
+
+export function buildOmanFirstTouchDraft(input:MessagePlanInput):OmanFirstTouchDraft{
+  if(input.marketCode!=='OM')throw new Error('Canonical Oman first-touch rendering is only available for market OM');
+  const draft=buildCanonicalFirstTouchDraft(input);
+  if(!draft.sections.arabic||!draft.sections.omaniArabic)throw new Error('Canonical Oman first-touch Arabic section is unavailable');
+  return{...draft,sections:{english:draft.sections.english,arabic:draft.sections.arabic,omaniArabic:draft.sections.omaniArabic}};
+}
