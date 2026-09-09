@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getRuntimeControls } from '@/lib/reliability/runtime-controls';
 import { evaluateGrowthFirstTouchChannelPolicy } from '@/lib/outreach/first-touch-channel-policy';
 import { assertSmartVisionsCatalogContentId } from '@/lib/whatsapp/catalog';
+import { getWhatsAppMarketingPermission } from '@/lib/whatsapp/marketing-opt-in';
 
 export type ShadowDraftChannel = 'EMAIL' | 'WHATSAPP';
 
@@ -21,6 +22,7 @@ export type ShadowDraftInput = {
   lastCustomerMessageAt?: string;
   templateName?: string;
   templateLanguageCode?: string;
+  templateBodyParameters?: string[];
   catalogContentId?: string;
   replyLanguage?: string;
   replyDialect?: string;
@@ -93,6 +95,10 @@ export async function queueShadowDraft(input: ShadowDraftInput) {
   const supabase = serviceClient();
   let resolvedTemplateName = input.templateName?.trim() || undefined;
   let resolvedTemplateLanguageCode = input.templateLanguageCode?.trim() || undefined;
+  const resolvedTemplateBodyParameters = (input.templateBodyParameters ?? []).map((value) => value.trim());
+  if (resolvedTemplateBodyParameters.some((value) => !value)) {
+    throw new Error('WhatsApp template body parameters must be non-empty text');
+  }
 
   if (input.idempotencyKey.trim().startsWith('growth-first-touch:')) {
     const marketCode = String(input.marketCode ?? '').trim().toUpperCase();
@@ -109,18 +115,28 @@ export async function queueShadowDraft(input: ShadowDraftInput) {
     }
 
     const config = record(market.config);
+    let whatsappOptInVerified = false;
     if (input.channel === 'WHATSAPP') {
+      if (!input.leadId) throw new Error('WhatsApp opt-in first touch requires durable lead linkage');
+      const permission = await getWhatsAppMarketingPermission({
+        supabase,
+        organizationId: input.organizationId,
+        leadId: input.leadId,
+        recipient: input.to,
+      });
+      whatsappOptInVerified = permission.allowed;
       resolvedTemplateName = resolvedTemplateName
-        ?? (typeof config.whatsappColdTemplateName === 'string' ? config.whatsappColdTemplateName.trim() || undefined : undefined);
+        ?? (typeof config.whatsappOptInTemplateName === 'string' ? config.whatsappOptInTemplateName.trim() || undefined : undefined);
       resolvedTemplateLanguageCode = resolvedTemplateLanguageCode
-        ?? (typeof config.whatsappColdTemplateLanguageCode === 'string' ? config.whatsappColdTemplateLanguageCode.trim() || undefined : undefined);
+        ?? (typeof config.whatsappOptInTemplateLanguageCode === 'string' ? config.whatsappOptInTemplateLanguageCode.trim() || undefined : undefined);
     }
 
     const channelPolicy = evaluateGrowthFirstTouchChannelPolicy({
       channel: input.channel,
       marketEnabled: Boolean(market.enabled),
       coldEmailEnabled: config.coldEmailEnabled === true,
-      whatsappColdEnabled: config.whatsappColdEnabled === true,
+      whatsappOptInEnabled: config.whatsappOptInEnabled === true,
+      whatsappOptInVerified,
       whatsappTemplateName: resolvedTemplateName,
       whatsappTemplateLanguageCode: resolvedTemplateLanguageCode,
     });
@@ -170,6 +186,7 @@ export async function queueShadowDraft(input: ShadowDraftInput) {
         last_customer_message_at: input.lastCustomerMessageAt ?? null,
         template_name: resolvedTemplateName ?? null,
         template_language_code: resolvedTemplateLanguageCode ?? null,
+        template_body_parameters: resolvedTemplateBodyParameters.length ? resolvedTemplateBodyParameters : null,
         catalog_content_id: input.catalogContentId ?? null,
       },
     },
