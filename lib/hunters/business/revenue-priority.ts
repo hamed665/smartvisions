@@ -16,12 +16,10 @@ const GCC_MARKETS = new Set(['OM', 'AE', 'SA', 'QA']);
 const clean = (value: unknown) => String(value ?? '').trim();
 const upper = (value: unknown) => clean(value).toUpperCase();
 const clamp = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
+const isInstagramUrl = (value: unknown) => /(?:^|\.)instagram\.com/i.test(clean(value).replace(/^https?:\/\//i, ''));
 
 function knownInstagram(business: DiscoveredBusiness) {
-  const explicit = clean(business.instagram);
-  if (explicit) return true;
-  const website = clean(business.officialWebsite).replace(/^https?:\/\//i, '');
-  return /(?:^|\.)instagram\.com/i.test(website);
+  return Boolean(clean(business.instagram)) || isInstagramUrl(business.officialWebsite);
 }
 
 function contactSignals(business: DiscoveredBusiness) {
@@ -31,13 +29,14 @@ function contactSignals(business: DiscoveredBusiness) {
     explicitWhatsapp
       || deriveWhatsappCandidate(business.internationalPhone, business.phone, business.countryCode),
   );
+  const officialWebsite = clean(business.officialWebsite);
   return {
     hasEmail: Boolean(clean(business.email)),
     hasPhone,
     explicitWhatsapp,
     hasWhatsapp: whatsappCandidate,
     hasInstagram: knownInstagram(business),
-    hasWebsite: Boolean(clean(business.officialWebsite)),
+    hasWebsite: Boolean(officialWebsite) && !isInstagramUrl(officialWebsite),
   };
 }
 
