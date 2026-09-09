@@ -4,7 +4,10 @@ export type GrowthFirstTouchChannelPolicyInput = {
   channel: GrowthFirstTouchChannel;
   marketEnabled: boolean;
   coldEmailEnabled: boolean;
-  whatsappColdEnabled: boolean;
+  /** Legacy kill-switch retained only for compatibility. Cold WhatsApp is never authorized. */
+  whatsappColdEnabled?: boolean;
+  whatsappOptInEnabled?: boolean;
+  whatsappOptInVerified?: boolean;
   whatsappTemplateName?: string | null;
   whatsappTemplateLanguageCode?: string | null;
 };
@@ -13,7 +16,8 @@ export type GrowthFirstTouchChannelPolicyReason =
   | 'ALLOWED'
   | 'MARKET_DISABLED'
   | 'EMAIL_COLD_DISABLED'
-  | 'WHATSAPP_COLD_DISABLED'
+  | 'WHATSAPP_OPT_IN_LANE_DISABLED'
+  | 'WHATSAPP_MARKETING_OPT_IN_REQUIRED'
   | 'WHATSAPP_TEMPLATE_REQUIRED'
   | 'WHATSAPP_TEMPLATE_LANGUAGE_REQUIRED';
 
@@ -28,8 +32,11 @@ export function evaluateGrowthFirstTouchChannelPolicy(
       : { allowed: false, reason: 'EMAIL_COLD_DISABLED' };
   }
 
-  if (!input.whatsappColdEnabled) {
-    return { allowed: false, reason: 'WHATSAPP_COLD_DISABLED' };
+  if (input.whatsappOptInEnabled !== true) {
+    return { allowed: false, reason: 'WHATSAPP_OPT_IN_LANE_DISABLED' };
+  }
+  if (input.whatsappOptInVerified !== true) {
+    return { allowed: false, reason: 'WHATSAPP_MARKETING_OPT_IN_REQUIRED' };
   }
   if (!input.whatsappTemplateName?.trim()) {
     return { allowed: false, reason: 'WHATSAPP_TEMPLATE_REQUIRED' };
