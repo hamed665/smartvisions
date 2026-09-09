@@ -8,19 +8,20 @@ const worker = readFileSync(resolve(process.cwd(), 'worker/index.ts'), 'utf8');
 const metricKeys = [
   'evidenceMarket',
   'autoDispatchStatus',
-  'autoDispatchFailedOutcomes',
   'autoDispatchAction',
   'autoDispatchReason',
+  'autoDispatchMarket',
   'dailyAcquisitionStatus',
-  'dailyAcquisitionFailedOutcomes',
   'dailyAcquisitionAction',
   'dailyAcquisitionReason',
+  'dailyAcquisitionMarket',
   'telegramDigestStatus',
-  'telegramDigestFailedOutcomes',
+  'telegramDigestAction',
+  'telegramDigestReason',
 ] as const;
 
 describe('operations heartbeat multi-market observability', () => {
-  it('sanitizes every scheduled metric emitted by the worker', () => {
+  it('sanitizes every multi-market scheduled metric emitted by the worker', () => {
     for (const key of metricKeys) {
       expect(worker).toContain(key);
       expect(heartbeatRoute).toContain(`${key}?:`);
@@ -34,6 +35,9 @@ describe('operations heartbeat multi-market observability', () => {
     expect(heartbeatRoute).toContain('telegramDigestStatus: boundedInteger(raw.telegramDigestStatus)');
     expect(heartbeatRoute).toContain('autoDispatchReason: boundedText(raw.autoDispatchReason)');
     expect(heartbeatRoute).toContain('dailyAcquisitionReason: boundedText(raw.dailyAcquisitionReason)');
+    expect(heartbeatRoute).toContain('telegramDigestReason: boundedText(raw.telegramDigestReason)');
     expect(heartbeatRoute).toContain('evidenceMarket: boundedText(raw.evidenceMarket, 8)');
+    expect(heartbeatRoute).toContain('autoDispatchMarket: boundedText(raw.autoDispatchMarket, 8)');
+    expect(heartbeatRoute).toContain('dailyAcquisitionMarket: boundedText(raw.dailyAcquisitionMarket, 8)');
   });
 });
