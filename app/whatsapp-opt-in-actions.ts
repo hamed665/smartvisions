@@ -56,6 +56,8 @@ async function loadCanonicalLead(leadId: string) {
 export async function recordWhatsAppMarketingOptIn(formData: FormData) {
   const leadId = required(formData, 'leadId');
   const sourceType = required(formData, 'sourceType').toUpperCase() as WhatsAppOptInSourceType;
+  const sourceReference = required(formData, 'sourceReference');
+  if (sourceReference.length > 500) throw new Error('Opt-in source reference is too long');
   if (!WHATSAPP_OPT_IN_SOURCE_TYPES.includes(sourceType)) {
     throw new Error('Invalid WhatsApp opt-in source');
   }
@@ -88,7 +90,7 @@ export async function recordWhatsAppMarketingOptIn(formData: FormData) {
         opted_in_at: occurredAt.toISOString(),
       },
       source_type: sourceType,
-      source_url: null,
+      source_url: sourceReference,
       retrieved_at: verifiedAt,
       verified_at: verifiedAt,
       confidence: 1,
@@ -164,6 +166,7 @@ export async function recordWhatsAppMarketingOptIn(formData: FormData) {
     after_data: {
       evidenceId: evidence.id,
       sourceType,
+      sourceReference,
       optedInAt: occurredAt.toISOString(),
       queuedMessageId: queued.messageId,
       duplicateDraft: queued.duplicate,
