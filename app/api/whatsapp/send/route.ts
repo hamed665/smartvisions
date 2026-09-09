@@ -26,6 +26,7 @@ export async function POST(request: Request) {
     priority?: 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
     templateName?: string;
     templateLanguageCode?: string;
+    templateBodyParameters?: string[];
   };
 
   if (!body.organizationId || !body.leadId || !body.conversationId || !body.to) {
@@ -79,7 +80,7 @@ export async function POST(request: Request) {
 
   const provider = new MetaCloudWhatsAppProvider();
   const result = whatsappPolicy.mode === 'TEMPLATE'
-    ? await provider.sendTemplate({ to: body.to, templateName: body.templateName!, languageCode: body.templateLanguageCode! })
+    ? await provider.sendTemplate({ to: body.to, templateName: body.templateName!, languageCode: body.templateLanguageCode!, bodyParameters: body.templateBodyParameters })
     : await provider.sendText({ to: body.to, text: body.text!, replyToMessageId: body.replyToMessageId });
 
   const pricingStatus = whatsappPolicy.mode === 'FREEFORM'
