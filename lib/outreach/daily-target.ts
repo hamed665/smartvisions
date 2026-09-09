@@ -15,14 +15,15 @@ function boundedNonNegative(value: number) {
 
 export { marketDateKey, marketDayUtcRange };
 
-// Compatibility aliases for existing Oman-specific callers. New code should use
-// marketDateKey / marketDayUtcRange so accounting remains correct for every market.
+// Compatibility aliases for existing Oman-specific callers. Keep the historical
+// return contract exact; generic callers may use marketDayUtcRange directly.
 export function omanDateKey(now = new Date()) {
   return marketDateKey('OM', now);
 }
 
 export function omanDayUtcRange(now = new Date()) {
-  return marketDayUtcRange('OM', now);
+  const { dateKey, startIso, endIso } = marketDayUtcRange('OM', now);
+  return { dateKey, startIso, endIso };
 }
 
 export function calculateDailyOutreachProgress(input: DailyOutreachProgressInput) {
