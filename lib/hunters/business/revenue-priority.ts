@@ -25,13 +25,33 @@ function knownInstagram(business: DiscoveredBusiness) {
 }
 
 function contactSignals(business: DiscoveredBusiness) {
-  const hasEmail = Boolean(clean(business.email));
+  const explicitWhatsapp = Boolean(clean(business.whatsapp));
   const hasPhone = Boolean(clean(business.internationalPhone) || clean(business.phone));
-  const hasWhatsapp = Boolean(
-    clean(business.whatsapp)
+  const whatsappCandidate = Boolean(
+    explicitWhatsapp
       || deriveWhatsappCandidate(business.internationalPhone, business.phone, business.countryCode),
   );
-  return { hasEmail, hasPhone, hasWhatsapp, hasInstagram: knownInstagram(business) };
+  return {
+    hasEmail: Boolean(clean(business.email)),
+    hasPhone,
+    explicitWhatsapp,
+    hasWhatsapp: whatsappCandidate,
+    hasInstagram: knownInstagram(business),
+    hasWebsite: Boolean(clean(business.officialWebsite)),
+  };
+}
+
+export function buildAcquisitionContactabilityScore(business: DiscoveredBusiness) {
+  const contact = contactSignals(business);
+  // This is reachability, not permission. Public phone/IG/website evidence must never
+  // authorize automated outreach; channel policy and opt-in gates remain separate.
+  return clamp(
+    (contact.hasPhone ? 35 : 0)
+      + (contact.explicitWhatsapp ? 25 : contact.hasWhatsapp ? 5 : 0)
+      + (contact.hasEmail ? 25 : 0)
+      + (contact.hasInstagram ? 10 : 0)
+      + (contact.hasWebsite ? 5 : 0),
+  );
 }
 
 export function classifyCompanySize(business: DiscoveredBusiness): {
@@ -155,6 +175,7 @@ export function buildRevenuePriority(input: {
 }) {
   const size = classifyCompanySize(input.business);
   const operational = upper(input.business.businessStatus) === 'OPERATIONAL';
+  const acquisitionContactabilityScore = operational ? buildAcquisitionContactabilityScore(input.business) : 0;
   const urgencyScore = operational
     ? buildUrgencyScore({
       primaryOfferFamily: input.qualification.primaryOfferFamily,
@@ -166,7 +187,7 @@ export function buildRevenuePriority(input: {
   const priorityScore = operational
     ? buildPriorityScore({
       fitScore: input.qualification.serviceFitScore,
-      contactabilityScore: input.qualification.contactabilityScore,
+      contactabilityScore: acquisitionContactabilityScore,
       revenuePotentialScore: input.qualification.revenuePotentialScore,
       urgencyScore,
     })
@@ -184,6 +205,7 @@ export function buildRevenuePriority(input: {
   return {
     companySize: size.companySize,
     companySizeReason: size.reason,
+    acquisitionContactabilityScore,
     revenuePotentialBand: classifyRevenuePotential(input.qualification.revenuePotentialScore),
     urgencyScore,
     priorityScore,
