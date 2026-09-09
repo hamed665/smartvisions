@@ -20,6 +20,16 @@ export type WhatsAppReferralContext = {
   ctwaClid?: string;
 };
 
+type RawWhatsAppReferral = {
+  source_url?: string;
+  source_id?: string;
+  source_type?: string;
+  headline?: string;
+  body?: string;
+  media_type?: string;
+  ctwa_clid?: string;
+};
+
 export type NormalizedWhatsAppInbound = {
   providerMessageId: string;
   from: string;
@@ -56,15 +66,7 @@ type WhatsAppWebhookRoot = {
           type?: string;
           text?: { body?: string };
           audio?: { id?: string; mime_type?: string; voice?: boolean };
-          referral?: {
-            source_url?: string;
-            source_id?: string;
-            source_type?: string;
-            headline?: string;
-            body?: string;
-            media_type?: string;
-            ctwa_clid?: string;
-          };
+          referral?: RawWhatsAppReferral;
         }>;
         statuses?: Array<{
           id?: string;
@@ -88,7 +90,7 @@ function clean(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-function referralContext(referral: NonNullable<NonNullable<NonNullable<WhatsAppWebhookRoot['entry']>[number]['changes']>[number]['value']>['messages'] extends Array<infer M> ? M extends { referral?: infer R } ? R : never : never) {
+function referralContext(referral?: RawWhatsAppReferral) {
   if (!referral) return undefined;
   const normalized: WhatsAppReferralContext = {
     sourceUrl: clean(referral.source_url),
