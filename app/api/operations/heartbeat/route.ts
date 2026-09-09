@@ -19,6 +19,17 @@ type HeartbeatMetrics = {
   evidenceReason?: string;
   evidenceFirstTouchStatus?: string;
   evidenceFirstTouchReason?: string;
+  evidenceMarket?: string;
+  autoDispatchStatus?: number;
+  autoDispatchFailedOutcomes?: number;
+  autoDispatchAction?: string;
+  autoDispatchReason?: string;
+  dailyAcquisitionStatus?: number;
+  dailyAcquisitionFailedOutcomes?: number;
+  dailyAcquisitionAction?: string;
+  dailyAcquisitionReason?: string;
+  telegramDigestStatus?: number;
+  telegramDigestFailedOutcomes?: number;
   pilotStatus?: number;
   pilotFailedOutcomes?: number;
 };
@@ -71,6 +82,17 @@ function sanitizeMetrics(value: unknown): HeartbeatMetrics {
     evidenceReason: boundedText(raw.evidenceReason),
     evidenceFirstTouchStatus: boundedText(raw.evidenceFirstTouchStatus),
     evidenceFirstTouchReason: boundedText(raw.evidenceFirstTouchReason),
+    evidenceMarket: boundedText(raw.evidenceMarket, 8),
+    autoDispatchStatus: boundedInteger(raw.autoDispatchStatus),
+    autoDispatchFailedOutcomes: boundedInteger(raw.autoDispatchFailedOutcomes),
+    autoDispatchAction: boundedText(raw.autoDispatchAction),
+    autoDispatchReason: boundedText(raw.autoDispatchReason),
+    dailyAcquisitionStatus: boundedInteger(raw.dailyAcquisitionStatus),
+    dailyAcquisitionFailedOutcomes: boundedInteger(raw.dailyAcquisitionFailedOutcomes),
+    dailyAcquisitionAction: boundedText(raw.dailyAcquisitionAction),
+    dailyAcquisitionReason: boundedText(raw.dailyAcquisitionReason),
+    telegramDigestStatus: boundedInteger(raw.telegramDigestStatus),
+    telegramDigestFailedOutcomes: boundedInteger(raw.telegramDigestFailedOutcomes),
     pilotStatus: boundedInteger(raw.pilotStatus),
     pilotFailedOutcomes: boundedInteger(raw.pilotFailedOutcomes),
   };
