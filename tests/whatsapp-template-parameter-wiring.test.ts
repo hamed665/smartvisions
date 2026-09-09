@@ -14,7 +14,7 @@ describe('WhatsApp template body parameter wiring', () => {
   });
 
   it('preserves queued parameters through the final approved provider send', () => {
-    expect(approvedSend).toContain('template_body_parameters?: unknown');
+    expect(approvedSend).toContain('template_body_parameters?: string[]');
     expect(approvedSend).toContain('bodyParameters: Array.isArray(sendContext.template_body_parameters)');
     expect(approvedSend).toContain('controlledWhatsAppOptInPilot');
     expect(approvedSend).toContain('getWhatsAppMarketingPermission');
