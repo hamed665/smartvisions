@@ -11,7 +11,12 @@ import { buildOmanFirstTouchDraft } from '@/lib/outreach/message-plan';
 import { omanDayUtcRange } from '@/lib/outreach/daily-target';
 import { countMailboxSendsLast24Hours } from '@/lib/outreach/mailbox-usage';
 import { queueShadowDraft, shadowProviderMessageId } from '@/lib/outreach/shadow-approval';
-import { evidencePipelineAuditDecision, evidencePipelineCandidatePriority, evidencePipelineTargetMatches } from '@/lib/operations/evidence-pipeline-policy';
+import {
+  evidencePipelineAuditDecision,
+  evidencePipelineCandidatePriority,
+  evidencePipelineLeadBlocksCandidate,
+  evidencePipelineTargetMatches,
+} from '@/lib/operations/evidence-pipeline-policy';
 
 const MAX_CANDIDATE_SCAN = 30;
 const MAX_EVIDENCE_PER_TICK = 1;
@@ -379,17 +384,105 @@ export async function POST(request: Request) {
 
   if (!candidates.length) return NextResponse.json({ ok: true, action: 'SKIPPED', reason: 'NO_EVIDENCE_CANDIDATE' });
   const businessIds = candidates.map((item) => String(item.business!.id));
+
+  const { data: candidateLeads, error: candidateLeadsError } = await supabase.from('leads')
+    .select('id,business_id,status,agent_mode')
+    .eq('organization_id', organizationId)
+    .in('business_id', businessIds);
+  if (candidateLeadsError) return NextResponse.json({ error: `Evidence candidate lead lookup failed: ${candidateLeadsError.message}` }, { status: 503 });
+
+  const leadByBusiness = new Map<string, { id: string; status: string | null; agentMode: string | null }>();
+  for (const lead of candidateLeads ?? []) {
+    leadByBusiness.set(String(lead.business_id), {
+      id: String(lead.id),
+      status: lead.status == null ? null : String(lead.status),
+      agentMode: lead.agent_mode == null ? null : String(lead.agent_mode),
+    });
+  }
+
+  const candidateLeadIds = [...leadByBusiness.values()].map((lead) => lead.id);
+  const exactEmailFirstTouchLeadIds = new Set<string>();
+  const nonBlockedConversationLeadIds = new Set<string>();
+  const outreachLeadIds = new Set<string>();
+  const latestEmailConversationByLead = new Map<string, { stage: string | null; agentMode: string | null; requiresHuman: boolean }>();
+
+  if (candidateLeadIds.length) {
+    const [messageActivityResult, outreachActivityResult, salesConversationResult] = await Promise.all([
+      supabase.from('conversation_messages')
+        .select('lead_id,channel,status,provider_message_id')
+        .eq('organization_id', organizationId)
+        .in('lead_id', candidateLeadIds),
+      supabase.from('outreach_messages')
+        .select('lead_id')
+        .eq('organization_id', organizationId)
+        .in('lead_id', candidateLeadIds),
+      supabase.from('sales_conversations')
+        .select('lead_id,stage,agent_mode,requires_human,updated_at')
+        .eq('organization_id', organizationId)
+        .eq('channel', 'EMAIL')
+        .in('lead_id', candidateLeadIds)
+        .order('updated_at', { ascending: false }),
+    ]);
+    const activityError = messageActivityResult.error ?? outreachActivityResult.error ?? salesConversationResult.error;
+    if (activityError) return NextResponse.json({ error: `Evidence candidate activity lookup failed: ${activityError.message}` }, { status: 503 });
+
+    for (const message of messageActivityResult.data ?? []) {
+      const leadId = String(message.lead_id ?? '');
+      if (!leadId) continue;
+      const exactProviderMessageId = shadowProviderMessageId(`growth-first-touch:${leadId}`);
+      if (String(message.channel ?? '').toUpperCase() === 'EMAIL' && String(message.provider_message_id ?? '') === exactProviderMessageId) {
+        exactEmailFirstTouchLeadIds.add(leadId);
+      }
+      if (message.status != null && String(message.status).toUpperCase() !== 'BLOCKED') {
+        nonBlockedConversationLeadIds.add(leadId);
+      }
+    }
+    for (const outreach of outreachActivityResult.data ?? []) {
+      const leadId = String(outreach.lead_id ?? '');
+      if (leadId) outreachLeadIds.add(leadId);
+    }
+    for (const conversation of salesConversationResult.data ?? []) {
+      const leadId = String(conversation.lead_id ?? '');
+      if (!leadId || latestEmailConversationByLead.has(leadId)) continue;
+      latestEmailConversationByLead.set(leadId, {
+        stage: conversation.stage == null ? null : String(conversation.stage),
+        agentMode: conversation.agent_mode == null ? null : String(conversation.agent_mode),
+        requiresHuman: conversation.requires_human === true,
+      });
+    }
+  }
+
+  const advanceableCandidates = candidates.filter((item) => {
+    const lead = leadByBusiness.get(String(item.business!.id));
+    if (!lead) return true;
+    const conversation = latestEmailConversationByLead.get(lead.id);
+    return !evidencePipelineLeadBlocksCandidate({
+      leadStatus: lead.status,
+      leadAgentMode: lead.agentMode,
+      hasExactEmailFirstTouch: exactEmailFirstTouchLeadIds.has(lead.id),
+      hasNonBlockedConversationActivity: nonBlockedConversationLeadIds.has(lead.id),
+      hasOutreachActivity: outreachLeadIds.has(lead.id),
+      latestEmailConversationStage: conversation?.stage,
+      latestEmailConversationAgentMode: conversation?.agentMode,
+      latestEmailConversationRequiresHuman: conversation?.requiresHuman,
+    });
+  });
+  if (!advanceableCandidates.length) {
+    return NextResponse.json({ ok: true, action: 'SKIPPED', reason: 'NO_ADVANCEABLE_EVIDENCE_CANDIDATE' });
+  }
+
+  const advanceableBusinessIds = advanceableCandidates.map((item) => String(item.business!.id));
   const { data: audits, error: auditsError } = await supabase.from('website_audits')
     .select('id,business_id,source_url,status,title,detected_languages,services,contact_emails,contact_phones,social_links,has_arabic,has_english,has_booking,has_whatsapp,mobile_quality,seo_quality,cta_quality,broken_links,evidence,audited_at,created_at')
     .eq('organization_id', organizationId)
-    .in('business_id', businessIds)
+    .in('business_id', advanceableBusinessIds)
     .order('created_at', { ascending: false });
   if (auditsError) return NextResponse.json({ error: `Evidence cache lookup failed: ${auditsError.message}` }, { status: 503 });
   const latestAudit = new Map<string, AuditRow>();
   for (const audit of (audits ?? []) as AuditRow[]) if (!latestAudit.has(String(audit.business_id))) latestAudit.set(String(audit.business_id), audit);
 
   const cacheDays = Math.max(1, Number(costResult.data.audit_cache_days ?? 30));
-  const selected = candidates.find((item) => evidencePipelineAuditDecision(latestAudit.get(String(item.business!.id)), now, cacheDays) !== 'WAIT_AFTER_FAILURE');
+  const selected = advanceableCandidates.find((item) => evidencePipelineAuditDecision(latestAudit.get(String(item.business!.id)), now, cacheDays) !== 'WAIT_AFTER_FAILURE');
   if (!selected) return NextResponse.json({ ok: true, action: 'SKIPPED', reason: 'RECENT_FAILED_AUDITS_COOLDOWN' });
 
   const row = selected.row;
