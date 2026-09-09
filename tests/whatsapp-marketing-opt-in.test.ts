@@ -9,6 +9,7 @@ const recipient = '+968 9123 4567';
 const validOptIn = {
   field_name: WHATSAPP_MARKETING_OPT_IN_FIELD,
   source_type: 'WEBSITE_FORM',
+  source_url: 'form-submission:abc123',
   retrieved_at: '2026-09-08T10:00:00.000Z',
   verified_at: '2026-09-08T10:05:00.000Z',
   value: {
@@ -33,6 +34,12 @@ describe('WhatsApp marketing permission evidence', () => {
   it('does not treat a public WhatsApp number as opt-in evidence', () => {
     expect(evaluateWhatsAppMarketingPermission([], recipient))
       .toEqual({ allowed: false, reason: 'NO_OPT_IN_EVIDENCE' });
+  });
+
+  it('rejects evidence without a traceable source reference', () => {
+    expect(evaluateWhatsAppMarketingPermission([
+      { ...validOptIn, source_url: null },
+    ], recipient)).toEqual({ allowed: false, reason: 'OPT_IN_SOURCE_REFERENCE_REQUIRED' });
   });
 
   it('rejects unverified evidence and recipient mismatches', () => {
