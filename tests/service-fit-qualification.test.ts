@@ -72,10 +72,10 @@ describe('high-precision service-fit qualification', () => {
       region: 'MUSCAT_LOCAL',
       websiteClass: 'NONE',
       socialAssessment: { status: 'VERIFIED', quality: 'WEAK', source: 'OWNER_REVIEW', reasons: ['posting is inconsistent and offers are unclear'] },
-      enabledServiceIds: new Set([...catalog, 'muscat_content_production']),
+      enabledServiceIds: new Set([...catalog, 'custom_content_production']),
     });
     expect(result.primaryOfferFamily).toBe('MUSCAT_CONTENT_GROWTH');
-    expect(result.primaryServiceId).toBe('muscat_content_production');
+    expect(result.primaryServiceId).toBe('custom_content_production');
     expect(result.shouldContact).toBe(true);
   });
 
@@ -122,10 +122,10 @@ describe('high-precision service-fit qualification', () => {
       region: 'MUSCAT_LOCAL', websiteClass: 'STANDALONE',
       websiteAudit: { seoQuality: 'GOOD', mobileQuality: 'GOOD', ctaQuality: 'GOOD', hasArabic: true, hasBooking: true },
       socialAssessment: { status: 'VERIFIED', quality: 'WEAK', source: 'OWNER_REVIEW', reasons: ['posting is inconsistent'] },
-      enabledServiceIds: new Set([...catalog, 'muscat_content_production']),
+      enabledServiceIds: new Set([...catalog, 'custom_content_production']),
     });
     expect(result.primaryOfferFamily).toBe('MUSCAT_CONTENT_GROWTH');
-    expect(result.primaryServiceId).toBe('muscat_content_production');
+    expect(result.primaryServiceId).toBe('custom_content_production');
     expect(result.prospectTier).toBe('A');
     expect(result.shouldContact).toBe(true);
   });
@@ -136,7 +136,7 @@ describe('high-precision service-fit qualification', () => {
       region: 'MUSCAT_LOCAL', websiteClass: 'STANDALONE',
       websiteAudit: { seoQuality: 'GOOD', mobileQuality: 'GOOD', ctaQuality: 'GOOD', hasArabic: true, hasBooking: true },
       socialAssessment: { status: 'VERIFIED', quality: 'GOOD', source: 'OWNER_REVIEW', reasons: ['posting quality is consistently strong'] },
-      enabledServiceIds: new Set([...catalog, 'muscat_content_production']),
+      enabledServiceIds: new Set([...catalog, 'custom_content_production']),
     });
     expect(result.serviceFits.some(item => item.family === 'MUSCAT_CONTENT_GROWTH')).toBe(false);
     expect(result.shouldContact).toBe(false);

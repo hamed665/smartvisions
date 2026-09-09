@@ -247,7 +247,7 @@ export function buildServiceFitQualification(input: {
         region === 'MUSCAT_LOCAL' ? 'MUSCAT_CONTENT_GROWTH' : 'AI_REELS',
         96,
         95,
-        region === 'MUSCAT_LOCAL' ? 'muscat_content_production' : 'ai_reels_4',
+        region === 'MUSCAT_LOCAL' ? 'custom_content_production' : 'ai_reels_4',
         ['Instagram presence is verified as inactive.', ...(social.reasons ?? [])],
       ));
     } else if (social.status === 'VERIFIED' && social.quality === 'WEAK') {
@@ -256,7 +256,7 @@ export function buildServiceFitQualification(input: {
         region === 'MUSCAT_LOCAL' ? 'MUSCAT_CONTENT_GROWTH' : 'AI_REELS',
         92,
         92,
-        region === 'MUSCAT_LOCAL' ? 'muscat_content_production' : 'ai_reels_4',
+        region === 'MUSCAT_LOCAL' ? 'custom_content_production' : 'ai_reels_4',
         ['Instagram/content quality is verified as weak.', ...(social.reasons ?? [])],
       ));
     } else if (social.status !== 'VERIFIED' || social.quality === 'UNKNOWN') {

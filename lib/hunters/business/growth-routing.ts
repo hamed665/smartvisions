@@ -7,6 +7,7 @@ import {
   type SocialAssessment,
   type WebsiteAuditEvidence,
 } from './service-fit';
+import { buildRevenuePriority } from './revenue-priority';
 
 export type GrowthServiceRegion = 'MUSCAT_LOCAL' | 'OMAN_REMOTE' | 'INTERNATIONAL_REMOTE';
 export type GrowthLane = 'MUSCAT_LOCAL_GROWTH' | 'OMAN_REMOTE_GROWTH' | 'INTERNATIONAL_AI_GROWTH';
@@ -52,6 +53,7 @@ export function buildGrowthOpportunity(
     socialAssessment: options.socialAssessment,
     enabledServiceIds: options.enabledServiceIds,
   });
+  const revenuePriority = buildRevenuePriority({ business, region, qualification });
 
   const websiteScore = Math.max(0, ...qualification.serviceFits
     .filter((item) => ['WEBSITE_BUILD','WEBSITE_UPGRADE','SEO_GROWTH'].includes(item.family))
@@ -71,11 +73,11 @@ export function buildGrowthOpportunity(
 
   const personalization = {
     ...basePersonalization,
-    contactabilityScore: qualification.contactabilityScore,
+    contactabilityScore: revenuePriority.acquisitionContactabilityScore,
     needScore: qualification.needScore,
     serviceFitScore: qualification.serviceFitScore,
     revenuePotentialScore: qualification.revenuePotentialScore,
-    personalizationPriorityScore: qualification.qualificationScore,
+    personalizationPriorityScore: revenuePriority.priorityScore,
     offerBundle,
     recommendedAngle: qualification.primaryOfferFamily === 'NONE'
       ? basePersonalization.recommendedAngle
@@ -115,6 +117,7 @@ export function buildGrowthOpportunity(
       shouldContact: qualification.shouldContact,
       evidenceGaps: qualification.evidenceGaps,
     },
+    revenuePriority,
   };
 
   const contentCheckStatus: ContentCheckStatus = !operational
@@ -137,6 +140,7 @@ export function buildGrowthOpportunity(
     personalization,
     digitalEvidence,
     qualification,
+    revenuePriority,
   };
 }
 
@@ -149,6 +153,7 @@ export function buildGrowthOpportunityPersistenceRow(
 ) {
   const p = opportunity.personalization;
   const q = opportunity.qualification;
+  const r = opportunity.revenuePriority;
   return {
     organization_id: organizationId,
     business_id: businessId,
@@ -187,6 +192,15 @@ export function buildGrowthOpportunityPersistenceRow(
     catalog_ready: q.catalogReady,
     qualification_reasons: q.reasons,
     evidence_gaps: q.evidenceGaps,
+    company_size: r.companySize,
+    company_size_reason: r.companySizeReason,
+    revenue_potential_band: r.revenuePotentialBand,
+    urgency_score: r.urgencyScore,
+    priority_score: r.priorityScore,
+    recommended_acquisition_route: r.recommendedAcquisitionRoute,
+    acquisition_routing_reason: r.acquisitionRoutingReason,
+    future_service_id: r.futureServiceId,
+    do_not_offer_service_ids: r.doNotOfferServiceIds,
     routed_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
