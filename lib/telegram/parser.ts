@@ -1,4 +1,4 @@
-import type { TelegramCostLimitKey, TelegramOwnerCommand } from './contracts';
+import type { TelegramCostLimitKey, TelegramMarketStyleField, TelegramOwnerCommand } from './contracts';
 import { PANEL_PARITY_ACTION_NAMES, type PanelParityActionName, type PanelParityArgs } from './panel-parity-types';
 import { normalizeCountryCode as normalizeCountryCodeCore, parseTelegramOwnerCommand as parseCore } from './parser-core';
 
@@ -103,6 +103,45 @@ function panelCommand(rawInput: string): TelegramOwnerCommand | null {
   return null;
 }
 
+const OUTREACH_COUNTRIES: Array<[string, RegExp]> = [
+  ['OM', /(^|\s)(om|oman|عمان)(?=\s|$)/i],
+  ['AE', /(^|\s)(ae|uae|emirates|امارات|الإمارات)(?=\s|$)/i],
+  ['SA', /(^|\s)(sa|ksa|saudi|عربستان|سعودی|السعودية)(?=\s|$)/i],
+  ['QA', /(^|\s)(qa|qatar|قطر)(?=\s|$)/i],
+  ['GB', /(^|\s)(gb|uk|britain|england|انگلیس|بریتانیا)(?=\s|$)/i],
+  ['US', /(^|\s)(us|usa|america|آمریکا|امریکا)(?=\s|$)/i],
+];
+
+function outreachCountry(input: string) {
+  return OUTREACH_COUNTRIES.find(([, pattern]) => pattern.test(input))?.[0];
+}
+
+function outreachCommand(rawInput: string): TelegramOwnerCommand | null {
+  const input = clean(rawInput);
+  const slashReport = input.match(/^\/(?:outreach|email)_?(?:report|status)(?:@[A-Za-z0-9_]+)?(?:\s+(\S+))?$/i);
+  if (slashReport) return { type: 'SHOW_OUTREACH_REPORT', countryCode: normalizeCountryCode(slashReport[1]) };
+  if (/(چند\s*تا\s*ایمیل|گزارش\s*(?:ایمیل|outreach)|نتیجه\s*(?:ایمیل|outreach)|email\s*(?:report|status)|outreach\s*(?:report|status))/i.test(input)) {
+    return { type: 'SHOW_OUTREACH_REPORT', countryCode: outreachCountry(input) };
+  }
+
+  const slashStart = input.match(/^\/(?:email|outreach)(?:@[A-Za-z0-9_]+)?\s+(\S+)\s+(\d{1,3})(?:\s+([\s\S]+))?$/i);
+  if (slashStart) {
+    const countryCode = normalizeCountryCode(slashStart[1]);
+    const targetCount = numeric(slashStart[2]);
+    if (countryCode && targetCount != null) return { type: 'SET_DAILY_EMAIL_OUTREACH', countryCode, targetCount, industry: slashStart[3]?.trim() || undefined };
+  }
+
+  if (/(ایمیل|email)/i.test(input) && /(شروع|بفرست|ارسال|start|send)/i.test(input)) {
+    const countryCode = outreachCountry(input);
+    const targetCount = numeric(input.match(/\b(\d{1,3})\b/)?.[1]);
+    if (!countryCode || targetCount == null) return null;
+    const persianIndustry = input.match(/(?:برای|صنعت)\s+([^،,]+?)(?=\s+(?:شروع|بفرست|ارسال|کن)(?:\s|$)|$)/i)?.[1]?.trim();
+    const englishIndustry = input.match(/(?:industry|for)\s+([a-z][a-z0-9 _-]{1,80}?)(?=\s+(?:start|send)|$)/i)?.[1]?.trim();
+    return { type: 'SET_DAILY_EMAIL_OUTREACH', countryCode, targetCount, industry: persianIndustry || englishIndustry || undefined };
+  }
+  return null;
+}
+
 function realCostCommand(input: string): TelegramOwnerCommand | null {
   if (input.startsWith('/limit ')) {
     const parts = clean(input).split(' ').slice(1);
@@ -132,6 +171,8 @@ export function parseTelegramOwnerCommand(rawInput: string): TelegramOwnerComman
   if (/^\/alert_?test(?:@[A-Za-z0-9_]+)?$/i.test(input)) return { type: 'TEST_OWNER_ALERT' };
   const safety = explicitSafetyBlock(input);
   if (safety) return safety;
+  const outreach = outreachCommand(rawInput);
+  if (outreach) return outreach;
   const catalog = catalogCommand(rawInput);
   if (catalog) return catalog;
   const panel = panelCommand(rawInput);
