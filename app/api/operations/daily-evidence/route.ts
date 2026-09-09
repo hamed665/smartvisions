@@ -5,6 +5,7 @@ import { fetchDeterministicWebsiteEvidence, safeWebsiteEvidenceError } from '@/l
 import { selectFirstPartyContactEmail } from '@/lib/hunters/business/contact-evidence';
 import { buildGrowthOpportunity, buildGrowthOpportunityPersistenceRow } from '@/lib/hunters/business/growth-routing';
 import { buildPrecisionLeadPersistenceRow, type WebsiteAuditEvidence } from '@/lib/hunters/business/service-fit';
+import { classifyWebsiteUri } from '@/lib/hunters/business/selective-enrichment';
 import type { DiscoveredBusiness } from '@/lib/hunters/business/types';
 import { buildCanonicalFirstTouchDraft } from '@/lib/outreach/message-plan';
 import { getLocaleProfile } from '@/lib/outreach/locale';
@@ -121,7 +122,7 @@ export async function POST(request: Request) {
     }
 
     const website = String(business.official_website ?? '').trim();
-    if (!website) continue;
+    if (classifyWebsiteUri(website) !== 'STANDALONE') continue;
     const { data: cached } = await supabase.from('website_audits').select('*').eq('organization_id', organizationId).eq('business_id', businessId).eq('status', 'SUCCEEDED').order('created_at', { ascending: false }).limit(1).maybeSingle();
     let audit = cached as Record<string, unknown> | null;
     if (!audit) {
