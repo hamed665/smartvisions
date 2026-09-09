@@ -1,5 +1,6 @@
 import { approveMessage, rejectMessage } from '@/app/management-actions';
 import { processLatestWhatsAppInboundPilot, sendApprovedWhatsAppCatalogPilot } from '@/app/whatsapp-pilot-actions';
+import { sendApprovedWhatsAppOptInFirstTouch } from '@/app/whatsapp-opt-in-actions';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 
 export const dynamic = 'force-dynamic';
@@ -53,7 +54,7 @@ export default async function ApprovalsPage() {
       .eq('organization_id', organizationId)
       .eq('channel', 'WHATSAPP')
       .order('created_at', { ascending: false })
-      .limit(20),
+      .limit(50),
   ]);
 
   const queue = messages ?? [];
@@ -65,6 +66,11 @@ export default async function ApprovalsPage() {
   const pilotMessage = (pilotCandidates ?? []).find((candidate) => {
     const metadata = recordValue(candidate.metadata);
     return latestPilotIdempotencyKey && metadata.idempotency_key === latestPilotIdempotencyKey;
+  });
+  const optInPilotMessages = (pilotCandidates ?? []).filter((candidate) => {
+    const metadata = recordValue(candidate.metadata);
+    return typeof metadata.idempotency_key === 'string'
+      && metadata.idempotency_key.startsWith('growth-first-touch:whatsapp-opt-in:');
   });
   const pilotMetadata = recordValue(pilotMessage?.metadata);
   const pilotSendContext = recordValue(pilotMetadata.send_context);
@@ -127,6 +133,37 @@ export default async function ApprovalsPage() {
       {pilotMessage.status === 'PROCESSING' ? <p className="muted">Provider send is already claimed. Do not retry.</p> : null}
       {pilotMessage.status === 'SENT' ? <p className="muted">Provider accepted the controlled pilot message. Delivery/read evidence can now be verified from the webhook ledger.</p> : null}
       {pilotMessage.status === 'FAILED' ? <p className="muted">The send failed before provider acceptance. Review the recorded failure before any manual retry: {pilotMessage.approval_reason || 'No detail recorded.'}</p> : null}
+    </section> : null}
+
+    {editable && optInPilotMessages.length ? <section className="panel">
+      <div className="conversationTopline">
+        <strong>Oman WhatsApp Opt-in Pilot</strong>
+        <span className="humanBadge">VERIFIED OPT-IN ONLY</span>
+      </div>
+      <p className="muted">Only a durable Smart Visions marketing opt-in can create this template draft. Approval does not bypass DNC, suppression, recipient linkage, send window, Cost Guard or the final opt-in recheck.</p>
+      {optInPilotMessages.map((candidate) => {
+        const candidateMetadata = recordValue(candidate.metadata);
+        const candidateContext = recordValue(candidateMetadata.send_context);
+        return <article key={candidate.id} className="conversationCard">
+          <div className="conversationTopline">
+            <strong>{String(candidateContext.template_name ?? 'WhatsApp template')}</strong>
+            <span className="humanBadge">{candidate.status}</span>
+          </div>
+          <p>{candidate.original_text}</p>
+          {candidate.status === 'APPROVED' && !candidate.requires_approval
+            ? <form action={sendApprovedWhatsAppOptInFirstTouch}>
+                <input type="hidden" name="id" value={candidate.id} />
+                <button className="approveButton">Send verified opt-in intro</button>
+              </form>
+            : null}
+          {candidate.status === 'SENT'
+            ? <p className="muted">Meta accepted this verified opt-in template message.</p>
+            : null}
+          {candidate.status === 'FAILED'
+            ? <p className="muted">Send failed before provider acceptance. Review the stored failure before retrying.</p>
+            : null}
+        </article>;
+      })}
     </section> : null}
 
     <section className="grid">
