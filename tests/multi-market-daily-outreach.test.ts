@@ -22,18 +22,25 @@ describe('multi-market daily outreach', () => {
     expect(getLocaleProfile('CA').primaryLocale).toBe('en-CA');
   });
 
-  it('renders Gulf first touches bilingually and western markets in local English', () => {
-    for (const code of ['OM','AE','SA','QA'] as MarketCode[]) {
-      const draft = buildCanonicalFirstTouchDraft({ marketCode: code, businessName: 'Example Clinic', evidence, recommendedOffer: 'seo_growth' });
-      expect(draft.plan.languageMode).toBe('BILINGUAL_FIRST_TOUCH');
-      expect(draft.text).toContain('Example Clinic');
-      expect(draft.text).toContain('فحص الموقع');
+  it('preserves bilingual Oman and renders other markets in their selected local language', () => {
+    const oman = buildCanonicalFirstTouchDraft({ marketCode: 'OM', businessName: 'Example Clinic', evidence, recommendedOffer: 'seo_growth' });
+    expect(oman.plan.languageMode).toBe('BILINGUAL_FIRST_TOUCH');
+    expect(oman.text).toContain('SEO performance');
+    expect(oman.text).toContain('السيو في موقعكم يحتاج تحسين');
+
+    for (const code of ['AE','SA','QA'] as MarketCode[]) {
+      const draft = buildCanonicalFirstTouchDraft({ marketCode: code, businessName: 'Example Clinic', evidence, recommendedOffer: 'seo_growth', preferredLanguage: 'ar' });
+      expect(draft.plan.languageMode).toBe('SINGLE_LANGUAGE');
+      expect(String(draft.plan.language)).toMatch(/^ar-/);
+      expect(draft.text).toContain('السيو في موقعكم يحتاج تحسين');
+      expect(draft.text).not.toContain('SEO performance');
     }
+
     for (const code of ['GB','US','CA'] as MarketCode[]) {
       const draft = buildCanonicalFirstTouchDraft({ marketCode: code, businessName: 'Example Clinic', evidence, recommendedOffer: 'seo_growth' });
       expect(draft.plan.languageMode).toBe('SINGLE_LANGUAGE');
-      expect(draft.text).not.toContain('فحص الموقع');
       expect(draft.text).toContain('SEO performance');
+      expect(draft.text).not.toContain('السيو في موقعكم يحتاج تحسين');
     }
   });
 
