@@ -49,6 +49,12 @@ describe('revenue acquisition priority', () => {
       officialWebsite: 'https://example.om',
     });
     expect(score).toBe(15);
+    expect(buildAcquisitionContactabilityScore({
+      ...business,
+      phone: undefined,
+      instagram: undefined,
+      officialWebsite: 'https://instagram.com/example',
+    })).toBe(10);
     const opportunity = buildGrowthOpportunity(
       {
         ...business,
