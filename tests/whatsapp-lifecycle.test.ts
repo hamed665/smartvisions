@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildVerifiedInboundBusinessSeed,
+  inboundAcquisitionMetadata,
   mapWhatsAppDeliveryStatus,
   normalizePhoneDigits,
   phonesRepresentSameNumber,
@@ -25,22 +26,56 @@ describe('WhatsApp lifecycle helpers', () => {
     expect(phonesRepresentSameNumber('94974431', '+968 9497 4431')).toBe(true);
   });
 
-  it('admits only canonical Oman Meta sender numbers into the inbound pilot', () => {
+  it('admits only plausible canonical GCC Meta sender numbers', () => {
     expect(verifiedInboundMarketForPhone('+968 9497 4431')).toBe('OM');
+    expect(verifiedInboundMarketForPhone('+971 50 123 4567')).toBe('AE');
+    expect(verifiedInboundMarketForPhone('+966 50 123 4567')).toBe('SA');
+    expect(verifiedInboundMarketForPhone('+974 5512 3456')).toBe('QA');
     expect(verifiedInboundMarketForPhone('94974431')).toBeNull();
-    expect(verifiedInboundMarketForPhone('+971501234567')).toBeNull();
     expect(verifiedInboundMarketForPhone('968123')).toBeNull();
+    expect(verifiedInboundMarketForPhone('+447700900123')).toBeNull();
   });
 
-  it('builds a deterministic dedupe identity from a verified Oman inbound without inventing business evidence', () => {
+  it('builds deterministic dedupe identity from verified GCC inbound without inventing business evidence', () => {
     expect(buildVerifiedInboundBusinessSeed({ from: '+968 9497 4431', contactName: '  Test   Customer  ' })).toEqual({
       name: 'Test Customer',
       countryCode: 'OM',
       whatsapp: '+96894974431',
       dedupeDomain: 'wa-96894974431.whatsapp-inbound.invalid',
     });
+    expect(buildVerifiedInboundBusinessSeed({ from: '+971 50 123 4567', contactName: 'UAE Contact' })?.countryCode).toBe('AE');
+    expect(buildVerifiedInboundBusinessSeed({ from: '+966 50 123 4567', contactName: 'Saudi Contact' })?.countryCode).toBe('SA');
+    expect(buildVerifiedInboundBusinessSeed({ from: '+974 5512 3456', contactName: 'Qatar Contact' })?.countryCode).toBe('QA');
     expect(buildVerifiedInboundBusinessSeed({ from: '+968 9497 4431' })?.name).toBe('WhatsApp inbound contact');
-    expect(buildVerifiedInboundBusinessSeed({ from: '+971 50 123 4567', contactName: 'UAE Contact' })).toBeNull();
+  });
+
+  it('distinguishes customer-initiated inbound from click-to-whatsapp attribution without inventing marketing opt-in', () => {
+    expect(inboundAcquisitionMetadata({ providerMessageId: 'wamid.1' })).toMatchObject({
+      acquisition_source: 'CUSTOMER_WHATSAPP_MESSAGE',
+      customer_initiated: true,
+    });
+    expect(inboundAcquisitionMetadata({
+      providerMessageId: 'wamid.2',
+      referral: {
+        sourceUrl: 'https://www.instagram.com/p/example',
+        sourceId: '123',
+        sourceType: 'ad',
+        ctwaClid: 'clid-1',
+      },
+    })).toEqual({
+      acquisition_source: 'CLICK_TO_WHATSAPP',
+      customer_initiated: true,
+      provider_message_id: 'wamid.2',
+      referral: {
+        source_url: 'https://www.instagram.com/p/example',
+        source_id: '123',
+        source_type: 'ad',
+        headline: null,
+        body: null,
+        media_type: null,
+        ctwa_clid: 'clid-1',
+      },
+    });
   });
 
   it('maps Meta delivery states without inventing unknown state semantics', () => {
