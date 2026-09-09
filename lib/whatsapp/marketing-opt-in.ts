@@ -29,6 +29,7 @@ export type WhatsAppMarketingPermission =
       verifiedAt: string;
       optedInAt: string;
       recipient: string;
+      sourceReference: string;
     }
   | {
       allowed: false;
@@ -37,6 +38,7 @@ export type WhatsAppMarketingPermission =
         | 'LATEST_PERMISSION_IS_OPT_OUT'
         | 'OPT_IN_NOT_VERIFIED'
         | 'OPT_IN_SOURCE_NOT_ALLOWED'
+        | 'OPT_IN_SOURCE_REFERENCE_REQUIRED'
         | 'OPT_IN_PAYLOAD_INVALID'
         | 'OPT_IN_RECIPIENT_MISMATCH';
     };
@@ -85,6 +87,9 @@ export function evaluateWhatsAppMarketingPermission(
     return { allowed: false, reason: 'OPT_IN_SOURCE_NOT_ALLOWED' };
   }
 
+  const sourceReference = String(latest.source_url ?? '').trim();
+  if (!sourceReference) return { allowed: false, reason: 'OPT_IN_SOURCE_REFERENCE_REQUIRED' };
+
   const value = record(latest.value);
   const optedInAt = validIso(value.opted_in_at);
   if (
@@ -108,6 +113,7 @@ export function evaluateWhatsAppMarketingPermission(
     verifiedAt,
     optedInAt,
     recipient: canonicalRecipient,
+    sourceReference,
   };
 }
 
