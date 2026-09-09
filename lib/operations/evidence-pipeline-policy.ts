@@ -20,6 +20,17 @@ export type EvidencePipelineCandidateInput = {
   hasEmail: boolean;
 };
 
+export type EvidencePipelineLeadActivityInput = {
+  leadStatus?: string | null;
+  leadAgentMode?: string | null;
+  hasExactEmailFirstTouch?: boolean;
+  hasNonBlockedConversationActivity?: boolean;
+  hasOutreachActivity?: boolean;
+  latestEmailConversationStage?: string | null;
+  latestEmailConversationAgentMode?: string | null;
+  latestEmailConversationRequiresHuman?: boolean | null;
+};
+
 export type EvidencePipelineAuditDecision = 'USE_CACHED' | 'FETCH' | 'WAIT_AFTER_FAILURE';
 
 export function evidencePipelineTargetMatches(input: {
@@ -52,6 +63,21 @@ export function evidencePipelineCandidatePriority(input: EvidencePipelineCandida
   }
   if (String(input.cheapestNextAction ?? '').toUpperCase() === 'WEBSITE_EVIDENCE') return 2;
   return null;
+}
+
+export function evidencePipelineLeadBlocksCandidate(input: EvidencePipelineLeadActivityInput) {
+  const leadStatus = String(input.leadStatus ?? '').toUpperCase();
+  const leadAgentMode = String(input.leadAgentMode ?? '').toUpperCase();
+  if (['DO_NOT_CONTACT', 'WON', 'LOST'].includes(leadStatus)) return true;
+  if (['HUMAN', 'PAUSED'].includes(leadAgentMode)) return true;
+  if (input.hasExactEmailFirstTouch || input.hasNonBlockedConversationActivity || input.hasOutreachActivity) return true;
+
+  const conversationStage = String(input.latestEmailConversationStage ?? '').toUpperCase();
+  const conversationAgentMode = String(input.latestEmailConversationAgentMode ?? '').toUpperCase();
+  if (conversationStage && conversationStage !== 'NEW') return true;
+  if (['HUMAN', 'PAUSED'].includes(conversationAgentMode)) return true;
+  if (input.latestEmailConversationRequiresHuman === true) return true;
+  return false;
 }
 
 export function evidencePipelineAuditDecision(

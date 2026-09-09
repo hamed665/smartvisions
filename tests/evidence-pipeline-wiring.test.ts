@@ -38,6 +38,19 @@ describe('controlled evidence pipeline wiring', () => {
     expect(route).toContain('MAILBOX_DAILY_CAPACITY_RESERVED');
   });
 
+  it('skips already-contacted or blocked leads before selecting the one evidence candidate for a tick', () => {
+    expect(route).toContain(".select('id,business_id,status,agent_mode')");
+    expect(route).toContain(".select('lead_id,channel,status,provider_message_id')");
+    expect(route).toContain(".select('lead_id,stage,agent_mode,requires_human,updated_at')");
+    expect(route).toContain('evidencePipelineLeadBlocksCandidate');
+    expect(route).toContain('exactEmailFirstTouchLeadIds');
+    expect(route).toContain('nonBlockedConversationLeadIds');
+    expect(route).toContain('outreachLeadIds');
+    expect(route).toContain('advanceableCandidates');
+    expect(route).toContain('NO_ADVANCEABLE_EVIDENCE_CANDIDATE');
+    expect(route).toContain("message.status != null && String(message.status).toUpperCase() !== 'BLOCKED'");
+  });
+
   it('runs deterministic evidence before paid pilot acquisition on the cron', () => {
     const evidenceIndex = worker.indexOf('evidencePipelinePost(');
     const pilotIndex = worker.indexOf('pilotAcquisitionPost(');

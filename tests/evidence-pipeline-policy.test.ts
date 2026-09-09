@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { evidencePipelineAuditDecision, evidencePipelineCandidatePriority, evidencePipelineTargetMatches } from '@/lib/operations/evidence-pipeline-policy';
+import {
+  evidencePipelineAuditDecision,
+  evidencePipelineCandidatePriority,
+  evidencePipelineLeadBlocksCandidate,
+  evidencePipelineTargetMatches,
+} from '@/lib/operations/evidence-pipeline-policy';
 
 describe('controlled evidence pipeline policy', () => {
   it('keeps a scoped Muscat dental campaign inside its city and industry', () => {
@@ -47,6 +52,26 @@ describe('controlled evidence pipeline policy', () => {
       hasStandaloneWebsite: true,
       hasEmail: false,
     })).toBeNull();
+  });
+
+  it('blocks candidates that cannot advance first-touch while preserving blocked-channel recovery', () => {
+    expect(evidencePipelineLeadBlocksCandidate({ hasExactEmailFirstTouch: true })).toBe(true);
+    expect(evidencePipelineLeadBlocksCandidate({ hasNonBlockedConversationActivity: true })).toBe(true);
+    expect(evidencePipelineLeadBlocksCandidate({ hasOutreachActivity: true })).toBe(true);
+    expect(evidencePipelineLeadBlocksCandidate({ leadStatus: 'DO_NOT_CONTACT' })).toBe(true);
+    expect(evidencePipelineLeadBlocksCandidate({ leadAgentMode: 'HUMAN' })).toBe(true);
+    expect(evidencePipelineLeadBlocksCandidate({ latestEmailConversationStage: 'QUALIFYING' })).toBe(true);
+    expect(evidencePipelineLeadBlocksCandidate({ latestEmailConversationRequiresHuman: true })).toBe(true);
+    expect(evidencePipelineLeadBlocksCandidate({
+      leadStatus: 'NEW',
+      leadAgentMode: 'AUTO',
+      hasExactEmailFirstTouch: false,
+      hasNonBlockedConversationActivity: false,
+      hasOutreachActivity: false,
+      latestEmailConversationStage: 'NEW',
+      latestEmailConversationAgentMode: 'AUTO',
+      latestEmailConversationRequiresHuman: false,
+    })).toBe(false);
   });
 
   it('reuses a fresh real Supabase audit only when it contains a first-party email', () => {
