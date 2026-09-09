@@ -1,5 +1,5 @@
 import type { DiscoveredBusiness } from './types';
-import type { GrowthServiceRegion } from './growth-routing';
+import type { PersonalizationRegion } from './personalization';
 import type { buildServiceFitQualification } from './service-fit';
 import { deriveWhatsappCandidate } from './selective-enrichment';
 
@@ -150,23 +150,30 @@ export function recommendAcquisitionRoute(input: {
 
 export function buildRevenuePriority(input: {
   business: DiscoveredBusiness;
-  region: GrowthServiceRegion;
+  region: PersonalizationRegion;
   qualification: ReturnType<typeof buildServiceFitQualification>;
 }) {
   const size = classifyCompanySize(input.business);
-  const urgencyScore = buildUrgencyScore({
-    primaryOfferFamily: input.qualification.primaryOfferFamily,
-    serviceFitScore: input.qualification.serviceFitScore,
-    qualificationConfidence: input.qualification.qualificationConfidence,
-    shouldContact: input.qualification.shouldContact,
-  });
-  const priorityScore = buildPriorityScore({
-    fitScore: input.qualification.serviceFitScore,
-    contactabilityScore: input.qualification.contactabilityScore,
-    revenuePotentialScore: input.qualification.revenuePotentialScore,
-    urgencyScore,
-  });
-  const route = recommendAcquisitionRoute({ business: input.business, companySize: size.companySize });
+  const operational = upper(input.business.businessStatus) === 'OPERATIONAL';
+  const urgencyScore = operational
+    ? buildUrgencyScore({
+      primaryOfferFamily: input.qualification.primaryOfferFamily,
+      serviceFitScore: input.qualification.serviceFitScore,
+      qualificationConfidence: input.qualification.qualificationConfidence,
+      shouldContact: input.qualification.shouldContact,
+    })
+    : 0;
+  const priorityScore = operational
+    ? buildPriorityScore({
+      fitScore: input.qualification.serviceFitScore,
+      contactabilityScore: input.qualification.contactabilityScore,
+      revenuePotentialScore: input.qualification.revenuePotentialScore,
+      urgencyScore,
+    })
+    : 0;
+  const route = operational
+    ? recommendAcquisitionRoute({ business: input.business, companySize: size.companySize })
+    : { route: 'NONE' as const, reason: 'Business is not operational; acquisition is blocked.' };
   const configuredFits = input.qualification.serviceFits
     .map((item) => item.serviceId)
     .filter((value): value is string => Boolean(value));
