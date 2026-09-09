@@ -20,16 +20,22 @@ export function phonesRepresentSameNumber(targetValue?: string | null, candidate
   return target === candidate || target.endsWith(candidate) || candidate.endsWith(target);
 }
 
-const GCC_INBOUND_PREFIXES = [
-  { market: 'OM', prefix: '968', lengths: new Set([11]) },
-  { market: 'AE', prefix: '971', lengths: new Set([11, 12]) },
-  { market: 'SA', prefix: '966', lengths: new Set([12]) },
-  { market: 'QA', prefix: '974', lengths: new Set([11]) },
-] as const;
+type GccInboundRule = {
+  market: 'OM' | 'AE' | 'SA' | 'QA';
+  prefix: string;
+  lengths: readonly number[];
+};
+
+const GCC_INBOUND_PREFIXES: readonly GccInboundRule[] = [
+  { market: 'OM', prefix: '968', lengths: [11] },
+  { market: 'AE', prefix: '971', lengths: [11, 12] },
+  { market: 'SA', prefix: '966', lengths: [12] },
+  { market: 'QA', prefix: '974', lengths: [11] },
+];
 
 export function verifiedInboundMarketForPhone(value?: string | null) {
   const digits = normalizePhoneDigits(value);
-  const match = GCC_INBOUND_PREFIXES.find(rule => digits.startsWith(rule.prefix) && rule.lengths.has(digits.length as never));
+  const match = GCC_INBOUND_PREFIXES.find(rule => digits.startsWith(rule.prefix) && rule.lengths.includes(digits.length));
   return match?.market ?? null;
 }
 
