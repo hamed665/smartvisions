@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { evaluateCanonicalMarketWindow } from '@/lib/outreach/canonical-market-window';
 import { evaluateWhatsAppSendPolicy } from '@/lib/whatsapp/policy';
+import { getWhatsAppMarketingPermission } from '@/lib/whatsapp/marketing-opt-in';
 
 export type CanonicalSendChannel = 'EMAIL' | 'WHATSAPP';
 
@@ -163,6 +164,7 @@ export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllow
   });
 
   let whatsappPolicy: ReturnType<typeof evaluateWhatsAppSendPolicy> | null = null;
+  let whatsappMarketingPermission: Awaited<ReturnType<typeof getWhatsAppMarketingPermission>> | null = null;
   let lastInboundAt: string | null = null;
   if (channel === 'WHATSAPP') {
     const [conversationInboundResult, outreachInboundResult] = await Promise.all([
@@ -193,9 +195,18 @@ export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllow
       conversationInboundResult.data?.created_at,
       outreachInboundResult.data?.received_at,
     );
+    if (input.templateName?.trim()) {
+      whatsappMarketingPermission = await getWhatsAppMarketingPermission({
+        supabase,
+        organizationId,
+        leadId,
+        recipient: input.recipient,
+      });
+    }
     whatsappPolicy = evaluateWhatsAppSendPolicy({
       lastCustomerMessageAt: lastInboundAt ?? undefined,
       templateName: input.templateName ?? undefined,
+      marketingOptInVerified: whatsappMarketingPermission?.allowed === true,
       now: input.nowUtc,
     });
   }
@@ -227,6 +238,7 @@ export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllow
     marketCode,
     marketWindow,
     whatsappPolicy,
+    whatsappMarketingPermission,
     lastInboundAt,
     canonicalRecipient: channel === 'EMAIL' ? businessEmail : recipientPhone,
   };

@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { queueShadowDraft, shadowProviderMessageId } from '@/lib/outreach/shadow-approval';
 import { evaluateWhatsAppSendPolicy } from '@/lib/whatsapp/policy';
+import { getWhatsAppMarketingPermission } from '@/lib/whatsapp/marketing-opt-in';
 import { evaluateBudgetMode } from '@/lib/reliability/cost-guard';
 import {
   chooseSafeAutomationRule,
@@ -214,8 +215,15 @@ async function processFollowup(input: {
   if (!recipient) return { jobId, action: 'BLOCKED', reason: 'FOLLOWUP_WHATSAPP_RECIPIENT_MISSING' };
   const templateName = stringValue(decision.rule.config.meta_template_name);
   const templateLanguageCode = stringValue(decision.rule.config.meta_template_language_code) ?? 'en';
-  const policy = evaluateWhatsAppSendPolicy({ lastCustomerMessageAt: lastInboundAt ?? undefined, templateName: templateName ?? undefined });
-  if (!policy.allowed) return { jobId, action: 'BLOCKED', reason: 'FOLLOWUP_WHATSAPP_TEMPLATE_REQUIRED' };
+  const marketingPermission = templateName
+    ? await getWhatsAppMarketingPermission({ supabase: input.supabase, organizationId, leadId, recipient })
+    : { allowed: false as const, reason: 'NO_OPT_IN_EVIDENCE' as const };
+  const policy = evaluateWhatsAppSendPolicy({
+    lastCustomerMessageAt: lastInboundAt ?? undefined,
+    templateName: templateName ?? undefined,
+    marketingOptInVerified: marketingPermission.allowed,
+  });
+  if (!policy.allowed) return { jobId, action: 'BLOCKED', reason: policy.reason };
   await queueShadowDraft({
     organizationId,
     conversationId: String(conversation.id),

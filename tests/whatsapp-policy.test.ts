@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { evaluateWhatsAppSendPolicy } from '../lib/whatsapp/policy';
 
-describe('WhatsApp customer service window policy', () => {
+describe('WhatsApp customer service window and opt-in policy', () => {
   const now = new Date('2026-08-22T00:00:00Z');
 
   it('allows free-form replies within 24 hours of the customer message', () => {
@@ -22,12 +22,23 @@ describe('WhatsApp customer service window policy', () => {
     expect(result.reason).toBe('OUTSIDE_24H_WINDOW_TEMPLATE_REQUIRED');
   });
 
-  it('allows an approved template path outside the 24-hour window', () => {
+  it('does not treat an approved template as proof of customer opt-in', () => {
     const result = evaluateWhatsAppSendPolicy({
       now,
-      templateName: 'business_intro_om',
+      templateName: 'smartvisions_business_intro_om',
+    });
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toBe('WHATSAPP_MARKETING_OPT_IN_REQUIRED');
+  });
+
+  it('allows an approved template outside the 24-hour window only with verified opt-in', () => {
+    const result = evaluateWhatsAppSendPolicy({
+      now,
+      templateName: 'smartvisions_business_intro_om',
+      marketingOptInVerified: true,
     });
     expect(result.allowed).toBe(true);
     expect(result.mode).toBe('TEMPLATE');
+    expect(result.reason).toBe('VERIFIED_OPT_IN_TEMPLATE');
   });
 });
