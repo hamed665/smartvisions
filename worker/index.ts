@@ -39,6 +39,9 @@ type ScheduledMetrics = {
   autoDispatchReason?: string;
   pilotStatus?: number;
   pilotFailedOutcomes?: number;
+  telegramDigestStatus?: number;
+  telegramDigestAction?: string;
+  telegramDigestReason?: string;
 };
 
 function organizationIdFromTask(task: AgentTask) {
@@ -255,6 +258,21 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
       const failedOutcomes = (pilot?.outcomes ?? []).filter((outcome) => outcome.action === 'FAILED').length;
       metrics.pilotFailedOutcomes = failedOutcomes;
       if (failedOutcomes > 0) metrics.failed += failedOutcomes;
+    }
+  } catch {
+    metrics.failed += 1;
+  }
+
+  // Daily owner reporting uses the same Telegram notification journal as operational alerts.
+  // The route is called every cron tick but sends at most once per Muscat calendar day.
+  try {
+    const digestResponse = await internalPost(env, '/api/operations/telegram-daily-digest', {});
+    metrics.telegramDigestStatus = digestResponse.status;
+    if (!digestResponse.ok) metrics.failed += 1;
+    else {
+      const digest = await digestResponse.json().catch(() => null) as { action?: string; reason?: string } | null;
+      metrics.telegramDigestAction = typeof digest?.action === 'string' ? digest.action : undefined;
+      metrics.telegramDigestReason = typeof digest?.reason === 'string' ? digest.reason : undefined;
     }
   } catch {
     metrics.failed += 1;

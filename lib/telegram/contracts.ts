@@ -25,6 +25,7 @@ export type TelegramMarketStyleField =
 
 export type TelegramOwnerCommand =
   | { type: 'SHOW_STATUS' }
+  | { type: 'SHOW_OUTREACH_REPORT'; countryCode?: string }
   | { type: 'LIST_SERVICES' }
   | { type: 'SHOW_PRICING'; countryCode?: string; serviceQuery?: string }
   | { type: 'SHOW_LEADS'; limit?: number; stage?: string }
@@ -38,6 +39,7 @@ export type TelegramOwnerCommand =
   | { type: 'TEST_OWNER_ALERT' }
   | { type: 'SAFETY_BLOCK'; reason: 'SHADOW_MODE' | 'KILL_SWITCH_OFF' | 'SECRETS' | 'DNC_BYPASS' | 'AUTO_COLD_CHANNEL' | 'APPROVAL_BYPASS' }
   | { type: 'CATALOG_COMPOSE'; rawText: string }
+  | { type: 'SET_DAILY_EMAIL_OUTREACH'; countryCode: string; targetCount: number; industry?: string }
   | { type: 'SET_PRICE'; countryCode: string; serviceQuery: string; price: number }
   | { type: 'SET_DISCOUNT_POLICY'; countryCode: string; serviceQuery: string; maxAutoDiscountPct: number; maxDiscountWithApprovalPct: number }
   | { type: 'SET_MINIMUM_PRICE'; countryCode: string; serviceQuery: string; minimumPrice: number }
@@ -97,5 +99,5 @@ export type TelegramNotificationType =
   | 'SYSTEM_ALERT';
 
 export const MUTATING_COMMANDS = new Set<TelegramOwnerCommand['type']>([
-  'CATALOG_COMPOSE','SET_PRICE','SET_DISCOUNT_POLICY','SET_MINIMUM_PRICE','SET_SERVICE_ENABLED','SET_SERVICE_OPTION','CREATE_HUNTER_CAMPAIGN','SET_MARKET_ENABLED','SET_MARKET_STYLE','SET_MARKET_SEND_WINDOW','SET_AGENT_ENABLED','SET_AGENT_THRESHOLD','SET_COST_LIMIT','ACTIVATE_KILL_SWITCH','SET_PAUSE','APPROVE_MESSAGE','REJECT_MESSAGE','PANEL_ACTION','REVERT_LAST_CHANGE',
+  'CATALOG_COMPOSE','SET_DAILY_EMAIL_OUTREACH','SET_PRICE','SET_DISCOUNT_POLICY','SET_MINIMUM_PRICE','SET_SERVICE_ENABLED','SET_SERVICE_OPTION','CREATE_HUNTER_CAMPAIGN','SET_MARKET_ENABLED','SET_MARKET_STYLE','SET_MARKET_SEND_WINDOW','SET_AGENT_ENABLED','SET_AGENT_THRESHOLD','SET_COST_LIMIT','ACTIVATE_KILL_SWITCH','SET_PAUSE','APPROVE_MESSAGE','REJECT_MESSAGE','PANEL_ACTION','REVERT_LAST_CHANGE',
 ]);
