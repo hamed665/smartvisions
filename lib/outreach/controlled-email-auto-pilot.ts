@@ -1,3 +1,5 @@
+import { isSupportedMarketCode } from './market-profile';
+
 type ControlledEmailAutoPilotInput = {
   messageStatus?: string | null;
   requiresApproval: boolean;
@@ -12,16 +14,16 @@ type ControlledEmailAutoPilotInput = {
   campaignStatus?: string | null;
   campaignCountryCode?: string | null;
   campaignConfig?: unknown;
-  currentOmanDateKey: string;
+  currentMarketDateKey?: string;
+  currentOmanDateKey?: string;
 };
 
 function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-export const CONTROLLED_OMAN_AUTOMATION_AUTHORIZATION = 'OWNER_REQUESTED_FULL_AUTOMATION' as const;
+export const CONTROLLED_EMAIL_AUTOMATION_AUTHORIZATION = 'OWNER_REQUESTED_FULL_AUTOMATION' as const;
+export const CONTROLLED_OMAN_AUTOMATION_AUTHORIZATION = CONTROLLED_EMAIL_AUTOMATION_AUTHORIZATION;
 
 export function verifyControlledEmailAutoPilot(input: ControlledEmailAutoPilotInput) {
   if (String(input.channel ?? '').toUpperCase() !== 'EMAIL') return { verified: false as const, reason: 'CHANNEL_NOT_EMAIL' as const };
@@ -30,19 +32,21 @@ export function verifyControlledEmailAutoPilot(input: ControlledEmailAutoPilotIn
   if (messageStatus === 'APPROVAL_REQUIRED' && !input.requiresApproval) return { verified: false as const, reason: 'PREAPPROVAL_STATE_INVALID' as const };
   if (messageStatus === 'APPROVED' && input.requiresApproval) return { verified: false as const, reason: 'APPROVAL_STILL_REQUIRED' as const };
   if (input.metadataSource !== 'SHADOW_MODE') return { verified: false as const, reason: 'SOURCE_NOT_SHADOW_MODE' as const };
-
   const idempotencyKey = String(input.idempotencyKey ?? '').trim();
   if (!idempotencyKey.startsWith('growth-first-touch:')) return { verified: false as const, reason: 'NOT_GROWTH_FIRST_TOUCH' as const };
   if (String(input.providerMessageId ?? '') !== `shadow:${idempotencyKey}`) return { verified: false as const, reason: 'SHADOW_ID_MISMATCH' as const };
-  if (String(input.marketCode ?? '').trim().toUpperCase() !== 'OM') return { verified: false as const, reason: 'MARKET_NOT_OMAN' as const };
+
+  const marketCode = String(input.marketCode ?? '').trim().toUpperCase();
+  if (!isSupportedMarketCode(marketCode)) return { verified: false as const, reason: 'MARKET_NOT_SUPPORTED' as const };
   if (!input.messageLeadId || input.messageLeadId !== input.conversationLeadId) return { verified: false as const, reason: 'LEAD_LINKAGE_MISMATCH' as const };
   if (String(input.conversationChannel ?? '').toUpperCase() !== 'EMAIL') return { verified: false as const, reason: 'CONVERSATION_CHANNEL_MISMATCH' as const };
   if (String(input.campaignStatus ?? '').toUpperCase() !== 'RUNNING') return { verified: false as const, reason: 'CAMPAIGN_NOT_RUNNING' as const };
-  if (String(input.campaignCountryCode ?? '').toUpperCase() !== 'OM') return { verified: false as const, reason: 'CAMPAIGN_NOT_OMAN' as const };
+  if (String(input.campaignCountryCode ?? '').toUpperCase() !== marketCode) return { verified: false as const, reason: 'CAMPAIGN_MARKET_MISMATCH' as const };
 
   const config = record(input.campaignConfig);
-  if (String(config.marketCode ?? '').toUpperCase() !== 'OM') return { verified: false as const, reason: 'CONFIG_MARKET_MISMATCH' as const };
-  if (String(config.targetDate ?? '') !== input.currentOmanDateKey) return { verified: false as const, reason: 'STALE_DAILY_TARGET' as const };
+  if (String(config.marketCode ?? '').toUpperCase() !== marketCode) return { verified: false as const, reason: 'CONFIG_MARKET_MISMATCH' as const };
+  const currentDateKey = input.currentMarketDateKey ?? input.currentOmanDateKey ?? '';
+  if (String(config.targetDate ?? '') !== currentDateKey) return { verified: false as const, reason: 'STALE_DAILY_TARGET' as const };
   if (String(config.outreachMode ?? '').toUpperCase() !== 'CONTROLLED') return { verified: false as const, reason: 'OUTREACH_MODE_NOT_CONTROLLED' as const };
   if (config.dailyOutreachTarget !== true) return { verified: false as const, reason: 'DAILY_TARGET_REQUIRED' as const };
   if (config.shadowModeRequired !== true) return { verified: false as const, reason: 'SHADOW_MODE_REQUIRED' as const };
@@ -50,9 +54,8 @@ export function verifyControlledEmailAutoPilot(input: ControlledEmailAutoPilotIn
   if (config.autoApprovalEnabled !== true) return { verified: false as const, reason: 'AUTO_APPROVAL_NOT_AUTHORIZED' as const };
   if (config.automatedSendingEnabled !== true) return { verified: false as const, reason: 'AUTO_SEND_NOT_AUTHORIZED' as const };
   if (config.manualReviewOnly !== false) return { verified: false as const, reason: 'MANUAL_REVIEW_ONLY' as const };
-  if (config.automationAuthorization !== CONTROLLED_OMAN_AUTOMATION_AUTHORIZATION) return { verified: false as const, reason: 'CAMPAIGN_OWNER_AUTHORIZATION_MISSING' as const };
-
-  return { verified: true as const, reason: 'CONTROLLED_OMAN_EMAIL_AUTOPILOT_VERIFIED' as const };
+  if (config.automationAuthorization !== CONTROLLED_EMAIL_AUTOMATION_AUTHORIZATION) return { verified: false as const, reason: 'CAMPAIGN_OWNER_AUTHORIZATION_MISSING' as const };
+  return { verified: true as const, reason: 'CONTROLLED_MULTI_MARKET_EMAIL_AUTOPILOT_VERIFIED' as const };
 }
 
 export function mailboxWarmupAllowsAutomaticSend(status?: string | null) {
