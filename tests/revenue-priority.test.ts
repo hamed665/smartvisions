@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildAcquisitionContactabilityScore,
   buildPriorityScore,
   classifyCompanySize,
   recommendAcquisitionRoute,
@@ -38,6 +39,27 @@ describe('revenue acquisition priority', () => {
       revenuePotentialScore: 60,
       urgencyScore: 40,
     })).toBe(76);
+  });
+
+  it('counts Instagram and website as reachability without treating them as auto-send permission', () => {
+    const score = buildAcquisitionContactabilityScore({
+      ...business,
+      phone: undefined,
+      instagram: 'https://instagram.com/example',
+      officialWebsite: 'https://example.om',
+    });
+    expect(score).toBe(15);
+    const opportunity = buildGrowthOpportunity(
+      {
+        ...business,
+        phone: undefined,
+        instagram: 'https://instagram.com/example',
+        officialWebsite: 'https://example.om',
+      },
+      { enabledServiceIds: services },
+    );
+    expect(opportunity.personalization.contactabilityScore).toBe(15);
+    expect(opportunity.qualification.shouldContact).toBe(false);
   });
 
   it('classifies company size conservatively from available public scale signals', () => {
