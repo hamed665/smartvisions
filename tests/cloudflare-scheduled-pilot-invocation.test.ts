@@ -20,6 +20,20 @@ describe('Cloudflare scheduled pilot invocation', () => {
     expect(source).toContain("internalPost(env, '/api/operations/tick', {})");
   });
 
+  it('routes inbound agent tasks through the channel guard before the canonical Agent endpoint', () => {
+    const worker = readFileSync(resolve(process.cwd(), 'worker/index.ts'), 'utf8');
+    const tick = readFileSync(resolve(process.cwd(), 'app/api/operations/tick/route.ts'), 'utf8');
+
+    expect(worker).toContain('const tasks = Array.isArray(tick.agentTasks) ? tick.agentTasks.slice(0, 5) : []');
+    expect(worker).toContain("internalPost(env, '/api/operations/channel-guard', { organizationId, channel: task.channel })");
+    expect(worker).toContain("internalPost(env, '/api/ai/process-inbound', task.payload)");
+    expect(worker.indexOf("'/api/operations/channel-guard'")).toBeLessThan(worker.indexOf("'/api/ai/process-inbound'"));
+
+    expect(tick).toContain(".eq('direction', 'INBOUND').eq('status', 'RECEIVED').in('channel', ['EMAIL','WHATSAPP'])");
+    expect(tick).toContain("payload.deliveryContext = { conversationId, to, marketCode }");
+    expect(tick).toContain("agentTasks.push({ requestKey, channel: channel as 'EMAIL'|'WHATSAPP', payload })");
+  });
+
   it('records Cloudflare worker version metadata without turning heartbeat failures into retries', () => {
     const worker = readFileSync(resolve(process.cwd(), 'worker/index.ts'), 'utf8');
     const wrangler = readFileSync(resolve(process.cwd(), 'wrangler.jsonc'), 'utf8');
