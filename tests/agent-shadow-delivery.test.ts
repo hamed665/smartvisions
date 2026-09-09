@@ -56,7 +56,7 @@ describe('agent WhatsApp Shadow Approval delivery plan', () => {
     expect(plan.input.replyDialect).toBe('omani');
   });
 
-  it('keeps a template reviewable outside 24 hours but deliberately omits the catalog product', () => {
+  it('does not treat a template as customer opt-in outside the 24-hour window', () => {
     const plan = planAgentWhatsAppShadowApproval({
       context,
       result,
@@ -70,12 +70,10 @@ describe('agent WhatsApp Shadow Approval delivery plan', () => {
       now: NOW,
     });
 
-    expect(plan.action).toBe('QUEUE');
-    if (plan.action !== 'QUEUE') throw new Error('expected queue plan');
-    expect(plan.policy.mode).toBe('TEMPLATE');
-    expect(plan.catalogAttached).toBe(false);
-    expect(plan.input.catalogContentId).toBeUndefined();
-    expect(plan.input.templateName).toBe('service_followup');
+    expect(plan.action).toBe('BLOCK');
+    if (plan.action !== 'BLOCK') throw new Error('expected blocked plan');
+    expect(plan.policy.mode).toBe('BLOCK');
+    expect(plan.policy.reason).toBe('WHATSAPP_MARKETING_OPT_IN_REQUIRED');
   });
 
   it('does not create a dead approval when WhatsApp policy blocks the send', () => {
