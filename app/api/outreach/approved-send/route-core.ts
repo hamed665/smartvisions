@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { approvedSendFailureDisposition, evaluateApprovedSendPolicy } from '@/lib/outreach/approved-send-policy';
-import { assertCanonicalSendAllowed } from '@/lib/outreach/canonical-send-gate';
+import { assertCanonicalSendAllowed, normalizeCanonicalPhone } from '@/lib/outreach/canonical-send-gate';
 import { verifyControlledWhatsAppCatalogPilot } from '@/lib/outreach/controlled-whatsapp-pilot';
 import { verifyControlledEmailAutoPilot, mailboxWarmupAllowsAutomaticSend } from '@/lib/outreach/controlled-email-auto-pilot';
 import { omanDateKey } from '@/lib/outreach/daily-target';
@@ -12,6 +12,8 @@ import { evaluateMailboxHealth } from '@/lib/outreach/mailbox-health';
 import { countMailboxSendsLast24Hours } from '@/lib/outreach/mailbox-usage';
 import { MetaCloudWhatsAppProvider } from '@/lib/whatsapp/meta-cloud';
 import { assertSmartVisionsCatalogContentId } from '@/lib/whatsapp/catalog';
+import { getWhatsAppMarketingPermission } from '@/lib/whatsapp/marketing-opt-in';
+import { SMART_VISIONS_BUSINESS_INTRO_OM } from '@/lib/whatsapp/business-intro-template';
 import { verifyLiveTestMarketWindowException } from '@/lib/whatsapp/live-test-market-window-exception';
 import type { WhatsAppSendResult } from '@/lib/whatsapp/provider';
 import { ResendEmailProvider } from '@/lib/outreach/resend-provider';
@@ -48,6 +50,7 @@ export async function POST(request: Request) {
     priority?: 'LOW'|'NORMAL'|'HIGH'|'CRITICAL';
     controlledShadowPilot?: boolean;
     controlledEmailPilot?: boolean;
+    controlledWhatsAppOptInPilot?: boolean;
   };
   if (!body.organizationId || !body.messageId) {
     return NextResponse.json({ error: 'organizationId and messageId are required' }, { status: 400 });
@@ -92,6 +95,85 @@ export async function POST(request: Request) {
 
   let shadowModeExceptionVerified = false;
   let liveTestMarketWindowExceptionVerified = false;
+
+  if (body.controlledWhatsAppOptInPilot) {
+    if (!controls.shadow_mode) {
+      return NextResponse.json({ error: 'Controlled WhatsApp opt-in pilot requires Shadow Mode to remain ON' }, { status: 409 });
+    }
+    if (message.channel !== 'WHATSAPP' || !message.lead_id || !message.conversation_id || !lead?.business_id) {
+      return NextResponse.json({ error: 'Controlled WhatsApp opt-in pilot is missing canonical linkage' }, { status: 409 });
+    }
+
+    const [{ data: business, error: businessError }, { data: conversation, error: conversationError }, { data: market, error: marketError }] = await Promise.all([
+      supabase.from('businesses')
+        .select('id,name,country_code,whatsapp,international_phone,phone')
+        .eq('organization_id', body.organizationId)
+        .eq('id', lead.business_id)
+        .maybeSingle(),
+      supabase.from('sales_conversations')
+        .select('id,lead_id,channel')
+        .eq('organization_id', body.organizationId)
+        .eq('id', message.conversation_id)
+        .maybeSingle(),
+      supabase.from('market_settings')
+        .select('enabled,config')
+        .eq('organization_id', body.organizationId)
+        .eq('country_code', 'OM')
+        .maybeSingle(),
+    ]);
+    if (businessError || conversationError || marketError || !business || !conversation || !market) {
+      return NextResponse.json({ error: 'Controlled WhatsApp opt-in pilot evidence is unavailable' }, { status: 409 });
+    }
+
+    const marketConfig = market.config && typeof market.config === 'object' && !Array.isArray(market.config)
+      ? market.config as Record<string, unknown>
+      : {};
+    const businessRecipient = normalizeCanonicalPhone(
+      business.whatsapp || business.international_phone || business.phone,
+    );
+    const sendRecipient = normalizeCanonicalPhone(sendContext.to);
+    const expectedIdempotencyKey = `growth-first-touch:whatsapp-opt-in:${message.lead_id}`;
+    const bodyParameters = Array.isArray(sendContext.template_body_parameters)
+      ? sendContext.template_body_parameters.map((value) => String(value).trim())
+      : [];
+
+    if (
+      !market.enabled
+      || marketConfig.whatsappOptInEnabled !== true
+      || String(business.country_code ?? '').toUpperCase() !== 'OM'
+      || String(sendContext.market_code ?? '').toUpperCase() !== 'OM'
+      || conversation.lead_id !== message.lead_id
+      || conversation.channel !== 'WHATSAPP'
+      || metadata.source !== 'SHADOW_MODE'
+      || idempotencyKey !== expectedIdempotencyKey
+      || message.provider_message_id !== `shadow:${expectedIdempotencyKey}`
+      || sendRecipient.length < 8
+      || sendRecipient !== businessRecipient
+      || sendContext.template_name !== SMART_VISIONS_BUSINESS_INTRO_OM.name
+      || sendContext.template_language_code !== SMART_VISIONS_BUSINESS_INTRO_OM.languageCode
+      || marketConfig.whatsappOptInTemplateName !== SMART_VISIONS_BUSINESS_INTRO_OM.name
+      || marketConfig.whatsappOptInTemplateLanguageCode !== SMART_VISIONS_BUSINESS_INTRO_OM.languageCode
+      || bodyParameters.length !== 1
+      || bodyParameters[0] !== String(business.name).trim()
+    ) {
+      return NextResponse.json({ error: 'Controlled WhatsApp opt-in pilot artifact failed closed' }, { status: 409 });
+    }
+
+    const permission = await getWhatsAppMarketingPermission({
+      supabase,
+      organizationId: body.organizationId,
+      leadId: message.lead_id,
+      recipient: sendContext.to,
+    });
+    if (!permission.allowed) {
+      return NextResponse.json({
+        error: 'Controlled WhatsApp opt-in pilot permission failed closed',
+        reason: permission.reason,
+      }, { status: 409 });
+    }
+    shadowModeExceptionVerified = true;
+  }
+
   if (body.controlledShadowPilot) {
     if (!controls.shadow_mode) {
       return NextResponse.json({ error: 'Controlled shadow pilot requires Shadow Mode to remain ON' }, { status: 409 });
