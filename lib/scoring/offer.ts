@@ -9,18 +9,14 @@ export type OfferInput = {
 };
 
 export type OfferRecommendation = {
-  primary: 'business_website' | 'premium_bilingual_website' | 'ai_content' | 'whatsapp_ai_setup' | 'growth_package' | 'skip';
-  secondary?: string;
+  primary: 'business_website' | 'premium_bilingual_website' | 'ai_reels_4' | 'whatsapp_ai_setup' | 'skip';
+  secondary?: 'whatsapp_ai_setup';
   reasons: string[];
 };
 
 export function recommendOffer(input: OfferInput): OfferRecommendation {
   if (!input.hasWebsite) {
     return { primary: 'business_website', reasons: ['No official website detected'] };
-  }
-
-  if (input.multipleWeaknesses) {
-    return { primary: 'growth_package', reasons: ['Multiple meaningful growth gaps detected'] };
   }
 
   if (input.audit && (input.audit.mobileQuality === 'POOR' || input.audit.ctaQuality === 'POOR' || !input.audit.hasArabic)) {
@@ -35,8 +31,15 @@ export function recommendOffer(input: OfferInput): OfferRecommendation {
     };
   }
 
+  if (input.multipleWeaknesses) {
+    return {
+      primary: 'skip',
+      reasons: ['Multiple growth gaps require the canonical evidence-backed service-fit engine; no bundle/service ID is invented here'],
+    };
+  }
+
   if (input.socialWeak) {
-    return { primary: 'ai_content', reasons: ['Website is acceptable but social/content presence is weak'] };
+    return { primary: 'ai_reels_4', reasons: ['Verified social/content weakness supports a remote-deliverable canonical reels offer'] };
   }
 
   if (input.whatsappHeavy) {
