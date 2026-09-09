@@ -5,6 +5,8 @@ const base = {
   marketEnabled: true,
   coldEmailEnabled: true,
   whatsappColdEnabled: false,
+  whatsappOptInEnabled: false,
+  whatsappOptInVerified: false,
 };
 
 describe('growth first-touch channel policy', () => {
@@ -15,37 +17,51 @@ describe('growth first-touch channel policy', () => {
       .toEqual({ allowed: false, reason: 'EMAIL_COLD_DISABLED' });
   });
 
-  it('blocks cold WhatsApp when Oman policy disables it', () => {
+  it('keeps the WhatsApp opt-in lane disabled by default', () => {
     expect(evaluateGrowthFirstTouchChannelPolicy({
       ...base,
       channel: 'WHATSAPP',
-      whatsappTemplateName: 'smartvisions_first_touch',
-      whatsappTemplateLanguageCode: 'en',
-    })).toEqual({ allowed: false, reason: 'WHATSAPP_COLD_DISABLED' });
+      whatsappTemplateName: 'smartvisions_business_intro_om',
+      whatsappTemplateLanguageCode: 'ar',
+    })).toEqual({ allowed: false, reason: 'WHATSAPP_OPT_IN_LANE_DISABLED' });
   });
 
-  it('requires explicit template configuration before cold WhatsApp can be queued', () => {
+  it('does not treat the legacy cold flag or a public phone number as consent', () => {
     expect(evaluateGrowthFirstTouchChannelPolicy({
       ...base,
       channel: 'WHATSAPP',
       whatsappColdEnabled: true,
+      whatsappOptInEnabled: true,
+      whatsappTemplateName: 'smartvisions_business_intro_om',
+      whatsappTemplateLanguageCode: 'ar',
+    })).toEqual({ allowed: false, reason: 'WHATSAPP_MARKETING_OPT_IN_REQUIRED' });
+  });
+
+  it('requires exact template configuration after verified opt-in', () => {
+    expect(evaluateGrowthFirstTouchChannelPolicy({
+      ...base,
+      channel: 'WHATSAPP',
+      whatsappOptInEnabled: true,
+      whatsappOptInVerified: true,
     })).toEqual({ allowed: false, reason: 'WHATSAPP_TEMPLATE_REQUIRED' });
 
     expect(evaluateGrowthFirstTouchChannelPolicy({
       ...base,
       channel: 'WHATSAPP',
-      whatsappColdEnabled: true,
-      whatsappTemplateName: 'smartvisions_first_touch',
+      whatsappOptInEnabled: true,
+      whatsappOptInVerified: true,
+      whatsappTemplateName: 'smartvisions_business_intro_om',
     })).toEqual({ allowed: false, reason: 'WHATSAPP_TEMPLATE_LANGUAGE_REQUIRED' });
   });
 
-  it('allows configured cold WhatsApp only with both template name and language', () => {
+  it('allows WhatsApp only with lane, verified opt-in, template name and language', () => {
     expect(evaluateGrowthFirstTouchChannelPolicy({
       ...base,
       channel: 'WHATSAPP',
-      whatsappColdEnabled: true,
-      whatsappTemplateName: 'smartvisions_first_touch',
-      whatsappTemplateLanguageCode: 'en',
+      whatsappOptInEnabled: true,
+      whatsappOptInVerified: true,
+      whatsappTemplateName: 'smartvisions_business_intro_om',
+      whatsappTemplateLanguageCode: 'ar',
     })).toEqual({ allowed: true, reason: 'ALLOWED' });
   });
 
