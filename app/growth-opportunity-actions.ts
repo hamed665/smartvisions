@@ -27,14 +27,14 @@ type FreshAudit = {
 type StoredEvidence = { business_id:string; digital_presence_evidence:unknown };
 type CountryCatalog = Map<string, Set<string>>;
 type GrowthFirstTouchBusiness = {
-  name:string|null; country_code:string|null; category:string|null; email:string|null; whatsapp:string|null; phone:string|null; international_phone:string|null;
+  name:string|null; country_code:string|null; category:string|null; email:string|null; instagram:string|null; whatsapp:string|null; phone:string|null; international_phone:string|null;
 };
 type PromotionOpportunity = {
-  id:string; business_id:string; qualification_score:number|null; qualification_reasons:unknown; prospect_tier:string; should_contact:boolean;
-  primary_service_id:string|null; message_hooks:unknown; businesses:GrowthFirstTouchBusiness|GrowthFirstTouchBusiness[]|null;
+  id:string; business_id:string; qualification_score:number|null; priority_score:number|null; qualification_reasons:unknown; prospect_tier:string; should_contact:boolean;
+  primary_service_id:string|null; message_hooks:unknown; recommended_acquisition_route:string|null; businesses:GrowthFirstTouchBusiness|GrowthFirstTouchBusiness[]|null;
 };
 type FirstTouchResult = {
-  status:'QUEUED'|'DUPLICATE'|'SKIPPED'; reason?:string; channel?:'EMAIL'|'WHATSAPP'; messageId?:string;
+  status:'QUEUED'|'DUPLICATE'|'SKIPPED'; reason?:string; channel?:'EMAIL'; messageId?:string;
 };
 
 const record=(value:unknown):Record<string,unknown>=>value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{};
@@ -55,6 +55,11 @@ const auditInstagram=(audit:FreshAudit|null|undefined)=>{
   const value=String(record(audit?.social_links).instagram??'').trim();
   return /^https?:\/\/(?:www\.)?instagram\.com\//i.test(value)?value:undefined;
 };
+const officialInstagramEvidence=(audit:FreshAudit|null|undefined)=>{
+  const url=auditInstagram(audit);
+  if(!url||!audit)return undefined;
+  return {status:'VERIFIED',source:'FIRST_PARTY_WEBSITE',url,auditId:audit.id,verifiedAt:audit.audited_at};
+};
 const withAuditInstagram=(business:DiscoveredBusiness,audit:FreshAudit|null|undefined):DiscoveredBusiness=>({
   ...business,
   instagram:business.instagram??auditInstagram(audit),
@@ -70,8 +75,9 @@ const socialAssessmentFromEvidence=(value:unknown):SocialAssessment|null=>{
 };
 const countryCatalog=(catalog:CountryCatalog,countryCode:string|null|undefined)=>catalog.get(String(countryCode??'').toUpperCase())??new Set<string>();
 const normalizeEmail=(value:string|null|undefined)=>String(value??'').trim().toLowerCase();
-const normalizePhone=(value:string|null|undefined)=>String(value??'').replace(/\D/g,'');
 const allowedFirstTouchLead=(status:string|null|undefined,agentMode:string|null|undefined)=>!['DO_NOT_CONTACT','WON','LOST'].includes(String(status??'').toUpperCase())&&!['HUMAN','PAUSED'].includes(String(agentMode??'').toUpperCase());
+const humanOnlyRoute=(value:string|null|undefined)=>String(value??'').toUpperCase()==='GCC_HUMAN_IG_WA';
+const hybridGccRoute=(value:string|null|undefined)=>String(value??'').toUpperCase()==='HYBRID_EMAIL_HUMAN_GCC';
 
 async function configuredServiceIdsByCountry(ctx: Awaited<ReturnType<typeof getCurrentOrganization>>):Promise<CountryCatalog> {
   const [{data:services,error:serviceError},{data:prices,error:priceError}]=await Promise.all([
@@ -101,11 +107,18 @@ async function queuePromotedLeadFirstTouch(input:{
   messageHooks:unknown;
   mailboxId:string|null;
   shadowMode:boolean;
+  recommendedAcquisitionRoute:string|null|undefined;
 }):Promise<FirstTouchResult>{
   const {ctx,leadId,business,serviceId,mailboxId}=input;
-  if(String(business.country_code??'').toUpperCase()!=='OM')return {status:'SKIPPED',reason:'OMAN_FIRST_TOUCH_ONLY'};
+  if(humanOnlyRoute(input.recommendedAcquisitionRoute))return {status:'SKIPPED',reason:'HUMAN_ACQUISITION_REQUIRED'};
+  if(String(business.country_code??'').toUpperCase()!=='OM')return {status:'SKIPPED',reason:'OMAN_FIRST_TOUCH_COPY_ONLY'};
   if(!input.shadowMode)return {status:'SKIPPED',reason:'SHADOW_MODE_REQUIRED'};
   if(!allowedFirstTouchLead(input.leadStatus,input.leadAgentMode))return {status:'SKIPPED',reason:'LEAD_STATE_BLOCKED'};
+
+  const email=normalizeEmail(business.email);
+  if(!email.includes('@')||!mailboxId){
+    return {status:'SKIPPED',reason:hybridGccRoute(input.recommendedAcquisitionRoute)?'HUMAN_ACQUISITION_REQUIRED':'NO_SAFE_FIRST_TOUCH_CHANNEL'};
+  }
 
   const idempotencyKey=`growth-first-touch:${leadId}`;
   const providerMessageId=shadowProviderMessageId(idempotencyKey);
@@ -134,12 +147,7 @@ async function queuePromotedLeadFirstTouch(input:{
     return {status:'SKIPPED',reason:'NO_CANONICAL_VERIFIED_FIRST_TOUCH_COPY'};
   }
 
-  const email=normalizeEmail(business.email);
-  const phone=normalizePhone(business.whatsapp)||normalizePhone(business.international_phone)||normalizePhone(business.phone);
-  const channel:'EMAIL'|'WHATSAPP'|null=email.includes('@')&&mailboxId?'EMAIL':phone.length>=8?'WHATSAPP':null;
-  const to=channel==='EMAIL'?email:channel==='WHATSAPP'?phone:'';
-  if(!channel||!to)return {status:'SKIPPED',reason:'NO_SAFE_FIRST_TOUCH_CHANNEL'};
-
+  const channel='EMAIL' as const;
   const{data:conversation,error:conversationError}=await ctx.supabase.from('sales_conversations').select('id,stage,agent_mode,requires_human').eq('organization_id',ctx.organizationId).eq('lead_id',leadId).eq('channel',channel).order('updated_at',{ascending:false}).limit(1).maybeSingle();
   if(conversationError)throw conversationError;
   if(conversation&&(conversation.stage!=='NEW'||conversation.agent_mode==='HUMAN'||conversation.agent_mode==='PAUSED'||conversation.requires_human))return {status:'SKIPPED',reason:'CONVERSATION_STATE_BLOCKED'};
@@ -158,9 +166,9 @@ async function queuePromotedLeadFirstTouch(input:{
     channel,
     draft:draft.text,
     idempotencyKey,
-    to,
-    subject:channel==='EMAIL'?draft.subject:undefined,
-    mailboxId:channel==='EMAIL'?mailboxId??undefined:undefined,
+    to:email,
+    subject:draft.subject,
+    mailboxId:mailboxId??undefined,
     marketCode:'OM',
     leadTimezone:'Asia/Muscat',
     replyLanguage:draft.plan.language,
@@ -233,14 +241,15 @@ export async function routeCachedGrowthOpportunities(){
       if(opportunity.qualification.cheapestNextAction==='CATALOG_SETUP')catalogBlocked+=1;
       if(opportunity.qualification.cheapestNextAction==='SOCIAL_CHECK')socialChecks+=1;
       const rowToPersist=buildGrowthOpportunityPersistenceRow(ctx.organizationId,row.id,opportunity);
-      const digitalPresence={...record(rowToPersist.digital_presence_evidence),...(freshAudit?{websiteAuditId:freshAudit.id,websiteAuditedAt:freshAudit.audited_at,websiteAudit:{title:freshAudit.title,...auditEvidence(freshAudit),socialLinks:freshAudit.social_links??{}},providerCallsForWebsiteEvidence:0,llmCallsForWebsiteEvidence:0}:{})};
+      const officialInstagram=officialInstagramEvidence(freshAudit);
+      const digitalPresence={...record(rowToPersist.digital_presence_evidence),...(freshAudit?{websiteAuditId:freshAudit.id,websiteAuditedAt:freshAudit.audited_at,websiteAudit:{title:freshAudit.title,...auditEvidence(freshAudit),socialLinks:freshAudit.social_links??{}},providerCallsForWebsiteEvidence:0,llmCallsForWebsiteEvidence:0}:{}),...(officialInstagram?{officialInstagram}:{})};
       const{error:upsertError}=await ctx.supabase.from('growth_opportunities').upsert({...rowToPersist,digital_presence_evidence:digitalPresence},{onConflict:'organization_id,business_id'});
       if(upsertError)throw upsertError;routed+=1;
     }
     const{error:auditError}=await ctx.supabase.from('audit_logs').insert({organization_id:ctx.organizationId,actor_type:'USER',actor_id:ctx.userId,action:'ROUTE_CACHED_GROWTH_OPPORTUNITIES',entity_type:'growth_opportunity',entity_id:ctx.organizationId,after_data:{routed,skipped,tierA,tierB,contactReady,catalogBlocked,socialChecks,evidenceReused,socialLinksReused,auditCacheDays,providerCalls:0,llmCalls:0,socialApiCalls:0,reviewsFetched:false,outreachTriggered:false,qualificationMode:'HIGH_PRECISION_VERIFIED_EVIDENCE',automaticLeadPromotion:false,marketPriceRequired:true}});if(auditError)throw auditError;
     destination=`/hunters/growth-opportunities?routed=${routed}&a=${tierA}&b=${tierB}&contactReady=${contactReady}&socialChecks=${socialChecks}&catalogBlocked=${catalogBlocked}`;
   }catch(error){const message=error instanceof Error?error.message.slice(0,200):'Cached growth routing failed';destination=`/hunters/growth-opportunities?error=${encodeURIComponent(message)}`;}
-  revalidatePath('/hunters/growth-opportunities');revalidatePath('/hunters');redirect(destination);
+  revalidatePath('/hunters/growth-opportunities');revalidatePath('/hunters/human-acquisition');revalidatePath('/hunters');redirect(destination);
 }
 
 export async function recordGrowthSocialAssessment(form:FormData){
@@ -256,14 +265,16 @@ export async function recordGrowthSocialAssessment(form:FormData){
     configuredServiceIdsByCountry(ctx),
   ]);
   if(businessError)throw businessError;if(auditError)throw auditError;
-  const business=withAuditInstagram(toDiscovered(businessRow as CachedBusiness),audit as FreshAudit|null);
-  const growth=buildGrowthOpportunity(business,{websiteAudit:auditEvidence(audit as FreshAudit|null),socialAssessment,enabledServiceIds:countryCatalog(catalogByCountry,business.countryCode)});
+  const freshAudit=audit as FreshAudit|null;
+  const business=withAuditInstagram(toDiscovered(businessRow as CachedBusiness),freshAudit);
+  const growth=buildGrowthOpportunity(business,{websiteAudit:auditEvidence(freshAudit),socialAssessment,enabledServiceIds:countryCatalog(catalogByCountry,business.countryCode)});
   const persistence=buildGrowthOpportunityPersistenceRow(ctx.organizationId,String(opportunity.business_id),growth);
   const previous=record(opportunity.digital_presence_evidence);
-  const {error:updateError}=await ctx.supabase.from('growth_opportunities').update({...persistence,digital_presence_evidence:{...previous,...record(persistence.digital_presence_evidence),socialAssessment}}).eq('organization_id',ctx.organizationId).eq('id',opportunityId);
+  const officialInstagram=officialInstagramEvidence(freshAudit);
+  const {error:updateError}=await ctx.supabase.from('growth_opportunities').update({...persistence,digital_presence_evidence:{...previous,...record(persistence.digital_presence_evidence),socialAssessment,...(officialInstagram?{officialInstagram}:{})}}).eq('organization_id',ctx.organizationId).eq('id',opportunityId);
   if(updateError)throw updateError;
   const{error:logError}=await ctx.supabase.from('audit_logs').insert({organization_id:ctx.organizationId,actor_type:'USER',actor_id:ctx.userId,action:'RECORD_SOCIAL_PRESENCE_ASSESSMENT',entity_type:'growth_opportunity',entity_id:opportunityId,before_data:{socialAssessment:record(previous.socialAssessment)},after_data:{socialAssessment,prospectTier:growth.qualification.prospectTier,primaryOfferFamily:growth.qualification.primaryOfferFamily,shouldContact:growth.qualification.shouldContact,outreachTriggered:false,marketPriceRequired:true}});if(logError)throw logError;
-  revalidatePath('/hunters/growth-opportunities');
+  revalidatePath('/hunters/growth-opportunities');revalidatePath('/hunters/human-acquisition');
 }
 
 export async function promoteHighPrecisionGrowthCandidates(form:FormData){
@@ -278,9 +289,9 @@ export async function promoteHighPrecisionGrowthCandidates(form:FormData){
     if(controlsResult.error)throw controlsResult.error;if(mailboxResult.error)throw mailboxResult.error;
     const shadowMode=Boolean(controlsResult.data?.shadow_mode);
     const mailboxId=String((mailboxResult.data??[]).find(row=>row.health_status==='HEALTHY')?.id??'')||null;
-    const{data:rows,error}=await ctx.supabase.from('growth_opportunities').select('id,business_id,qualification_score,qualification_reasons,prospect_tier,should_contact,primary_service_id,message_hooks,businesses(name,country_code,category,email,whatsapp,phone,international_phone)').eq('organization_id',ctx.organizationId).eq('prospect_tier','A').eq('should_contact',true).order('qualification_score',{ascending:false}).limit(requested*2);
+    const{data:rows,error}=await ctx.supabase.from('growth_opportunities').select('id,business_id,qualification_score,priority_score,qualification_reasons,prospect_tier,should_contact,primary_service_id,message_hooks,recommended_acquisition_route,businesses(name,country_code,category,email,instagram,whatsapp,phone,international_phone)').eq('organization_id',ctx.organizationId).eq('prospect_tier','A').eq('should_contact',true).order('priority_score',{ascending:false,nullsFirst:false}).limit(requested*2);
     if(error)throw error;
-    let created=0,reused=0,skipped=0,shadowDraftQueued=0,shadowDraftReused=0,shadowDraftSkipped=0;
+    let created=0,reused=0,skipped=0,humanAcquisitionSkipped=0,shadowDraftQueued=0,shadowDraftReused=0,shadowDraftSkipped=0;
     const shadowDraftSkipReasons:Record<string,number>={};
     for(const row of(rows??[]) as PromotionOpportunity[]){
       if(created>=requested)break;
@@ -288,6 +299,12 @@ export async function promoteHighPrecisionGrowthCandidates(form:FormData){
       const businessRelation=(Array.isArray(row.businesses)?row.businesses[0]:row.businesses)??null;
       const countryCode=String(businessRelation?.country_code??'').toUpperCase();
       if(!serviceId||!countryCatalog(catalogByCountry,countryCode).has(serviceId)){skipped+=1;continue;}
+      if(humanOnlyRoute(row.recommended_acquisition_route)){
+        humanAcquisitionSkipped+=1;skipped+=1;continue;
+      }
+      if(hybridGccRoute(row.recommended_acquisition_route)&&!normalizeEmail(businessRelation?.email).includes('@')){
+        humanAcquisitionSkipped+=1;skipped+=1;continue;
+      }
 
       const{data:existing,error:existingError}=await ctx.supabase.from('leads').select('id,status,agent_mode').eq('organization_id',ctx.organizationId).eq('business_id',row.business_id).maybeSingle();
       if(existingError)throw existingError;
@@ -312,7 +329,7 @@ export async function promoteHighPrecisionGrowthCandidates(form:FormData){
       }
 
       if(!leadId||!businessRelation){shadowDraftSkipped+=1;shadowDraftSkipReasons.MISSING_LINKAGE=(shadowDraftSkipReasons.MISSING_LINKAGE??0)+1;continue;}
-      const firstTouch=await queuePromotedLeadFirstTouch({ctx,leadId,leadStatus,leadAgentMode,business:businessRelation,serviceId,messageHooks:row.message_hooks,mailboxId,shadowMode});
+      const firstTouch=await queuePromotedLeadFirstTouch({ctx,leadId,leadStatus,leadAgentMode,business:businessRelation,serviceId,messageHooks:row.message_hooks,mailboxId,shadowMode,recommendedAcquisitionRoute:row.recommended_acquisition_route});
       if(firstTouch.status==='QUEUED')shadowDraftQueued+=1;
       else if(firstTouch.status==='DUPLICATE')shadowDraftReused+=1;
       else{
@@ -321,8 +338,8 @@ export async function promoteHighPrecisionGrowthCandidates(form:FormData){
         shadowDraftSkipReasons[reason]=(shadowDraftSkipReasons[reason]??0)+1;
       }
     }
-    const{error:logError}=await ctx.supabase.from('audit_logs').insert({organization_id:ctx.organizationId,actor_type:'USER',actor_id:ctx.userId,action:'PROMOTE_HIGH_PRECISION_GROWTH_CANDIDATES',entity_type:'lead',entity_id:ctx.organizationId,after_data:{requested,created,reused,skipped,tier:'A',outreachTriggered:false,shadowDraftQueued,shadowDraftReused,shadowDraftSkipped,shadowDraftSkipReasons,firstTouchMode:'BILINGUAL_FIRST_TOUCH',providerSendTriggered:false,providerCalls:0,llmCalls:0,marketPriceRequired:true}});if(logError)throw logError;
-    destination=`/hunters/growth-opportunities?promoted=${created}&reused=${reused}&skipped=${skipped}&shadowDrafts=${shadowDraftQueued}`;
+    const{error:logError}=await ctx.supabase.from('audit_logs').insert({organization_id:ctx.organizationId,actor_type:'USER',actor_id:ctx.userId,action:'PROMOTE_HIGH_PRECISION_GROWTH_CANDIDATES',entity_type:'lead',entity_id:ctx.organizationId,after_data:{requested,created,reused,skipped,humanAcquisitionSkipped,tier:'A',outreachTriggered:false,shadowDraftQueued,shadowDraftReused,shadowDraftSkipped,shadowDraftSkipReasons,firstTouchMode:'POLICY_ROUTED_EMAIL_OR_HUMAN',providerSendTriggered:false,providerCalls:0,llmCalls:0,marketPriceRequired:true}});if(logError)throw logError;
+    destination=`/hunters/growth-opportunities?promoted=${created}&reused=${reused}&skipped=${skipped}&human=${humanAcquisitionSkipped}&shadowDrafts=${shadowDraftQueued}`;
   }catch(error){destination=`/hunters/growth-opportunities?promotionError=${encodeURIComponent(error instanceof Error?error.message.slice(0,180):'Promotion failed')}`;}
-  revalidatePath('/hunters/growth-opportunities');revalidatePath('/leads');revalidatePath('/approvals');revalidatePath('/conversations');redirect(destination);
+  revalidatePath('/hunters/growth-opportunities');revalidatePath('/hunters/human-acquisition');revalidatePath('/leads');revalidatePath('/approvals');revalidatePath('/conversations');redirect(destination);
 }

@@ -9,11 +9,12 @@ const record = (value: unknown): Record<string, unknown> => value && typeof valu
 
 export default async function HuntersPage() {
   const { supabase, organizationId } = await getCurrentOrganization();
-  const [{ data: campaigns }, { count: discovered }, { count: intents }, { count: growth }, { data: integrations }] = await Promise.all([
+  const [{ data: campaigns }, { count: discovered }, { count: intents }, { count: growth }, { count: humanAcquisition }, { data: integrations }] = await Promise.all([
     supabase.from('campaigns').select('hunter_type,status,target_count,config,updated_at').eq('organization_id', organizationId),
     supabase.from('discovery_records').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId),
     supabase.from('intent_opportunities').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId),
     supabase.from('growth_opportunities').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId),
+    supabase.from('growth_opportunities').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId).in('recommended_acquisition_route', ['GCC_HUMAN_IG_WA', 'HYBRID_EMAIL_HUMAN_GCC']),
     supabase.from('integration_connections').select('provider,channel,status,enabled').eq('organization_id', organizationId),
   ]);
 
@@ -38,6 +39,7 @@ export default async function HuntersPage() {
       <div className="card"><span className="muted">Business campaigns</span><div className="value">{c.filter((row) => row.hunter_type === 'BUSINESS').length}</div></div>
       <div className="card"><span className="muted">Discovery records</span><div className="value">{discovered ?? 0}</div></div>
       <div className="card"><span className="muted">Growth opportunities</span><div className="value">{growth ?? 0}</div></div>
+      <div className="card"><span className="muted">Human acquisition</span><div className="value">{humanAcquisition ?? 0}</div></div>
       <div className="card"><span className="muted">Intent opportunities</span><div className="value">{intents ?? 0}</div></div>
     </section>
     <section className="twoCol">
@@ -50,14 +52,16 @@ export default async function HuntersPage() {
           <span>Daily outreach target <strong>{displayedTargetVolume}</strong></span>
         </div>
         <p><Link className="textLink" href="/hunters/growth-opportunities">Open Growth Opportunity Router →</Link></p>
+        <p><Link className="textLink" href="/hunters/human-acquisition">Open GCC Human Acquisition Queue →</Link></p>
       </div>
       <div className="panel">
         <h2>Sales lanes</h2>
         <div className="healthList">
-          <span>Muscat <strong>Website + on-site content</strong></span>
-          <span>Oman remote <strong>Website + AI content</strong></span>
-          <span>International <strong>Website + AI content</strong></span>
-          <span>Social analysis <strong>Deferred / cost-controlled</strong></span>
+          <span>GCC SME <strong>Human Instagram / WhatsApp first</strong></span>
+          <span>GCC medium / enterprise <strong>Hybrid email + human social</strong></span>
+          <span>Inbound WhatsApp <strong>Agent after customer initiation</strong></span>
+          <span>International <strong>Email first</strong></span>
+          <span>Physical production <strong>Muscat only</strong></span>
         </div>
       </div>
     </section>

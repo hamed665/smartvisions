@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { queueShadowDraft, shadowProviderMessageId } from '@/lib/outreach/shadow-approval';
+import { ensureFirstTouchFollowupJobs } from '@/lib/outreach/followup-persistence';
 import { evaluateWhatsAppSendPolicy } from '@/lib/whatsapp/policy';
 import { getWhatsAppMarketingPermission } from '@/lib/whatsapp/marketing-opt-in';
 import { evaluateBudgetMode } from '@/lib/reliability/cost-guard';
@@ -18,6 +19,7 @@ import { notifyOperationalAlert } from '@/lib/operations/alerts';
 
 const MAX_INBOUND_SCAN = 30;
 const MAX_AGENT_TASKS = 5;
+const MAX_FIRST_TOUCH_RECONCILE = 100;
 const MAX_FOLLOWUPS = 15;
 const STUCK_MINUTES = 10;
 
@@ -99,11 +101,16 @@ async function processFollowup(input: {
   const organizationId = String(input.job.organization_id);
   const leadId = String(input.job.lead_id);
   const jobId = String(input.job.id);
+  const jobChannel = String(input.job.channel ?? '').toUpperCase();
+  if (jobChannel !== 'EMAIL' && jobChannel !== 'WHATSAPP') {
+    await input.supabase.from('followup_jobs').update({ status: 'CANCELLED', stop_reason: 'FOLLOWUP_CHANNEL_MISSING' }).eq('organization_id', organizationId).eq('id', jobId).eq('status', 'PENDING');
+    return { jobId, action: 'CANCELLED', reason: 'FOLLOWUP_CHANNEL_MISSING' };
+  }
   const [leadResult, conversationResult, inboundResult, outboundResult, existingDraftResult] = await Promise.all([
     input.supabase.from('leads').select('id,business_id,status,agent_mode').eq('organization_id', organizationId).eq('id', leadId).maybeSingle(),
-    input.supabase.from('sales_conversations').select('id,channel,stage,agent_mode,requires_human,last_inbound_at,last_outbound_at').eq('organization_id', organizationId).eq('lead_id', leadId).order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+    input.supabase.from('sales_conversations').select('id,channel,stage,agent_mode,requires_human,last_inbound_at,last_outbound_at').eq('organization_id', organizationId).eq('lead_id', leadId).eq('channel', jobChannel).order('updated_at', { ascending: false }).limit(1).maybeSingle(),
     input.supabase.from('outreach_messages').select('received_at,created_at').eq('organization_id', organizationId).eq('lead_id', leadId).eq('direction', 'INBOUND').order('created_at', { ascending: false }).limit(1).maybeSingle(),
-    input.supabase.from('outreach_messages').select('mailbox_id,subject,sent_at,created_at').eq('organization_id', organizationId).eq('lead_id', leadId).eq('direction', 'OUTBOUND').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    input.supabase.from('outreach_messages').select('mailbox_id,subject,sent_at,created_at').eq('organization_id', organizationId).eq('lead_id', leadId).eq('channel', jobChannel).eq('direction', 'OUTBOUND').order('created_at', { ascending: false }).limit(1).maybeSingle(),
     input.supabase.from('conversation_messages').select('id,status').eq('organization_id', organizationId).eq('provider_message_id', shadowProviderMessageId(`followup:${jobId}`)).maybeSingle(),
   ]);
   const firstError = [leadResult.error, conversationResult.error, inboundResult.error, outboundResult.error, existingDraftResult.error].find(Boolean);
@@ -249,14 +256,15 @@ export async function POST(request: Request) {
   const now = new Date();
   const stuckBefore = new Date(now.getTime() - STUCK_MINUTES * 60_000).toISOString();
 
-  const [controlsResult, inboundResult, followupResult, stuckResult, failedSendResult] = await Promise.all([
+  const [controlsResult, inboundResult, firstTouchSentResult, followupResult, stuckResult, failedSendResult] = await Promise.all([
     supabase.from('system_controls').select('organization_id,global_kill_switch,email_paused,whatsapp_ai_paused,agents_paused,shadow_mode'),
     supabase.from('outreach_messages').select('id,organization_id,lead_id,channel,body,provider_message_id,metadata,received_at,created_at').eq('direction', 'INBOUND').eq('status', 'RECEIVED').in('channel', ['EMAIL','WHATSAPP']).not('provider_message_id', 'is', null).order('created_at', { ascending: true }).limit(MAX_INBOUND_SCAN),
-    supabase.from('followup_jobs').select('id,organization_id,lead_id,campaign_id,sequence,scheduled_at,status').eq('status', 'PENDING').lte('scheduled_at', now.toISOString()).order('scheduled_at', { ascending: true }).limit(MAX_FOLLOWUPS),
+    supabase.from('conversation_messages').select('id,organization_id,lead_id,channel,metadata,sent_at,processed_at,created_at').eq('direction', 'OUTBOUND').eq('status', 'SENT').in('channel', ['EMAIL','WHATSAPP']).not('lead_id', 'is', null).order('sent_at', { ascending: false, nullsFirst: false }).limit(MAX_FIRST_TOUCH_RECONCILE),
+    supabase.from('followup_jobs').select('id,organization_id,lead_id,campaign_id,channel,sequence,scheduled_at,status').eq('status', 'PENDING').lte('scheduled_at', now.toISOString()).order('scheduled_at', { ascending: true }).limit(MAX_FOLLOWUPS),
     supabase.from('agent_runs').select('id,organization_id,lead_id,conversation_id,request_key,started_at').eq('status', 'PROCESSING').lt('started_at', stuckBefore).limit(25),
     supabase.from('conversation_messages').select('id,organization_id,lead_id,status,approval_reason,processed_at').eq('status', 'FAILED').not('approval_reason', 'is', null).order('processed_at', { ascending: false }).limit(50),
   ]);
-  const firstError = [controlsResult.error, inboundResult.error, followupResult.error, stuckResult.error, failedSendResult.error].find(Boolean);
+  const firstError = [controlsResult.error, inboundResult.error, firstTouchSentResult.error, followupResult.error, stuckResult.error, failedSendResult.error].find(Boolean);
   if (firstError) return NextResponse.json({ error: `Operational discovery failed: ${firstError!.message}` }, { status: 503 });
 
   const controlsByOrganization = new Map((controlsResult.data ?? []).map((row) => [String(row.organization_id), record(row)]));
@@ -406,6 +414,43 @@ export async function POST(request: Request) {
     agentTasks.push({ requestKey, channel: channel as 'EMAIL'|'WHATSAPP', payload });
   }
 
+  const followupReconciliation: Array<Record<string, unknown>> = [];
+  for (const sent of firstTouchSentResult.data ?? []) {
+    const metadata = record(sent.metadata);
+    const idempotencyKey = stringValue(metadata.idempotency_key);
+    const leadId = stringValue(sent.lead_id);
+    const organizationId = stringValue(sent.organization_id);
+    const channel = String(sent.channel ?? '').toUpperCase();
+    const sentAt = stringValue(sent.sent_at ?? sent.processed_at ?? sent.created_at);
+    if (!leadId || !organizationId || !sentAt || (channel !== 'EMAIL' && channel !== 'WHATSAPP')) continue;
+    try {
+      const result = await ensureFirstTouchFollowupJobs({
+        supabase,
+        organizationId,
+        leadId,
+        channel,
+        sentAt,
+        idempotencyKey,
+      });
+      if (result.action !== 'SKIPPED') followupReconciliation.push({ messageId: sent.id, channel, ...result });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'Follow-up reconciliation failed';
+      followupReconciliation.push({ messageId: sent.id, channel, action: 'ERROR', reason });
+      try {
+        await notifyOperationalAlert({
+          supabase,
+          organizationId,
+          code: 'FOLLOWUP_FAILED',
+          eventKey: `followup-reconcile:${sent.id}`,
+          detail: reason,
+          entityType: 'conversation_message',
+          entityId: String(sent.id),
+          payload: { leadId, channel },
+        });
+      } catch { /* notification-only */ }
+    }
+  }
+
   const followupResults: Array<Record<string, unknown>> = [];
   for (const job of followupResult.data ?? []) {
     const organizationId = String(job.organization_id);
@@ -422,7 +467,7 @@ export async function POST(request: Request) {
           detail: `Follow-up ${job.id} is due but no customer send occurred. State: ${result.action}; reason: ${result.reason ?? 'review required'}.`,
           entityType: 'followup_job',
           entityId: String(job.id),
-          payload: { leadId: job.lead_id, sequence: job.sequence, action: result.action, reason: result.reason ?? null },
+          payload: { leadId: job.lead_id, sequence: job.sequence, channel: job.channel, action: result.action, reason: result.reason ?? null },
         });
       }
     } catch (error) {
@@ -437,7 +482,7 @@ export async function POST(request: Request) {
           detail,
           entityType: 'followup_job',
           entityId: String(job.id),
-          payload: { leadId: job.lead_id, sequence: job.sequence },
+          payload: { leadId: job.lead_id, sequence: job.sequence, channel: job.channel },
         });
       } catch { /* notification-only */ }
     }
@@ -446,7 +491,8 @@ export async function POST(request: Request) {
   return NextResponse.json({
     generatedAt: now.toISOString(),
     agentTasks,
+    followupReconciliation,
     followups: followupResults,
-    limits: { maxAgentTasksPerTick: MAX_AGENT_TASKS, maxInboundScan: MAX_INBOUND_SCAN, maxFollowups: MAX_FOLLOWUPS },
+    limits: { maxAgentTasksPerTick: MAX_AGENT_TASKS, maxInboundScan: MAX_INBOUND_SCAN, maxFirstTouchReconcile: MAX_FIRST_TOUCH_RECONCILE, maxFollowups: MAX_FOLLOWUPS },
   });
 }

@@ -19,6 +19,43 @@ describe('WhatsApp webhook normalization', () => {
     expect(events[1]).toMatchObject({ providerMessageId: 'wamid.voice', mediaId: 'media-1', mimeType: 'audio/ogg', voice: true });
   });
 
+  it('preserves click-to-whatsapp referral attribution from Meta inbound payloads', () => {
+    const payload = {
+      entry: [{ changes: [{ value: {
+        contacts: [{ profile: { name: 'Ad Customer' }, wa_id: '971501234567' }],
+        messages: [{
+          id: 'wamid.ctwa',
+          from: '971501234567',
+          timestamp: '1787350002',
+          type: 'text',
+          text: { body: 'I saw your ad' },
+          referral: {
+            source_url: 'https://www.instagram.com/p/example',
+            source_id: 'ig-ad-123',
+            source_type: 'ad',
+            headline: 'Smart Visions',
+            body: 'Website and automation',
+            media_type: 'image',
+            ctwa_clid: 'clid-123',
+          },
+        }],
+      } }] }],
+    };
+
+    expect(extractWhatsAppInbound(payload)[0]).toMatchObject({
+      providerMessageId: 'wamid.ctwa',
+      referral: {
+        sourceUrl: 'https://www.instagram.com/p/example',
+        sourceId: 'ig-ad-123',
+        sourceType: 'ad',
+        headline: 'Smart Visions',
+        body: 'Website and automation',
+        mediaType: 'image',
+        ctwaClid: 'clid-123',
+      },
+    });
+  });
+
   it('normalizes delivery/read/failure statuses without treating them as inbound messages', () => {
     const payload = {
       entry: [{ changes: [{ value: {

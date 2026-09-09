@@ -20,9 +20,23 @@ export function phonesRepresentSameNumber(targetValue?: string | null, candidate
   return target === candidate || target.endsWith(candidate) || candidate.endsWith(target);
 }
 
+type GccInboundRule = {
+  market: 'OM' | 'AE' | 'SA' | 'QA';
+  prefix: string;
+  lengths: readonly number[];
+};
+
+const GCC_INBOUND_PREFIXES: readonly GccInboundRule[] = [
+  { market: 'OM', prefix: '968', lengths: [11] },
+  { market: 'AE', prefix: '971', lengths: [11, 12] },
+  { market: 'SA', prefix: '966', lengths: [12] },
+  { market: 'QA', prefix: '974', lengths: [11] },
+];
+
 export function verifiedInboundMarketForPhone(value?: string | null) {
   const digits = normalizePhoneDigits(value);
-  return digits.length === 11 && digits.startsWith('968') ? 'OM' as const : null;
+  const match = GCC_INBOUND_PREFIXES.find(rule => digits.startsWith(rule.prefix) && rule.lengths.includes(digits.length));
+  return match?.market ?? null;
 }
 
 export function buildVerifiedInboundBusinessSeed(event: Pick<NormalizedWhatsAppInbound, 'from' | 'contactName'>) {
@@ -35,6 +49,31 @@ export function buildVerifiedInboundBusinessSeed(event: Pick<NormalizedWhatsAppI
     countryCode,
     whatsapp: `+${digits}`,
     dedupeDomain: `wa-${digits}.whatsapp-inbound.invalid`,
+  };
+}
+
+export function inboundAcquisitionMetadata(event: Pick<NormalizedWhatsAppInbound, 'providerMessageId' | 'referral'>) {
+  const referral = event.referral;
+  if (!referral) {
+    return {
+      acquisition_source: 'CUSTOMER_WHATSAPP_MESSAGE' as const,
+      customer_initiated: true,
+      provider_message_id: event.providerMessageId,
+    };
+  }
+  return {
+    acquisition_source: 'CLICK_TO_WHATSAPP' as const,
+    customer_initiated: true,
+    provider_message_id: event.providerMessageId,
+    referral: {
+      source_url: referral.sourceUrl ?? null,
+      source_id: referral.sourceId ?? null,
+      source_type: referral.sourceType ?? null,
+      headline: referral.headline ?? null,
+      body: referral.body ?? null,
+      media_type: referral.mediaType ?? null,
+      ctwa_clid: referral.ctwaClid ?? null,
+    },
   };
 }
 
@@ -61,14 +100,16 @@ async function resolveExactBusinessByPhone(organizationId: string, from: string)
 
   const { data: businesses, error: businessError } = await supabase
     .from('businesses')
-    .select('id,phone,whatsapp')
+    .select('id,phone,international_phone,whatsapp')
     .eq('organization_id', organizationId)
-    .or(`phone.ilike.%${suffix}%,whatsapp.ilike.%${suffix}%`)
+    .or(`phone.ilike.%${suffix}%,international_phone.ilike.%${suffix}%,whatsapp.ilike.%${suffix}%`)
     .limit(20);
   if (businessError) throw new Error(`WhatsApp business lookup failed: ${businessError.message}`);
 
   const exact = (businesses ?? []).filter(row =>
-    phonesRepresentSameNumber(target, row.phone) || phonesRepresentSameNumber(target, row.whatsapp),
+    phonesRepresentSameNumber(target, row.phone)
+      || phonesRepresentSameNumber(target, row.international_phone)
+      || phonesRepresentSameNumber(target, row.whatsapp),
   );
   if (exact.length > 1) return { business: null, ambiguous: true };
   return { business: exact[0] ?? null, ambiguous: false };
@@ -192,6 +233,7 @@ export async function applyWhatsAppInboundLifecycle(organizationId: string, even
   const conversation = await getOrCreateConversation(organizationId, lead.id, receivedAt);
   const body = event.text?.trim() || (event.type === 'audio' ? '[WhatsApp voice message]' : `[WhatsApp ${event.type} message]`);
   const idempotencyKey = `whatsapp:inbound:${event.providerMessageId}`;
+  const acquisition = inboundAcquisitionMetadata(event);
 
   const { error: eventLinkError } = await supabase.from('whatsapp_events').update({
     lead_id: lead.id,
@@ -212,7 +254,14 @@ export async function applyWhatsAppInboundLifecycle(organizationId: string, even
     body,
     idempotency_key: idempotencyKey,
     received_at: receivedAt,
-    metadata: { conversation_id: conversation.id, type: event.type, media_id: event.mediaId ?? null, mime_type: event.mimeType ?? null, voice: Boolean(event.voice) },
+    metadata: {
+      conversation_id: conversation.id,
+      type: event.type,
+      media_id: event.mediaId ?? null,
+      mime_type: event.mimeType ?? null,
+      voice: Boolean(event.voice),
+      ...acquisition,
+    },
   });
   if (messageError && !isWhatsAppInboundDuplicateError(messageError.code)) {
     throw new Error(`WhatsApp inbound message persistence failed: ${messageError.message}`);
@@ -227,7 +276,7 @@ export async function applyWhatsAppInboundLifecycle(organizationId: string, even
       phone: event.from,
       source: 'WHATSAPP_INBOUND',
     });
-    return { linked: true as const, leadId: lead.id, conversationId: conversation.id, agentMode: 'PAUSED' as const, doNotContact: true as const };
+    return { linked: true as const, leadId: lead.id, conversationId: conversation.id, agentMode: 'PAUSED' as const, doNotContact: true as const, acquisitionSource: acquisition.acquisition_source };
   }
 
   const terminal = new Set(['WON','LOST','DO_NOT_CONTACT','HUMAN']);
@@ -246,7 +295,7 @@ export async function applyWhatsAppInboundLifecycle(organizationId: string, even
   const { error: followupError } = await supabase.from('followup_jobs').update({ status: 'CANCELLED', stop_reason: 'CUSTOMER_REPLIED' }).eq('organization_id', organizationId).eq('lead_id', lead.id).eq('status', 'PENDING');
   if (followupError) throw new Error(`WhatsApp follow-up cancellation failed: ${followupError.message}`);
 
-  return { linked: true as const, leadId: lead.id, conversationId: conversation.id, agentMode: lead.agent_mode };
+  return { linked: true as const, leadId: lead.id, conversationId: conversation.id, agentMode: lead.agent_mode, acquisitionSource: acquisition.acquisition_source };
 }
 
 export async function applyWhatsAppStatusLifecycle(organizationId: string, event: NormalizedWhatsAppStatus) {

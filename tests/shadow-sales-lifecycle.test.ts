@@ -65,10 +65,16 @@ describe('Shadow Mode sales lifecycle scenarios', () => {
     expect(result.trace.delivery).toBe('BLOCK');
   });
 
-  it('schedules no-reply follow-ups but stops them once a reply exists', () => {
+  it('schedules email no-reply follow-ups on day 3, 7 and 14 but stops them once a reply exists', () => {
     const sentAt = new Date('2026-09-01T06:00:00Z');
-    expect(buildFollowupSchedule({ sentAt })).toHaveLength(2);
-    expect(buildFollowupSchedule({ sentAt, hasReply: true })).toEqual([]);
+    const jobs = buildFollowupSchedule({ sentAt, channel: 'EMAIL' });
+    expect(jobs).toHaveLength(3);
+    expect(jobs.map(job => job.scheduledAt)).toEqual([
+      '2026-09-04T06:00:00.000Z',
+      '2026-09-08T06:00:00.000Z',
+      '2026-09-15T06:00:00.000Z',
+    ]);
+    expect(buildFollowupSchedule({ sentAt, channel: 'EMAIL', hasReply: true })).toEqual([]);
   });
 
   it('recognizes explicit DNC language deterministically across English, Arabic and Persian', () => {
