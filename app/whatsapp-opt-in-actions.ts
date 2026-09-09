@@ -221,7 +221,7 @@ export async function recordWhatsAppMarketingOptOut(formData: FormData) {
   });
   if (suppressionError) throw new Error(`WhatsApp suppression failed: ${suppressionError.message}`);
 
-  await ctx.supabase.from('audit_logs').insert({
+  const { error: auditError } = await ctx.supabase.from('audit_logs').insert({
     organization_id: ctx.organizationId,
     actor_type: 'USER',
     actor_id: ctx.userId,
@@ -230,6 +230,7 @@ export async function recordWhatsAppMarketingOptOut(formData: FormData) {
     entity_id: leadId,
     after_data: { recipient, leadStatus: 'DO_NOT_CONTACT' },
   });
+  if (auditError) throw new Error(`WhatsApp opt-out audit failed: ${auditError.message}`);
 
   revalidatePath('/leads');
   revalidatePath(`/leads/${leadId}`);
@@ -241,6 +242,21 @@ export async function sendApprovedWhatsAppOptInFirstTouch(formData: FormData) {
   const messageId = required(formData, 'id');
   const internalKey = process.env.INTERNAL_API_KEY;
   if (!internalKey) throw new Error('INTERNAL_API_KEY is not configured');
+
+  const { error: auditError } = await ctx.supabase.from('audit_logs').insert({
+    organization_id: ctx.organizationId,
+    actor_type: 'USER',
+    actor_id: ctx.userId,
+    action: 'REQUEST_WHATSAPP_OPT_IN_FIRST_TOUCH_SEND',
+    entity_type: 'conversation_message',
+    entity_id: messageId,
+    after_data: {
+      shadow_mode_remains_on: true,
+      route: 'APPROVED_SEND',
+      opt_in_rechecked_at_provider_boundary: true,
+    },
+  });
+  if (auditError) throw new Error(`WhatsApp opt-in send audit failed before provider call: ${auditError.message}`);
 
   const response = await approvedSendPost(internalJsonRequest('/api/outreach/approved-send', internalKey, {
     organizationId: ctx.organizationId,
