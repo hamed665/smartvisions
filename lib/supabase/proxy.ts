@@ -10,6 +10,7 @@ const SESSION_BYPASS_PATHS = new Set([
   '/api/operations/email-shadow',
   '/api/operations/heartbeat',
   '/api/operations/report',
+  '/api/operations/telegram-daily-digest',
   '/api/operations/tick',
   '/api/telegram/webhook',
   '/api/telegram/notify',
