@@ -10,6 +10,7 @@ export type WhatsAppTemplateSendInput = {
   to: string;
   templateName: string;
   languageCode: string;
+  bodyParameters?: string[];
 };
 
 export type WhatsAppCatalogProductSendInput = {
