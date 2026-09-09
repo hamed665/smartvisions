@@ -242,7 +242,7 @@ export async function routeCachedGrowthOpportunities(){
       if(opportunity.qualification.cheapestNextAction==='SOCIAL_CHECK')socialChecks+=1;
       const rowToPersist=buildGrowthOpportunityPersistenceRow(ctx.organizationId,row.id,opportunity);
       const officialInstagram=officialInstagramEvidence(freshAudit);
-      const digitalPresence={...record(rowToPersist.digital_presence_evidence),...(freshAudit?{websiteAuditId:freshAudit.id,websiteAuditedAt:freshAudit.audited_at,websiteAudit:{title:freshAudit.title,...auditEvidence(freshAudit),socialLinks:freshAudit.social_links??{}},providerCallsForWebsiteEvidence:0,llmCallsForWebsiteEvidence:0}:{)),...(officialInstagram?{officialInstagram}:{})};
+      const digitalPresence={...record(rowToPersist.digital_presence_evidence),...(freshAudit?{websiteAuditId:freshAudit.id,websiteAuditedAt:freshAudit.audited_at,websiteAudit:{title:freshAudit.title,...auditEvidence(freshAudit),socialLinks:freshAudit.social_links??{}},providerCallsForWebsiteEvidence:0,llmCallsForWebsiteEvidence:0}:{}),...(officialInstagram?{officialInstagram}:{})};
       const{error:upsertError}=await ctx.supabase.from('growth_opportunities').upsert({...rowToPersist,digital_presence_evidence:digitalPresence},{onConflict:'organization_id,business_id'});
       if(upsertError)throw upsertError;routed+=1;
     }
