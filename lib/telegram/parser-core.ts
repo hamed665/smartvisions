@@ -7,6 +7,7 @@ const COUNTRY_ALIASES: Record<string, string> = {
   qa: 'QA', qatar: 'QA', 'قطر': 'QA',
   gb: 'GB', uk: 'GB', britain: 'GB', england: 'GB', 'انگلیس': 'GB', 'بریتانیا': 'GB',
   us: 'US', usa: 'US', america: 'US', 'آمریکا': 'US', 'امریکا': 'US',
+  ca: 'CA', canada: 'CA', 'کانادا': 'CA', 'كندا': 'CA',
 };
 
 const AGENT_ALIASES: Record<string, string> = {

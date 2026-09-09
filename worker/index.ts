@@ -1,5 +1,6 @@
 import handler from 'vinext/server/fetch-handler';
-import { POST as evidencePipelinePost } from '../app/api/operations/evidence-pipeline/route';
+import { POST as dailyAcquisitionPost } from '../app/api/operations/daily-acquisition/route';
+import { POST as evidencePipelinePost } from '../app/api/operations/daily-evidence/route';
 import { POST as controlledAutoDispatchPost } from '../app/api/operations/controlled-auto-dispatch/route';
 import { POST as pilotAcquisitionPost } from '../app/api/operations/pilot-acquisition/route';
 import { shouldRunScheduledOperations } from './schedule-policy';
@@ -28,15 +29,21 @@ type ScheduledMetrics = {
   failed: number;
   reconciliationAttention: number;
   tickStatus: number;
+  dailyAcquisitionStatus?: number;
+  dailyAcquisitionAction?: string;
+  dailyAcquisitionReason?: string;
+  dailyAcquisitionMarket?: string;
   evidenceStatus?: number;
   evidenceFailedOutcomes?: number;
   evidenceAction?: string;
   evidenceReason?: string;
   evidenceFirstTouchStatus?: string;
   evidenceFirstTouchReason?: string;
+  evidenceMarket?: string;
   autoDispatchStatus?: number;
   autoDispatchAction?: string;
   autoDispatchReason?: string;
+  autoDispatchMarket?: string;
   pilotStatus?: number;
   pilotFailedOutcomes?: number;
   telegramDigestStatus?: number;
@@ -166,8 +173,6 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
     }
 
     if (!response.ok) {
-      // 409 is an idempotency race; 423 is a deliberate safety pause; 429 is Cost Guard/quota.
-      // None should trigger automatic retry or duplicate paid work.
       if (response.status === 409) metrics.idempotent += 1;
       else if (response.status === 423) metrics.safetyBlocked += 1;
       else if (response.status === 429) metrics.throttled += 1;
@@ -204,10 +209,26 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
     }
   }
 
-  // Preparation is allowed around the clock in Production. This deterministic evidence
-  // path can only create Shadow drafts and never calls an outbound provider itself.
+  // Multi-market acquisition is journal-first and permits at most one paid
+  // qualification per tick. It cannot send a provider message itself.
   try {
-    const evidenceResponse = await evidencePipelinePost(internalJsonRequest(env, '/api/operations/evidence-pipeline', {}));
+    const acquisitionResponse = await dailyAcquisitionPost(internalJsonRequest(env, '/api/operations/daily-acquisition', {}));
+    metrics.dailyAcquisitionStatus = acquisitionResponse.status;
+    if (acquisitionResponse.status === 429) metrics.throttled += 1;
+    else if (acquisitionResponse.status === 409 || acquisitionResponse.status === 423) metrics.safetyBlocked += 1;
+    else if (!acquisitionResponse.ok) metrics.failed += 1;
+    const acquisition = await acquisitionResponse.json().catch(() => null) as { action?: string; reason?: string; marketCode?: string } | null;
+    metrics.dailyAcquisitionAction = acquisition?.action;
+    metrics.dailyAcquisitionReason = acquisition?.reason;
+    metrics.dailyAcquisitionMarket = acquisition?.marketCode;
+  } catch {
+    metrics.failed += 1;
+  }
+
+  // Canonical deterministic evidence works for today's active market target and
+  // creates at most one evidence-backed Shadow first touch per tick.
+  try {
+    const evidenceResponse = await evidencePipelinePost(internalJsonRequest(env, '/api/operations/daily-evidence', {}));
     metrics.evidenceStatus = evidenceResponse.status;
     if (evidenceResponse.status === 429) metrics.throttled += 1;
     else if (evidenceResponse.status === 409 || evidenceResponse.status === 423) metrics.safetyBlocked += 1;
@@ -216,12 +237,14 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
       const evidence = await evidenceResponse.json().catch(() => null) as {
         action?: string;
         reason?: string;
+        marketCode?: string;
         firstTouch?: { status?: string; reason?: string };
       } | null;
-      metrics.evidenceAction = typeof evidence?.action === 'string' ? evidence.action : undefined;
-      metrics.evidenceReason = typeof evidence?.reason === 'string' ? evidence.reason : undefined;
-      metrics.evidenceFirstTouchStatus = typeof evidence?.firstTouch?.status === 'string' ? evidence.firstTouch.status : undefined;
-      metrics.evidenceFirstTouchReason = typeof evidence?.firstTouch?.reason === 'string' ? evidence.firstTouch.reason : undefined;
+      metrics.evidenceAction = evidence?.action;
+      metrics.evidenceReason = evidence?.reason;
+      metrics.evidenceMarket = evidence?.marketCode;
+      metrics.evidenceFirstTouchStatus = evidence?.firstTouch?.status;
+      metrics.evidenceFirstTouchReason = evidence?.firstTouch?.reason;
       metrics.evidenceFailedOutcomes = evidence?.action === 'FAILED' ? 1 : 0;
       if (metrics.evidenceFailedOutcomes) metrics.failed += 1;
     }
@@ -229,24 +252,23 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
     metrics.failed += 1;
   }
 
-  // The controlled auto-dispatch route may auto-approve only evidence-backed Oman first
-  // touches authorized by today's RUNNING campaign. It holds them outside the canonical
-  // 09:00-19:00 Muscat send window and also holds them until mailbox warmup is ready.
+  // Dispatch is market-aware, local-window aware and sends at most one approved
+  // first touch per tick through the canonical controlled email boundary.
   try {
     const autoDispatchResponse = await controlledAutoDispatchPost(internalJsonRequest(env, '/api/operations/controlled-auto-dispatch', {}));
     metrics.autoDispatchStatus = autoDispatchResponse.status;
     if (autoDispatchResponse.status === 429) metrics.throttled += 1;
     else if (autoDispatchResponse.status === 409 || autoDispatchResponse.status === 423) metrics.safetyBlocked += 1;
     else if (!autoDispatchResponse.ok) metrics.failed += 1;
-    const dispatch = await autoDispatchResponse.json().catch(() => null) as { action?: string; reason?: string } | null;
-    metrics.autoDispatchAction = typeof dispatch?.action === 'string' ? dispatch.action : undefined;
-    metrics.autoDispatchReason = typeof dispatch?.reason === 'string' ? dispatch.reason : undefined;
+    const dispatch = await autoDispatchResponse.json().catch(() => null) as { action?: string; reason?: string; marketCode?: string } | null;
+    metrics.autoDispatchAction = dispatch?.action;
+    metrics.autoDispatchReason = dispatch?.reason;
+    metrics.autoDispatchMarket = dispatch?.marketCode;
   } catch {
     metrics.failed += 1;
   }
 
-  // Acquisition remains isolated and fail-closed. It is a no-op unless an Oman campaign
-  // explicitly authorizes acquisition under its own cost and safety policy.
+  // Legacy Oman pilot acquisition remains isolated for old pilot campaigns only.
   try {
     const pilotResponse = await pilotAcquisitionPost(internalJsonRequest(env, '/api/operations/pilot-acquisition', {}));
     metrics.pilotStatus = pilotResponse.status;
@@ -263,16 +285,14 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
     metrics.failed += 1;
   }
 
-  // Daily owner reporting uses the same Telegram notification journal as operational alerts.
-  // The route is called every cron tick but sends at most once per Muscat calendar day.
   try {
     const digestResponse = await internalPost(env, '/api/operations/telegram-daily-digest', {});
     metrics.telegramDigestStatus = digestResponse.status;
     if (!digestResponse.ok) metrics.failed += 1;
     else {
       const digest = await digestResponse.json().catch(() => null) as { action?: string; reason?: string } | null;
-      metrics.telegramDigestAction = typeof digest?.action === 'string' ? digest.action : undefined;
-      metrics.telegramDigestReason = typeof digest?.reason === 'string' ? digest.reason : undefined;
+      metrics.telegramDigestAction = digest?.action;
+      metrics.telegramDigestReason = digest?.reason;
     }
   } catch {
     metrics.failed += 1;

@@ -1,4 +1,4 @@
-import type { TelegramCostLimitKey, TelegramMarketStyleField, TelegramOwnerCommand } from './contracts';
+import type { TelegramCostLimitKey, TelegramOwnerCommand } from './contracts';
 import { PANEL_PARITY_ACTION_NAMES, type PanelParityActionName, type PanelParityArgs } from './panel-parity-types';
 import { normalizeCountryCode as normalizeCountryCodeCore, parseTelegramOwnerCommand as parseCore } from './parser-core';
 
@@ -110,6 +110,7 @@ const OUTREACH_COUNTRIES: Array<[string, RegExp]> = [
   ['QA', /(^|\s)(qa|qatar|قطر)(?=\s|$)/i],
   ['GB', /(^|\s)(gb|uk|britain|england|انگلیس|بریتانیا)(?=\s|$)/i],
   ['US', /(^|\s)(us|usa|america|آمریکا|امریکا)(?=\s|$)/i],
+  ['CA', /(^|\s)(ca|canada|کانادا|كندا)(?=\s|$)/i],
 ];
 
 function outreachCountry(input: string) {

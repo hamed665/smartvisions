@@ -24,6 +24,7 @@ const overrides: Record<MarketCode, Omit<LocaleProfile, 'marketCode'>> = {
   QA: { primaryLocale: 'ar-QA', fallbackLocale: 'en', dialect: 'qatari', tone: 'respectful_concise', dialectIntensity: 0.2, emojiLevel: 'low', maxFirstTouchWords: 80, maxReplyWords: 120 },
   GB: { primaryLocale: 'en-GB', fallbackLocale: 'en', dialect: 'british', tone: 'polite_understated', dialectIntensity: 0, emojiLevel: 'none', maxFirstTouchWords: 90, maxReplyWords: 140 },
   US: { primaryLocale: 'en-US', fallbackLocale: 'en', dialect: 'american', tone: 'direct_outcome_focused', dialectIntensity: 0, emojiLevel: 'none', maxFirstTouchWords: 90, maxReplyWords: 140 },
+  CA: { primaryLocale: 'en-CA', fallbackLocale: 'en', dialect: 'canadian', tone: 'clear_consultative', dialectIntensity: 0, emojiLevel: 'none', maxFirstTouchWords: 90, maxReplyWords: 140 },
 };
 
 export function getLocaleProfile(marketCode: MarketCode): LocaleProfile {
@@ -40,6 +41,7 @@ function normalizeDetectedLanguage(language: Exclude<DetectedLanguage, 'mixed' |
   if (language === 'en') {
     if (marketCode === 'GB') return 'en-GB';
     if (marketCode === 'US') return 'en-US';
+    if (marketCode === 'CA') return 'en-CA';
     return 'en';
   }
   return language;
@@ -114,7 +116,12 @@ export function chooseLanguage(input: { marketCode: MarketCode; detectedLanguage
   const profile = getLocaleProfile(input.marketCode);
   const requested = input.preferredLanguage ?? input.detectedLanguage;
   if (requested?.toLowerCase().startsWith('ar') && profile.primaryLocale.startsWith('ar')) return profile.primaryLocale;
-  if (requested?.toLowerCase().startsWith('en')) return input.marketCode === 'GB' ? 'en-GB' : input.marketCode === 'US' ? 'en-US' : 'en';
+  if (requested?.toLowerCase().startsWith('en')) {
+    if (input.marketCode === 'GB') return 'en-GB';
+    if (input.marketCode === 'US') return 'en-US';
+    if (input.marketCode === 'CA') return 'en-CA';
+    return 'en';
+  }
   if (requested?.trim()) return requested.trim();
   return profile.primaryLocale;
 }
