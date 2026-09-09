@@ -9,7 +9,7 @@ import { isPublicShellPath } from '@/lib/public-paths';
 const groups = [
   ['Sales', [['Dashboard', '/'], ['Hunters', '/hunters'], ['Leads', '/leads'], ['Intent Leads', '/intent-leads'], ['Campaigns', '/campaigns'], ['Conversations', '/conversations'], ['Hot Leads', '/hot-leads']]],
   ['Growth', [['Outreach', '/outreach'], ['Message Studio', '/messages'], ['Automations', '/automations'], ['Approvals', '/approvals'], ['Portfolio', '/portfolio'], ['Preview Studio', '/preview-studio']]],
-  ['Control', [['Services', '/services'], ['Pricing', '/pricing'], ['Markets', '/markets'], ['AI Agents', '/agents'], ['Knowledge Base', '/knowledge'], ['Integrations', '/integrations'], ['Suppression / DNC', '/suppression']]],
+  ['Control', [['Command Center', '/command-center'], ['Services', '/services'], ['Pricing', '/pricing'], ['Markets', '/markets'], ['AI Agents', '/agents'], ['Knowledge Base', '/knowledge'], ['Integrations', '/integrations'], ['Suppression / DNC', '/suppression']]],
   ['Operations', [['Reports', '/reports'], ['Cost & Usage', '/cost-usage'], ['Audit Log', '/audit'], ['System', '/system'], ['Settings', '/settings']]],
 ] as const;
 
