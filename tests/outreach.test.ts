@@ -89,11 +89,15 @@ describe('reply intelligence', () => {
 });
 
 describe('follow-up policy', () => {
-  it('builds day 3 and day 7 follow-ups', () => {
-    const jobs = buildFollowupSchedule({ sentAt: new Date('2026-08-20T10:00:00Z') });
-    expect(jobs).toHaveLength(2);
-    expect(jobs[0].sequence).toBe(1);
-    expect(jobs[1].sequence).toBe(2);
+  it('builds email day 3, day 7 and day 14 follow-ups', () => {
+    const jobs = buildFollowupSchedule({ sentAt: new Date('2026-08-20T10:00:00Z'), channel: 'EMAIL' });
+    expect(jobs).toHaveLength(3);
+    expect(jobs.map(job => job.sequence)).toEqual([1, 2, 3]);
+    expect(jobs.map(job => job.scheduledAt)).toEqual([
+      '2026-08-23T10:00:00.000Z',
+      '2026-08-27T10:00:00.000Z',
+      '2026-09-03T10:00:00.000Z',
+    ]);
   });
 
   it('stops follow-ups when a reply exists', () => {
