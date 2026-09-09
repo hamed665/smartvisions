@@ -9,6 +9,24 @@ import {
 
 export const dynamic = 'force-dynamic';
 
+type QueueBusiness = {
+  name?: string | null;
+  country_code?: string | null;
+  city?: string | null;
+  instagram?: string | null;
+  whatsapp?: string | null;
+  phone?: string | null;
+  international_phone?: string | null;
+  email?: string | null;
+  google_maps_uri?: string | null;
+};
+
+type QueueRow = HumanAcquisitionOpportunity & {
+  id: string;
+  acquisition_routing_reason?: string | null;
+  businesses?: QueueBusiness | QueueBusiness[] | null;
+};
+
 function phoneDigits(value: unknown) {
   return String(value ?? '').replace(/\D/g, '');
 }
@@ -29,11 +47,7 @@ export default async function HumanAcquisitionPage() {
     .limit(100);
   if (error) throw new Error(`Human acquisition queue unavailable: ${error.message}`);
 
-  const rows = ((data ?? []) as unknown as Array<HumanAcquisitionOpportunity & {
-    id: string;
-    acquisition_routing_reason?: string | null;
-    businesses?: HumanAcquisitionOpportunity['businesses'] & { name?: string; city?: string; google_maps_uri?: string };
-  }>).filter(isGccHumanAcquisitionCandidate);
+  const rows = ((data ?? []) as unknown as QueueRow[]).filter(isGccHumanAcquisitionCandidate);
 
   return <main className="pageStack">
     <section className="panel">
@@ -56,7 +70,7 @@ export default async function HumanAcquisitionPage() {
       {rows.length === 0 ? <p className="muted">No current GCC human-acquisition candidates. Run cached growth routing after discovery/evidence refresh.</p> : null}
       <div className="conversationList">
         {rows.map(row => {
-          const business = humanAcquisitionBusiness(row) as (ReturnType<typeof humanAcquisitionBusiness> & { name?: string; city?: string; google_maps_uri?: string }) | null;
+          const business = humanAcquisitionBusiness(row) as QueueBusiness | null;
           const instagram = safeInstagram(business?.instagram);
           const phone = phoneDigits(business?.whatsapp || business?.international_phone || business?.phone);
           return <article className="conversationCard" key={row.id}>
