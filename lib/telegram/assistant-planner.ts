@@ -109,16 +109,13 @@ export async function planTelegramOwnerRequest(input: {
     metadata: { task, model, tier: route.tier, deterministicFallbackFirst: true },
   });
 
-  let response: Response;
-  try {
-    response = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: requestBody,
-    });
-  } catch (error) {
-    throw error;
-  }
+  // A network failure is ambiguous after request bytes may have left the Worker.
+  // Keep the reservation for reconciliation instead of blindly retrying.
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: requestBody,
+  });
 
   if (!response.ok) {
     const detail = await response.text();
