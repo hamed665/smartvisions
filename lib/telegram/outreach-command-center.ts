@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { DateTime } from 'luxon';
 import type { CommandExecutionResult, TelegramOwnerCommand } from './contracts';
 import { getMarketOperationalProfile, isSupportedMarketCode, marketDayUtcRange } from '@/lib/outreach/market-profile';
 
@@ -13,6 +14,7 @@ type CampaignRow = {
   target_count: number | null;
   status: string | null;
   config: unknown;
+  updated_at?: string | null;
 };
 
 type CampaignStats = { sent: number; delivered: number; bounced: number; replies: number };
@@ -27,15 +29,51 @@ export function isOperationalDailyCampaign(row: CampaignRow, dateKey: string) {
     && isSupportedMarketCode(row.country_code.toUpperCase());
 }
 
-export function operationalCampaignLine(row: CampaignRow, stats: CampaignStats) {
+type SendWindowState = 'OPEN' | 'BEFORE_WINDOW' | 'CLOSED' | 'UNKNOWN';
+
+function clockMinutes(value: unknown) {
+  const match = String(value ?? '').match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hours = Number(match[1]); const minutes = Number(match[2]);
+  return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59 ? hours * 60 + minutes : null;
+}
+
+export function operationalCampaignWindow(row: CampaignRow, now = new Date()): {
+  state: SendWindowState;
+  timezone: string;
+  start: string;
+  end: string;
+} {
   const config = record(row.config);
-  const blocker = String(config.lastAcquisitionReason ?? config.lastEvidenceReason ?? '').trim();
+  const country = String(row.country_code ?? '').toUpperCase();
+  const fallbackTimezone = isSupportedMarketCode(country) ? marketDayUtcRange(country, now).timezone : '';
+  const timezone = String(config.agentWindowTimezone ?? fallbackTimezone);
+  const start = String(config.agentWindowStart ?? '09:00');
+  const end = String(config.agentWindowEnd ?? '19:00');
+  const startMinutes = clockMinutes(start); const endMinutes = clockMinutes(end);
+  const local = DateTime.fromJSDate(now, { zone: 'utc' }).setZone(timezone);
+  if (!local.isValid || startMinutes == null || endMinutes == null) return { state: 'UNKNOWN', timezone, start, end };
+  const currentMinutes = local.hour * 60 + local.minute;
+  const open = startMinutes <= endMinutes
+    ? currentMinutes >= startMinutes && currentMinutes < endMinutes
+    : currentMinutes >= startMinutes || currentMinutes < endMinutes;
+  const state: SendWindowState = open ? 'OPEN' : startMinutes <= endMinutes && currentMinutes < startMinutes ? 'BEFORE_WINDOW' : 'CLOSED';
+  return { state, timezone, start, end };
+}
+
+export function operationalCampaignLine(row: CampaignRow, stats: CampaignStats, now = new Date()) {
+  const config = record(row.config);
+  const lastMarker = String(config.lastAcquisitionReason ?? config.lastEvidenceReason ?? '').trim();
+  const remaining = Math.max(0, Number(row.target_count ?? 0) - stats.sent);
+  const window = operationalCampaignWindow(row, now);
   return [
     `• ${row.country_code} · ${row.city ?? 'default city'}${row.industry ? ` · ${row.industry}` : ''}: ${stats.sent}/${row.target_count ?? 0}`,
+    `remaining ${remaining}`,
+    `window ${window.state} ${window.start}-${window.end} ${window.timezone}`,
     `delivered ${stats.delivered}`,
     `bounce ${stats.bounced}`,
     `reply ${stats.replies}`,
-    ...(blocker ? [blocker] : []),
+    ...(lastMarker ? [`last marker (not a current blocker unless timestamped): ${lastMarker}`] : []),
   ].join(' · ');
 }
 
@@ -156,11 +194,23 @@ export async function buildOutreachReport(input: { supabase: SupabaseClient; org
   }
 
   const target = operational.reduce((sum, row) => sum + Number(row.target_count ?? 0), 0);
+  const remaining = Math.max(0, target - stats.totals.sent);
   const progress = target > 0 ? Math.min(100, Math.round(stats.totals.sent / target * 100)) : 0;
+  const reportNow = new Date();
+  const windowStates = operational.map((row) => operationalCampaignWindow(row, reportNow).state);
+  const operationalState = remaining === 0 && target > 0
+    ? 'TARGET_MET'
+    : windowStates.includes('OPEN')
+      ? 'UNDER_TARGET_WINDOW_OPEN'
+      : windowStates.includes('BEFORE_WINDOW')
+        ? 'UNDER_TARGET_WINDOW_NOT_OPEN'
+        : remaining > 0
+          ? 'UNDER_TARGET_WINDOW_CLOSED'
+          : 'NO_OPERATIONAL_TARGET';
   const capacity = (mailboxesResult.data ?? [])
     .filter((row) => String(row.health_status).toUpperCase() === 'HEALTHY' && ['ACTIVE','READY','WARMED','COMPLETED'].includes(String(row.warmup_status).toUpperCase()))
     .reduce((sum, row) => sum + Number(row.daily_limit ?? 0), 0);
-  const campaignLines = operational.slice(0, 10).map((row) => operationalCampaignLine(row, stats.byCampaign.get(String(row.id)) ?? { sent: 0, delivered: 0, bounced: 0, replies: 0 }));
+  const campaignLines = operational.slice(0, 10).map((row) => operationalCampaignLine(row, stats.byCampaign.get(String(row.id)) ?? { sent: 0, delivered: 0, bounced: 0, replies: 0 }, reportNow));
   const dateLabel = code ? marketDayUtcRange(code).dateKey : 'current local day per campaign';
 
   return {
@@ -174,6 +224,8 @@ export async function buildOutreachReport(input: { supabase: SupabaseClient; org
       `Bounce: ${stats.totals.bounced}`,
       `Reply: ${stats.totals.replies}`,
       `Target عملیاتی: ${target}`,
+      `Remaining: ${remaining}`,
+      `Operational state: ${operationalState}`,
       `Progress: ${progress}%`,
       `Mailbox capacity سالم: ${capacity}/day`,
       `Operational daily campaigns: ${operational.length}`,
@@ -181,6 +233,11 @@ export async function buildOutreachReport(input: { supabase: SupabaseClient; org
       ...(campaignLines.length ? ['', 'Campaigns:', ...campaignLines] : []),
       '',
       'توجه: Approval یا Lead قدیمی فقط inventory است و بدون انتساب زمانی/کمپینی، blocker یا فرصت فعال محسوب نمی‌شود.',
+      remaining > 0 && operationalState === 'UNDER_TARGET_WINDOW_CLOSED'
+        ? 'اقدام لازم: امروز زیر هدف بسته شده؛ ارسال خارج از پنجره ممنوع است. علت کسری را مشخص و صف قابل‌ارسال پنجره بعد را آماده کنید.'
+        : remaining > 0
+          ? 'اقدام لازم: هدف عملیاتی هنوز کامل نشده؛ علت کسری باید از evidence/queue/runtime telemetry مشخص شود.'
+          : 'هدف عملیاتی امروز کامل است یا هدف فعالی وجود ندارد.',
     ].join('\n'),
   };
 }

@@ -81,6 +81,8 @@ export async function planTelegramOwnerRequest(input: {
     'Never redistribute an aggregate count across campaigns. Never say each campaign sent N unless LIVE_STATUS gives a separate campaign-attributed N for each campaign.',
     'Only call an approval blocking, or a lead actively hot/human, when LIVE_STATUS explicitly gives current campaign attribution and current-day evidence. Otherwise label it historical/all-time inventory and ask for a scoped lookup.',
     'Treat the canonical outreach ledger with campaign_id and the campaign local-day window as the source of truth for sent, delivered, bounce, reply and progress.',
+    'If an operational target has Remaining greater than zero, never say no operational action is needed. State the shortfall explicitly.',
+    'If Operational state is UNDER_TARGET_WINDOW_CLOSED, never recommend sending outside the window; recommend diagnosing the shortfall and preparing an evidence-backed queue for the next allowed window.',
     'Never claim an action was executed. Never emit /alert_test. Never bypass Shadow, Kill Switch, DNC, suppression, approval or channel policy.',
     'Available read commands: /status /services /markets /agents /budget /approvals /campaigns /policy /pricing /leads /outreach_report.',
     'Available controlled writes: /price /discount /minimum /service /option /tone /dialect /locale /replywords /window /agent /threshold /limit /kill on /hunt /market /pause /resume /approve /reject /revert /email.',

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MUTATING_COMMANDS } from '@/lib/telegram/contracts';
 import { parseTelegramOwnerCommand } from '@/lib/telegram/parser';
-import { isOperationalDailyCampaign, operationalCampaignLine } from '@/lib/telegram/outreach-command-center';
+import { isOperationalDailyCampaign, operationalCampaignLine, operationalCampaignWindow } from '@/lib/telegram/outreach-command-center';
 
 describe('Telegram outreach command center', () => {
   it('parses Persian daily email commands with Persian digits', () => {
@@ -72,6 +72,38 @@ describe('Telegram outreach command center', () => {
     }, '2026-09-10')).toBe(false);
   });
 
+
+  it('marks an Oman campaign closed after its local send window', () => {
+    const campaign = {
+      id: 'campaign-1',
+      name: 'Daily Oman',
+      country_code: 'OM',
+      city: 'Muscat',
+      industry: null,
+      target_count: 10,
+      status: 'RUNNING',
+      config: {
+        dailyOutreachTarget: true,
+        outreachEnabled: true,
+        targetDate: '2026-09-10',
+        agentWindowStart: '09:00',
+        agentWindowEnd: '19:00',
+        agentWindowTimezone: 'Asia/Muscat',
+      },
+    };
+    expect(operationalCampaignWindow(campaign, new Date('2026-09-10T19:10:00Z'))).toMatchObject({
+      state: 'CLOSED',
+      timezone: 'Asia/Muscat',
+      start: '09:00',
+      end: '19:00',
+    });
+    expect(operationalCampaignLine(
+      campaign,
+      { sent: 1, delivered: 1, bounced: 0, replies: 0 },
+      new Date('2026-09-10T19:10:00Z'),
+    )).toContain('remaining 9 · window CLOSED');
+  });
+
   it('renders campaign-attributed progress instead of copying an aggregate', () => {
     const campaign = {
       id: 'campaign-1',
@@ -84,7 +116,9 @@ describe('Telegram outreach command center', () => {
       config: { lastEvidenceReason: 'NO_ADVANCEABLE_EVIDENCE_CANDIDATE' },
     };
     expect(operationalCampaignLine(campaign, { sent: 1, delivered: 1, bounced: 0, replies: 0 }))
-      .toContain('1/10 · delivered 1 · bounce 0 · reply 0');
+      .toContain('remaining 9');
+    expect(operationalCampaignLine(campaign, { sent: 1, delivered: 1, bounced: 0, replies: 0 }))
+      .toContain('delivered 1 · bounce 0 · reply 0');
   });
 
   it('requires confirmation for daily email mutation', () => {
