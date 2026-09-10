@@ -203,7 +203,7 @@ export async function POST(request: Request) {
             executeReadCommand({ supabase, organizationId: config.organizationId, command: { type: 'SHOW_BUDGET' } }),
           ]),
           supabase.from('telegram_command_runs')
-            .select('command_type,status')
+            .select('command_type,status,raw_text')
             .eq('organization_id', config.organizationId)
             .neq('id', claimed.id)
             .in('status', ['COMPLETED','PENDING_CONFIRMATION'])
@@ -218,6 +218,7 @@ export async function POST(request: Request) {
           recentCommands: (historyResult.data ?? []).map((row) => ({
             type: String(row.command_type ?? 'UNKNOWN'),
             status: String(row.status ?? 'UNKNOWN'),
+            text: row.raw_text ? String(row.raw_text) : undefined,
           })),
         });
         assistantMeta = { mode: plan.mode, importance: plan.importance, reason: plan.reason };
