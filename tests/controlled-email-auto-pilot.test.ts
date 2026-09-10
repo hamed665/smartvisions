@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CONTROLLED_EMAIL_QUEUE_MAX_AGE_DAYS,
   CONTROLLED_OMAN_AUTOMATION_AUTHORIZATION,
+  controlledEmailQueueStartIso,
   mailboxWarmupAllowsAutomaticSend,
   verifyControlledEmailAutoPilot,
 } from '@/lib/outreach/controlled-email-auto-pilot';
@@ -49,10 +51,17 @@ describe('controlled Oman email autopilot', () => {
     expect(result).toEqual({ verified: false, reason: 'CAMPAIGN_OWNER_AUTHORIZATION_MISSING' });
   });
 
-  it('fails closed for stale targets, manual-review mode and non-Oman messages', () => {
+  it('fails closed for stale targets, manual-review mode and mismatched market messages', () => {
     expect(verifyControlledEmailAutoPilot({ ...base, currentOmanDateKey: '2026-09-09' }).verified).toBe(false);
     expect(verifyControlledEmailAutoPilot({ ...base, campaignConfig: { ...campaignConfig, manualReviewOnly: true } }).verified).toBe(false);
     expect(verifyControlledEmailAutoPilot({ ...base, marketCode: 'AE' }).verified).toBe(false);
+  });
+
+  it('uses a bounded seven-day queue rollover window instead of current-day-only drafts', () => {
+    const now = new Date('2026-09-10T08:40:00.000Z');
+    expect(CONTROLLED_EMAIL_QUEUE_MAX_AGE_DAYS).toBe(7);
+    expect(controlledEmailQueueStartIso(now)).toBe('2026-09-03T08:40:00.000Z');
+    expect(() => controlledEmailQueueStartIso(now, 0)).toThrow('maxAgeDays must be positive');
   });
 
   it('requires explicit warmup readiness for automatic provider send', () => {
