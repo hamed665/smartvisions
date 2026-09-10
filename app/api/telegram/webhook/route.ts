@@ -196,8 +196,12 @@ export async function POST(request: Request) {
     let assistantMeta: Record<string, unknown> | null = null;
     if (shouldUseOwnerAssistantPlanner(rawText, command)) {
       try {
-        const [liveStatus, historyResult] = await Promise.all([
-          executeReadCommand({ supabase, organizationId: config.organizationId, command: { type: 'SHOW_STATUS' } }),
+        const [liveSnapshots, historyResult] = await Promise.all([
+          Promise.all([
+            executeReadCommand({ supabase, organizationId: config.organizationId, command: { type: 'SHOW_STATUS' } }),
+            executeReadCommand({ supabase, organizationId: config.organizationId, command: { type: 'SHOW_OUTREACH_REPORT' } }),
+            executeReadCommand({ supabase, organizationId: config.organizationId, command: { type: 'SHOW_BUDGET' } }),
+          ]),
           supabase.from('telegram_command_runs')
             .select('command_type,status')
             .eq('organization_id', config.organizationId)
@@ -210,7 +214,7 @@ export async function POST(request: Request) {
         const plan = await planTelegramOwnerRequest({
           organizationId: config.organizationId,
           text: rawText,
-          liveStatus: `${liveStatus.title}\n${liveStatus.text}`,
+          liveStatus: liveSnapshots.map((snapshot) => `${snapshot.title}\n${snapshot.text}`).join('\n\n'),
           recentCommands: (historyResult.data ?? []).map((row) => ({
             type: String(row.command_type ?? 'UNKNOWN'),
             status: String(row.status ?? 'UNKNOWN'),
