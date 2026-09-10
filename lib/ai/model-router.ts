@@ -1,6 +1,6 @@
 import type { BudgetMode, CostGuardSettings } from '@/lib/reliability/cost-guard';
 
-export type AiTaskClass = 'CLASSIFY' | 'TRANSLATE' | 'SUMMARIZE' | 'TRANSCRIBE' | 'REPLY' | 'NEGOTIATE' | 'PROPOSAL' | 'CLOSING';
+export type AiTaskClass = 'CLASSIFY' | 'TRANSLATE' | 'SUMMARIZE' | 'TRANSCRIBE' | 'REPLY' | 'NEGOTIATE' | 'PROPOSAL' | 'CLOSING' | 'OWNER_ASSISTANT' | 'OWNER_ANALYSIS';
 
 export type ModelRoute = {
   tier: 'LOW_COST' | 'HIGH_REASONING';
@@ -9,7 +9,7 @@ export type ModelRoute = {
   allowDeepReasoning: boolean;
 };
 
-const highReasoningTasks = new Set<AiTaskClass>(['NEGOTIATE', 'PROPOSAL', 'CLOSING']);
+const highReasoningTasks = new Set<AiTaskClass>(['NEGOTIATE', 'PROPOSAL', 'CLOSING', 'OWNER_ANALYSIS']);
 
 export function routeAiTask(task: AiTaskClass, budgetMode: BudgetMode, settings: Pick<CostGuardSettings,'model_routing_enabled'|'low_cost_model'|'high_reasoning_model'>): ModelRoute {
   const expensiveTask = highReasoningTasks.has(task);
