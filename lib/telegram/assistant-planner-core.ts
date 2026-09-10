@@ -35,7 +35,7 @@ export function freeOwnerAssistantReply(input: string): OwnerAssistantPlan | nul
       mode: 'ANSWER',
       importance: 'NORMAL',
       reason: 'DETERMINISTIC_GREETING',
-      text: 'سلام حامد. آماده‌ام وضعیت واقعی سیستم را بررسی کنم، دلیل مشکلات را توضیح بدهم یا یک تغییر کنترل‌شده را برای تأیید آماده کنم. مثلاً بگو «الان چه چیز مهمی نیاز به توجه دارد؟»',
+      text: 'سلام. آماده‌ام وضعیت واقعی سیستم را بررسی کنم، دلیل مشکلات را توضیح بدهم یا یک تغییر کنترل‌شده را برای تأیید آماده کنم. مثلاً بگو «الان چه چیز مهمی نیاز به توجه دارد؟»',
     };
   }
   if (thanks.test(text)) {
