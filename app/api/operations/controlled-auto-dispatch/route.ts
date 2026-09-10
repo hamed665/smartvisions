@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { marketDayUtcRange, isSupportedMarketCode } from '@/lib/outreach/market-profile';
-import { verifyControlledEmailAutoPilot, mailboxWarmupAllowsAutomaticSend } from '@/lib/outreach/controlled-email-auto-pilot';
+import { controlledEmailQueueStartIso, verifyControlledEmailAutoPilot, mailboxWarmupAllowsAutomaticSend } from '@/lib/outreach/controlled-email-auto-pilot';
+import { evidencePipelineTargetMatches } from '@/lib/operations/evidence-pipeline-policy';
 import { POST as controlledEmailSendPost } from '@/app/api/operations/controlled-email-send/route';
 
 function serviceClient() {
@@ -17,7 +18,7 @@ export async function POST(request: Request) {
   const denied = requireInternalApiKey(request); if (denied) return denied;
   const supabase = serviceClient(); const now = new Date();
   const { data: campaigns, error: campaignError } = await supabase.from('campaigns')
-    .select('id,organization_id,status,country_code,city,industry,config,updated_at')
+    .select('id,organization_id,status,country_code,city,industry,target_count,config,updated_at')
     .eq('status', 'RUNNING').order('updated_at', { ascending: true }).limit(50);
   if (campaignError) return NextResponse.json({ error: `Autopilot campaign lookup failed: ${campaignError.message}` }, { status: 503 });
   const eligibleCampaigns = (campaigns ?? []).filter((row) => {
@@ -32,19 +33,44 @@ export async function POST(request: Request) {
     const organizationId = String(campaign.organization_id); const marketCode = String(campaign.country_code).toUpperCase(); const day = marketDayUtcRange(marketCode, now); const config = record(campaign.config);
     const { data: controls } = await supabase.from('system_controls').select('global_kill_switch,agents_paused,email_paused,shadow_mode').eq('organization_id', organizationId).maybeSingle();
     if (!controls || controls.global_kill_switch || controls.agents_paused || controls.email_paused || !controls.shadow_mode) continue;
+
+    const targetCount = Math.max(1, Number(campaign.target_count ?? 1));
+    const { count: sentToday, error: sentTodayError } = await supabase.from('outreach_messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', organizationId).eq('campaign_id', campaign.id)
+      .eq('channel', 'EMAIL').eq('direction', 'OUTBOUND').eq('status', 'SENT')
+      .gte('sent_at', day.startIso).lt('sent_at', day.endIso);
+    if (sentTodayError) return NextResponse.json({ error: `Autopilot daily send count failed: ${sentTodayError.message}` }, { status: 503 });
+    if (Number(sentToday ?? 0) >= targetCount) continue;
+
     const { data: messages, error: messagesError } = await supabase.from('conversation_messages')
       .select('id,conversation_id,lead_id,channel,status,requires_approval,metadata,provider_message_id,created_at')
       .eq('organization_id', organizationId).eq('channel', 'EMAIL').eq('direction', 'OUTBOUND')
       .in('status', ['APPROVAL_REQUIRED','APPROVED']).like('provider_message_id', 'shadow:growth-first-touch:%')
-      .gte('created_at', day.startIso).lt('created_at', day.endIso).order('created_at', { ascending: true }).limit(20);
+      .gte('created_at', controlledEmailQueueStartIso(now)).order('created_at', { ascending: true }).limit(50);
     if (messagesError) return NextResponse.json({ error: `Autopilot queue lookup failed: ${messagesError.message}` }, { status: 503 });
 
     for (const message of messages ?? []) {
       if (!message.lead_id || !message.conversation_id) continue;
       const metadata = record(message.metadata); const sendContext = record(metadata.send_context); const idempotencyKey = typeof metadata.idempotency_key === 'string' ? metadata.idempotency_key : null;
       if (String(sendContext.market_code ?? '').toUpperCase() !== marketCode) continue;
-      const { data: conversation } = await supabase.from('sales_conversations').select('id,lead_id,channel').eq('organization_id', organizationId).eq('id', message.conversation_id).maybeSingle();
-      if (!conversation) continue;
+      const [{ data: conversation }, { data: leadBusiness }] = await Promise.all([
+        supabase.from('sales_conversations').select('id,lead_id,channel').eq('organization_id', organizationId).eq('id', message.conversation_id).maybeSingle(),
+        supabase.from('leads').select('id,businesses(country_code,city,category,formatted_address,google_primary_type_display_name)').eq('organization_id', organizationId).eq('id', message.lead_id).maybeSingle(),
+      ]);
+      if (!conversation || !leadBusiness) continue;
+      const businessRelation = leadBusiness.businesses;
+      const business = (Array.isArray(businessRelation) ? businessRelation[0] : businessRelation) as Record<string, unknown> | null;
+      if (!business || String(business.country_code ?? '').toUpperCase() !== marketCode) continue;
+      if (!evidencePipelineTargetMatches({
+        targetCity: campaign.city,
+        targetIndustry: campaign.industry,
+        businessCity: business.city as string | null,
+        formattedAddress: business.formatted_address as string | null,
+        category: business.category as string | null,
+        primaryType: business.google_primary_type_display_name as string | null,
+      })) continue;
+
       const verification = verifyControlledEmailAutoPilot({ messageStatus: message.status, requiresApproval: Boolean(message.requires_approval), channel: message.channel, metadataSource: metadata.source, providerMessageId: message.provider_message_id, idempotencyKey, marketCode, messageLeadId: message.lead_id, conversationLeadId: conversation.lead_id, conversationChannel: conversation.channel, campaignStatus: campaign.status, campaignCountryCode: campaign.country_code, campaignConfig: config, currentMarketDateKey: day.dateKey });
       if (!verification.verified) continue;
 
