@@ -26,6 +26,7 @@ export type TelegramMarketStyleField =
 export type TelegramOwnerCommand =
   | { type: 'SHOW_STATUS' }
   | { type: 'SHOW_OUTREACH_REPORT'; countryCode?: string }
+  | { type: 'DIAGNOSE_OUTREACH'; countryCode: string }
   | { type: 'LIST_SERVICES' }
   | { type: 'SHOW_PRICING'; countryCode?: string; serviceQuery?: string }
   | { type: 'SHOW_LEADS'; limit?: number; stage?: string }
