@@ -116,7 +116,9 @@ describe('Telegram outreach command center', () => {
       config: { lastEvidenceReason: 'NO_ADVANCEABLE_EVIDENCE_CANDIDATE' },
     };
     expect(operationalCampaignLine(campaign, { sent: 1, delivered: 1, bounced: 0, replies: 0 }))
-      .toContain('1/10 · delivered 1 · bounce 0 · reply 0');
+      .toContain('remaining 9');
+    expect(operationalCampaignLine(campaign, { sent: 1, delivered: 1, bounced: 0, replies: 0 }))
+      .toContain('delivered 1 · bounce 0 · reply 0');
   });
 
   it('requires confirmation for daily email mutation', () => {
