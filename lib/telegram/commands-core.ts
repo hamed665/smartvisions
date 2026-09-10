@@ -133,9 +133,9 @@ export async function executeReadCommand(input: {
         `WhatsApp AI: ${c?.whatsapp_ai_paused ? 'PAUSED' : 'ACTIVE'}`,
         `Email: ${c?.email_paused ? 'PAUSED' : 'ACTIVE'}`,
         `Connected: ${connected.join(', ') || 'none'}`,
-        `Hot / interested / human leads: ${hotLeads.count ?? 0}`,
-        `Approvals waiting: ${approvals.count ?? 0}`,
-        `Running hunter campaigns: ${runningCampaigns.count ?? 0}`,
+        `Hot / interested / human lead records (all-time inventory): ${hotLeads.count ?? 0}`,
+        `Approvals waiting (all-time inventory; not proof of an active campaign block): ${approvals.count ?? 0}`,
+        `RUNNING campaign records (may include pilot/non-outreach/stale): ${runningCampaigns.count ?? 0}`,
         `Monthly budget: ${costGuard.data?.monthly_total_budget_usd ?? '—'} USD`,
       ].join('\n'),
     };

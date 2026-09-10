@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MUTATING_COMMANDS } from '@/lib/telegram/contracts';
 import { parseTelegramOwnerCommand } from '@/lib/telegram/parser';
+import { isOperationalDailyCampaign, operationalCampaignLine } from '@/lib/telegram/outreach-command-center';
 
 describe('Telegram outreach command center', () => {
   it('parses Persian daily email commands with Persian digits', () => {
@@ -44,6 +45,46 @@ describe('Telegram outreach command center', () => {
     expect(parseTelegramOwnerCommand('گزارش ایمیل عمان')).toEqual({ type: 'SHOW_OUTREACH_REPORT', countryCode: 'OM' });
     expect(parseTelegramOwnerCommand('گزارش ایمیل کانادا')).toEqual({ type: 'SHOW_OUTREACH_REPORT', countryCode: 'CA' });
     expect(parseTelegramOwnerCommand('/outreach_status AE')).toEqual({ type: 'SHOW_OUTREACH_REPORT', countryCode: 'AE' });
+  });
+
+
+  it('excludes stale and non-outreach RUNNING records from operational totals', () => {
+    const base = {
+      id: 'campaign-1',
+      name: 'Daily Oman',
+      country_code: 'OM',
+      city: 'Muscat',
+      industry: null,
+      target_count: 10,
+      status: 'RUNNING',
+    };
+    expect(isOperationalDailyCampaign({
+      ...base,
+      config: { dailyOutreachTarget: true, outreachEnabled: true, targetDate: '2026-09-10' },
+    }, '2026-09-10')).toBe(true);
+    expect(isOperationalDailyCampaign({
+      ...base,
+      config: { dailyOutreachTarget: false, outreachEnabled: false, targetDate: '2026-09-10' },
+    }, '2026-09-10')).toBe(false);
+    expect(isOperationalDailyCampaign({
+      ...base,
+      config: { dailyOutreachTarget: true, outreachEnabled: true, targetDate: '2026-09-09' },
+    }, '2026-09-10')).toBe(false);
+  });
+
+  it('renders campaign-attributed progress instead of copying an aggregate', () => {
+    const campaign = {
+      id: 'campaign-1',
+      name: 'Daily Oman',
+      country_code: 'OM',
+      city: 'Muscat',
+      industry: 'dental',
+      target_count: 10,
+      status: 'RUNNING',
+      config: { lastEvidenceReason: 'NO_ADVANCEABLE_EVIDENCE_CANDIDATE' },
+    };
+    expect(operationalCampaignLine(campaign, { sent: 1, delivered: 1, bounced: 0, replies: 0 }))
+      .toContain('1/10 · delivered 1 · bounce 0 · reply 0');
   });
 
   it('requires confirmation for daily email mutation', () => {
