@@ -84,10 +84,11 @@ export async function planTelegramOwnerRequest(input: {
     'Keep Persian answers concise, direct and honest.',
   ].join('\n');
 
+  const supportsReasoningControls = /^gpt-(?:5|6)(?:\.|-|$)/i.test(model);
   const requestBody = JSON.stringify({
     model,
     store: false,
-    reasoning: { effort: route.allowDeepReasoning ? 'medium' : 'none' },
+    ...(supportsReasoningControls ? { reasoning: { effort: route.allowDeepReasoning ? 'medium' : 'none' } } : {}),
     max_output_tokens: route.allowDeepReasoning ? 800 : 500,
     instructions,
     input: JSON.stringify({
