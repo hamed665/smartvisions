@@ -119,6 +119,15 @@ function outreachCountry(input: string) {
 
 function outreachCommand(rawInput: string): TelegramOwnerCommand | null {
   const input = clean(rawInput);
+  const slashDiagnosis = input.match(/^\/(?:diagnose_?outreach|outreach_?diagnose)(?:@[A-Za-z0-9_]+)?(?:\s+(\S+))?$/i);
+  if (slashDiagnosis) {
+    const countryCode = normalizeCountryCode(slashDiagnosis[1]);
+    return countryCode ? { type: 'DIAGNOSE_OUTREACH', countryCode } : { type: 'HELP' };
+  }
+  if (/(علت|چرا|ریشه|diagnos|root\s*cause)/i.test(input) && /(کسری|کمبود|نرسید|under.?target|outreach|ارسال)/i.test(input)) {
+    const countryCode = outreachCountry(input);
+    if (countryCode) return { type: 'DIAGNOSE_OUTREACH', countryCode };
+  }
   const slashReport = input.match(/^\/(?:outreach|email)_?(?:report|status)(?:@[A-Za-z0-9_]+)?(?:\s+(\S+))?$/i);
   if (slashReport) return { type: 'SHOW_OUTREACH_REPORT', countryCode: normalizeCountryCode(slashReport[1]) };
   if (/(چند\s*تا\s*ایمیل|گزارش\s*(?:ایمیل|outreach)|نتیجه\s*(?:ایمیل|outreach)|email\s*(?:report|status)|outreach\s*(?:report|status))/i.test(input)) {
