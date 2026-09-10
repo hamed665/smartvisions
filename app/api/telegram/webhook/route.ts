@@ -178,7 +178,7 @@ export async function POST(request: Request) {
 
   try {
     const freeReply = freeOwnerAssistantReply(rawText);
-    if (freeReply) {
+    if (freeReply?.mode === 'ANSWER') {
       const result = { title: 'دستیار مالک', text: freeReply.text, importance: freeReply.importance, reason: freeReply.reason };
       const { error: completeError } = await supabase.from('telegram_command_runs').update({
         command_type: 'OWNER_ASSISTANT_REPLY',
