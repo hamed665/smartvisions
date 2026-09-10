@@ -24,6 +24,7 @@ function record(value: unknown): Record<string, unknown> {
 
 export const CONTROLLED_EMAIL_AUTOMATION_AUTHORIZATION = 'OWNER_REQUESTED_FULL_AUTOMATION' as const;
 export const CONTROLLED_OMAN_AUTOMATION_AUTHORIZATION = CONTROLLED_EMAIL_AUTOMATION_AUTHORIZATION;
+export const CONTROLLED_EMAIL_QUEUE_MAX_AGE_DAYS = 7;
 
 export function verifyControlledEmailAutoPilot(input: ControlledEmailAutoPilotInput) {
   if (String(input.channel ?? '').toUpperCase() !== 'EMAIL') return { verified: false as const, reason: 'CHANNEL_NOT_EMAIL' as const };
@@ -56,6 +57,11 @@ export function verifyControlledEmailAutoPilot(input: ControlledEmailAutoPilotIn
   if (config.manualReviewOnly !== false) return { verified: false as const, reason: 'MANUAL_REVIEW_ONLY' as const };
   if (config.automationAuthorization !== CONTROLLED_EMAIL_AUTOMATION_AUTHORIZATION) return { verified: false as const, reason: 'CAMPAIGN_OWNER_AUTHORIZATION_MISSING' as const };
   return { verified: true as const, reason: 'CONTROLLED_MULTI_MARKET_EMAIL_AUTOPILOT_VERIFIED' as const };
+}
+
+export function controlledEmailQueueStartIso(now = new Date(), maxAgeDays = CONTROLLED_EMAIL_QUEUE_MAX_AGE_DAYS) {
+  if (!Number.isFinite(maxAgeDays) || maxAgeDays <= 0) throw new Error('maxAgeDays must be positive');
+  return new Date(now.getTime() - maxAgeDays * 24 * 60 * 60 * 1000).toISOString();
 }
 
 export function mailboxWarmupAllowsAutomaticSend(status?: string | null) {
