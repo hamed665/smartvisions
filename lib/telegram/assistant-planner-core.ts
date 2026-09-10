@@ -15,12 +15,12 @@ export type RawOwnerAssistantPlan = {
   reason?: unknown;
 };
 
-const explicitHelp = /^(?:\/?help|\/?start|کمک|راهنما)$/i;
+const explicitHelp = /^(?:\/(?:help|start)(?:@[A-Za-z0-9_]+)?|کمک|راهنما)$/i;
 const greeting = /^(?:سلام|درود|hello|hi|hey|صبح بخیر|عصر بخیر|شب بخیر)[!.؟\s]*$/i;
 const thanks = /^(?:ممنون|مرسی|سپاس|thank you|thanks)[!.؟\s]*$/i;
 const explicitMutation = /(?:\d+(?:\.\d+)?[^\n]{0,20}(?:کن|بذار|بگذار)|تنظیم|تغییر|ویرایش|فعال|غیرفعال|روشن|خاموش|متوقف|ادامه|شروع|بساز|ایجاد|ارسال|بفرست|تأیید|تایید|رد|برگردان|حذف|set|change|update|enable|disable|pause|resume|start|create|send|approve|reject|revert|delete)/i;
 const forbiddenCommand = /^\/(?:alert_?test)(?:@|\s|$)/i;
-const allowedCommand = /^\/(?:status|services|markets|agents|budget|approvals|campaigns|policy|pricing|leads|price|discount|minimum|service|option|tone|dialect|locale|replywords|window|agent|threshold|limit|kill|hunt|market|pause|resume|approve|reject|revert|panel|email|outreach)(?:@|\s|$)/i;
+const allowedCommand = /^\/(?:status|services|markets|agents|budget|approvals|campaigns|policy|pricing|leads|price|discount|minimum|service|option|tone|dialect|locale|replywords|window|agent|threshold|limit|kill|hunt|market|pause|resume|approve|reject|revert|panel|email|outreach|outreach_report|outreach_status|email_report|email_status)(?:@|\s|$)/i;
 
 const safeText = (value: unknown, max: number) => String(value ?? '').trim().slice(0, max);
 
