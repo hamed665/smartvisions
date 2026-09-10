@@ -7,6 +7,8 @@ import type { CommandExecutionResult, TelegramOwnerCommand, TelegramUpdate } fro
 import { MUTATING_COMMANDS } from '@/lib/telegram/contracts';
 import { executePreparedMutation, executeReadCommand, prepareMutation } from '@/lib/telegram/commands';
 import { parseTelegramOwnerCommand } from '@/lib/telegram/parser';
+import { freeOwnerAssistantReply, shouldUseOwnerAssistantPlanner } from '@/lib/telegram/assistant-planner-core';
+import { planTelegramOwnerRequest } from '@/lib/telegram/assistant-planner';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -175,7 +177,102 @@ export async function POST(request: Request) {
   }
 
   try {
-    const command = parseTelegramOwnerCommand(rawText);
+    const freeReply = freeOwnerAssistantReply(rawText);
+    if (freeReply?.mode === 'ANSWER') {
+      const result = { title: 'دستیار مالک', text: freeReply.text, importance: freeReply.importance, reason: freeReply.reason };
+      const { error: completeError } = await supabase.from('telegram_command_runs').update({
+        command_type: 'OWNER_ASSISTANT_REPLY',
+        command_payload: { mode: freeReply.mode },
+        status: 'COMPLETED',
+        result,
+        completed_at: new Date().toISOString(),
+      }).eq('organization_id', config.organizationId).eq('id', claimed.id).eq('status', 'PROCESSING');
+      if (completeError) throw new Error(`Telegram assistant reply persistence failed: ${completeError.message}`);
+      try {
+        await sendTelegramMessage({ chatId, text: freeReply.text });
+      } catch (deliveryError) {
+        await supabase.from('telegram_command_runs').update({
+          error: deliveryError instanceof Error ? deliveryError.message.slice(0, 300) : 'Reply delivery failed',
+        }).eq('id', claimed.id);
+      }
+      return NextResponse.json({ ok: true, completed: true, deterministic: true });
+    }
+
+    let command = parseTelegramOwnerCommand(rawText);
+    let assistantMeta: Record<string, unknown> | null = null;
+    if (shouldUseOwnerAssistantPlanner(rawText, command)) {
+      try {
+        const [liveSnapshots, historyResult] = await Promise.all([
+          Promise.all([
+            executeReadCommand({ supabase, organizationId: config.organizationId, command: { type: 'SHOW_STATUS' } }),
+            executeReadCommand({ supabase, organizationId: config.organizationId, command: { type: 'SHOW_OUTREACH_REPORT' } }),
+            executeReadCommand({ supabase, organizationId: config.organizationId, command: { type: 'SHOW_BUDGET' } }),
+          ]),
+          supabase.from('telegram_command_runs')
+            .select('command_type,status,raw_text')
+            .eq('organization_id', config.organizationId)
+            .neq('id', claimed.id)
+            .in('status', ['COMPLETED','PENDING_CONFIRMATION'])
+            .order('created_at', { ascending: false })
+            .limit(6),
+        ]);
+        if (historyResult.error) throw new Error(`Owner assistant history failed: ${historyResult.error.message}`);
+        const plan = await planTelegramOwnerRequest({
+          organizationId: config.organizationId,
+          text: rawText,
+          liveStatus: liveSnapshots.map((snapshot) => `${snapshot.title}\n${snapshot.text}`).join('\n\n'),
+          recentCommands: (historyResult.data ?? []).map((row) => ({
+            type: String(row.command_type ?? 'UNKNOWN'),
+            status: String(row.status ?? 'UNKNOWN'),
+            text: row.raw_text ? String(row.raw_text) : undefined,
+          })),
+        });
+        assistantMeta = { mode: plan.mode, importance: plan.importance, reason: plan.reason };
+
+        if (plan.mode !== 'COMMAND') {
+          const result = { title: 'دستیار مالک', text: plan.text, ...assistantMeta };
+          const { error: completeError } = await supabase.from('telegram_command_runs').update({
+            command_type: `OWNER_ASSISTANT_${plan.mode}`,
+            command_payload: { mode: plan.mode },
+            status: 'COMPLETED',
+            result,
+            completed_at: new Date().toISOString(),
+          }).eq('organization_id', config.organizationId).eq('id', claimed.id).eq('status', 'PROCESSING');
+          if (completeError) throw new Error(`Telegram assistant reply persistence failed: ${completeError.message}`);
+          const prefix = plan.importance === 'CRITICAL' ? '🚨 ' : plan.importance === 'IMPORTANT' ? '⚠️ ' : '';
+          try {
+            await sendTelegramMessage({ chatId, text: `${prefix}${plan.text}` });
+          } catch (deliveryError) {
+            await supabase.from('telegram_command_runs').update({
+              error: deliveryError instanceof Error ? deliveryError.message.slice(0, 300) : 'Reply delivery failed',
+            }).eq('id', claimed.id);
+          }
+          return NextResponse.json({ ok: true, completed: true, assistantMode: plan.mode });
+        }
+
+        command = plan.command;
+        assistantMeta = { ...assistantMeta, canonicalCommand: plan.canonicalCommand };
+      } catch (plannerError) {
+        const internalError = plannerError instanceof Error ? plannerError.message.slice(0, 500) : 'Owner assistant planning failed';
+        const fallbackText = [
+          'بخش مکالمه هوشمند فعلاً در دسترس نیست یا Cost Guard اجازه نداده است.',
+          'هیچ تغییری انجام نشد. فرمان‌های مستقیم همچنان فعال‌اند؛ برای فهرست آن‌ها /help را بفرست.',
+        ].join('\n');
+        await supabase.from('telegram_command_runs').update({
+          command_type: 'OWNER_ASSISTANT_DEGRADED',
+          command_payload: {},
+          status: 'COMPLETED',
+          result: { title: 'حالت امن دستیار', text: fallbackText, reason: 'PLANNER_UNAVAILABLE' },
+          error: internalError,
+          completed_at: new Date().toISOString(),
+        }).eq('organization_id', config.organizationId).eq('id', claimed.id).eq('status', 'PROCESSING');
+        try {
+          await sendTelegramMessage({ chatId, text: `⚠️ ${fallbackText}` });
+        } catch { /* no retry: Telegram send is not idempotent */ }
+        return NextResponse.json({ ok: true, completed: true, degraded: true });
+      }
+    }
+
     if (MUTATING_COMMANDS.has(command.type)) {
       const prepared = await prepareMutation({ supabase, organizationId: config.organizationId, ownerUserId: config.ownerUserId, command });
       const token = randomUUID();
@@ -184,7 +281,7 @@ export async function POST(request: Request) {
         command_payload: prepared.command,
         status: 'PENDING_CONFIRMATION',
         confirmation_token: token,
-        result: { preview: prepared.preview },
+        result: { preview: prepared.preview, ...(assistantMeta ? { assistant: assistantMeta } : {}) },
       }).eq('organization_id', config.organizationId).eq('id', claimed.id).eq('status', 'PROCESSING');
       if (pendingError) throw new Error(`Telegram confirmation persistence failed: ${pendingError.message}`);
       try {
@@ -197,7 +294,8 @@ export async function POST(request: Request) {
     }
 
     const result = await executeReadCommand({ supabase, organizationId: config.organizationId, command });
-    const { error: completeError } = await supabase.from('telegram_command_runs').update({ command_type: command.type, command_payload: command, status: 'COMPLETED', result, completed_at: new Date().toISOString() })
+    const persistedResult = assistantMeta ? { ...result, assistant: assistantMeta } : result;
+    const { error: completeError } = await supabase.from('telegram_command_runs').update({ command_type: command.type, command_payload: command, status: 'COMPLETED', result: persistedResult, completed_at: new Date().toISOString() })
       .eq('organization_id', config.organizationId).eq('id', claimed.id).eq('status', 'PROCESSING');
     if (completeError) throw new Error(`Telegram read command persistence failed: ${completeError.message}`);
     try {
