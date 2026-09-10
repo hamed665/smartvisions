@@ -53,7 +53,7 @@ export async function planTelegramOwnerRequest(input: {
   organizationId: string;
   text: string;
   liveStatus: string;
-  recentCommands?: Array<{ type: string; status: string }>;
+  recentCommands?: Array<{ type: string; status: string; text?: string }>;
 }): Promise<OwnerAssistantPlan> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OpenAI is not configured for conversational owner requests');
@@ -94,7 +94,7 @@ export async function planTelegramOwnerRequest(input: {
     input: JSON.stringify({
       owner_request: redactOwnerAssistantContext(input.text),
       live_status: redactOwnerAssistantContext(input.liveStatus),
-      recent_commands: (input.recentCommands ?? []).slice(0, 6),
+      recent_commands: (input.recentCommands ?? []).slice(0, 6).map((item) => ({ ...item, text: item.text ? redactOwnerAssistantContext(item.text).slice(0, 300) : undefined })),
     }),
     text: { format: { type: 'json_schema', name: 'owner_assistant_plan', strict: true, schema } },
   });
