@@ -4,40 +4,129 @@ import { getMarketOperationalProfile, isSupportedMarketCode, marketDayUtcRange }
 
 const record = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
-async function actualEmailStats(input: { supabase: SupabaseClient; organizationId: string; countryCode?: string }) {
-  const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-  const { supabase, organizationId } = input;
-  const [sentResult, inboundResult] = await Promise.all([
-    supabase.from('conversation_messages').select('id,lead_id,provider_message_id,sent_at,status').eq('organization_id', organizationId).eq('channel', 'EMAIL').eq('direction', 'OUTBOUND').eq('status', 'SENT').gte('sent_at', since),
-    supabase.from('outreach_messages').select('id,lead_id,received_at,created_at').eq('organization_id', organizationId).eq('channel', 'EMAIL').eq('direction', 'INBOUND').gte('created_at', since),
-  ]);
-  if (sentResult.error || inboundResult.error) throw new Error(`Outreach stats lookup failed: ${sentResult.error?.message ?? inboundResult.error?.message}`);
-  const leadIds = [...new Set([...(sentResult.data ?? []), ...(inboundResult.data ?? [])].map((row) => String(row.lead_id ?? '')).filter(Boolean))];
-  const leadCountry = new Map<string, string>();
-  if (leadIds.length) {
-    const { data: leads, error } = await supabase.from('leads').select('id,business_id').eq('organization_id', organizationId).in('id', leadIds);
-    if (error) throw new Error(`Outreach lead lookup failed: ${error.message}`);
-    const businessIds = [...new Set((leads ?? []).map((row) => String(row.business_id ?? '')).filter(Boolean))];
-    const businessCountry = new Map<string, string>();
-    if (businessIds.length) {
-      const { data: businesses, error: businessError } = await supabase.from('businesses').select('id,country_code').eq('organization_id', organizationId).in('id', businessIds);
-      if (businessError) throw new Error(`Outreach business lookup failed: ${businessError.message}`);
-      for (const row of businesses ?? []) businessCountry.set(String(row.id), String(row.country_code ?? '').toUpperCase());
-    }
-    for (const row of leads ?? []) leadCountry.set(String(row.id), businessCountry.get(String(row.business_id)) ?? '');
-  }
-  const wanted = input.countryCode?.toUpperCase();
-  const sentRows = (sentResult.data ?? []).filter((row) => !wanted || leadCountry.get(String(row.lead_id)) === wanted);
-  const inboundRows = (inboundResult.data ?? []).filter((row) => !wanted || leadCountry.get(String(row.lead_id)) === wanted);
+type CampaignRow = {
+  id: string;
+  name: string | null;
+  country_code: string | null;
+  city: string | null;
+  industry: string | null;
+  target_count: number | null;
+  status: string | null;
+  config: unknown;
+};
+
+type CampaignStats = { sent: number; delivered: number; bounced: number; replies: number };
+
+export function isOperationalDailyCampaign(row: CampaignRow, dateKey: string) {
+  const config = record(row.config);
+  return String(row.status).toUpperCase() === 'RUNNING'
+    && config.dailyOutreachTarget === true
+    && config.outreachEnabled === true
+    && config.targetDate === dateKey
+    && typeof row.country_code === 'string'
+    && isSupportedMarketCode(row.country_code.toUpperCase());
+}
+
+export function operationalCampaignLine(row: CampaignRow, stats: CampaignStats) {
+  const config = record(row.config);
+  const blocker = String(config.lastAcquisitionReason ?? config.lastEvidenceReason ?? '').trim();
+  return [
+    `• ${row.country_code} · ${row.city ?? 'default city'}${row.industry ? ` · ${row.industry}` : ''}: ${stats.sent}/${row.target_count ?? 0}`,
+    `delivered ${stats.delivered}`,
+    `bounce ${stats.bounced}`,
+    `reply ${stats.replies}`,
+    ...(blocker ? [blocker] : []),
+  ].join(' · ');
+}
+
+async function actualEmailStats(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  campaigns: CampaignRow[];
+}) {
+  const empty = { totals: { sent: 0, delivered: 0, bounced: 0, replies: 0 }, byCampaign: new Map<string, CampaignStats>() };
+  if (!input.campaigns.length) return empty;
+
+  const windows = new Map(input.campaigns.map((campaign) => {
+    const code = String(campaign.country_code).toUpperCase();
+    const day = marketDayUtcRange(code);
+    return [String(campaign.id), { startIso: day.startIso, endIso: day.endIso }];
+  }));
+  const starts = [...windows.values()].map((window) => window.startIso).sort();
+  const ends = [...windows.values()].map((window) => window.endIso).sort();
+  const campaignIds = input.campaigns.map((campaign) => String(campaign.id));
+
+  const { data: outbound, error: outboundError } = await input.supabase.from('outreach_messages')
+    .select('id,campaign_id,lead_id,provider_message_id,sent_at,status')
+    .eq('organization_id', input.organizationId)
+    .eq('channel', 'EMAIL')
+    .eq('direction', 'OUTBOUND')
+    .in('campaign_id', campaignIds)
+    .not('sent_at', 'is', null)
+    .gte('sent_at', starts[0])
+    .lt('sent_at', ends[ends.length - 1]);
+  if (outboundError) throw new Error(`Outreach ledger lookup failed: ${outboundError.message}`);
+
+  const sentRows = (outbound ?? []).filter((row) => {
+    const window = windows.get(String(row.campaign_id));
+    const sentAt = String(row.sent_at ?? '');
+    return Boolean(window && sentAt >= window.startIso && sentAt < window.endIso);
+  });
   const providerIds = [...new Set(sentRows.map((row) => String(row.provider_message_id ?? '')).filter(Boolean))];
-  let delivered = 0; let bounced = 0;
-  if (providerIds.length) {
-    const { data: events, error } = await supabase.from('email_events').select('provider_message_id,event_type').eq('organization_id', organizationId).in('provider_message_id', providerIds);
-    if (error) throw new Error(`Email event lookup failed: ${error.message}`);
-    delivered = new Set((events ?? []).filter((row) => String(row.event_type).toLowerCase() === 'email.delivered').map((row) => String(row.provider_message_id))).size;
-    bounced = new Set((events ?? []).filter((row) => /bounce/i.test(String(row.event_type))).map((row) => String(row.provider_message_id))).size;
+  const leadIds = [...new Set(sentRows.map((row) => String(row.lead_id ?? '')).filter(Boolean))];
+
+  const [eventsResult, inboundResult] = await Promise.all([
+    providerIds.length
+      ? input.supabase.from('email_events').select('provider_message_id,event_type').eq('organization_id', input.organizationId).in('provider_message_id', providerIds)
+      : Promise.resolve({ data: [], error: null }),
+    leadIds.length
+      ? input.supabase.from('outreach_messages').select('id,lead_id,created_at').eq('organization_id', input.organizationId).eq('channel', 'EMAIL').eq('direction', 'INBOUND').in('lead_id', leadIds).gte('created_at', starts[0]).lt('created_at', ends[ends.length - 1])
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (eventsResult.error || inboundResult.error) {
+    throw new Error(`Outreach event lookup failed: ${eventsResult.error?.message ?? inboundResult.error?.message}`);
   }
-  return { sent: sentRows.length, delivered, bounced, replies: inboundRows.length };
+
+  const deliveredIds = new Set((eventsResult.data ?? []).filter((row) => String(row.event_type).toLowerCase() === 'email.delivered').map((row) => String(row.provider_message_id)));
+  const bouncedIds = new Set((eventsResult.data ?? []).filter((row) => /bounce/i.test(String(row.event_type))).map((row) => String(row.provider_message_id)));
+  const campaignsByLead = new Map<string, Set<string>>();
+  for (const row of sentRows) {
+    const leadId = String(row.lead_id ?? '');
+    if (!leadId) continue;
+    const campaignSet = campaignsByLead.get(leadId) ?? new Set<string>();
+    campaignSet.add(String(row.campaign_id));
+    campaignsByLead.set(leadId, campaignSet);
+  }
+  const repliedCampaigns = new Map<string, Set<string>>();
+  for (const row of inboundResult.data ?? []) {
+    for (const campaignId of campaignsByLead.get(String(row.lead_id)) ?? []) {
+      const window = windows.get(campaignId);
+      const createdAt = String(row.created_at ?? '');
+      if (!window || createdAt < window.startIso || createdAt >= window.endIso) continue;
+      const replyIds = repliedCampaigns.get(campaignId) ?? new Set<string>();
+      replyIds.add(String(row.id));
+      repliedCampaigns.set(campaignId, replyIds);
+    }
+  }
+
+  const byCampaign = new Map<string, CampaignStats>();
+  for (const campaign of input.campaigns) {
+    const campaignId = String(campaign.id);
+    const rows = sentRows.filter((row) => String(row.campaign_id) === campaignId);
+    byCampaign.set(campaignId, {
+      sent: rows.length,
+      delivered: rows.filter((row) => deliveredIds.has(String(row.provider_message_id))).length,
+      bounced: rows.filter((row) => bouncedIds.has(String(row.provider_message_id))).length,
+      replies: repliedCampaigns.get(campaignId)?.size ?? 0,
+    });
+  }
+  const totals = [...byCampaign.values()].reduce((sum, value) => ({
+    sent: sum.sent + value.sent,
+    delivered: sum.delivered + value.delivered,
+    bounced: sum.bounced + value.bounced,
+    replies: sum.replies + value.replies,
+  }), { sent: 0, delivered: 0, bounced: 0, replies: 0 });
+  return { totals, byCampaign };
 }
 
 export async function buildOutreachReport(input: { supabase: SupabaseClient; organizationId: string; countryCode?: string }): Promise<CommandExecutionResult> {
@@ -45,60 +134,53 @@ export async function buildOutreachReport(input: { supabase: SupabaseClient; org
   if (code && !isSupportedMarketCode(code)) throw new Error(`Market ${code} پشتیبانی نمی‌شود.`);
   let campaignQuery = input.supabase.from('campaigns').select('id,name,country_code,city,industry,target_count,status,config,updated_at').eq('organization_id', input.organizationId).eq('status', 'RUNNING');
   if (code) campaignQuery = campaignQuery.eq('country_code', code);
-  let businessQuery = input.supabase.from('businesses').select('id,country_code').eq('organization_id', input.organizationId);
-  if (code) businessQuery = businessQuery.eq('country_code', code);
-  const [campaignsResult, stats, mailboxesResult, businessesResult] = await Promise.all([
+  const [campaignsResult, mailboxesResult] = await Promise.all([
     campaignQuery,
-    actualEmailStats(input),
     input.supabase.from('mailboxes').select('address,enabled,daily_limit,warmup_status,health_status').eq('organization_id', input.organizationId).eq('enabled', true),
-    businessQuery,
   ]);
-  const firstError = campaignsResult.error ?? mailboxesResult.error ?? businessesResult.error;
+  const firstError = campaignsResult.error ?? mailboxesResult.error;
   if (firstError) throw new Error(`Outreach report lookup failed: ${firstError.message}`);
-  const campaigns = campaignsResult.data ?? [];
-  const businessIds = (businessesResult.data ?? []).map((b) => String(b.id));
-  let leads: Array<{ id: string; business_id: string | null; status: string | null }> = [];
-  if (businessIds.length) {
-    const { data, error } = await input.supabase.from('leads').select('id,business_id,status').eq('organization_id', input.organizationId).in('business_id', businessIds);
-    if (error) throw new Error(`Report lead lookup failed: ${error.message}`); leads = data ?? [];
-  }
-  const leadIds = leads.map((l) => String(l.id));
-  let queued = 0;
-  if (leadIds.length) {
-    const { count, error } = await input.supabase.from('conversation_messages').select('id', { count: 'exact', head: true }).eq('organization_id', input.organizationId).eq('channel', 'EMAIL').eq('direction', 'OUTBOUND').in('status', ['APPROVAL_REQUIRED','APPROVED','PROCESSING']).in('lead_id', leadIds);
-    if (error) throw new Error(`Queued report lookup failed: ${error.message}`); queued = Number(count ?? 0);
-  }
+
+  const running = (campaignsResult.data ?? []) as CampaignRow[];
+  const operational = running.filter((campaign) => {
+    const country = String(campaign.country_code ?? '').toUpperCase();
+    return isSupportedMarketCode(country) && isOperationalDailyCampaign(campaign, marketDayUtcRange(country).dateKey);
+  });
+  const stats = await actualEmailStats({ supabase: input.supabase, organizationId: input.organizationId, campaigns: operational });
+  const campaignIds = operational.map((campaign) => String(campaign.id));
   let discovered = 0;
-  const campaignIds = campaigns.map((c) => String(c.id));
   if (campaignIds.length) {
     const { count, error } = await input.supabase.from('discovery_records').select('id', { count: 'exact', head: true }).eq('organization_id', input.organizationId).in('campaign_id', campaignIds);
-    if (error) throw new Error(`Discovery report lookup failed: ${error.message}`); discovered = Number(count ?? 0);
+    if (error) throw new Error(`Discovery report lookup failed: ${error.message}`);
+    discovered = Number(count ?? 0);
   }
-  const target = campaigns.reduce((sum, row) => sum + Number(row.target_count ?? 0), 0);
-  const capacity = (mailboxesResult.data ?? []).filter((row) => String(row.health_status).toUpperCase() === 'HEALTHY' && ['ACTIVE','READY','WARMED','COMPLETED'].includes(String(row.warmup_status).toUpperCase())).reduce((sum, row) => sum + Number(row.daily_limit ?? 0), 0);
-  const dateLabel = code ? marketDayUtcRange(code).dateKey : new Date().toISOString().slice(0,10);
-  const qualified = leads.length;
-  const progress = target > 0 ? Math.min(100, Math.round(stats.sent / target * 100)) : 0;
-  const campaignLines = campaigns.slice(0, 10).map((row) => {
-    const c = record(row.config); const blocker = String(c.lastAcquisitionReason ?? c.lastEvidenceReason ?? '').trim();
-    return `• ${row.country_code} · ${row.city ?? 'default city'}${row.industry ? ` · ${row.industry}` : ''}: ${stats.sent}/${row.target_count}${blocker ? ` · ${blocker}` : ''}`;
-  });
+
+  const target = operational.reduce((sum, row) => sum + Number(row.target_count ?? 0), 0);
+  const progress = target > 0 ? Math.min(100, Math.round(stats.totals.sent / target * 100)) : 0;
+  const capacity = (mailboxesResult.data ?? [])
+    .filter((row) => String(row.health_status).toUpperCase() === 'HEALTHY' && ['ACTIVE','READY','WARMED','COMPLETED'].includes(String(row.warmup_status).toUpperCase()))
+    .reduce((sum, row) => sum + Number(row.daily_limit ?? 0), 0);
+  const campaignLines = operational.slice(0, 10).map((row) => operationalCampaignLine(row, stats.byCampaign.get(String(row.id)) ?? { sent: 0, delivered: 0, bounced: 0, replies: 0 }));
+  const dateLabel = code ? marketDayUtcRange(code).dateKey : 'current local day per campaign';
+
   return {
     title: `گزارش Outreach ${code ?? 'همه بازارها'}`,
     text: [
       `📊 ${dateLabel} · ${code ?? 'ALL'}`,
-      `Discovered: ${discovered}`,
-      `Qualified Leads: ${qualified}`,
-      `Queued/Approved: ${queued}`,
-      `Sent واقعی: ${stats.sent}`,
-      `Delivered: ${stats.delivered}`,
-      `Bounce: ${stats.bounced}`,
-      `Reply: ${stats.replies}`,
-      `Target: ${target}`,
+      'Scope: فقط Daily Outreach عملیاتی امروز و ledger دارای campaign_id',
+      `Discovered (operational campaigns): ${discovered}`,
+      `Sent واقعی: ${stats.totals.sent}`,
+      `Delivered: ${stats.totals.delivered}`,
+      `Bounce: ${stats.totals.bounced}`,
+      `Reply: ${stats.totals.replies}`,
+      `Target عملیاتی: ${target}`,
       `Progress: ${progress}%`,
       `Mailbox capacity سالم: ${capacity}/day`,
-      `Active campaigns: ${campaigns.length}`,
+      `Operational daily campaigns: ${operational.length}`,
+      `Other RUNNING records (pilot/non-outreach/stale): ${Math.max(0, running.length - operational.length)}`,
       ...(campaignLines.length ? ['', 'Campaigns:', ...campaignLines] : []),
+      '',
+      'توجه: Approval یا Lead قدیمی فقط inventory است و بدون انتساب زمانی/کمپینی، blocker یا فرصت فعال محسوب نمی‌شود.',
     ].join('\n'),
   };
 }
