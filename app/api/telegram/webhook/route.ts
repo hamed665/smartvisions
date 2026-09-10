@@ -188,7 +188,13 @@ export async function POST(request: Request) {
         completed_at: new Date().toISOString(),
       }).eq('organization_id', config.organizationId).eq('id', claimed.id).eq('status', 'PROCESSING');
       if (completeError) throw new Error(`Telegram assistant reply persistence failed: ${completeError.message}`);
-      await sendTelegramMessage({ chatId, text: freeReply.text });
+      try {
+        await sendTelegramMessage({ chatId, text: freeReply.text });
+      } catch (deliveryError) {
+        await supabase.from('telegram_command_runs').update({
+          error: deliveryError instanceof Error ? deliveryError.message.slice(0, 300) : 'Reply delivery failed',
+        }).eq('id', claimed.id);
+      }
       return NextResponse.json({ ok: true, completed: true, deterministic: true });
     }
 
@@ -234,7 +240,13 @@ export async function POST(request: Request) {
           }).eq('organization_id', config.organizationId).eq('id', claimed.id).eq('status', 'PROCESSING');
           if (completeError) throw new Error(`Telegram assistant reply persistence failed: ${completeError.message}`);
           const prefix = plan.importance === 'CRITICAL' ? '🚨 ' : plan.importance === 'IMPORTANT' ? '⚠️ ' : '';
-          await sendTelegramMessage({ chatId, text: `${prefix}${plan.text}` });
+          try {
+            await sendTelegramMessage({ chatId, text: `${prefix}${plan.text}` });
+          } catch (deliveryError) {
+            await supabase.from('telegram_command_runs').update({
+              error: deliveryError instanceof Error ? deliveryError.message.slice(0, 300) : 'Reply delivery failed',
+            }).eq('id', claimed.id);
+          }
           return NextResponse.json({ ok: true, completed: true, assistantMode: plan.mode });
         }
 
@@ -254,7 +266,9 @@ export async function POST(request: Request) {
           error: internalError,
           completed_at: new Date().toISOString(),
         }).eq('organization_id', config.organizationId).eq('id', claimed.id).eq('status', 'PROCESSING');
-        await sendTelegramMessage({ chatId, text: `⚠️ ${fallbackText}` });
+        try {
+          await sendTelegramMessage({ chatId, text: `⚠️ ${fallbackText}` });
+        } catch { /* no retry: Telegram send is not idempotent */ }
         return NextResponse.json({ ok: true, completed: true, degraded: true });
       }
     }
