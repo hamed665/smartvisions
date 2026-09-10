@@ -19,6 +19,7 @@ describe('Telegram conversational owner copilot', () => {
     expect(shouldUseOwnerAssistantPlanner('وضعیت سیستم چطوره؟', parseTelegramOwnerCommand('وضعیت سیستم چطوره؟'))).toBe(false);
     expect(shouldUseOwnerAssistantPlanner('چرا امروز خروجی کمتر از هدف بوده؟', parseTelegramOwnerCommand('چرا امروز خروجی کمتر از هدف بوده؟'))).toBe(true);
     expect(shouldUseOwnerAssistantPlanner('کمک', parseTelegramOwnerCommand('کمک'))).toBe(false);
+    expect(shouldUseOwnerAssistantPlanner('/help@SmartVisionsOwnerBot', parseTelegramOwnerCommand('/help@SmartVisionsOwnerBot'))).toBe(false);
   });
 
   it('answers greetings without a paid model call', () => {
@@ -56,6 +57,17 @@ describe('Telegram conversational owner copilot', () => {
       importance: 'IMPORTANT',
       reason: 'BUDGET',
     }, 'بودجه OpenAI الان چقدره؟');
+    expect(plan.mode).toBe('CLARIFY');
+  });
+
+  it('does not treat a generic inspection request as write authorization', () => {
+    const plan = parseOwnerAssistantPlan({
+      mode: 'COMMAND',
+      canonical_command: '/market OM off',
+      answer: '',
+      importance: 'IMPORTANT',
+      reason: 'MARKET',
+    }, 'کمپین عمان را بررسی کن');
     expect(plan.mode).toBe('CLARIFY');
   });
 
