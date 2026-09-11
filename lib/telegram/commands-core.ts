@@ -86,6 +86,7 @@ function helpText() {
     '',
     'دستورهای امن و مستقیم:',
     '/status  وضعیت سیستم',
+    '/diagnose_outreach OM  علت‌یابی دقیق کسری Outreach عمان (فقط خواندنی)',
     '/services  سرویس‌ها',
     '/pricing OM  قیمت‌های عمان',
     '/leads 10  آخرین لیدها',
