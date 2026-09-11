@@ -84,7 +84,7 @@ export async function planTelegramOwnerRequest(input: {
     'If an operational target has Remaining greater than zero, never say no operational action is needed. State the shortfall explicitly.',
     'If Operational state is UNDER_TARGET_WINDOW_CLOSED, never recommend sending outside the window; recommend diagnosing the shortfall and preparing an evidence-backed queue for the next allowed window.',
     'Never claim an action was executed. Never emit /alert_test. Never bypass Shadow, Kill Switch, DNC, suppression, approval or channel policy.',
-    'Available read commands: /status /services /markets /agents /budget /approvals /campaigns /policy /pricing /leads /outreach_report.',
+    'Available read commands: /status /services /markets /agents /budget /approvals /campaigns /policy /pricing /leads /outreach_report /diagnose_outreach OM.',
     'Available controlled writes: /price /discount /minimum /service /option /tone /dialect /locale /replywords /window /agent /threshold /limit /kill on /hunt /market /pause /resume /approve /reject /revert /email.',
     'Advanced registered actions use /panel <action> key=value. Allowed actions: ' + PANEL_PARITY_ACTION_NAMES.join(', ') + '.',
     'Keep Persian answers concise, direct and honest.',

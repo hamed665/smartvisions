@@ -242,6 +242,205 @@ export async function buildOutreachReport(input: { supabase: SupabaseClient; org
   };
 }
 
+
+export type OutreachDiagnosisCode =
+  | 'SAFETY_OR_PAUSE'
+  | 'MAILBOX_UNAVAILABLE'
+  | 'PROVIDER_OR_LEDGER_FAILURE'
+  | 'QUEUE_PENDING'
+  | 'SENDABLE_CANDIDATES_AVAILABLE'
+  | 'CANDIDATE_SUPPLY_EXHAUSTED';
+
+export function deriveOutreachDiagnosis(input: {
+  controlsBlocked: boolean;
+  healthyMailboxes: number;
+  currentFailures: number;
+  currentPending: number;
+  sendableVerifiedUnsent: number;
+}): OutreachDiagnosisCode {
+  if (input.controlsBlocked) return 'SAFETY_OR_PAUSE';
+  if (input.healthyMailboxes < 1) return 'MAILBOX_UNAVAILABLE';
+  if (input.currentFailures > 0) return 'PROVIDER_OR_LEDGER_FAILURE';
+  if (input.currentPending > 0) return 'QUEUE_PENDING';
+  if (input.sendableVerifiedUnsent > 0) return 'SENDABLE_CANDIDATES_AVAILABLE';
+  return 'CANDIDATE_SUPPLY_EXHAUSTED';
+}
+
+function relatedBusiness(value: unknown) {
+  if (Array.isArray(value)) return record(value[0]);
+  return record(value);
+}
+
+export async function buildOutreachDiagnosis(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  countryCode: string;
+}): Promise<CommandExecutionResult> {
+  const countryCode = input.countryCode.toUpperCase();
+  if (!isSupportedMarketCode(countryCode)) throw new Error(`Market ${countryCode} پشتیبانی نمی‌شود.`);
+  const day = marketDayUtcRange(countryCode);
+
+  const [campaignsResult, controlsResult, mailboxesResult, candidatesResult] = await Promise.all([
+    input.supabase.from('campaigns')
+      .select('id,name,country_code,city,industry,target_count,status,config,updated_at')
+      .eq('organization_id', input.organizationId)
+      .eq('country_code', countryCode)
+      .eq('status', 'RUNNING')
+      .order('updated_at', { ascending: false }),
+    input.supabase.from('system_controls')
+      .select('global_kill_switch,email_paused,agents_paused,shadow_mode')
+      .eq('organization_id', input.organizationId)
+      .maybeSingle(),
+    input.supabase.from('mailboxes')
+      .select('id,address,enabled,daily_limit,warmup_status,health_status')
+      .eq('organization_id', input.organizationId)
+      .eq('enabled', true),
+    input.supabase.from('growth_opportunities')
+      .select('id,business_id,prospect_tier,should_contact,qualification_score,primary_service_id,digital_presence_evidence,businesses!inner(id,name,country_code,email,official_website)')
+      .eq('organization_id', input.organizationId)
+      .eq('businesses.country_code', countryCode)
+      .eq('prospect_tier', 'A')
+      .eq('should_contact', true)
+      .order('qualification_score', { ascending: false })
+      .limit(100),
+  ]);
+  const lookupError = campaignsResult.error ?? controlsResult.error ?? mailboxesResult.error ?? candidatesResult.error;
+  if (lookupError) throw new Error(`Outreach diagnosis lookup failed: ${lookupError.message}`);
+
+  const operational = ((campaignsResult.data ?? []) as CampaignRow[])
+    .filter((campaign) => isOperationalDailyCampaign(campaign, day.dateKey));
+  const campaign = operational[0];
+  if (!campaign) {
+    return {
+      title: `تشخیص Outreach ${countryCode}`,
+      text: [
+        `Date: ${day.dateKey} · ${day.timezone}`,
+        'Diagnosis: NO_OPERATIONAL_DAILY_TARGET',
+        'کمپین Daily Outreach عملیاتی برای روز جاری وجود ندارد.',
+        'هیچ ارسالی اجرا نشد. برای ساخت یا فعال‌سازی Target جدید، فرمان جداگانه و تأیید مالک لازم است.',
+      ].join('\n'),
+    };
+  }
+
+  const candidateRows = candidatesResult.data ?? [];
+  const candidateBusinessIds = candidateRows.map((row) => String(row.business_id));
+  const { data: leads, error: leadsError } = candidateBusinessIds.length
+    ? await input.supabase.from('leads')
+      .select('id,business_id,status,agent_mode')
+      .eq('organization_id', input.organizationId)
+      .in('business_id', candidateBusinessIds)
+    : { data: [], error: null };
+  if (leadsError) throw new Error(`Diagnosis lead lookup failed: ${leadsError.message}`);
+  const leadIds = (leads ?? []).map((row) => String(row.id));
+
+  const [ledgerResult, messagesResult] = await Promise.all([
+    input.supabase.from('outreach_messages')
+      .select('id,lead_id,status,provider_message_id,sent_at')
+      .eq('organization_id', input.organizationId)
+      .eq('campaign_id', campaign.id)
+      .eq('channel', 'EMAIL')
+      .eq('direction', 'OUTBOUND')
+      .gte('sent_at', day.startIso)
+      .lt('sent_at', day.endIso),
+    leadIds.length
+      ? input.supabase.from('conversation_messages')
+        .select('id,lead_id,status,requires_approval,approval_reason,provider_message_id,created_at,sent_at')
+        .eq('organization_id', input.organizationId)
+        .eq('channel', 'EMAIL')
+        .eq('direction', 'OUTBOUND')
+        .in('lead_id', leadIds)
+        .order('created_at', { ascending: false })
+        .limit(500)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (ledgerResult.error || messagesResult.error) {
+    throw new Error(`Diagnosis message lookup failed: ${ledgerResult.error?.message ?? messagesResult.error?.message}`);
+  }
+
+  const messages = messagesResult.data ?? [];
+  const currentMessages = messages.filter((row) => {
+    const createdAt = String(row.created_at ?? '');
+    return createdAt >= day.startIso && createdAt < day.endIso;
+  });
+  const currentPending = currentMessages.filter((row) => ['APPROVAL_REQUIRED','APPROVED','PROCESSING','READY'].includes(String(row.status))).length;
+  const currentFailures = currentMessages.filter((row) => String(row.status) === 'FAILED' || /RECONCILIATION/i.test(String(row.approval_reason ?? ''))).length;
+  const contactedLeadIds = new Set(messages.filter((row) => ['SENT','APPROVED','PROCESSING','APPROVAL_REQUIRED','READY'].includes(String(row.status))).map((row) => String(row.lead_id)));
+  const leadByBusiness = new Map((leads ?? []).map((row) => [String(row.business_id), row]));
+
+  let verifiedFirstParty = 0;
+  let sendableVerifiedUnsent = 0;
+  for (const row of candidateRows) {
+    const business = relatedBusiness(row.businesses);
+    const evidence = record(row.digital_presence_evidence);
+    const lead = leadByBusiness.get(String(row.business_id));
+    const verified = evidence.verifiedFirstPartyEmail === true && Boolean(String(business.email ?? '').trim());
+    if (verified) verifiedFirstParty += 1;
+    const leadAllowed = lead && !['DO_NOT_CONTACT','WON','LOST'].includes(String(lead.status))
+      && !['HUMAN','PAUSED'].includes(String(lead.agent_mode));
+    if (verified && leadAllowed && !contactedLeadIds.has(String(lead.id))) sendableVerifiedUnsent += 1;
+  }
+
+  const healthyMailboxes = (mailboxesResult.data ?? []).filter((row) =>
+    String(row.health_status).toUpperCase() === 'HEALTHY'
+    && ['ACTIVE','READY','WARMED','COMPLETED'].includes(String(row.warmup_status).toUpperCase())
+  ).length;
+  const controls = controlsResult.data;
+  const controlsBlocked = !controls
+    || controls.global_kill_switch === true
+    || controls.email_paused === true
+    || controls.agents_paused === true
+    || controls.shadow_mode !== true;
+  const diagnosis = deriveOutreachDiagnosis({
+    controlsBlocked,
+    healthyMailboxes,
+    currentFailures,
+    currentPending,
+    sendableVerifiedUnsent,
+  });
+  const ledger = ledgerResult.data ?? [];
+  const sent = ledger.length;
+  const delivered = ledger.filter((row) => String(row.status).toUpperCase() === 'DELIVERED').length;
+  const bounced = ledger.filter((row) => /BOUNCE/i.test(String(row.status))).length;
+  const remaining = Math.max(0, Number(campaign.target_count ?? 0) - sent);
+  const config = record(campaign.config);
+  const window = operationalCampaignWindow(campaign);
+  const providerLedgerHealthy = sent > 0 && delivered > 0 && currentFailures === 0;
+  const autoAcquisitionEnabled = config.autoAcquisitionEnabled === true;
+
+  return {
+    title: `تشخیص Outreach ${countryCode}`,
+    text: [
+      `Campaign: ${campaign.name ?? campaign.id}`,
+      `Date: ${day.dateKey} · ${day.timezone}`,
+      `Diagnosis: ${diagnosis}`,
+      `Confidence: ${diagnosis === 'CANDIDATE_SUPPLY_EXHAUSTED' ? 'HIGH' : 'MEDIUM'}`,
+      '',
+      `Target: ${campaign.target_count ?? 0} · Sent: ${sent} · Remaining: ${remaining}`,
+      `Delivered: ${delivered} · Bounce: ${bounced}`,
+      `Window: ${window.state} ${window.start}-${window.end}`,
+      `Current pending queue/approval: ${currentPending}`,
+      `Current provider/ledger failures: ${currentFailures}`,
+      `Tier A + should_contact candidates: ${candidateRows.length}`,
+      `Verified first-party email candidates: ${verifiedFirstParty}`,
+      `Verified and unsent candidates: ${sendableVerifiedUnsent}`,
+      `Healthy mailboxes: ${healthyMailboxes}`,
+      `Provider + canonical ledger path: ${providerLedgerHealthy ? 'HEALTHY' : 'NOT_PROVEN_HEALTHY'}`,
+      `Auto acquisition: ${autoAcquisitionEnabled ? 'ON' : 'OFF'}`,
+      '',
+      diagnosis === 'CANDIDATE_SUPPLY_EXHAUSTED'
+        ? 'علت اصلی: موجودی candidate قابل‌ارسال تمام شده؛ Approval و Provider علت کسری فعلی نیستند.'
+        : 'علت بالا از داده‌های scoped همین کمپین و روز استخراج شده است.',
+      window.state === 'CLOSED'
+        ? 'اقدام بعدی: خارج از پنجره ارسال نکنید؛ existing DB/free evidence را بررسی و صف مستند پنجره بعد را آماده کنید.'
+        : 'اقدام بعدی باید مطابق Diagnosis و با حفظ Shadow/DNC/Suppression انجام شود.',
+      !autoAcquisitionEnabled && diagnosis === 'CANDIDATE_SUPPLY_EXHAUSTED'
+        ? 'اگر موجودی رایگان کافی نبود، فعال‌سازی Controlled Acquisition فقط با فرمان تغییر جداگانه و تأیید مالک انجام شود.'
+        : '',
+      'این تشخیص فقط Read-only بود و هیچ ارسال یا تغییری انجام نداد.',
+    ].filter(Boolean).join('\n'),
+  };
+}
+
 export async function prepareDailyEmailOutreach(input: { supabase: SupabaseClient; organizationId: string; command: Extract<TelegramOwnerCommand, { type: 'SET_DAILY_EMAIL_OUTREACH' }> }) {
   const command = input.command; const countryCode = command.countryCode.toUpperCase();
   if (!isSupportedMarketCode(countryCode)) throw new Error(`${countryCode} در Daily Outreach پشتیبانی نمی‌شود.`);

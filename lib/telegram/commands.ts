@@ -19,7 +19,7 @@ import {
 import { normalizePersistedPreview } from './persisted-preview';
 import { assertTelegramRevertFresh } from './revert-guard';
 import { notifyTelegramOwner } from './notifications';
-import { buildOutreachReport, executeDailyEmailOutreach, prepareDailyEmailOutreach } from './outreach-command-center';
+import { buildOutreachDiagnosis, buildOutreachReport, executeDailyEmailOutreach, prepareDailyEmailOutreach } from './outreach-command-center';
 
 export type { ExecutedMutation, PreparedMutation } from './commands-core';
 export { isSafeServiceOptionKey } from './commands-core';
@@ -29,6 +29,10 @@ export async function executeReadCommand(input: {
   organizationId: string;
   command: TelegramOwnerCommand;
 }): Promise<CommandExecutionResult> {
+  if (input.command.type === 'DIAGNOSE_OUTREACH') {
+    return buildOutreachDiagnosis({ supabase: input.supabase, organizationId: input.organizationId, countryCode: input.command.countryCode });
+  }
+
   if (input.command.type === 'SHOW_OUTREACH_REPORT') {
     return buildOutreachReport({ supabase: input.supabase, organizationId: input.organizationId, countryCode: input.command.countryCode });
   }
