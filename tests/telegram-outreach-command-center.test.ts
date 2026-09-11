@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MUTATING_COMMANDS } from '@/lib/telegram/contracts';
 import { parseTelegramOwnerCommand } from '@/lib/telegram/parser';
-import { isOperationalDailyCampaign, operationalCampaignLine, operationalCampaignWindow } from '@/lib/telegram/outreach-command-center';
+import { deriveOutreachDiagnosis, isOperationalDailyCampaign, operationalCampaignLine, operationalCampaignWindow } from '@/lib/telegram/outreach-command-center';
 
 describe('Telegram outreach command center', () => {
   it('parses Persian daily email commands with Persian digits', () => {
@@ -38,6 +38,19 @@ describe('Telegram outreach command center', () => {
       targetCount: 8,
       industry: 'salon',
     });
+  });
+
+  it('parses scoped outreach diagnosis as read-only', () => {
+    expect(parseTelegramOwnerCommand('/diagnose_outreach OM')).toEqual({ type: 'DIAGNOSE_OUTREACH', countryCode: 'OM' });
+    expect(parseTelegramOwnerCommand('علت کسری ارسال عمان چیه؟')).toEqual({ type: 'DIAGNOSE_OUTREACH', countryCode: 'OM' });
+    expect(MUTATING_COMMANDS.has('DIAGNOSE_OUTREACH')).toBe(false);
+  });
+
+  it('derives a deterministic scoped root cause', () => {
+    const healthy = { controlsBlocked: false, healthyMailboxes: 1, currentFailures: 0, currentPending: 0 };
+    expect(deriveOutreachDiagnosis({ ...healthy, sendableVerifiedUnsent: 0 })).toBe('CANDIDATE_SUPPLY_EXHAUSTED');
+    expect(deriveOutreachDiagnosis({ ...healthy, currentFailures: 1, sendableVerifiedUnsent: 0 })).toBe('PROVIDER_OR_LEDGER_FAILURE');
+    expect(deriveOutreachDiagnosis({ ...healthy, sendableVerifiedUnsent: 2 })).toBe('SENDABLE_CANDIDATES_AVAILABLE');
   });
 
   it('keeps report questions read-only and market-scoped', () => {
