@@ -78,7 +78,7 @@ The implementation branch contains:
 - feature-flag override scopes;
 - reserved safety controls excluded from ordinary config/feature override keys;
 - Plans, Pricing Versions, Subscriptions and Entitlements foundation;
-- formal catalog/subscription state guards;
+- formal catalog/subscription state guards aligned to `STATE_EVENT_CATALOG.md` (`TRIAL -> ACTIVE -> PAST_DUE -> GRACE_PERIOD -> SUSPENDED -> CANCELED | EXPIRED`, with `PAST_DUE -> ACTIVE` recovery);
 - published pricing commercial-field immutability;
 - plan entitlements mutable only while pricing version is DRAFT;
 - `usage_events.usage_classification` with:
@@ -91,7 +91,7 @@ The implementation branch contains:
 - default classification `INTERNAL` so billing fails closed;
 - tenant clients cannot directly set customer-billing classification;
 - trusted classification mutation goes through service-role-only `classify_usage_event` and writes audit evidence;
-- customer AI billing multiplier contract defaults to 4 and only BILLABLE usage is chargeable;
+- current customer AI billing policy is constrained to exactly 4× and only BILLABLE usage is chargeable;
 - audit correlation/causation and hierarchy scope;
 - database audit triggers for important control-plane mutations;
 - runtime contract helpers and contract/isolation tests.
