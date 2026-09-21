@@ -119,7 +119,7 @@ create table if not exists public.member_scope_assignments (
   organization_id uuid not null,
   user_id uuid not null,
   scope_type text not null check (scope_type in ('BRAND','BUSINESS','BRANCH','DEPARTMENT','TEAM')),
-  role text not null check (role in ('OWNER','ADMIN','SALES_MANAGER','SALES_AGENT','VIEWER')),
+  role text not null check (role in ('ADMIN','SALES_MANAGER','SALES_AGENT','VIEWER')),
   brand_id uuid,
   tenant_business_id uuid,
   branch_id uuid,
