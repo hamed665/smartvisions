@@ -149,11 +149,11 @@ A scoped assignment may contain policy attributes, but attributes are inputs to 
 ### Subscription states
 
 ```text
-TRIALING -> ACTIVE -> PAST_DUE -> ACTIVE
-TRIALING -> CANCELED
-ACTIVE -> PAUSED -> ACTIVE
-ACTIVE | PAST_DUE | PAUSED -> CANCELED
-CANCELED -> EXPIRED
+TRIAL -> ACTIVE -> PAST_DUE -> GRACE_PERIOD -> SUSPENDED -> CANCELED | EXPIRED
+
+Recovery explicitly allowed by the canonical catalog:
+
+PAST_DUE -> ACTIVE
 ```
 
 This PR stores and validates state. It does not call a payment provider and does not create a billing side effect.
@@ -288,7 +288,7 @@ Plans / pricing versions:
 
 Subscriptions:
 
-`TRIALING | ACTIVE | PAST_DUE | PAUSED | CANCELED | EXPIRED`
+`TRIAL | ACTIVE | PAST_DUE | GRACE_PERIOD | SUSPENDED | CANCELED | EXPIRED`
 
 ## Permissions
 
@@ -327,7 +327,7 @@ All future important mutation handlers must write the existing `audit_logs` tabl
 
 The migration itself has no customer billing impact.
 
-`usage_events.cost_usd` stays raw provider cost. Customer charge is computed only from explicitly `BILLABLE` AI usage and the current multiplier 4. All other classifications produce zero customer AI charge.
+`usage_events.cost_usd` stays raw provider cost. Customer charge is computed only from explicitly `BILLABLE` AI usage and the current policy multiplier **4×**. Pricing Version storage is constrained to exactly 4 for this phase; changing the commercial multiplier later requires an explicit versioned migration/policy change. All other classifications produce zero customer AI charge.
 
 ## Retention
 
