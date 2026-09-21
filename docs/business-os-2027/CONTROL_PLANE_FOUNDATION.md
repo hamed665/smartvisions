@@ -122,7 +122,7 @@ Rules:
 
 ### RBAC
 
-The first foundation release reuses the existing role vocabulary:
+The organization role vocabulary remains:
 
 - OWNER
 - ADMIN
@@ -130,7 +130,7 @@ The first foundation release reuses the existing role vocabulary:
 - SALES_AGENT
 - VIEWER
 
-Organization role is authoritative for organization-wide access. Lower-scope assignments narrow or explicitly grant work context below the organization; they do not create cross-tenant access.
+`OWNER` is organization-wide only. Lower-scope assignments may use `ADMIN | SALES_MANAGER | SALES_AGENT | VIEWER`; they cannot manufacture another organization owner. Runtime role resolution is keyed by both `user_id` and tenant scope, so an assignment belonging to another user or another organization is never applicable.
 
 ### ABAC
 
@@ -228,8 +228,8 @@ Version: `v1`
 - configuration inheritance: legacy `organization_settings.config` plus `scope_configuration_overrides`;
 - feature overrides: `feature_flag_overrides`;
 - SaaS commercial model: `plans`, `pricing_versions`, `plan_entitlements`, `subscriptions`, `organization_entitlement_overrides`;
-- usage accounting: existing `usage_events` plus classification;
-- audit: existing `audit_logs` plus correlation/scope.
+- usage accounting: existing `usage_events` plus fail-closed classification; trusted classification changes go through the service-role-only `classify_usage_event` RPC and are audited;
+- audit: existing `audit_logs` plus correlation/scope and control-plane mutation triggers.
 
 ## Commands
 
