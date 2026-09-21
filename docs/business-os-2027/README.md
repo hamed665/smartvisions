@@ -14,7 +14,7 @@ Current production remains untouched until a later implementation PR passes the 
 2. [IMPLEMENTATION_MAP.md](./IMPLEMENTATION_MAP.md) — dependency-ordered execution plan.
 3. [SERVICE_CONTRACT_STANDARD.md](./SERVICE_CONTRACT_STANDARD.md) — required contract for every domain/service.
 4. [STATE_EVENT_CATALOG.md](./STATE_EVENT_CATALOG.md) — initial canonical state machines and event naming.
-5. [MIGRATION_FROM_GROWTH_OS.md](./MIGRATION_FROM_GROWTH_OS.md) — reuse/extend/replace decisions for existing production primitives.
+5. [MIGRATION_FROM_GROWTH_OS.md](./MIGRATION_FROM_GROWTH_OS.md) — reuse/extend/replace decisions for existing production primitives.\n6. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
 
 ## Phase 0 exit criteria
 
