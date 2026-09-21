@@ -28,6 +28,7 @@ export const ORGANIZATION_ROLES = [
 ] as const;
 
 export type OrganizationRole = (typeof ORGANIZATION_ROLES)[number];
+export type ScopedRole = Exclude<OrganizationRole, 'OWNER'>;
 
 export const USAGE_CLASSIFICATIONS = [
   'BILLABLE',
@@ -52,7 +53,7 @@ export type MemberScopeAssignment = {
   userId: string;
   scopeType: LowerTenantScopeType;
   scopeId: string;
-  role: OrganizationRole;
+  role: ScopedRole;
   attributes?: Record<string, unknown>;
 };
 
@@ -186,13 +187,16 @@ export function isScopeAssignmentApplicable(
 
 export function effectiveRoleForScope(input: {
   organizationRole: OrganizationRole;
+  userId: string;
   target: TenantScope;
   assignments: MemberScopeAssignment[];
 }): OrganizationRole {
   if (input.organizationRole === 'OWNER') return 'OWNER';
 
   const applicable = input.assignments
-    .filter((assignment) => isScopeAssignmentApplicable(input.target, assignment))
+    .filter((assignment) =>
+      assignment.userId === input.userId
+      && isScopeAssignmentApplicable(input.target, assignment))
     .sort((a, b) => scopeRank(b.scopeType) - scopeRank(a.scopeType));
 
   return applicable[0]?.role ?? input.organizationRole;
