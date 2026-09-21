@@ -227,18 +227,12 @@ export function resolveEntitlement<T>(input: {
 }
 
 /**
- * Returns the exact multiplier to apply in the numeric billing ledger.
- * Keeping multiplication out of JS avoids introducing floating-point money as
- * a source of truth. Pricing versions currently default this multiplier to 4.
+ * Current commercial policy is fixed at 4x for explicitly BILLABLE AI usage.
+ * Money multiplication itself belongs in the numeric billing ledger, not JS.
+ * Changing this policy requires an explicit versioned commercial migration.
  */
-export function customerAiChargeMultiplier(
-  classification: UsageClassification,
-  configuredMultiplier = 4,
-) {
-  if (!Number.isFinite(configuredMultiplier) || configuredMultiplier < 0) {
-    throw new Error('AI customer charge multiplier must be a finite non-negative number');
-  }
-  return classification === 'BILLABLE' ? configuredMultiplier : 0;
+export function customerAiChargeMultiplier(classification: UsageClassification) {
+  return classification === 'BILLABLE' ? 4 : 0;
 }
 
 export function isCatalogTransitionAllowed(from: CatalogState, to: CatalogState) {
