@@ -556,6 +556,26 @@ alter table public.usage_events
 create index if not exists usage_events_org_class_created_idx
   on public.usage_events(organization_id, usage_classification, created_at desc);
 
+-- Preserve the existing authenticated append capability without allowing a
+-- tenant client to self-classify customer-billing usage. Omitted classification
+-- receives the fail-closed INTERNAL default. Backend service_role may classify
+-- evidence after trusted runtime reconciliation.
+revoke insert on table public.usage_events from authenticated;
+grant insert (
+  id,
+  organization_id,
+  provider,
+  operation,
+  cost_usd,
+  input_tokens,
+  output_tokens,
+  units,
+  lead_id,
+  metadata,
+  created_at
+) on table public.usage_events to authenticated;
+grant update (usage_classification) on table public.usage_events to service_role;
+
 alter table public.audit_logs
   add column if not exists correlation_id text,
   add column if not exists causation_id text,
