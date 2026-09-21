@@ -2,7 +2,9 @@
 
 This is not a feature wishlist. It is the order required to avoid rebuilding the same primitive twice.
 
-## Phase 0 — Architecture contracts\n\nStatus: **MERGED** in PR #172. No Production schema change was part of Phase 0.
+## Phase 0 — Architecture contracts
+
+Status: **MERGED** in PR #172. No Production schema change was part of Phase 0.
 
 Deliver before production code expansion:
 
@@ -17,7 +19,9 @@ Deliver before production code expansion:
 
 No production schema changes in this phase.
 
-## Phase 1 — SaaS Control Plane foundation\n\nStatus: **IMPLEMENTED ON BRANCH, NOT YET PRODUCTION** in `feat/business-os-control-plane-foundation`. See `CONTROL_PLANE_FOUNDATION.md` for the evidence-backed Gap Map and contract.
+## Phase 1 — SaaS Control Plane foundation
+
+Status: **IMPLEMENTED ON BRANCH, NOT YET PRODUCTION** in `feat/business-os-control-plane-foundation`. See `CONTROL_PLANE_FOUNDATION.md` for the evidence-backed Gap Map and contract.
 
 Extend the existing organization model toward:
 
