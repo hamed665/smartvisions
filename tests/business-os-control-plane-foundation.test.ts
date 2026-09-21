@@ -283,8 +283,17 @@ describe('Business OS control plane migration safety', () => {
   });
 
   it('keeps every PL/pgSQL body correctly dollar quoted', () => {
-    expect(migration).not.toMatch(/as \\$\\n/);
-    expect(migration).not.toMatch(/\\n\\$;\\n/);
+    expect(migration).not.toContain('as 
+
+  it('adds formal state-machine guards without provider actions', () => {
+    expect(migration).toContain('create or replace function public.enforce_subscription_state_transition()');
+    expect(migration).toContain('subscriptions_state_transition_guard');
+    expect(migration).toContain('pricing_versions_state_transition_guard');
+    expect(migration).not.toMatch(/net\.http|http_post|resend\.com|graph\.facebook|send_whatsapp/i);
+  });
+});
+ + '\n');
+    expect(migration).not.toContain('\n' + '$;' + '\n');
   });
 
   it('adds formal state-machine guards without provider actions', () => {
