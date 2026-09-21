@@ -205,7 +205,15 @@ create table if not exists public.scope_configuration_overrides (
   department_id uuid,
   team_id uuid,
   namespace text not null default 'default' check (length(trim(namespace)) > 0),
-  config_key text not null check (length(trim(config_key)) > 0),
+  config_key text not null
+    check (length(trim(config_key)) > 0)
+    check (lower(config_key) not in (
+      'shadow_mode',
+      'global_kill_switch',
+      'email_paused',
+      'whatsapp_ai_paused',
+      'agents_paused'
+    )),
   config_value jsonb not null,
   version integer not null default 1 check (version > 0),
   updated_by uuid references auth.users(id) on delete set null,
@@ -280,7 +288,15 @@ create table if not exists public.feature_flag_overrides (
   branch_id uuid,
   department_id uuid,
   team_id uuid,
-  flag_key text not null check (length(trim(flag_key)) > 0),
+  flag_key text not null
+    check (length(trim(flag_key)) > 0)
+    check (lower(flag_key) not in (
+      'shadow_mode',
+      'global_kill_switch',
+      'email_paused',
+      'whatsapp_ai_paused',
+      'agents_paused'
+    )),
   enabled boolean not null,
   reason text,
   updated_by uuid references auth.users(id) on delete set null,
@@ -479,6 +495,67 @@ create trigger pricing_versions_state_transition_guard
 before update of status on public.pricing_versions
 for each row execute function public.enforce_catalog_state_transition();
 
+create or replace function public.enforce_pricing_version_immutability()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $
+begin
+  if old.status in ('ACTIVE','RETIRED') and (
+    new.plan_id is distinct from old.plan_id
+    or new.version is distinct from old.version
+    or new.currency is distinct from old.currency
+    or new.billing_period is distinct from old.billing_period
+    or new.recurring_amount is distinct from old.recurring_amount
+    or new.setup_fee_amount is distinct from old.setup_fee_amount
+    or new.ai_cost_multiplier is distinct from old.ai_cost_multiplier
+    or new.included_units is distinct from old.included_units
+    or new.unit_prices is distinct from old.unit_prices
+    or new.effective_from is distinct from old.effective_from
+    or new.metadata is distinct from old.metadata
+  ) then
+    raise exception 'published pricing version commercial fields are immutable';
+  end if;
+  return new;
+end;
+$;
+
+drop trigger if exists pricing_versions_immutability_guard on public.pricing_versions;
+create trigger pricing_versions_immutability_guard
+before update on public.pricing_versions
+for each row execute function public.enforce_pricing_version_immutability();
+
+create or replace function public.enforce_plan_entitlement_draft_only()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $
+declare
+  v_pricing_version_id uuid;
+begin
+  v_pricing_version_id := case when tg_op = 'DELETE' then old.pricing_version_id else new.pricing_version_id end;
+
+  if not exists (
+    select 1
+    from public.pricing_versions pv
+    where pv.id = v_pricing_version_id
+      and pv.status = 'DRAFT'
+  ) then
+    raise exception 'plan entitlements are mutable only while pricing version is DRAFT';
+  end if;
+
+  if tg_op = 'DELETE' then return old; end if;
+  return new;
+end;
+$;
+
+drop trigger if exists plan_entitlements_draft_guard on public.plan_entitlements;
+create trigger plan_entitlements_draft_guard
+before insert or update or delete on public.plan_entitlements
+for each row execute function public.enforce_plan_entitlement_draft_only();
+
 create or replace function public.enforce_subscription_state_transition()
 returns trigger
 language plpgsql
@@ -574,7 +651,93 @@ grant insert (
   metadata,
   created_at
 ) on table public.usage_events to authenticated;
-grant update (usage_classification) on table public.usage_events to service_role;
+
+create or replace function public.classify_usage_event(
+  p_organization_id uuid,
+  p_event_id uuid,
+  p_usage_classification text,
+  p_reason text default null,
+  p_correlation_id text default null,
+  p_actor_id text default 'billing-runtime'
+)
+returns table(
+  usage_event_id uuid,
+  previous_classification text,
+  current_classification text,
+  changed boolean
+)
+language plpgsql
+security definer
+set search_path = public, pg_catalog
+as $
+declare
+  v_previous text;
+begin
+  if p_usage_classification not in (
+    'BILLABLE',
+    'NON_BILLABLE',
+    'SYSTEM_RETRY',
+    'CACHED',
+    'PROMOTIONAL',
+    'INTERNAL'
+  ) then
+    raise exception 'invalid usage classification';
+  end if;
+
+  select ue.usage_classification
+    into v_previous
+    from public.usage_events ue
+   where ue.id = p_event_id
+     and ue.organization_id = p_organization_id
+   for update;
+
+  if not found then
+    raise exception 'usage event not found for organization';
+  end if;
+
+  if v_previous = p_usage_classification then
+    return query select p_event_id, v_previous, p_usage_classification, false;
+    return;
+  end if;
+
+  update public.usage_events
+     set usage_classification = p_usage_classification
+   where id = p_event_id
+     and organization_id = p_organization_id;
+
+  insert into public.audit_logs(
+    organization_id,
+    actor_type,
+    actor_id,
+    action,
+    entity_type,
+    entity_id,
+    before_data,
+    after_data,
+    correlation_id
+  ) values (
+    p_organization_id,
+    'SYSTEM',
+    coalesce(nullif(p_actor_id, ''), 'billing-runtime'),
+    'USAGE_CLASSIFICATION_CHANGED',
+    'usage_event',
+    p_event_id::text,
+    jsonb_build_object('usage_classification', v_previous),
+    jsonb_build_object(
+      'usage_classification', p_usage_classification,
+      'reason', p_reason
+    ),
+    p_correlation_id
+  );
+
+  return query select p_event_id, v_previous, p_usage_classification, true;
+end;
+$;
+
+revoke all on function public.classify_usage_event(uuid, uuid, text, text, text, text)
+  from public, anon, authenticated;
+grant execute on function public.classify_usage_event(uuid, uuid, text, text, text, text)
+  to service_role;
 
 alter table public.audit_logs
   add column if not exists correlation_id text,
@@ -605,6 +768,141 @@ alter table public.audit_logs
 create index if not exists audit_logs_correlation_idx
   on public.audit_logs(organization_id, correlation_id, created_at desc)
   where correlation_id is not null;
+
+create or replace function public.audit_control_plane_mutation()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, auth, pg_catalog
+as $
+declare
+  v_before jsonb;
+  v_after jsonb;
+  v_row jsonb;
+  v_org_id uuid;
+  v_entity_id text;
+  v_brand_id uuid;
+  v_tenant_business_id uuid;
+  v_branch_id uuid;
+  v_department_id uuid;
+  v_team_id uuid;
+  v_actor uuid;
+begin
+  v_before := case when tg_op in ('UPDATE','DELETE') then to_jsonb(old) else null end;
+  v_after := case when tg_op in ('INSERT','UPDATE') then to_jsonb(new) else null end;
+  v_row := coalesce(v_after, v_before);
+  v_org_id := nullif(v_row ->> 'organization_id', '')::uuid;
+  v_entity_id := v_row ->> 'id';
+  v_actor := auth.uid();
+
+  v_brand_id := case
+    when tg_table_name = 'brands' then nullif(v_entity_id, '')::uuid
+    else nullif(v_row ->> 'brand_id', '')::uuid
+  end;
+  v_tenant_business_id := case
+    when tg_table_name = 'tenant_businesses' then nullif(v_entity_id, '')::uuid
+    else nullif(v_row ->> 'tenant_business_id', '')::uuid
+  end;
+  v_branch_id := case
+    when tg_table_name = 'branches' then nullif(v_entity_id, '')::uuid
+    else nullif(v_row ->> 'branch_id', '')::uuid
+  end;
+  v_department_id := case
+    when tg_table_name = 'departments' then nullif(v_entity_id, '')::uuid
+    else nullif(v_row ->> 'department_id', '')::uuid
+  end;
+  v_team_id := case
+    when tg_table_name = 'teams' then nullif(v_entity_id, '')::uuid
+    else nullif(v_row ->> 'team_id', '')::uuid
+  end;
+
+  insert into public.audit_logs(
+    organization_id,
+    actor_type,
+    actor_id,
+    action,
+    entity_type,
+    entity_id,
+    before_data,
+    after_data,
+    brand_id,
+    tenant_business_id,
+    branch_id,
+    department_id,
+    team_id
+  ) values (
+    v_org_id,
+    case when v_actor is null then 'SYSTEM' else 'USER' end,
+    coalesce(v_actor::text, current_user),
+    'CONTROL_PLANE_' || tg_op,
+    tg_table_name,
+    v_entity_id,
+    v_before,
+    v_after,
+    v_brand_id,
+    v_tenant_business_id,
+    v_branch_id,
+    v_department_id,
+    v_team_id
+  );
+
+  if tg_op = 'DELETE' then return old; end if;
+  return new;
+end;
+$;
+
+revoke all on function public.audit_control_plane_mutation()
+  from public, anon, authenticated;
+
+drop trigger if exists brands_audit_mutation on public.brands;
+create trigger brands_audit_mutation
+after insert or update on public.brands
+for each row execute function public.audit_control_plane_mutation();
+
+drop trigger if exists tenant_businesses_audit_mutation on public.tenant_businesses;
+create trigger tenant_businesses_audit_mutation
+after insert or update on public.tenant_businesses
+for each row execute function public.audit_control_plane_mutation();
+
+drop trigger if exists branches_audit_mutation on public.branches;
+create trigger branches_audit_mutation
+after insert or update on public.branches
+for each row execute function public.audit_control_plane_mutation();
+
+drop trigger if exists departments_audit_mutation on public.departments;
+create trigger departments_audit_mutation
+after insert or update on public.departments
+for each row execute function public.audit_control_plane_mutation();
+
+drop trigger if exists teams_audit_mutation on public.teams;
+create trigger teams_audit_mutation
+after insert or update on public.teams
+for each row execute function public.audit_control_plane_mutation();
+
+drop trigger if exists member_scope_assignments_audit_mutation on public.member_scope_assignments;
+create trigger member_scope_assignments_audit_mutation
+after insert or update or delete on public.member_scope_assignments
+for each row execute function public.audit_control_plane_mutation();
+
+drop trigger if exists scope_configuration_overrides_audit_mutation on public.scope_configuration_overrides;
+create trigger scope_configuration_overrides_audit_mutation
+after insert or update or delete on public.scope_configuration_overrides
+for each row execute function public.audit_control_plane_mutation();
+
+drop trigger if exists feature_flag_overrides_audit_mutation on public.feature_flag_overrides;
+create trigger feature_flag_overrides_audit_mutation
+after insert or update or delete on public.feature_flag_overrides
+for each row execute function public.audit_control_plane_mutation();
+
+drop trigger if exists subscriptions_audit_mutation on public.subscriptions;
+create trigger subscriptions_audit_mutation
+after insert or update or delete on public.subscriptions
+for each row execute function public.audit_control_plane_mutation();
+
+drop trigger if exists organization_entitlement_overrides_audit_mutation on public.organization_entitlement_overrides;
+create trigger organization_entitlement_overrides_audit_mutation
+after insert or update or delete on public.organization_entitlement_overrides
+for each row execute function public.audit_control_plane_mutation();
 
 -- ---------------------------------------------------------------------------
 -- RLS and least privilege.
@@ -737,7 +1035,15 @@ revoke all on public.brands,
   public.organization_entitlement_overrides
 from anon;
 
-revoke all on public.plans,
+revoke all on public.brands,
+  public.tenant_businesses,
+  public.branches,
+  public.departments,
+  public.teams,
+  public.member_scope_assignments,
+  public.scope_configuration_overrides,
+  public.feature_flag_overrides,
+  public.plans,
   public.pricing_versions,
   public.plan_entitlements,
   public.subscriptions,
@@ -781,6 +1087,8 @@ to service_role;
 revoke all on function public.enforce_catalog_state_transition() from public, anon, authenticated;
 revoke all on function public.enforce_subscription_state_transition() from public, anon, authenticated;
 revoke all on function public.enforce_subscription_pricing_version() from public, anon, authenticated;
+revoke all on function public.enforce_pricing_version_immutability() from public, anon, authenticated;
+revoke all on function public.enforce_plan_entitlement_draft_only() from public, anon, authenticated;
 
 -- Explicitly preserve customer-billing fail-closed behavior for all historical
 -- and currently unclassified usage. Cost Guard still sees cost_usd unchanged.
