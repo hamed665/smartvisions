@@ -82,6 +82,7 @@ describe('Business OS control plane runtime contracts', () => {
   it('uses the most specific applicable scoped role without narrowing organization OWNER', () => {
     expect(effectiveRoleForScope({
       organizationRole: 'VIEWER',
+      userId: 'user-a',
       target,
       assignments: [
         {
@@ -103,6 +104,7 @@ describe('Business OS control plane runtime contracts', () => {
 
     expect(effectiveRoleForScope({
       organizationRole: 'OWNER',
+      userId: 'user-a',
       target,
       assignments: [{
         organizationId: 'org-a',
@@ -112,6 +114,21 @@ describe('Business OS control plane runtime contracts', () => {
         role: 'VIEWER',
       }],
     })).toBe('OWNER');
+  });
+
+  it('never applies another user scoped assignment', () => {
+    expect(effectiveRoleForScope({
+      organizationRole: 'VIEWER',
+      userId: 'user-a',
+      target,
+      assignments: [{
+        organizationId: 'org-a',
+        userId: 'user-b',
+        scopeType: 'TEAM',
+        scopeId: 'team-a',
+        role: 'ADMIN',
+      }],
+    })).toBe('VIEWER');
   });
 
   it('gives an active entitlement override precedence over the plan value', () => {
@@ -179,6 +196,8 @@ describe('Business OS control plane migration safety', () => {
   it('ties scoped user access back to the existing organization membership', () => {
     expect(migration).toContain('references public.organization_members(organization_id, user_id)');
     expect(migration).toContain("scope_type text not null check (scope_type in ('BRAND','BUSINESS','BRANCH','DEPARTMENT','TEAM'))");
+    expect(migration).toContain("role text not null check (role in ('ADMIN','SALES_MANAGER','SALES_AGENT','VIEWER'))");
+    expect(migration).not.toContain("role text not null check (role in ('OWNER','ADMIN','SALES_MANAGER','SALES_AGENT','VIEWER'))");
   });
 
   it('enables RLS on every new tenant-owned table', () => {
@@ -213,21 +232,46 @@ describe('Business OS control plane migration safety', () => {
     expect(migration).toContain("'PROMOTIONAL'");
     expect(migration).toContain("'NON_BILLABLE'");
     expect(migration).toContain('revoke insert on table public.usage_events from authenticated;');
-    expect(migration).toContain('grant update (usage_classification) on table public.usage_events to service_role;');
+    expect(migration).toContain('create or replace function public.classify_usage_event(');
+    expect(migration).toContain('grant execute on function public.classify_usage_event');
+    expect(migration).toContain('to service_role;');
+    expect(migration).not.toContain('grant update (usage_classification) on table public.usage_events to authenticated;');
     expect(migration).not.toMatch(/alter\s+column\s+cost_usd/i);
   });
 
-  it('extends canonical audit logs with correlation and hierarchy scope', () => {
+  it('extends canonical audit logs and audits important control-plane mutations', () => {
     expect(migration).toContain('add column if not exists correlation_id text');
     expect(migration).toContain('add column if not exists causation_id text');
     expect(migration).toContain('audit_logs_business_scope_fk');
     expect(migration).toContain('audit_logs_team_scope_fk');
+    expect(migration).toContain('create or replace function public.audit_control_plane_mutation()');
+    expect(migration).toContain('member_scope_assignments_audit_mutation');
+    expect(migration).toContain('subscriptions_audit_mutation');
+  });
+
+  it('protects runtime safety flags from generic configuration overrides', () => {
+    for (const reservedKey of [
+      'shadow_mode',
+      'global_kill_switch',
+      'email_paused',
+      'whatsapp_ai_paused',
+      'agents_paused',
+    ]) {
+      expect(migration).toContain(`'${reservedKey}'`);
+    }
+  });
+
+  it('makes published pricing immutable and entitlements draft-only', () => {
+    expect(migration).toContain('create or replace function public.enforce_pricing_version_immutability()');
+    expect(migration).toContain('pricing_versions_immutability_guard');
+    expect(migration).toContain('create or replace function public.enforce_plan_entitlement_draft_only()');
+    expect(migration).toContain('plan_entitlements_draft_guard');
   });
 
   it('adds formal state-machine guards without provider actions', () => {
     expect(migration).toContain('create or replace function public.enforce_subscription_state_transition()');
     expect(migration).toContain('subscriptions_state_transition_guard');
     expect(migration).toContain('pricing_versions_state_transition_guard');
-    expect(migration).not.toMatch(/http|webhook|resend|whatsapp|meta_cloud/i);
+    expect(migration).not.toMatch(/net\.http|http_post|resend\.com|graph\.facebook|send_whatsapp/i);
   });
 });
