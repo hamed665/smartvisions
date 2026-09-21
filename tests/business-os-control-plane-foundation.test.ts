@@ -283,7 +283,11 @@ describe('Business OS control plane migration safety', () => {
   });
 
   it('keeps every PL/pgSQL body correctly dollar quoted', () => {
-    expect(migration).not.toContain('as 
+    const singleDollar = String.fromCharCode(36);
+    const newline = String.fromCharCode(10);
+    expect(migration).not.toContain('as ' + singleDollar + newline);
+    expect(migration).not.toContain(newline + singleDollar + ';' + newline);
+  });
 
   it('adds formal state-machine guards without provider actions', () => {
     expect(migration).toContain('create or replace function public.enforce_subscription_state_transition()');
