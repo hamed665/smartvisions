@@ -500,7 +500,7 @@ returns trigger
 language plpgsql
 security invoker
 set search_path = public
-as $
+as $$
 begin
   if old.status in ('ACTIVE','RETIRED') and (
     new.plan_id is distinct from old.plan_id
@@ -519,7 +519,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists pricing_versions_immutability_guard on public.pricing_versions;
 create trigger pricing_versions_immutability_guard
@@ -531,7 +531,7 @@ returns trigger
 language plpgsql
 security invoker
 set search_path = public
-as $
+as $$
 declare
   v_pricing_version_id uuid;
 begin
@@ -549,7 +549,7 @@ begin
   if tg_op = 'DELETE' then return old; end if;
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists plan_entitlements_draft_guard on public.plan_entitlements;
 create trigger plan_entitlements_draft_guard
@@ -669,7 +669,7 @@ returns table(
 language plpgsql
 security definer
 set search_path = public, pg_catalog
-as $
+as $$
 declare
   v_previous text;
 begin
@@ -732,7 +732,7 @@ begin
 
   return query select p_event_id, v_previous, p_usage_classification, true;
 end;
-$;
+$$;
 
 revoke all on function public.classify_usage_event(uuid, uuid, text, text, text, text)
   from public, anon, authenticated;
@@ -774,7 +774,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public, auth, pg_catalog
-as $
+as $$
 declare
   v_before jsonb;
   v_after jsonb;
@@ -849,7 +849,7 @@ begin
   if tg_op = 'DELETE' then return old; end if;
   return new;
 end;
-$;
+$$;
 
 revoke all on function public.audit_control_plane_mutation()
   from public, anon, authenticated;
