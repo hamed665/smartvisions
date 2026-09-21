@@ -165,8 +165,8 @@ export function resolveFeatureFlag(input: {
   }) ?? input.defaultEnabled;
 }
 
-export function canReadControlPlane(_role: OrganizationRole) {
-  return true;
+export function canReadControlPlane(role: OrganizationRole) {
+  return ORGANIZATION_ROLES.includes(role);
 }
 
 /**
