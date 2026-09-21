@@ -296,9 +296,6 @@ describe('Business OS control plane migration safety', () => {
     expect(migration).not.toMatch(/net\.http|http_post|resend\.com|graph\.facebook|send_whatsapp/i);
   });
 });
- + '\n');
-    expect(migration).not.toContain('\n' + '$;' + '\n');
-  });
 
   it('adds formal state-machine guards without provider actions', () => {
     expect(migration).toContain('create or replace function public.enforce_subscription_state_transition()');
