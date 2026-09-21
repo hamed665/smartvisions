@@ -168,10 +168,14 @@ describe('Business OS control plane runtime contracts', () => {
     expect(isCatalogTransitionAllowed('ACTIVE', 'RETIRED')).toBe(true);
     expect(isCatalogTransitionAllowed('RETIRED', 'ACTIVE')).toBe(false);
 
-    expect(isSubscriptionTransitionAllowed('TRIALING', 'ACTIVE')).toBe(true);
+    expect(isSubscriptionTransitionAllowed('TRIAL', 'ACTIVE')).toBe(true);
     expect(isSubscriptionTransitionAllowed('ACTIVE', 'PAST_DUE')).toBe(true);
     expect(isSubscriptionTransitionAllowed('PAST_DUE', 'ACTIVE')).toBe(true);
-    expect(isSubscriptionTransitionAllowed('CANCELED', 'EXPIRED')).toBe(true);
+    expect(isSubscriptionTransitionAllowed('PAST_DUE', 'GRACE_PERIOD')).toBe(true);
+    expect(isSubscriptionTransitionAllowed('GRACE_PERIOD', 'SUSPENDED')).toBe(true);
+    expect(isSubscriptionTransitionAllowed('SUSPENDED', 'CANCELED')).toBe(true);
+    expect(isSubscriptionTransitionAllowed('SUSPENDED', 'EXPIRED')).toBe(true);
+    expect(isSubscriptionTransitionAllowed('CANCELED', 'EXPIRED')).toBe(false);
     expect(isSubscriptionTransitionAllowed('EXPIRED', 'ACTIVE')).toBe(false);
   });
 });
@@ -259,6 +263,16 @@ describe('Business OS control plane migration safety', () => {
     ]) {
       expect(migration).toContain(`'${reservedKey}'`);
     }
+  });
+
+  it('pins the current customer AI multiplier policy to exactly 4x', () => {
+    expect(migration).toContain("ai_cost_multiplier numeric(10,4) not null default 4 check (ai_cost_multiplier = 4)");
+  });
+
+  it('uses the canonical subscription state catalog without invented aliases', () => {
+    expect(migration).toContain("status text not null check (status in ('TRIAL','ACTIVE','PAST_DUE','GRACE_PERIOD','SUSPENDED','CANCELED','EXPIRED'))");
+    expect(migration).not.toContain("'TRIALING'");
+    expect(migration).not.toContain("'PAUSED'");
   });
 
   it('makes published pricing immutable and entitlements draft-only', () => {
