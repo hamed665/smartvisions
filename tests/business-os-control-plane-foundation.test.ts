@@ -268,6 +268,11 @@ describe('Business OS control plane migration safety', () => {
     expect(migration).toContain('plan_entitlements_draft_guard');
   });
 
+  it('keeps every PL/pgSQL body correctly dollar quoted', () => {
+    expect(migration).not.toMatch(/as \\$\\n/);
+    expect(migration).not.toMatch(/\\n\\$;\\n/);
+  });
+
   it('adds formal state-machine guards without provider actions', () => {
     expect(migration).toContain('create or replace function public.enforce_subscription_state_transition()');
     expect(migration).toContain('subscriptions_state_transition_guard');
