@@ -15,7 +15,7 @@ Current production remains untouched until a later implementation PR passes the 
 3. [SERVICE_CONTRACT_STANDARD.md](./SERVICE_CONTRACT_STANDARD.md) — required contract for every domain/service.
 4. [STATE_EVENT_CATALOG.md](./STATE_EVENT_CATALOG.md) — initial canonical state machines and event naming.
 5. [MIGRATION_FROM_GROWTH_OS.md](./MIGRATION_FROM_GROWTH_OS.md) — reuse/extend/replace decisions for existing production primitives.
-6. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
+6. [CONTROL_PLANE_FOUNDATION.md](./CONTROL_PLANE_FOUNDATION.md) — Production-evidence Gap Map, compatibility decisions, and Phase 1 domain contract.\n7. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
 
 ## Phase 0 exit criteria
 
@@ -29,3 +29,12 @@ Phase 0 is complete only when:
 - existing Growth OS primitives have a reuse/extend decision;
 - no production subsystem is duplicated by accident;
 - the first implementation slice can be built without inventing architecture during coding.
+
+
+## Current implementation status — 2026-09-22
+
+- Phase 0 architecture foundation was merged in PR #172 at `main@144906c8f72c368851f8c4efb3e85dff8627f863`.
+- Phase 1 Control Plane Foundation is implemented on `feat/business-os-control-plane-foundation` and is not Production yet.
+- Production database migrations have **not** been applied by this branch.
+- Current Growth OS CRM/Hunter `businesses` remains unchanged; tenant-owned Business hierarchy uses `tenant_businesses`.
+- The next dependency after this PR is the Omnichannel Adapter Boundary, only after Control Plane review/CI/migration safety is closed.
