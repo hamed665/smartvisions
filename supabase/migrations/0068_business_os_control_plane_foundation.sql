@@ -387,7 +387,7 @@ create table if not exists public.pricing_versions (
   billing_period text not null check (billing_period in ('MONTHLY','ANNUAL')),
   recurring_amount numeric(14,3) not null default 0 check (recurring_amount >= 0),
   setup_fee_amount numeric(14,3) not null default 0 check (setup_fee_amount >= 0),
-  ai_cost_multiplier numeric(10,4) not null default 4 check (ai_cost_multiplier >= 0),
+  ai_cost_multiplier numeric(10,4) not null default 4 check (ai_cost_multiplier = 4),
   included_units jsonb not null default '{}'::jsonb,
   unit_prices jsonb not null default '{}'::jsonb,
   effective_from timestamptz,
@@ -418,7 +418,7 @@ create table if not exists public.subscriptions (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   pricing_version_id uuid not null references public.pricing_versions(id) on delete restrict,
-  status text not null check (status in ('TRIALING','ACTIVE','PAST_DUE','PAUSED','CANCELED','EXPIRED')),
+  status text not null check (status in ('TRIAL','ACTIVE','PAST_DUE','GRACE_PERIOD','SUSPENDED','CANCELED','EXPIRED')),
   provider text,
   provider_subscription_id text,
   started_at timestamptz not null default now(),
@@ -567,11 +567,11 @@ begin
     return new;
   end if;
 
-  if old.status = 'TRIALING' and new.status in ('ACTIVE','CANCELED') then return new; end if;
-  if old.status = 'ACTIVE' and new.status in ('PAST_DUE','PAUSED','CANCELED') then return new; end if;
-  if old.status = 'PAST_DUE' and new.status in ('ACTIVE','PAUSED','CANCELED') then return new; end if;
-  if old.status = 'PAUSED' and new.status in ('ACTIVE','CANCELED') then return new; end if;
-  if old.status = 'CANCELED' and new.status = 'EXPIRED' then return new; end if;
+  if old.status = 'TRIAL' and new.status = 'ACTIVE' then return new; end if;
+  if old.status = 'ACTIVE' and new.status = 'PAST_DUE' then return new; end if;
+  if old.status = 'PAST_DUE' and new.status in ('ACTIVE','GRACE_PERIOD') then return new; end if;
+  if old.status = 'GRACE_PERIOD' and new.status = 'SUSPENDED' then return new; end if;
+  if old.status = 'SUSPENDED' and new.status in ('CANCELED','EXPIRED') then return new; end if;
 
   raise exception 'invalid subscription state transition: % -> %', old.status, new.status;
 end;
