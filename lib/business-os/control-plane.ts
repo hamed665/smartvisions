@@ -64,10 +64,11 @@ export type EntitlementOverride<T = unknown> = {
 };
 
 export const SUBSCRIPTION_STATES = [
-  'TRIALING',
+  'TRIAL',
   'ACTIVE',
   'PAST_DUE',
-  'PAUSED',
+  'GRACE_PERIOD',
+  'SUSPENDED',
   'CANCELED',
   'EXPIRED',
 ] as const;
@@ -248,11 +249,12 @@ export function isCatalogTransitionAllowed(from: CatalogState, to: CatalogState)
 }
 
 const SUBSCRIPTION_TRANSITIONS: Record<SubscriptionState, ReadonlySet<SubscriptionState>> = {
-  TRIALING: new Set(['ACTIVE', 'CANCELED']),
-  ACTIVE: new Set(['PAST_DUE', 'PAUSED', 'CANCELED']),
-  PAST_DUE: new Set(['ACTIVE', 'PAUSED', 'CANCELED']),
-  PAUSED: new Set(['ACTIVE', 'CANCELED']),
-  CANCELED: new Set(['EXPIRED']),
+  TRIAL: new Set(['ACTIVE']),
+  ACTIVE: new Set(['PAST_DUE']),
+  PAST_DUE: new Set(['ACTIVE', 'GRACE_PERIOD']),
+  GRACE_PERIOD: new Set(['SUSPENDED']),
+  SUSPENDED: new Set(['CANCELED', 'EXPIRED']),
+  CANCELED: new Set(),
   EXPIRED: new Set(),
 };
 
