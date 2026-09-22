@@ -106,6 +106,14 @@ describe('Business OS omnichannel semantic boundary', () => {
         providerEventId: 'evt_1',
       },
     });
+
+    expect(emailSemanticAdapter.normalizeInbound({
+      eventId: 'evt_missing_from',
+      eventType: 'email.received',
+      providerMessageId: 'email_2',
+      occurredAt: '2026-09-22T10:20:00.000Z',
+      raw: {},
+    })).toBeNull();
   });
 
   it('maps Resend delivery evidence to canonical statuses', () => {
@@ -168,6 +176,15 @@ describe('Business OS omnichannel semantic boundary', () => {
         },
       },
     });
+
+    const withoutTimestamp = whatsappSemanticAdapter.normalizeInbound({
+      providerMessageId: 'wamid.2',
+      from: '96890000001',
+      type: 'audio',
+      mediaId: 'media-1',
+    });
+    expect(withoutTimestamp.occurredAt).toBeUndefined();
+    expect(withoutTimestamp.contentType).toBe('AUDIO');
   });
 
   it('maps WhatsApp delivery/read evidence to canonical statuses', () => {
