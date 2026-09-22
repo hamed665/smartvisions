@@ -62,9 +62,23 @@ Events:
 
 ## Deal
 
-States:
+Aggregate states:
+
+`OPEN -> WON | LOST`
+
+`WON` and `LOST` are terminal commercial states.
+
+Pipeline stages are configurable ordered labels. A typical default pipeline may use:
 
 `NEW -> QUALIFIED -> OPPORTUNITY -> PROPOSAL -> NEGOTIATION -> WON | LOST`
+
+Every stage carries a category:
+
+- `OPEN`
+- `WON`
+- `LOST`
+
+Exactly one WON and one LOST stage are required per active Pipeline. Moving a Deal into a terminal stage sets the aggregate state and terminal evidence. Closed commercial truth such as amount/currency/owner/expected close/loss reason is immutable after terminal transition.
 
 Events:
 
