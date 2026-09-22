@@ -1,6 +1,6 @@
 # Customer 360 + CRM Normalization — Evidence, Gap Map, and Identity Foundation
 
-Status: **Phase 3 active — Slice 1, Slice 2 and Slice 3 Production-verified**  
+Status: **Phase 3 active — Slice 1 through Slice 4 Production-verified**  
 Slice 1 merge: PR #178 -> `main@27e980e417ec52c64055c029b8ffa6c6c77ab961`  
 Slice 1 Production migration: `0070_crm_identity_foundation` -> version `20260922164110`  
 Slice 2 merge: PR #179 -> `main@efcf979ff15d32062b48928672a25128c521987a`  
@@ -760,3 +760,33 @@ At the last pre-closeout check, the heartbeat still reported Worker version:
 `6d12f286-9584-4733-a168-eba61cf1a397`
 
 Therefore this document deliberately records runtime promotion as **pending evidence**, not as complete.
+
+
+## 20. Slice 4 Production runtime closeout
+
+Slice 4 merged in PR #184 at `main@d416fcee020bc393a45096ee1330f8378bbd8e38`.
+
+Production migration:
+
+- `0074_crm_deal_pipeline_foundation` -> version `20260922225908`
+
+Verified Production database state:
+
+- `crm_pipelines`, `crm_pipeline_stages` and `crm_deals` have RLS enabled;
+- stage history remains a SECURITY INVOKER view over the existing audit ledger;
+- migration and rollback-only verification left exactly 0 Pipelines / 0 Stages / 0 Deals;
+- no Growth/Intent Opportunity row was reclassified or auto-converted;
+- zero architecture-test Email/WhatsApp outbound rows were created.
+
+Cloudflare runtime promotion is now proven by a post-merge heartbeat with Worker version:
+
+`47d22421-109e-4c1e-81e6-20bb273078e1`
+
+Latest checked heartbeat evidence:
+
+- `failed=0`;
+- acquisition `SKIPPED`;
+- dispatch `SKIPPED`;
+- zero Email/WhatsApp outbound rows after PR #184 merge.
+
+Slice 4 is therefore Production-verified across schema, runtime and safety evidence.
