@@ -4,7 +4,7 @@
 
 Repository: `hamed665/smartvisions`
 
-Business OS status as of 2026-09-22:
+Business OS status as of 2026-09-23:
 
 - Phase 0 merged in PR #172 at `main@144906c8f72c368851f8c4efb3e85dff8627f863`.
 - Phase 1 Control Plane Foundation merged in PR #173 at `main@01d74f7c8d333c017f8f4790d7bc3e4a7d1f6ca4`.
@@ -202,3 +202,42 @@ A green CI run is necessary, not a substitute for review of a migration.
 7. Keep Shadow Mode and existing provider safety gates unchanged.
 
 Runtime and Production evidence outrank stale docs or chat memory.
+
+## Next-chat checkpoint
+
+Use this checkpoint before any new Phase 3 code:
+
+- current canonical `main`: `3fc5f884b115b732b675bfadf09ae90db69f15aa`;
+- Phase 3 Slice 1 through Slice 4 are Production-verified;
+- latest Phase 3 migration: `0074_crm_deal_pipeline_foundation` -> Production version `20260922225908`;
+- latest verified Cloudflare Worker after Slice 4: `47d22421-109e-4c1e-81e6-20bb273078e1`;
+- latest checked heartbeat: `failed=0`, acquisition `SKIPPED`, dispatch `SKIPPED`;
+- no Email/WhatsApp outbound rows were created by Slice 4 verification;
+- Production intentionally has 0 Pipelines / 0 Stages / 0 Deals until real commercial commands create them;
+- current remaining-gap evidence shows no Custom Field registry, no Custom Object registry, no Segment domain and no canonical Person Contact;
+- identity conflicts are currently 0 and duplicate normalized identity groups are currently 0;
+- do not fabricate Person Contacts from provider display names;
+- do not auto-convert Growth/Intent Opportunities into Deals;
+- Shadow Mode and existing provider safety gates remain unchanged.
+
+### Exact next implementation target
+
+**Phase 3 / Slice 5 — Custom Field / Custom Object Governance**
+
+Start with a fresh read-only repository + Production audit before writing code.
+
+Required audit:
+
+1. inspect current `main`, open PRs, CI, Production migrations and Worker evidence;
+2. search all existing CRM/domain tables for configurable/custom-field behavior and JSON payloads;
+3. classify every relevant primitive as REUSE / EXTEND / NEW / DEFER;
+4. prove whether custom values are needed first for Business, Lead, Deal, Task, Conversation or another entity;
+5. define data-type, validation, required/optional, default, option-set, sensitivity, indexing/filterability and lifecycle/versioning rules;
+6. define tenant scope and RBAC before persistence;
+7. define audit/PII rules and prohibit silent model-driven mutation;
+8. do not build Segments on ungoverned JSON/custom data;
+9. do not introduce a second CRM, second event store, generic EAV dumping ground or arbitrary JSON-as-schema;
+10. preserve all existing Phase 3 invariants and Shadow Mode.
+
+Only after the gap audit should implementation begin. Prefer a narrow first slice that establishes governed field definitions + typed values + RLS + audit + deterministic query semantics before adding Segments.
+
