@@ -59,7 +59,7 @@ Use the existing WhatsApp/Email paths as first adapters.
 
 ## Phase 3 — Customer 360 + CRM normalization
 
-Status: **ACTIVE IMPLEMENTATION**. Slice 1 CRM Identity Foundation is Production-verified in PR #178 / migration 0070. Slice 2 Customer 360 Timeline is Production-verified in PR #179 / migration 0071. Slice 3 CRM Task Foundation is Production-verified in PR #181 / migration 0072 with FK-index cleanup PR #182 / migration 0073. Activity remains canonical immutable evidence; `crm_tasks` owns actionable human work only. The next dependency is explicit Deal/Pipeline normalization.
+Status: **ACTIVE IMPLEMENTATION**. Slice 1 CRM Identity Foundation is Production-verified in PR #178 / migration 0070. Slice 2 Customer 360 Timeline is Production-verified in PR #179 / migration 0071. Slice 3 CRM Task Foundation is Production-verified in PR #181 / migration 0072 with FK-index cleanup 0073. Slice 4 Deal/Pipeline Foundation is active on `feat/business-os-crm-deal-pipeline` / migration 0074. Existing Growth/Intent Opportunities remain acquisition evidence and are not repurposed as CRM Deals.
 
 Extend the existing Lead/Business/Conversation CRM instead of creating a second CRM.
 

@@ -41,6 +41,10 @@ Business OS status as of 2026-09-22:
 - Supabase Performance Advisor has zero post-Slice-3 unindexed-FK findings after 0073; Security Advisor is unchanged baseline.
 - Cloudflare runtime heartbeat after Slice 3 changed Worker version to `84d19f06-ead7-4abe-b332-ba14309629d8`, with failed=0 and acquisition/dispatch SKIPPED.
 - Zero Email/WhatsApp outbound rows were created by Slice 3 verification.
+- Phase 3 Slice 4 Deal/Pipeline Foundation is active on `feat/business-os-crm-deal-pipeline` / migration `0074_crm_deal_pipeline_foundation.sql`.
+- Growth/Intent Opportunities remain acquisition evidence and are not canonical Deals.
+- Deal aggregate state is OPEN/WON/LOST; Pipeline stages are configurable labels categorized OPEN/WON/LOST.
+- Lead->Deal conversion is explicit/idempotent and does not mutate Lead state or auto-convert acquisition Opportunities.
 
 Runtime and Production evidence outrank stale documentation or chat memory.
 
@@ -187,14 +191,14 @@ A green CI run is necessary, not a substitute for review of a migration.
 
 ## Exact next action
 
-1. Start the next Phase 3 slice from current clean main after the CRM Task closeout docs merge.
-2. Audit current `leads`, `sales_conversations`, `growth_opportunities`, `intent_opportunities`, campaigns, quote/pricing primitives and CRM ownership semantics before adding Deal tables.
-3. Produce a Deal/Pipeline Gap Map. Treat Growth/Intent Opportunities as acquisition evidence, not CRM sales Deals.
-4. Preserve `leads` as Lead/Opportunity foundation and `sales_conversations` as conversation state; do not repurpose their current statuses into commercial pipeline stages.
-5. Define explicit Pipeline + Stage + Deal ownership only for missing commercial truth: amount/currency, expected close, owner, ordered stage, WON/LOST evidence, stage history and idempotent conversion.
-6. Do not auto-create Deals merely because a Lead or acquisition Opportunity exists.
-7. Keep Quote, Payment, Booking and Order as later owned domains; Deal may reference future outputs but must not absorb their state machines.
-8. Preserve Shadow Mode, provider send boundaries and Human takeover. No provider/customer sends are required for Deal architecture verification.
-9. Do not fabricate Person Contacts to unblock the Deal model.
+1. Use `feat/business-os-crm-deal-pipeline` as active Phase 3 Slice 4 work.
+2. Run exact-head CI after final docs/API/test commits.
+3. Review migration 0074 for Pipeline terminal-stage constraints, tenant composite FKs, RLS role boundaries, terminal commercial immutability, Lead conversion idempotency and stage-history SECURITY INVOKER behavior.
+4. Do not merge or promote from a stale/failing head.
+5. After merge, apply exact main migration 0074 through controlled Supabase migration.
+6. Verify zero seeded Pipeline/Deal rows, RLS/grants/functions/history view, advisor delta, safety controls, heartbeat and zero architecture-test outbound sends.
+7. If Performance Advisor reports only missing FK indexes introduced by 0074, fix only those in a separate additive migration.
+8. Verify Cloudflare Production deployment of the exact merge SHA.
+9. Reconcile docs to proven Production state before continuing the next Phase 3 gap.
 
-The goal remains production-grade Business OS behavior, not decorative UI or file count.
+Runtime and Production evidence outrank stale docs or chat memory.

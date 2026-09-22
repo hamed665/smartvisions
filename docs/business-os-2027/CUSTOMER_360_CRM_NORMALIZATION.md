@@ -618,3 +618,93 @@ The next slice must therefore first produce a Deal/Pipeline Gap Map covering:
 - compatibility with future Quote/Booking/Payment modules.
 
 No Person Contact model should be fabricated merely to unblock Deals.
+
+
+## 20. Slice 4 — Deal + Pipeline Normalization
+
+### Production Gap Map
+
+Production evidence before this slice:
+
+- 19 existing Leads, all Business-linked;
+- 14 `growth_opportunities`, all acquisition/qualification routing evidence in `MUSCAT_LOCAL_GROWTH`;
+- 12 of those 14 Growth Opportunities are tier A and marked `should_contact=true`;
+- `intent_opportunities` currently contains zero rows;
+- Lead statuses are operational (`NEW`, `READY_TO_CONTACT`, `REPLIED`, `HUMAN`);
+- Conversation stages are operational (`NEW`, `ACTIVE`, `NEEDS_HUMAN`, `FOLLOW_UP_DUE`);
+- no Production table matching Deal, Pipeline or Sales Stage exists;
+- no existing primitive owns canonical commercial amount/currency, expected-close, owner or WON/LOST revenue truth.
+
+Decision:
+
+- **REUSE** `businesses` as Account/Company;
+- **REUSE** `leads` as Lead foundation;
+- **REUSE** existing Growth/Intent Opportunities as acquisition evidence only;
+- **NEW** `crm_pipelines`, `crm_pipeline_stages`, `crm_deals`;
+- **REUSE** `audit_logs` for immutable Deal stage history;
+- no automatic Deal backfill or Opportunity->Deal reclassification.
+
+### Commercial model
+
+Deal aggregate state is:
+
+```text
+OPEN -> WON | LOST
+```
+
+Pipeline stages are configurable ordered labels and each stage is categorized as `OPEN`, `WON` or `LOST`. Every Pipeline requires at least one OPEN stage and exactly one WON and one LOST stage.
+
+Deal owns:
+
+- Business;
+- optional Lead;
+- Pipeline + Stage;
+- amount + ISO-4217-style 3-letter currency pair;
+- expected close;
+- owner;
+- terminal WON/LOST evidence;
+- immutable source provenance;
+- request-key idempotency;
+- optimistic version.
+
+Terminal commercial truth is frozen after WON/LOST.
+
+### Lead conversion
+
+Lead -> Deal is explicit through `create_crm_deal_from_lead(...)`.
+
+The command:
+
+- derives Business from the canonical Lead;
+- preserves Lead provenance;
+- requires an explicit Pipeline/Stage/owner;
+- is idempotent by Organization + request key;
+- does not mutate Lead state;
+- does not create a Deal merely because a Lead or Growth Opportunity exists.
+
+Manual Deals remain separately supported with `source_type=MANUAL`.
+
+### Authorization
+
+- Organization members read Pipelines/Stages/Deals;
+- OWNER / ADMIN / SALES_MANAGER manage Pipeline definitions and Deals;
+- SALES_AGENT may manage only self-owned Deals;
+- VIEWER is read-only;
+- no DELETE grants;
+- signed-in Supabase session + underlying RLS only;
+- no service-role browser path.
+
+### History
+
+`crm_deal_stage_history` is a SECURITY INVOKER read model over existing `audit_logs`. No second Deal event store is created.
+
+### Non-scope
+
+Slice 4 does not:
+
+- rename `growth_opportunities` or `intent_opportunities`;
+- convert every Lead to Deal;
+- fabricate Person Contacts;
+- add Quotes/Payments;
+- add provider sends;
+- seed tenant Pipelines in migration.
