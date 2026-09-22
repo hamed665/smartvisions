@@ -70,6 +70,8 @@ The implementation branch contains:
 
 - Brand / tenant Business / Branch / Department / Team hierarchy;
 - composite `(organization_id, parent_id)` FKs for tenant-consistent hierarchy;
+- immutable `organization_id` guards on all new tenant-owned Control Plane entities, preventing cross-tenant row transfer by UPDATE;
+- runtime canonical-scope lineage validation for Brand -> Business -> Branch -> Department -> Team;
 - lower-scope member assignments attached to existing `organization_members`;
 - organization `OWNER` kept organization-wide only;
 - lower-scope roles limited to `ADMIN | SALES_MANAGER | SALES_AGENT | VIEWER`;
