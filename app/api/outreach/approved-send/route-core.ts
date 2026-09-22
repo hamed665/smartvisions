@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { approvedSendFailureDisposition, evaluateApprovedSendPolicy } from '@/lib/outreach/approved-send-policy';
+import { getChannelIntegrationIdentity } from '@/lib/omnichannel';
 import { assertCanonicalSendAllowed, normalizeCanonicalPhone } from '@/lib/outreach/canonical-send-gate';
 import { verifyControlledWhatsAppCatalogPilot } from '@/lib/outreach/controlled-whatsapp-pilot';
 import { verifyControlledEmailAutoPilot, mailboxWarmupAllowsAutomaticSend } from '@/lib/outreach/controlled-email-auto-pilot';
@@ -65,11 +66,7 @@ export async function POST(request: Request) {
     .maybeSingle();
   if (messageError || !message) return NextResponse.json({ error: messageError?.message ?? 'Approved message not found' }, { status: 404 });
 
-  const providerIdentity = message.channel === 'EMAIL'
-    ? { provider: 'EMAIL_PROVIDER', channel: 'EMAIL' }
-    : message.channel === 'WHATSAPP'
-      ? { provider: 'META', channel: 'WHATSAPP' }
-      : null;
+  const providerIdentity = getChannelIntegrationIdentity(message.channel);
 
   const [{ data: controls, error: controlsError }, { data: lead, error: leadError }, providerConnectionResult] = await Promise.all([
     supabase.from('system_controls').select('global_kill_switch,email_paused,whatsapp_ai_paused,agents_paused,shadow_mode').eq('organization_id', body.organizationId).maybeSingle(),
