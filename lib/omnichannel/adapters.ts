@@ -73,7 +73,7 @@ export const WHATSAPP_CHANNEL_DESCRIPTOR = {
   },
 } as const satisfies ChannelCapabilityDescriptor;
 
-function emailStatus(eventType: string): CanonicalDeliveryStatus | null {
+export function mapEmailProviderStatus(eventType: string): CanonicalDeliveryStatus | null {
   switch (eventType) {
     case 'email.scheduled': return 'QUEUED';
     case 'email.sent': return 'SENT';
@@ -86,7 +86,7 @@ function emailStatus(eventType: string): CanonicalDeliveryStatus | null {
   }
 }
 
-function whatsappStatus(
+export function mapWhatsAppProviderStatus(
   status: NormalizedWhatsAppStatus['status'],
 ): CanonicalDeliveryStatus {
   switch (status) {
@@ -135,7 +135,7 @@ export const emailSemanticAdapter: ChannelSemanticAdapter<
 
   normalizeStatus(event) {
     if (!event.providerMessageId) return null;
-    const status = emailStatus(event.eventType);
+    const status = mapEmailProviderStatus(event.eventType);
     if (!status) return null;
     return {
       channel: 'EMAIL',
@@ -185,7 +185,7 @@ export const whatsappSemanticAdapter: ChannelSemanticAdapter<
       channel: 'WHATSAPP',
       provider: 'META_CLOUD',
       providerMessageId: event.providerMessageId,
-      status: whatsappStatus(event.status),
+      status: mapWhatsAppProviderStatus(event.status),
       ...(event.timestamp
         ? { occurredAt: new Date(Number(event.timestamp) * 1000).toISOString() }
         : {}),
