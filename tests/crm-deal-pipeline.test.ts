@@ -37,6 +37,8 @@ describe('Business OS CRM Deal + Pipeline foundation', () => {
   });
 
   it('keeps Deal aggregate state separate from configurable Pipeline stages', () => {
+    expect(migration).toContain("status in ('DRAFT','ACTIVE','ARCHIVED')");
+    expect(migration).toContain("'CRM pipeline activation requires active OPEN stage(s), exactly one WON stage and exactly one LOST stage'");
     expect(migration).toContain("state in ('OPEN','WON','LOST')");
     expect(migration).toContain("category in ('OPEN','WON','LOST')");
     expect(migration).toContain('crm_pipeline_stages_one_won_uidx');
