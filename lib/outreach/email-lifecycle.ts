@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { isDoNotContactReply, persistCustomerDoNotContact, persistCustomerReplyConversationState } from '@/lib/conversations/sales-lifecycle';
 import type { ResendWebhookEvent } from './resend-webhook';
+import { mapEmailProviderStatus } from '@/lib/omnichannel';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -215,15 +216,7 @@ export async function persistResendWebhookEvent(event: ResendWebhookEvent) {
   }
 
   if (event.providerMessageId) {
-    const mappedStatus: Record<string, string> = {
-      'email.sent': 'SENT',
-      'email.delivered': 'DELIVERED',
-      'email.bounced': 'BOUNCED',
-      'email.complained': 'COMPLAINED',
-      'email.failed': 'FAILED',
-      'email.suppressed': 'SUPPRESSED',
-    };
-    const status = mappedStatus[event.eventType];
+    const status = mapEmailProviderStatus(event.eventType);
     if (status) {
       const { error } = await supabase
         .from('outreach_messages')
