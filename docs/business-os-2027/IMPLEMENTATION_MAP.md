@@ -41,7 +41,7 @@ Keep current production behavior backward compatible.
 
 ## Phase 2 — Omnichannel domain boundary
 
-Status: **ACTIVE IMPLEMENTATION**. The semantic adapter/status slice merged in PR #175; provider-identity and reconciliation contract work continues on `feat/business-os-omnichannel-reconciliation`. No Production schema migration is required for either slice.
+Status: **COMPLETED AND MERGED**. Semantic adapter/status work merged in PR #175 at `main@5d812eee8a0e15dac658247b254660ae8f09aacd`; provider-identity/reconciliation work merged in PR #176 at `main@a5396156afc58a22cdf78baf7a495fb07ec38b40`. Production verification after PR #176 showed a healthy heartbeat, Shadow Mode ON, acquisition/dispatch SKIPPED, and zero Email/WhatsApp outbound messages after the merge. No Production schema migration was required.
 
 Do not replace canonical provider journals/send gate.
 
