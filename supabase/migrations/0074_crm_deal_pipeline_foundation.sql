@@ -595,6 +595,79 @@ on public.crm_deals for update to authenticated
 using (public.crm_deal_can_manage(organization_id, owner_user_id))
 with check (public.crm_deal_can_manage(organization_id, owner_user_id));
 
+create or replace function public.create_crm_pipeline_with_stages(
+  p_organization_id uuid,
+  p_name text,
+  p_is_default boolean,
+  p_stages jsonb
+)
+returns uuid
+language plpgsql
+security invoker
+set search_path = public, auth, pg_catalog
+as $pipeline_create$
+declare
+  v_pipeline_id uuid;
+  v_stage jsonb;
+  v_category text;
+  v_open_count integer;
+  v_won_count integer;
+  v_lost_count integer;
+begin
+  if nullif(trim(p_name), '') is null or length(trim(p_name)) > 160 then
+    raise exception 'invalid CRM pipeline name';
+  end if;
+
+  if p_stages is null or jsonb_typeof(p_stages) <> 'array'
+     or jsonb_array_length(p_stages) < 3
+     or jsonb_array_length(p_stages) > 20
+  then
+    raise exception 'CRM pipeline requires between 3 and 20 stages';
+  end if;
+
+  select
+    count(*) filter (where upper(value->>'category') = 'OPEN'),
+    count(*) filter (where upper(value->>'category') = 'WON'),
+    count(*) filter (where upper(value->>'category') = 'LOST')
+  into v_open_count, v_won_count, v_lost_count
+  from jsonb_array_elements(p_stages);
+
+  if v_open_count < 1 or v_won_count <> 1 or v_lost_count <> 1 then
+    raise exception 'CRM pipeline requires OPEN stage(s), exactly one WON stage and exactly one LOST stage';
+  end if;
+
+  insert into public.crm_pipelines(
+    organization_id, name, status, is_default, created_by_user_id
+  ) values (
+    p_organization_id, trim(p_name), 'ACTIVE', coalesce(p_is_default,false), auth.uid()
+  )
+  returning id into v_pipeline_id;
+
+  for v_stage in select value from jsonb_array_elements(p_stages)
+  loop
+    v_category := upper(coalesce(v_stage->>'category',''));
+    if v_category not in ('OPEN','WON','LOST') then
+      raise exception 'invalid CRM pipeline stage category';
+    end if;
+
+    insert into public.crm_pipeline_stages(
+      organization_id, pipeline_id, name, position, category,
+      is_active, created_by_user_id
+    ) values (
+      p_organization_id,
+      v_pipeline_id,
+      trim(coalesce(v_stage->>'name','')),
+      (v_stage->>'position')::integer,
+      v_category,
+      true,
+      auth.uid()
+    );
+  end loop;
+
+  return v_pipeline_id;
+end;
+$pipeline_create$;
+
 create or replace view public.crm_deal_stage_history
 with (security_invoker = true)
 as
@@ -666,6 +739,13 @@ grant execute on function public.crm_pipeline_can_manage(uuid) to authenticated;
 revoke all on function public.crm_deal_can_manage(uuid, uuid)
   from public, anon, service_role;
 grant execute on function public.crm_deal_can_manage(uuid, uuid) to authenticated;
+
+revoke all on function public.create_crm_pipeline_with_stages(
+  uuid, text, boolean, jsonb
+) from public, anon, service_role;
+grant execute on function public.create_crm_pipeline_with_stages(
+  uuid, text, boolean, jsonb
+) to authenticated;
 
 revoke all on function public.get_crm_deals(
   uuid, uuid, uuid, uuid, text, integer, timestamptz, uuid
