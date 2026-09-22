@@ -171,6 +171,13 @@ create index if not exists crm_deals_org_created_by_fk_idx
   on public.crm_deals(organization_id, created_by_user_id)
   where created_by_user_id is not null;
 
+create index if not exists crm_deals_org_lead_business_fk_idx
+  on public.crm_deals(organization_id, lead_id, business_id)
+  where lead_id is not null;
+
+create index if not exists crm_deals_org_stage_pipeline_fk_idx
+  on public.crm_deals(organization_id, stage_id, pipeline_id);
+
 create or replace function public.crm_pipeline_can_manage(p_organization_id uuid)
 returns boolean
 language sql
