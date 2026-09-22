@@ -21,7 +21,7 @@ No production schema changes in this phase.
 
 ## Phase 1 — SaaS Control Plane foundation
 
-Status: **IMPLEMENTED ON BRANCH, NOT YET PRODUCTION** in `feat/business-os-control-plane-foundation`. See `CONTROL_PLANE_FOUNDATION.md` for the evidence-backed Gap Map and contract.
+Status: **MERGED AND PROMOTED TO PRODUCTION** in PR #173 / migration 0068. Production verification passed for schema, RLS, grants, runtime safety, usage classification and audit foundations. Migration 0069 is a post-promotion FK-index advisor cleanup only. See `CONTROL_PLANE_FOUNDATION.md` for the evidence-backed Gap Map and contract.
 
 Extend the existing organization model toward:
 

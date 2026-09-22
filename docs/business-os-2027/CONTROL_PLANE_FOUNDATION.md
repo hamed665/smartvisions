@@ -1,7 +1,9 @@
 # Control Plane Foundation — Evidence, Gap Map, and Domain Contract
 
-Status: implementation branch `feat/business-os-control-plane-foundation`  
-Base: `main@144906c8f72c368851f8c4efb3e85dff8627f863`
+Status: **merged and promoted to Production**  
+Phase 1 merge: PR #173 -> `main@01d74f7c8d333c017f8f4790d7bc3e4a7d1f6ca4`  
+Production migration: `0068_business_os_control_plane_foundation` -> version `20260922100907`  
+Post-promotion cleanup: `0069_business_os_control_plane_fk_indexes.sql`
 
 ## 1. Runtime evidence used for this work package
 
@@ -415,9 +417,30 @@ Rollback policy:
 
 A destructive down migration is therefore intentionally not shipped as an automatic recovery mechanism.
 
-## 13. Explicit non-scope
+## 13. Production promotion evidence
 
-This work package does not add:
+Migration 0068 was promoted only after exact-head CI passed lint, typecheck, Vitest, PostgreSQL 17 migration smoke, Next build, Vinext build, and Cloudflare scheduled verification.
+
+After Production application:
+
+- all new Control Plane tables exist;
+- RLS is enabled on every new table;
+- authenticated/service-role grants match the contract;
+- all new privileged helper/trigger functions remain SECURITY INVOKER;
+- `usage_events.usage_classification` is NOT NULL with default `INTERNAL`;
+- `classify_usage_event` is executable by `service_role` only;
+- audit correlation/causation hierarchy columns exist;
+- required pricing/subscription uniqueness indexes exist;
+- all new catalog/hierarchy/subscription tables contain zero seeded commercial rows;
+- Shadow Mode stayed ON, kill switch stayed OFF, provider pause controls were unchanged;
+- no provider or customer message was sent for migration verification;
+- Supabase security-advisor findings were unchanged from the pre-0068 baseline.
+
+The post-promotion performance advisor reported 15 new unindexed foreign-key findings. Migration 0069 adds only those covering indexes; it changes no runtime behavior, policy, state machine, billing rule, or provider path.
+
+## 14. Explicit non-scope
+
+Phase 1 still does not add:
 
 - new omnichannel providers;
 - CRM v2;
@@ -426,7 +449,6 @@ This work package does not add:
 - booking;
 - agent redesign;
 - provider billing integration;
-- real customer messages;
-- Production migration application.
+- real customer messages.
 
-Production remains unchanged until this implementation PR is reviewed, green, migration-safe, and explicitly promoted.
+Those capabilities remain dependency-ordered work for later phases.
