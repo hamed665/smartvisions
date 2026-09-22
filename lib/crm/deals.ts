@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type CrmDealState = 'OPEN' | 'WON' | 'LOST';
 export type CrmStageCategory = CrmDealState;
-export type CrmPipelineStatus = 'ACTIVE' | 'ARCHIVED';
+export type CrmPipelineStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
 
 export type CrmPipelineRow = {
   id: string;
