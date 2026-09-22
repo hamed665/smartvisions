@@ -52,3 +52,5 @@ Phase 0 is complete only when:
 - Production verification confirmed a SECURITY INVOKER timeline view/RPC, authenticated-only access, preserved service-role restrictions, 85 timeline items across 9 Businesses, 65 customer-visible interactions, 20 internal items, zero duplicate customer provider IDs, zero provider-journal standalone rows and zero customer-visible unsent rows.
 - Cloudflare Production Deploy #332 promoted the exact green main bundle and reported Production Worker version `a78567d8-e4f9-484e-a62b-2bd8e47b8583`; route, routed smoke and safe API/webhook smoke all passed with no provider send invoked.
 - The next Phase 3 dependency is Activity/Task normalization over existing follow-up, handoff, reply and operator evidence.
+
+- Phase 3 Slice 3 CRM Task Foundation is active in PR #181 on `feat/business-os-crm-task-foundation`. It adds a tenant-safe, RLS-governed human work queue with assignee, due date, priority, state machine, optimistic versioning and audit while reusing Customer 360 as the historical Activity read model.
