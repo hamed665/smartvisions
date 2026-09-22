@@ -189,6 +189,22 @@ create unique index if not exists member_scope_assignments_team_unique
 create index if not exists member_scope_assignments_user_idx
   on public.member_scope_assignments(organization_id, user_id, scope_type);
 
+-- Tenant ownership is immutable after creation. An actor who is OWNER of more
+-- than one organization must not be able to move a row across tenant boundaries.
+create or replace function public.enforce_tenant_ownership_immutable()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $
+begin
+  if new.organization_id is distinct from old.organization_id then
+    raise exception 'organization_id is immutable for tenant-owned control-plane entities';
+  end if;
+  return new;
+end;
+$;
+
 -- ---------------------------------------------------------------------------
 -- Configuration inheritance and feature-flag overrides.
 -- Existing organization_settings.config remains the legacy organization base.
@@ -926,6 +942,62 @@ drop trigger if exists organization_entitlement_overrides_audit_mutation on publ
 create trigger organization_entitlement_overrides_audit_mutation
 after insert or update or delete on public.organization_entitlement_overrides
 for each row execute function public.audit_control_plane_mutation();
+
+-- Tenant-bound rows may be re-parented inside one organization when the
+-- relevant hierarchy FK permits it, but they can never be transferred between
+-- organizations by UPDATE.
+drop trigger if exists brands_tenant_ownership_guard on public.brands;
+create trigger brands_tenant_ownership_guard
+before update of organization_id on public.brands
+for each row execute function public.enforce_tenant_ownership_immutable();
+
+drop trigger if exists tenant_businesses_tenant_ownership_guard on public.tenant_businesses;
+create trigger tenant_businesses_tenant_ownership_guard
+before update of organization_id on public.tenant_businesses
+for each row execute function public.enforce_tenant_ownership_immutable();
+
+drop trigger if exists branches_tenant_ownership_guard on public.branches;
+create trigger branches_tenant_ownership_guard
+before update of organization_id on public.branches
+for each row execute function public.enforce_tenant_ownership_immutable();
+
+drop trigger if exists departments_tenant_ownership_guard on public.departments;
+create trigger departments_tenant_ownership_guard
+before update of organization_id on public.departments
+for each row execute function public.enforce_tenant_ownership_immutable();
+
+drop trigger if exists teams_tenant_ownership_guard on public.teams;
+create trigger teams_tenant_ownership_guard
+before update of organization_id on public.teams
+for each row execute function public.enforce_tenant_ownership_immutable();
+
+drop trigger if exists member_scope_assignments_tenant_ownership_guard on public.member_scope_assignments;
+create trigger member_scope_assignments_tenant_ownership_guard
+before update of organization_id on public.member_scope_assignments
+for each row execute function public.enforce_tenant_ownership_immutable();
+
+drop trigger if exists scope_configuration_overrides_tenant_ownership_guard on public.scope_configuration_overrides;
+create trigger scope_configuration_overrides_tenant_ownership_guard
+before update of organization_id on public.scope_configuration_overrides
+for each row execute function public.enforce_tenant_ownership_immutable();
+
+drop trigger if exists feature_flag_overrides_tenant_ownership_guard on public.feature_flag_overrides;
+create trigger feature_flag_overrides_tenant_ownership_guard
+before update of organization_id on public.feature_flag_overrides
+for each row execute function public.enforce_tenant_ownership_immutable();
+
+drop trigger if exists subscriptions_tenant_ownership_guard on public.subscriptions;
+create trigger subscriptions_tenant_ownership_guard
+before update of organization_id on public.subscriptions
+for each row execute function public.enforce_tenant_ownership_immutable();
+
+drop trigger if exists organization_entitlement_overrides_tenant_ownership_guard on public.organization_entitlement_overrides;
+create trigger organization_entitlement_overrides_tenant_ownership_guard
+before update of organization_id on public.organization_entitlement_overrides
+for each row execute function public.enforce_tenant_ownership_immutable();
+
+revoke all on function public.enforce_tenant_ownership_immutable()
+  from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- RLS and least privilege.
