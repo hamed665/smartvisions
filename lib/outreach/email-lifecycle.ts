@@ -2,6 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 import { isDoNotContactReply, persistCustomerDoNotContact, persistCustomerReplyConversationState } from '@/lib/conversations/sales-lifecycle';
 import type { ResendWebhookEvent } from './resend-webhook';
 import { mapEmailProviderStatus } from '@/lib/omnichannel';
+import {
+  recordCrmBusinessIdentityEvidence,
+  resolveBusinessByCrmIdentity,
+} from '@/lib/crm/contact-identity';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -59,8 +63,43 @@ async function fetchReceivedEmail(emailId: string) {
   }>;
 }
 
-async function matchLeadByEmail(organizationId: string, email: string) {
+async function matchLeadByEmail(organizationId: string, email: string, providerMessageId: string) {
   const supabase = serviceClient();
+  const registry = await resolveBusinessByCrmIdentity({
+    supabase,
+    organizationId,
+    identityType: 'EMAIL',
+    value: email,
+  });
+
+  if (registry.status === 'AMBIGUOUS') return null;
+
+  if (registry.status === 'MATCH') {
+    const { data: leads, error: leadError } = await supabase
+      .from('leads')
+      .select('id,status,agent_mode')
+      .eq('organization_id', organizationId)
+      .eq('business_id', registry.businessId)
+      .limit(2);
+    if (leadError) throw new Error(`Email identity Lead lookup failed: ${leadError.message}`);
+    if (!leads || leads.length !== 1) return null;
+
+    await recordCrmBusinessIdentityEvidence({
+      supabase,
+      organizationId,
+      businessId: registry.businessId,
+      identityType: 'EMAIL',
+      value: email,
+      displayValue: email,
+      sourceType: 'EMAIL_INBOUND',
+      sourceRef: 'email-inbound',
+      evidenceStrength: 'VERIFIED',
+      evidence: { provider_message_id: providerMessageId },
+    });
+
+    return leads[0] as { id: string; status: string; agent_mode: string };
+  }
+
   const { data, error } = await supabase
     .from('businesses')
     .select('id,leads(id,status,agent_mode)')
@@ -71,6 +110,21 @@ async function matchLeadByEmail(organizationId: string, email: string) {
   if (!data || data.length !== 1) return null;
   const leads = Array.isArray(data[0].leads) ? data[0].leads : [];
   if (leads.length !== 1) return null;
+
+  const businessId = String(data[0].id);
+  await recordCrmBusinessIdentityEvidence({
+    supabase,
+    organizationId,
+    businessId,
+    identityType: 'EMAIL',
+    value: email,
+    displayValue: email,
+    sourceType: 'EMAIL_INBOUND',
+    sourceRef: 'email-inbound',
+    evidenceStrength: 'VERIFIED',
+    evidence: { provider_message_id: providerMessageId },
+  });
+
   return leads[0] as { id: string; status: string; agent_mode: string };
 }
 
@@ -150,7 +204,7 @@ export async function persistResendWebhookEvent(event: ResendWebhookEvent) {
     const received = await fetchReceivedEmail(event.providerMessageId);
     const from = normalizeAddress(received.from ?? event.from);
     if (!from) return { duplicate, organizationId, linked: false };
-    const lead = await matchLeadByEmail(organizationId, from);
+    const lead = await matchLeadByEmail(organizationId, from, event.providerMessageId);
     if (!lead) return { duplicate, organizationId, linked: false };
 
     const conversationId = await ensureConversation(organizationId, lead.id);
