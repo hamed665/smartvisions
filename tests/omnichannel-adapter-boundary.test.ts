@@ -183,6 +183,8 @@ describe('Business OS omnichannel semantic boundary', () => {
       type: 'audio',
       mediaId: 'media-1',
     });
+    expect(withoutTimestamp).not.toBeNull();
+    if (!withoutTimestamp) throw new Error('WhatsApp inbound normalization unexpectedly returned null');
     expect(withoutTimestamp.occurredAt).toBeUndefined();
     expect(withoutTimestamp.contentType).toBe('AUDIO');
   });
@@ -198,10 +200,13 @@ describe('Business OS omnichannel semantic boundary', () => {
     ] as const;
 
     for (const [status, expected] of cases) {
-      expect(whatsappSemanticAdapter.normalizeStatus({
+      const normalizedStatus = whatsappSemanticAdapter.normalizeStatus({
         providerMessageId: 'wamid.1',
         status,
-      }).status).toBe(expected);
+      });
+      expect(normalizedStatus).not.toBeNull();
+      if (!normalizedStatus) throw new Error('WhatsApp status normalization unexpectedly returned null');
+      expect(normalizedStatus.status).toBe(expected);
     }
   });
 
