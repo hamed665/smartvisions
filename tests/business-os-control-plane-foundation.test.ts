@@ -358,6 +358,9 @@ describe('Business OS control plane migration safety', () => {
   it('makes published pricing immutable and entitlements draft-only', () => {
     expect(migration).toContain('create or replace function public.enforce_pricing_version_immutability()');
     expect(migration).toContain('pricing_versions_immutability_guard');
+    expect(migration).toContain("old.status = 'ACTIVE'");
+    expect(migration).toContain("new.status = 'RETIRED'");
+    expect(migration).toContain('new.effective_to is distinct from old.effective_to');
     expect(migration).toContain('create or replace function public.enforce_plan_entitlement_draft_only()');
     expect(migration).toContain('plan_entitlements_draft_guard');
   });
