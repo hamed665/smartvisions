@@ -397,12 +397,12 @@ begin
     raise exception 'Viewer cannot read CRM Deals';
   end if;
 
-  begin
-    update public.crm_deals set title='Viewer mutation'
-    where request_key='fixture-agent-deal';
+  update public.crm_deals set title='Viewer mutation'
+  where request_key='fixture-agent-deal';
+
+  if found then
     raise exception 'Viewer unexpectedly updated CRM Deal';
-  exception when insufficient_privilege then null;
-  end;
+  end if;
 end;
 $viewer_scope$;
 
