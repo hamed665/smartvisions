@@ -326,6 +326,8 @@ describe('Business OS control plane migration safety', () => {
   it('extends canonical audit logs and audits important control-plane mutations', () => {
     expect(migration).toContain('add column if not exists correlation_id text');
     expect(migration).toContain('add column if not exists causation_id text');
+    expect(migration).toContain("'dbtx:' || txid_current()::text");
+    expect(migration).toContain('p_causation_id text default null');
     expect(migration).toContain('audit_logs_business_scope_fk');
     expect(migration).toContain('audit_logs_team_scope_fk');
     expect(migration).toContain('create or replace function public.audit_control_plane_mutation()');
