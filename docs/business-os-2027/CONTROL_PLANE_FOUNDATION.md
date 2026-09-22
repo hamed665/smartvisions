@@ -401,7 +401,21 @@ Required before merge:
 - Vinext build;
 - Cloudflare scheduled-bundle verification.
 
-## 12. Explicit non-scope
+## 12. Migration and rollback strategy
+
+Migration 0068 is additive to the existing Growth OS source-of-truth model. It does not rename or repurpose existing CRM/Hunter tables and does not change outbound provider execution.
+
+Rollback policy:
+
+1. before Production application, rollback is simply not promoting the migration;
+2. after Production application but before Business OS features depend on the new schema, disable new Control Plane write paths and use a reviewed forward migration to correct grants/constraints;
+3. once hierarchy, subscription, entitlement, usage-classification, or audit evidence exists, do **not** blindly drop the new tables/columns as a rollback because that would destroy canonical evidence;
+4. existing Growth OS runtime remains the compatibility fallback because no existing primitive is replaced by 0068;
+5. any emergency rollback must preserve `usage_events.cost_usd`, `audit_logs`, current Shadow Mode, Cost Guard, send gates, provider journals, and existing Organization/CRM IDs.
+
+A destructive down migration is therefore intentionally not shipped as an automatic recovery mechanism.
+
+## 13. Explicit non-scope
 
 This work package does not add:
 
