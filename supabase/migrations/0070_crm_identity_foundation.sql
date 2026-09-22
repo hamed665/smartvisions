@@ -472,7 +472,7 @@ create or replace function public.audit_crm_identity_mutation()
 returns trigger
 language plpgsql
 security invoker
-set search_path = public, auth, pg_catalog
+set search_path = public, auth, extensions, pg_catalog
 as $crm_audit$
 declare
   v_before jsonb;
@@ -496,12 +496,12 @@ begin
     v_action := 'CRM_IDENTITY_' || tg_op;
     v_before_summary := case when v_before is null then null else jsonb_build_object(
       'identity_type', v_before ->> 'identity_type',
-      'identity_fingerprint', encode(digest(coalesce(v_before ->> 'normalized_value', ''), 'sha256'), 'hex'),
+      'identity_fingerprint', encode(extensions.digest(coalesce(v_before ->> 'normalized_value', ''), 'sha256'), 'hex'),
       'status', v_before ->> 'status'
     ) end;
     v_after_summary := case when v_after is null then null else jsonb_build_object(
       'identity_type', v_after ->> 'identity_type',
-      'identity_fingerprint', encode(digest(coalesce(v_after ->> 'normalized_value', ''), 'sha256'), 'hex'),
+      'identity_fingerprint', encode(extensions.digest(coalesce(v_after ->> 'normalized_value', ''), 'sha256'), 'hex'),
       'status', v_after ->> 'status'
     ) end;
   else
