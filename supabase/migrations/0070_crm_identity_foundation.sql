@@ -316,8 +316,8 @@ create or replace function public.record_crm_business_identity(
   p_evidence jsonb
 )
 returns table (
-  identity_id uuid,
-  business_id uuid,
+  resolved_identity_id uuid,
+  resolved_business_id uuid,
   linked_business_count integer,
   ambiguous boolean
 )
