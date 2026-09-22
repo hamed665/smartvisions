@@ -251,6 +251,26 @@ describe('Business OS control plane migration safety', () => {
     expect(migration).toContain('references public.departments(organization_id, id)');
   });
 
+  it('makes tenant ownership immutable after insert', () => {
+    expect(migration).toContain('create or replace function public.enforce_tenant_ownership_immutable()');
+    expect(migration).toContain("raise exception 'organization_id is immutable for tenant-owned control-plane entities'");
+    for (const table of [
+      'brands',
+      'tenant_businesses',
+      'branches',
+      'departments',
+      'teams',
+      'member_scope_assignments',
+      'scope_configuration_overrides',
+      'feature_flag_overrides',
+      'subscriptions',
+      'organization_entitlement_overrides',
+    ]) {
+      expect(migration).toContain(`create trigger ${table}_tenant_ownership_guard`);
+      expect(migration).toContain(`before update of organization_id on public.${table}`);
+    }
+  });
+
   it('ties scoped user access back to the existing organization membership', () => {
     expect(migration).toContain('references public.organization_members(organization_id, user_id)');
     expect(migration).toContain("scope_type text not null check (scope_type in ('BRAND','BUSINESS','BRANCH','DEPARTMENT','TEAM'))");
