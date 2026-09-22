@@ -32,13 +32,16 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
-      - name: Verify Control Plane migration on PostgreSQL 17
+      - name: Verify Business OS migrations on PostgreSQL 17
         env:
           PGPASSWORD: postgres
         run: |
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/tests/sql/control-plane-foundation-bootstrap.sql
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/supabase/migrations/0068_business_os_control_plane_foundation.sql
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/supabase/migrations/0069_business_os_control_plane_fk_indexes.sql
+          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/tests/sql/crm-identity-pre-migration.sql
+          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/supabase/migrations/0070_crm_identity_foundation.sql
+          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/tests/sql/crm-identity-smoke.sql
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/tests/sql/control-plane-foundation-smoke.sql
       - run: npm run build
       - run: npm run build:vinext
