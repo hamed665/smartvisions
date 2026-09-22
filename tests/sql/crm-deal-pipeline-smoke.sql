@@ -49,6 +49,45 @@ $deal_initial$;
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000c001',false);
 
+insert into public.crm_pipelines(
+  organization_id,name,status,is_default,created_by_user_id
+) values (
+  '00000000-0000-0000-0000-000000000c01',
+  'Incomplete Pipeline',
+  'ACTIVE',
+  true,
+  '00000000-0000-0000-0000-00000000c001'
+);
+
+do $draft_activation_guard$
+declare
+  v_pipeline uuid;
+begin
+  select id into v_pipeline
+  from public.crm_pipelines
+  where organization_id='00000000-0000-0000-0000-000000000c01'
+    and name='Incomplete Pipeline';
+
+  if not exists (
+    select 1 from public.crm_pipelines
+    where id=v_pipeline and status='DRAFT' and not is_default
+  ) then
+    raise exception 'Direct Pipeline insert did not fail closed to DRAFT';
+  end if;
+
+  begin
+    update public.crm_pipelines
+    set status='ACTIVE'
+    where id=v_pipeline;
+    raise exception 'Incomplete Pipeline unexpectedly activated';
+  exception when others then
+    if sqlerrm not like 'CRM pipeline activation requires active OPEN stage(s), exactly one WON stage and exactly one LOST stage%' then
+      raise;
+    end if;
+  end;
+end;
+$draft_activation_guard$;
+
 select public.create_crm_pipeline_with_stages(
   '00000000-0000-0000-0000-000000000c01',
   'Sales',
