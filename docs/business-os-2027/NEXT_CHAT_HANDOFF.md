@@ -11,8 +11,10 @@ Business OS status as of 2026-09-22:
 - Migration `0068_business_os_control_plane_foundation` is live in Production as migration version `20260922100907`.
 - Production verification passed for schema, RLS, grants, SECURITY INVOKER boundaries, usage classification, audit correlation, runtime safety controls and empty initial Control Plane catalog data.
 - Supabase security-advisor findings after 0068 are unchanged from the pre-0068 baseline.
-- The only new advisor debt from 0068 was 15 performance INFO findings for unindexed foreign keys.
-- Branch `fix/business-os-control-plane-fk-indexes` / migration `0069_business_os_control_plane_fk_indexes.sql` exists solely to cover those FK indexes.
+- The 15 post-0068 unindexed-FK findings were cleared by PR #174 / Production migration `0069_business_os_control_plane_fk_indexes` version `20260922101641`.
+- Current clean main after Phase 1 cleanup is `5bdcfb997d729446ae98485f81955c94db02d897`.
+- Phase 2 is active on `feat/business-os-omnichannel-adapter-boundary`.
+- Phase 2 reuses the current canonical Email/WhatsApp send gate, provider implementations, journals, lifecycle/reconciliation evidence and Human takeover semantics.
 - No customer/provider message was sent for Phase 1 verification.
 - Shadow Mode remains ON.
 
@@ -33,8 +35,9 @@ Read in this order:
 9. `docs/business-os-2027/STATE_EVENT_CATALOG.md`
 10. `docs/business-os-2027/MIGRATION_FROM_GROWTH_OS.md`
 11. `docs/business-os-2027/CONTROL_PLANE_FOUNDATION.md`
-12. PR #173 changed files, CI, reviews and review threads
-13. current `main` SHA, Production deploy evidence and Production Supabase migration state
+12. `docs/business-os-2027/OMNICHANNEL_ADAPTER_BOUNDARY.md`
+13. current Phase 2 PR/branch diff, CI, reviews and review threads
+14. current `main` SHA, Production deploy evidence and Production Supabase migration state
 
 Runtime and Production evidence outrank stale documentation or chat memory.
 
@@ -159,12 +162,13 @@ A green CI run is necessary, not a substitute for review of a migration.
 
 ## Exact next action
 
-1. Finish CI/review for the narrow 0069 FK-index cleanup.
-2. Merge 0069 only if exact-head CI is green.
-3. Promote 0069 and confirm the 15 new unindexed-FK advisor findings are gone; do not treat existing legacy advisor findings as regressions.
-4. Reconfirm runtime safety controls and heartbeat after 0069.
-5. Start Phase 2 from the new clean `main`: **Omnichannel Adapter Boundary**.
-6. Reuse current WhatsApp/Email journals, reconciliation evidence and canonical send gate. Do not create a second outbound path.
-7. Keep provider side effects behind the existing safety path and introduce no real customer sends during adapter-contract verification.
+1. Complete Phase 2 semantic adapter tests and exact-head CI.
+2. Review the Phase 2 diff specifically for accidental provider-side effects or a second send path.
+3. Merge only if the adapter remains side-effect free and existing Email/WhatsApp lifecycle tests remain green.
+4. No Production database migration is required for this initial Phase 2 slice.
+5. After merge, reconcile Production/runtime evidence and then extend Phase 2 only where provider evidence exists.
+6. Native-app coexistence remains evidence-driven: Human takeover already wins, but native-provider human activity must stay `UNPROVEN` until a reliable provider signal exists.
+7. Do not register Instagram/Facebook/TikTok/Telegram/SMS/RCS/Voice as active adapters before their real provider paths, journals and reconciliation contracts are proven.
+8. Keep all provider side effects behind the existing canonical send gate, approval/claim, Cost Guard, verification and reconciliation path.
 
 The goal remains production-grade Business OS behavior, not decorative UI or file count.
