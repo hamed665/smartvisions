@@ -41,10 +41,12 @@ Business OS status as of 2026-09-22:
 - Supabase Performance Advisor has zero post-Slice-3 unindexed-FK findings after 0073; Security Advisor is unchanged baseline.
 - Cloudflare runtime heartbeat after Slice 3 changed Worker version to `84d19f06-ead7-4abe-b332-ba14309629d8`, with failed=0 and acquisition/dispatch SKIPPED.
 - Zero Email/WhatsApp outbound rows were created by Slice 3 verification.
-- Phase 3 Slice 4 Deal/Pipeline Foundation is active on `feat/business-os-crm-deal-pipeline` / migration `0074_crm_deal_pipeline_foundation.sql`.
+- Phase 3 Slice 4 Deal/Pipeline Foundation merged in PR #184 at `main@d416fcee020bc393a45096ee1330f8378bbd8e38`; Production migration `0074_crm_deal_pipeline_foundation` is live as version `20260922225908`.
 - Growth/Intent Opportunities remain acquisition evidence and are not canonical Deals.
 - Deal aggregate state is OPEN/WON/LOST; Pipeline stages are configurable labels categorized OPEN/WON/LOST.
 - Lead->Deal conversion is explicit/idempotent and does not mutate Lead state or auto-convert acquisition Opportunities.
+- Cloudflare runtime after Slice 4 is proven by Worker version `47d22421-109e-4c1e-81e6-20bb273078e1`; latest checked heartbeat had failed=0 with acquisition/dispatch SKIPPED.
+- Zero Email/WhatsApp outbound rows were created after the PR #184 merge in the verification window.
 
 Runtime and Production evidence outrank stale documentation or chat memory.
 
@@ -191,14 +193,12 @@ A green CI run is necessary, not a substitute for review of a migration.
 
 ## Exact next action
 
-1. Use `feat/business-os-crm-deal-pipeline` as active Phase 3 Slice 4 work.
-2. Run exact-head CI after final docs/API/test commits.
-3. Review migration 0074 for Pipeline terminal-stage constraints, tenant composite FKs, RLS role boundaries, terminal commercial immutability, Lead conversion idempotency and stage-history SECURITY INVOKER behavior.
-4. Do not merge or promote from a stale/failing head.
-5. After merge, apply exact main migration 0074 through controlled Supabase migration.
-6. Verify zero seeded Pipeline/Deal rows, RLS/grants/functions/history view, advisor delta, safety controls, heartbeat and zero architecture-test outbound sends.
-7. If Performance Advisor reports only missing FK indexes introduced by 0074, fix only those in a separate additive migration.
-8. Verify Cloudflare Production deployment of the exact merge SHA.
-9. Reconcile docs to proven Production state before continuing the next Phase 3 gap.
+1. Treat Phase 3 Slice 4 Deal/Pipeline Foundation as Production-verified: PR #184, migration `0074_crm_deal_pipeline_foundation`, Cloudflare Worker `47d22421-109e-4c1e-81e6-20bb273078e1`.
+2. Preserve the verified invariants: 0 seeded Pipelines/Stages/Deals, explicit/idempotent Lead conversion only, terminal WON/LOST commercial truth, Growth/Intent Opportunities remain acquisition evidence.
+3. Start the next Phase 3 gap with a fresh Production/repository audit. Current evidence shows no governed Custom Field/Object registry, no Segment domain, no canonical Person Contact, zero identity conflicts and no need to fabricate Contacts.
+4. Prefer Custom Field/Object governance before Segments if the fresh audit confirms that segmentation would otherwise depend on scattered JSON/domain-specific fields.
+5. Do not create Person Contacts from provider display names.
+6. Do not auto-convert Growth/Intent Opportunities into Deals.
+7. Keep Shadow Mode and existing provider safety gates unchanged.
 
 Runtime and Production evidence outrank stale docs or chat memory.

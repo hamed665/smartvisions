@@ -59,7 +59,7 @@ Use the existing WhatsApp/Email paths as first adapters.
 
 ## Phase 3 — Customer 360 + CRM normalization
 
-Status: **ACTIVE IMPLEMENTATION**. Slice 1 CRM Identity Foundation is Production-verified in PR #178 / migration 0070. Slice 2 Customer 360 Timeline is Production-verified in PR #179 / migration 0071. Slice 3 CRM Task Foundation is Production-verified in PR #181 / migration 0072 with FK-index cleanup 0073. Slice 4 Deal/Pipeline Foundation is active on `feat/business-os-crm-deal-pipeline` / migration 0074. Existing Growth/Intent Opportunities remain acquisition evidence and are not repurposed as CRM Deals.
+Status: **ACTIVE IMPLEMENTATION**. Slice 1 CRM Identity Foundation is Production-verified in PR #178 / migration 0070. Slice 2 Customer 360 Timeline is Production-verified in PR #179 / migration 0071. Slice 3 CRM Task Foundation is Production-verified in PR #181 / migration 0072 with FK-index cleanup 0073. Slice 4 Deal/Pipeline Foundation is Production-verified in PR #184 / migration 0074. Existing Growth/Intent Opportunities remain acquisition evidence and are not repurposed as CRM Deals. Cloudflare runtime promotion is proven by Worker version `47d22421-109e-4c1e-81e6-20bb273078e1` with `failed=0`, acquisition/dispatch SKIPPED and zero Email/WhatsApp outbound rows after merge.
 
 Extend the existing Lead/Business/Conversation CRM instead of creating a second CRM.
 

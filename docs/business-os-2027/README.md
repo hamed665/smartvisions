@@ -55,3 +55,5 @@ Phase 0 is complete only when:
 
 - Phase 3 Slice 3 CRM Task Foundation is Production-verified in PR #181 / migration 0072, with advisor cleanup PR #182 / migration 0073. `crm_tasks` owns actionable human work only; Customer 360 remains the historical Activity read model. Post-promotion verification kept Task rows at zero, cleared all new unindexed-FK findings, preserved Shadow Mode and produced zero architecture-test outbound sends. Cloudflare heartbeat evidence shows Worker version `84d19f06-ead7-4abe-b332-ba14309629d8`.
 - The next Phase 3 dependency is Deal/Pipeline normalization. Existing `growth_opportunities` / `intent_opportunities` remain acquisition/intent evidence and must not be repurposed as canonical CRM Deals.
+
+- Phase 3 Slice 4 Deal/Pipeline Foundation merged in PR #184 at `main@d416fcee020bc393a45096ee1330f8378bbd8e38`; Production migration 0074 is database-verified with zero seeded commercial rows and zero new unindexed-FK findings. Cloudflare runtime promotion is intentionally still evidence-gated until a post-merge Worker version is observed.
