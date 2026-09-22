@@ -196,14 +196,14 @@ returns trigger
 language plpgsql
 security invoker
 set search_path = public
-as $
+as $tenant$
 begin
   if new.organization_id is distinct from old.organization_id then
     raise exception 'organization_id is immutable for tenant-owned control-plane entities';
   end if;
   return new;
 end;
-$;
+$tenant$;
 
 -- ---------------------------------------------------------------------------
 -- Configuration inheritance and feature-flag overrides.
