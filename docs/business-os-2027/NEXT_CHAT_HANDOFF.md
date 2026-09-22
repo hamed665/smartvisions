@@ -19,13 +19,18 @@ Business OS status as of 2026-09-22:
 - Post-PR #176 Production verification: heartbeat `failed=0`, Shadow Mode ON, acquisition/dispatch SKIPPED, and zero Email/WhatsApp outbound rows after the merge.
 - Phase 2 reuses the current canonical Email/WhatsApp send gate, provider implementations, journals, lifecycle/reconciliation evidence and Human takeover semantics.
 - Phase 2 closeout merged in PR #177 at `main@e677407bce74818e5d5c8fea4643fb9706acbefb`.
-- Phase 3 first slice is PR #178 on `feat/business-os-crm-identity-foundation`, migration `0070_crm_identity_foundation.sql`.
-- Phase 3 reuses `businesses` as canonical Company/Account and `leads` as the existing Lead/Opportunity foundation; it does not create a parallel CRM.
-- The first slice adds `crm_identities` and `crm_identity_links`, deterministic tenant-scoped resolution, explicit conflict state, PII-safe audit fingerprints, and Email/WhatsApp registry-first lookup with the old exact lookup retained as deployment compatibility fallback.
-- A Person/Contact row is deliberately not fabricated from WhatsApp profile/display names.
-- Implementation head `7a394f3fe42aa7c25a758cfffd90d094f292294d` passed full CI including PostgreSQL 17 migration/backfill/RLS/conflict/audit smoke before final docs reconciliation.
-- Migration 0070 is not Production yet while PR #178 remains under review.
-- No customer/provider message was sent for architecture verification.
+- Phase 3 Slice 1 CRM Identity Foundation merged in PR #178 at `main@27e980e417ec52c64055c029b8ffa6c6c77ab961`.
+- Production migration `0070_crm_identity_foundation` is live as version `20260922164110`.
+- Production verification after 0070: 47 identities, 47 identity links, zero conflicts, zero cross-tenant mismatches, Shadow Mode ON, heartbeat `failed=0`, and zero Email/WhatsApp outbound rows after the merge.
+- Cloudflare runtime after PR #178 is proven by Worker version `562c495f-ceeb-4021-b2d9-122ddc04021b`.
+- Phase 3 still reuses `businesses` as canonical Company/Account and `leads` as the existing Lead/Opportunity foundation; it does not create a parallel CRM.
+- A Person/Contact row is deliberately not fabricated from provider display names.
+- Phase 3 Slice 2 Customer 360 Timeline is PR #179 on `feat/business-os-customer-360-timeline`, migration `0071_customer_360_timeline.sql`.
+- Slice 2 adds a SECURITY INVOKER read-only timeline view/RPC and signed-in/RLS API over existing canonical evidence. No event store, materialized copy, provider send path or service-role browser path is added.
+- Provider journals enrich latest delivery state and do not become duplicate timeline items.
+- Implementation head `3f25b41d052519ddffb8a5ce7f8f8503d38fa97f` passed CI #854 including PostgreSQL 17 RLS/dedupe/enrichment/cursor smoke before final docs reconciliation.
+- Migration 0071 is not Production yet while PR #179 remains under review.
+- No customer/provider message was sent for timeline architecture verification.
 - Shadow Mode remains ON.
 
 Runtime and Production evidence outrank stale documentation or chat memory.
@@ -47,8 +52,8 @@ Read in this order:
 11. `docs/business-os-2027/CONTROL_PLANE_FOUNDATION.md`
 12. `docs/business-os-2027/OMNICHANNEL_ADAPTER_BOUNDARY.md`
 13. `docs/business-os-2027/CUSTOMER_360_CRM_NORMALIZATION.md`
-14. PR #178 diff, exact-head CI, reviews and review threads
-15. current `main` SHA, Production deploy evidence and Production Supabase migration state
+14. PR #179 diff, exact-head CI, reviews and review threads
+15. current `main` SHA, Production Cloudflare Worker evidence and Production Supabase migration state
 
 Runtime and Production evidence outrank stale documentation or chat memory.
 
@@ -173,13 +178,14 @@ A green CI run is necessary, not a substitute for review of a migration.
 
 ## Exact next action
 
-1. Run exact-head CI after the final Phase 3 documentation reconciliation commits.
-2. Review PR #178 specifically for migration 0070 RLS/grants, tenant composite FKs, identity ambiguity behavior, PII-safe audit, and code-before-migration fallback.
-3. Mark PR #178 Ready for Review only if its final exact head is green.
-4. Do not promote migration 0070 to Production from a failing or stale head.
-5. After merge, apply the exact main migration through the controlled Supabase migration path.
-6. Immediately verify Production table/RLS/grants/function ACLs, backfill counts, conflict count, advisor delta, heartbeat, Shadow Mode and zero architecture-test outbound sends.
-7. Reconcile the Phase 3 docs to proven Production state.
-8. Continue Phase 3 with the next evidence-backed dependency. Do not fabricate Person Contacts; choose Customer 360 timeline or a Person model only after source/evidence semantics are proven.
+1. Run exact-head CI after the final Slice 2 documentation reconciliation commits.
+2. Review PR #179 specifically for SECURITY INVOKER semantics, underlying RLS/grants, message dedupe, INTERNAL vs CUSTOMER visibility, provider-status enrichment and deterministic cursor behavior.
+3. Mark PR #179 Ready for Review only if its final exact head is green.
+4. Do not promote migration 0071 from a stale or failing head.
+5. After merge, apply the exact main 0071 migration through the controlled Supabase migration path.
+6. Verify Production view options, RPC ACLs, authenticated tenant isolation, real timeline counts, dedupe behavior, advisor delta, heartbeat, Shadow Mode and zero architecture-test outbound sends.
+7. Verify Cloudflare Production Worker version changes after the main push deploy before claiming the API runtime is live.
+8. Reconcile docs to proven Production state.
+9. Continue Phase 3 with the next evidence-backed dependency, most likely activity/task normalization. Do not fabricate Person Contacts without a real person-evidence contract.
 
 The goal remains production-grade Business OS behavior, not decorative UI or file count.
