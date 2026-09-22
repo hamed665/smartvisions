@@ -360,6 +360,8 @@ to authenticated
 with check (
   creator_type = 'USER'
   and created_by_user_id = (select auth.uid())
+  and source_type = 'MANUAL'
+  and source_id is null
   and public.crm_task_can_manage(organization_id, assignee_user_id)
 );
 
