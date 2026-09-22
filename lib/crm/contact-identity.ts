@@ -13,6 +13,24 @@ export type CrmIdentityResolution =
   | { status: 'MATCH'; normalizedValue: string; businessId: string }
   | { status: 'AMBIGUOUS'; normalizedValue: string; businessIds: string[] };
 
+export function isCrmIdentitySchemaUnavailable(error: {
+  code?: string | null;
+  message?: string | null;
+} | null | undefined) {
+  const code = String(error?.code ?? '');
+  const message = String(error?.message ?? '').toLowerCase();
+  return code === 'PGRST202'
+    || code === 'PGRST205'
+    || code === '42P01'
+    || code === '42883'
+    || message.includes('crm_identities')
+      && (
+        message.includes('schema cache')
+        || message.includes('does not exist')
+        || message.includes('could not find')
+      );
+}
+
 function normalizeInstagram(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -73,7 +91,12 @@ export async function resolveBusinessByCrmIdentity(input: {
     .eq('normalized_value', normalizedValue)
     .maybeSingle();
 
-  if (identityError) throw new Error(`CRM identity lookup failed: ${identityError.message}`);
+  if (identityError) {
+    if (isCrmIdentitySchemaUnavailable(identityError)) {
+      return { status: 'NO_MATCH', normalizedValue };
+    }
+    throw new Error(`CRM identity lookup failed: ${identityError.message}`);
+  }
   if (!identity || identity.status === 'RETIRED') {
     return { status: 'NO_MATCH', normalizedValue };
   }
@@ -85,7 +108,12 @@ export async function resolveBusinessByCrmIdentity(input: {
     .eq('identity_id', identity.id)
     .neq('status', 'RETIRED');
 
-  if (linksError) throw new Error(`CRM identity link lookup failed: ${linksError.message}`);
+  if (linksError) {
+    if (isCrmIdentitySchemaUnavailable(linksError)) {
+      return { status: 'NO_MATCH', normalizedValue };
+    }
+    throw new Error(`CRM identity link lookup failed: ${linksError.message}`);
+  }
 
   const businessIds = [...new Set((links ?? []).map(row => String(row.business_id)))];
   if (businessIds.length === 0) return { status: 'NO_MATCH', normalizedValue };
@@ -171,7 +199,10 @@ export async function recordCrmBusinessIdentityEvidence(input: {
     p_evidence: input.evidence ?? {},
   });
 
-  if (error) throw new Error(`CRM identity evidence write failed: ${error.message}`);
+  if (error) {
+    if (isCrmIdentitySchemaUnavailable(error)) return null;
+    throw new Error(`CRM identity evidence write failed: ${error.message}`);
+  }
 
   const row = Array.isArray(data) ? data[0] : data;
   return row ?? null;
