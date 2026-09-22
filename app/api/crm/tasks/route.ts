@@ -23,7 +23,7 @@ function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID_RE.test(value);
 }
 
-function optionalUuid(value: unknown) {
+function optionalUuid(value: unknown): value is string | null | undefined {
   return value === null || value === undefined || isUuid(value);
 }
 
@@ -232,8 +232,9 @@ export async function PATCH(request: Request) {
 
   if (!isUuid(organizationId)
       || !isUuid(taskId)
+      || typeof expectedVersion !== 'number'
       || !Number.isInteger(expectedVersion)
-      || Number(expectedVersion) < 1
+      || expectedVersion < 1
       || !isMetadata(patch)
       || Object.keys(patch).length === 0) {
     return NextResponse.json({ error: 'Invalid CRM task update payload' }, { status: 400 });
@@ -276,7 +277,7 @@ export async function PATCH(request: Request) {
       supabase,
       organizationId,
       taskId,
-      expectedVersion: Number(expectedVersion),
+      expectedVersion,
       patch: {
         taskType: patch.taskType as CrmTaskType | undefined,
         title: patch.title as string | undefined,
