@@ -17,8 +17,10 @@ This is the current operational handoff for Growth OS. Current `main`, routed Cl
 - Production Worker version at latest verified heartbeat: `562c495f-ceeb-4021-b2d9-122ddc04021b`
 - Latest Business OS Production migration: `0070_crm_identity_foundation`, version `20260922164110`
 - Latest Business OS runtime merge: PR #179, merge commit `efcf979ff15d32062b48928672a25128c521987a`
-- Latest Business OS Production migration: `0071_customer_360_timeline`, version `20260922202957`
-- Latest Cloudflare Production Worker version from deploy #332: `a78567d8-e4f9-484e-a62b-2bd8e47b8583`
+- Latest Business OS Production migration before Tasks: `0071_customer_360_timeline`, version `20260922202957`
+- CRM Task Foundation merged in PR #181 at `main@4c2a4d3bc78a57088f92ba8eae82542d501a37dc`; Production migration `0072_crm_task_foundation` version `20260922214407`
+- CRM Task FK cleanup merged in PR #182 at `main@1eab75f73a5ae99a973e5616bb30c09325b9a680`; Production migration `0073_crm_task_fk_indexes` version `20260922214843`
+- Latest verified Cloudflare Production Worker heartbeat after Slice 3: `84d19f06-ead7-4abe-b332-ba14309629d8`
 - Production cron: exactly `*/2 * * * *`
 - Release candidate: no scheduled trigger
 - Old Vercel deployment: frozen rollback/history only; not a Production health source
@@ -74,6 +76,23 @@ Production-verified read model over canonical CRM evidence:
 - migration `0071_customer_360_timeline` is live as version `20260922202957`;
 - Cloudflare Production Deploy #332 promoted exact merge SHA and reported Worker version `a78567d8-e4f9-484e-a62b-2bd8e47b8583`;
 - routed Production and safe API/webhook smokes passed without invoking provider sends.
+
+
+### PR #181 / #182 — CRM Task Foundation and FK cleanup
+
+Production-verified human work queue without duplicating Activity:
+
+- `crm_tasks` owns actionable human work only; Customer 360 remains immutable historical Activity;
+- no historical follow-up/handoff/reply/operator/approval facts were auto-backfilled into Tasks;
+- tenant-consistent Business -> Lead -> Conversation scope and Organization-member assignee are enforced;
+- OWNER/ADMIN/SALES_MANAGER manage; SALES_AGENT self-assigned only; VIEWER read-only;
+- state machine: OPEN / IN_PROGRESS / BLOCKED / DONE / CANCELED, with CANCELED terminal and explicit DONE -> OPEN reopen;
+- request-key idempotency, optimistic versioning and PII-minimized audit are enforced;
+- migration 0072 is live as version `20260922214407`;
+- migration 0073 is live as version `20260922214843` and cleared all five new unindexed-FK advisor findings;
+- Production migration created zero Task rows; rollback-only Production smoke verified OPEN -> DONE -> OPEN and audit without persisting fixtures;
+- zero provider/customer messages were sent by Slice 3 verification;
+- latest verified Cloudflare Worker heartbeat after the Slice 3 runtime change is `84d19f06-ead7-4abe-b332-ba14309629d8` with failed=0.
 
 
 ### PR #142 — Runtime reliability and operational truth
@@ -277,7 +296,7 @@ Do not invent another feature roadmap. Continue from the existing canonical path
 
 `real business evidence -> deterministic qualification/service fit -> smallest useful recommendation or NO_RECOMMENDATION -> selective Agent reasoning -> Shadow/approval/human gates -> canonical provider-boundary safety -> durable result evidence -> measured learning`
 
-For Business OS work, continue from the current dependency order without duplicating canonical stores. The active slice is PR #179 Customer 360 Timeline; it is intentionally a read model over existing evidence.
+For Business OS work, continue from the current dependency order without duplicating canonical stores. CRM Identity, Customer 360 Timeline and CRM Task Foundation are Production-verified. The next dependency is Deal/Pipeline normalization after an evidence-backed gap audit; Growth/Intent Opportunities are acquisition evidence and must not be repurposed as CRM Deals.
 
 For controlled Oman launch behavior, the next runtime behavior change must still correspond to one of these:
 
