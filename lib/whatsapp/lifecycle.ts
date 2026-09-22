@@ -2,6 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 import { isDoNotContactReply, persistCustomerDoNotContact, persistCustomerReplyConversationState } from '@/lib/conversations/sales-lifecycle';
 import type { NormalizedWhatsAppInbound, NormalizedWhatsAppStatus } from './webhook';
 import { mapWhatsAppProviderStatus } from '@/lib/omnichannel';
+import {
+  recordCrmBusinessIdentityEvidence,
+  resolveBusinessByCrmIdentityCandidates,
+} from '@/lib/crm/contact-identity';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -90,8 +94,28 @@ async function resolveExactBusinessByPhone(organizationId: string, from: string)
   const supabase = serviceClient();
   const target = normalizePhoneDigits(from);
   if (target.length < 8) return { business: null, ambiguous: false };
-  const suffix = target.slice(-8);
 
+  const registry = await resolveBusinessByCrmIdentityCandidates({
+    supabase,
+    organizationId,
+    candidates: [
+      { identityType: 'WHATSAPP', value: from },
+      { identityType: 'PHONE', value: from },
+    ],
+  });
+  if (registry.status === 'AMBIGUOUS') return { business: null, ambiguous: true };
+  if (registry.status === 'MATCH') {
+    const { data: business, error } = await supabase
+      .from('businesses')
+      .select('id,phone,international_phone,whatsapp')
+      .eq('organization_id', organizationId)
+      .eq('id', registry.businessId)
+      .maybeSingle();
+    if (error) throw new Error(`WhatsApp identity Business lookup failed: ${error.message}`);
+    if (business) return { business, ambiguous: false };
+  }
+
+  const suffix = target.slice(-8);
   const { data: businesses, error: businessError } = await supabase
     .from('businesses')
     .select('id,phone,international_phone,whatsapp')
@@ -148,7 +172,22 @@ async function resolveOrCreateVerifiedInboundLead(organizationId: string, event:
   const supabase = serviceClient();
   const resolved = await resolveExactBusinessByPhone(organizationId, event.from);
   if (resolved.ambiguous) return null;
-  if (resolved.business) return getOrCreateLeadForBusiness(organizationId, String(resolved.business.id));
+  if (resolved.business) {
+    const businessId = String(resolved.business.id);
+    await recordCrmBusinessIdentityEvidence({
+      supabase,
+      organizationId,
+      businessId,
+      identityType: 'WHATSAPP',
+      value: event.from,
+      displayValue: event.from,
+      sourceType: 'WHATSAPP_INBOUND',
+      sourceRef: 'whatsapp-inbound',
+      evidenceStrength: 'VERIFIED',
+      evidence: { provider_message_id: event.providerMessageId },
+    });
+    return getOrCreateLeadForBusiness(organizationId, businessId);
+  }
 
   const seed = buildVerifiedInboundBusinessSeed(event);
   if (!seed) return null;
@@ -185,6 +224,19 @@ async function resolveOrCreateVerifiedInboundLead(organizationId: string, event:
       throw new Error(`WhatsApp inbound business create failed: ${createError.message}`);
     }
   }
+
+  await recordCrmBusinessIdentityEvidence({
+    supabase,
+    organizationId,
+    businessId,
+    identityType: 'WHATSAPP',
+    value: event.from,
+    displayValue: event.from,
+    sourceType: 'WHATSAPP_INBOUND',
+    sourceRef: 'whatsapp-inbound',
+    evidenceStrength: 'VERIFIED',
+    evidence: { provider_message_id: event.providerMessageId },
+  });
 
   return getOrCreateLeadForBusiness(organizationId, businessId);
 }
