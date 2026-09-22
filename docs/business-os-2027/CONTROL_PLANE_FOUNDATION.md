@@ -211,6 +211,8 @@ Important Business OS mutations MUST be able to carry:
 - `causation_id`
 - optional Brand / Business / Branch / Department / Team scope
 
+Trigger-audited Control Plane mutations receive a deterministic transaction correlation fallback of `dbtx:<transaction_id>`, so rows emitted by the same database transaction can be grouped even when an application correlation ID was not supplied. Trusted usage-classification commands accept explicit correlation/causation IDs and use the same DB-transaction fallback when correlation is omitted.
+
 Existing audit writers are backward compatible because all new audit fields are nullable.
 
 ## 10. Feature flag scopes
