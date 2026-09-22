@@ -37,7 +37,9 @@ function parseIso(value: unknown) {
 }
 function mutationStatus(error: unknown) {
   if (error instanceof CrmDealMutationError) {
-    return error.code === 'NOT_FOUND' ? 404 : 409;
+    if (error.code === 'NOT_FOUND') return 404;
+    if (error.code === 'FORBIDDEN') return 403;
+    return 409;
   }
   const message = error instanceof Error ? error.message : String(error);
   if (/row-level security|permission denied|not permitted/i.test(message)) return 403;
