@@ -16,7 +16,9 @@ This is the current operational handoff for Growth OS. Current `main`, routed Cl
 - Latest runtime-changing Production merge: PR #178, merge commit `27e980e417ec52c64055c029b8ffa6c6c77ab961`
 - Production Worker version at latest verified heartbeat: `562c495f-ceeb-4021-b2d9-122ddc04021b`
 - Latest Business OS Production migration: `0070_crm_identity_foundation`, version `20260922164110`
-- Active non-Production work: PR #179 / `feat/business-os-customer-360-timeline`; migration 0071 is not Production yet
+- Latest Business OS runtime merge: PR #179, merge commit `efcf979ff15d32062b48928672a25128c521987a`
+- Latest Business OS Production migration: `0071_customer_360_timeline`, version `20260922202957`
+- Latest Cloudflare Production Worker version from deploy #332: `a78567d8-e4f9-484e-a62b-2bd8e47b8583`
 - Production cron: exactly `*/2 * * * *`
 - Release candidate: no scheduled trigger
 - Old Vercel deployment: frozen rollback/history only; not a Production health source
@@ -58,18 +60,20 @@ Extended the existing CRM without creating a second CRM:
 - Production backfill produced 47 identities and 47 links with zero conflicts;
 - Cloudflare runtime evidence after the merge is Worker version `562c495f-ceeb-4021-b2d9-122ddc04021b`.
 
-### PR #179 — Customer 360 Timeline (active, not Production)
+### PR #179 — Customer 360 Timeline
 
-The current next slice is a read model, not another event store:
+Production-verified read model over canonical CRM evidence:
 
-- SECURITY INVOKER view over existing CRM/message/provider evidence;
-- provider journals enrich delivery status and do not become duplicate timeline rows;
-- actual customer interactions are separated from internal blocked/approval/follow-up/handoff evidence;
-- authenticated session + underlying RLS is the access boundary;
-- no service-role privilege expansion;
-- no provider send path;
-- implementation CI #854 passed, including PostgreSQL 17 dedupe/RLS/cursor smoke;
-- migration 0071 must not be treated as Production until PR #179 merges and the exact main migration is applied and verified.
+- SECURITY INVOKER view + SECURITY INVOKER cursor RPC;
+- authenticated-only timeline access; service-role restrictions remain unchanged;
+- provider journals enrich delivery status but do not become duplicate timeline rows;
+- 85 real timeline rows across 9 Businesses: 65 customer-visible, 20 internal;
+- zero duplicate customer provider-ID groups;
+- zero provider-journal standalone rows;
+- zero customer-visible unsent rows;
+- migration `0071_customer_360_timeline` is live as version `20260922202957`;
+- Cloudflare Production Deploy #332 promoted exact merge SHA and reported Worker version `a78567d8-e4f9-484e-a62b-2bd8e47b8583`;
+- routed Production and safe API/webhook smokes passed without invoking provider sends.
 
 
 ### PR #142 — Runtime reliability and operational truth

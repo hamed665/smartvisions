@@ -1,11 +1,11 @@
 # Customer 360 + CRM Normalization — Evidence, Gap Map, and Identity Foundation
 
-Status: **Phase 3 active — Slice 1 Production-verified, Slice 2 implemented in PR #179**  
+Status: **Phase 3 active — Slice 1 and Slice 2 Production-verified**  
 Slice 1 merge: PR #178 -> `main@27e980e417ec52c64055c029b8ffa6c6c77ab961`  
 Slice 1 Production migration: `0070_crm_identity_foundation` -> version `20260922164110`  
-Slice 2 branch: `feat/business-os-customer-360-timeline`  
-Slice 2 migration: `0071_customer_360_timeline.sql`  
-Slice 2 verified implementation head before final docs reconciliation: `3f25b41d052519ddffb8a5ce7f8f8503d38fa97f`
+Slice 2 merge: PR #179 -> `main@efcf979ff15d32062b48928672a25128c521987a`  
+Slice 2 Production migration: `0071_customer_360_timeline` -> version `20260922202957`  
+Slice 2 Production Worker: `a78567d8-e4f9-484e-a62b-2bd8e47b8583`
 
 ## 1. Production evidence
 
@@ -377,4 +377,22 @@ Implementation head `3f25b41d052519ddffb8a5ce7f8f8503d38fa97f` passed CI #854:
 - Vinext build;
 - Cloudflare scheduled-bundle verification.
 
-Migration 0071 is not Production merely because this implementation verification passed.
+Migration 0071 was subsequently merged and promoted to Production. Production verification confirmed:
+
+- view option `security_invoker=true`;
+- query RPC `security_definer=false`;
+- authenticated SELECT/EXECUTE only; anon and service_role have no timeline view/RPC access;
+- existing service-role restrictions on `handoff_events`, `reply_events` and `operator_briefs` remain unchanged;
+- 85 real timeline items across 9 Businesses;
+- 65 CUSTOMER and 20 INTERNAL items;
+- 42 inbound and 23 actually-sent outbound customer interactions;
+- 4 blocked, 9 approval-required and 1 failed message remain internal;
+- provider-journal standalone rows = 0;
+- duplicate customer provider-ID groups = 0;
+- customer-visible unsent rows = 0;
+- authenticated owner RLS sees the expected 85 rows and a random inaccessible Business returns zero rows;
+- Supabase Security Advisor findings are unchanged from baseline;
+- no new Performance Advisor class was introduced;
+- zero Email/WhatsApp outbound rows were created by the merge/migration/deploy verification.
+
+Cloudflare Production Deploy #332 promoted exact `main@efcf979ff15d32062b48928672a25128c521987a`. Wrangler reported Production Worker version `a78567d8-e4f9-484e-a62b-2bd8e47b8583`; Worker Route, routed smoke, candidate smoke, safe production API/webhook rejection smoke and the `*/2 * * * *` scheduled-trigger invariant all passed. The deployment smoke invoked no outbound provider send.

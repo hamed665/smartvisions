@@ -25,11 +25,12 @@ Business OS status as of 2026-09-22:
 - Cloudflare runtime after PR #178 is proven by Worker version `562c495f-ceeb-4021-b2d9-122ddc04021b`.
 - Phase 3 still reuses `businesses` as canonical Company/Account and `leads` as the existing Lead/Opportunity foundation; it does not create a parallel CRM.
 - A Person/Contact row is deliberately not fabricated from provider display names.
-- Phase 3 Slice 2 Customer 360 Timeline is PR #179 on `feat/business-os-customer-360-timeline`, migration `0071_customer_360_timeline.sql`.
-- Slice 2 adds a SECURITY INVOKER read-only timeline view/RPC and signed-in/RLS API over existing canonical evidence. No event store, materialized copy, provider send path or service-role browser path is added.
-- Provider journals enrich latest delivery state and do not become duplicate timeline items.
-- Implementation head `3f25b41d052519ddffb8a5ce7f8f8503d38fa97f` passed CI #854 including PostgreSQL 17 RLS/dedupe/enrichment/cursor smoke before final docs reconciliation.
-- Migration 0071 is not Production yet while PR #179 remains under review.
+- Phase 3 Slice 2 Customer 360 Timeline merged in PR #179 at `main@efcf979ff15d32062b48928672a25128c521987a`.
+- Production migration `0071_customer_360_timeline` is live as version `20260922202957`.
+- Production Timeline evidence: 85 rows across 9 Businesses; 65 CUSTOMER / 20 INTERNAL; zero duplicate customer provider IDs; zero provider-journal standalone rows; zero customer-visible unsent rows.
+- Timeline view/RPC remains SECURITY INVOKER and authenticated-only. Existing service-role restrictions on handoff/reply/operator tables were not widened.
+- Cloudflare Production Deploy #332 succeeded on exact merge SHA; Production Worker version is `a78567d8-e4f9-484e-a62b-2bd8e47b8583`.
+- Candidate smoke, controlled load, route verification, routed production smoke and safe API/webhook rejection smoke all passed; deployment smoke sent no provider message.
 - No customer/provider message was sent for timeline architecture verification.
 - Shadow Mode remains ON.
 
@@ -52,7 +53,7 @@ Read in this order:
 11. `docs/business-os-2027/CONTROL_PLANE_FOUNDATION.md`
 12. `docs/business-os-2027/OMNICHANNEL_ADAPTER_BOUNDARY.md`
 13. `docs/business-os-2027/CUSTOMER_360_CRM_NORMALIZATION.md`
-14. PR #179 diff, exact-head CI, reviews and review threads
+14. current Phase 3 activity/task branch or PR, if any
 15. current `main` SHA, Production Cloudflare Worker evidence and Production Supabase migration state
 
 Runtime and Production evidence outrank stale documentation or chat memory.
@@ -178,14 +179,12 @@ A green CI run is necessary, not a substitute for review of a migration.
 
 ## Exact next action
 
-1. Run exact-head CI after the final Slice 2 documentation reconciliation commits.
-2. Review PR #179 specifically for SECURITY INVOKER semantics, underlying RLS/grants, message dedupe, INTERNAL vs CUSTOMER visibility, provider-status enrichment and deterministic cursor behavior.
-3. Mark PR #179 Ready for Review only if its final exact head is green.
-4. Do not promote migration 0071 from a stale or failing head.
-5. After merge, apply the exact main 0071 migration through the controlled Supabase migration path.
-6. Verify Production view options, RPC ACLs, authenticated tenant isolation, real timeline counts, dedupe behavior, advisor delta, heartbeat, Shadow Mode and zero architecture-test outbound sends.
-7. Verify Cloudflare Production Worker version changes after the main push deploy before claiming the API runtime is live.
-8. Reconcile docs to proven Production state.
-9. Continue Phase 3 with the next evidence-backed dependency, most likely activity/task normalization. Do not fabricate Person Contacts without a real person-evidence contract.
+1. Start the next Phase 3 slice from clean `main@efcf979ff15d32062b48928672a25128c521987a` after this closeout documentation merges.
+2. Audit Production follow-up, handoff, reply, operator and approval/work-item primitives before adding any Task table.
+3. Produce an evidence-backed Activity/Task Gap Map: distinguish immutable historical activity from actionable work, assignee, due date, priority, status, source, idempotency and completion evidence.
+4. REUSE existing `followup_jobs`, `handoff_events`, `reply_events`, `operator_briefs` and approval primitives where they already own truth.
+5. Do not turn every Timeline item into a Task and do not build a second event store.
+6. Define the smallest safe Activity/Task first slice only after proving what current primitives cannot represent.
+7. Preserve Shadow Mode, Human takeover, Cost Guard and provider send boundaries. No real provider/customer sends for architecture verification.
 
 The goal remains production-grade Business OS behavior, not decorative UI or file count.
