@@ -384,8 +384,18 @@ begin
     raise exception 'CRM deal tenant/scope/source/creator is immutable';
   end if;
 
-  if old.state in ('WON','LOST') and new.stage_id is distinct from old.stage_id then
-    raise exception 'terminal CRM deal stage is immutable';
+  if old.state in ('WON','LOST') then
+    if new.stage_id is distinct from old.stage_id then
+      raise exception 'terminal CRM deal stage is immutable';
+    end if;
+    if new.amount is distinct from old.amount
+       or new.currency is distinct from old.currency
+       or new.owner_user_id is distinct from old.owner_user_id
+       or new.expected_close_at is distinct from old.expected_close_at
+       or new.lost_reason is distinct from old.lost_reason
+    then
+      raise exception 'terminal CRM deal commercial truth is immutable';
+    end if;
   end if;
 
   if new.stage_id is distinct from old.stage_id then
@@ -585,8 +595,14 @@ on public.crm_deals for insert to authenticated
 with check (
   creator_type = 'USER'
   and created_by_user_id = (select auth.uid())
-  and source_type = 'MANUAL'
-  and source_id is null
+  and (
+    (source_type = 'MANUAL' and source_id is null)
+    or (
+      source_type = 'LEAD'
+      and lead_id is not null
+      and source_id = lead_id::text
+    )
+  )
   and public.crm_deal_can_manage(organization_id, owner_user_id)
 );
 
@@ -667,6 +683,123 @@ begin
   return v_pipeline_id;
 end;
 $pipeline_create$;
+
+create or replace function public.create_crm_deal_from_lead(
+  p_organization_id uuid,
+  p_lead_id uuid,
+  p_pipeline_id uuid,
+  p_stage_id uuid,
+  p_title text,
+  p_amount numeric,
+  p_currency text,
+  p_expected_close_at timestamptz,
+  p_owner_user_id uuid,
+  p_request_key text,
+  p_metadata jsonb default '{}'::jsonb
+)
+returns uuid
+language plpgsql
+security invoker
+set search_path = public, auth, pg_catalog
+as $deal_from_lead$
+declare
+  v_business_id uuid;
+  v_deal_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'authentication required';
+  end if;
+
+  if nullif(trim(p_title), '') is null or length(trim(p_title)) > 240 then
+    raise exception 'invalid CRM deal title';
+  end if;
+
+  if nullif(trim(p_request_key), '') is null or length(trim(p_request_key)) > 200 then
+    raise exception 'invalid CRM deal request_key';
+  end if;
+
+  if p_metadata is null or jsonb_typeof(p_metadata) <> 'object' then
+    raise exception 'CRM deal metadata must be a JSON object';
+  end if;
+
+  select l.business_id
+    into v_business_id
+  from public.leads l
+  where l.organization_id = p_organization_id
+    and l.id = p_lead_id;
+
+  if v_business_id is null then
+    raise exception 'CRM Deal conversion requires Lead with Business';
+  end if;
+
+  if not public.crm_deal_can_manage(p_organization_id, p_owner_user_id) then
+    raise exception 'CRM Deal conversion not permitted';
+  end if;
+
+  select d.id
+    into v_deal_id
+  from public.crm_deals d
+  where d.organization_id = p_organization_id
+    and d.request_key = trim(p_request_key);
+
+  if v_deal_id is not null then
+    return v_deal_id;
+  end if;
+
+  insert into public.crm_deals(
+    organization_id,
+    business_id,
+    lead_id,
+    pipeline_id,
+    stage_id,
+    title,
+    amount,
+    currency,
+    expected_close_at,
+    owner_user_id,
+    lost_reason,
+    source_type,
+    source_id,
+    request_key,
+    creator_type,
+    created_by_user_id,
+    metadata
+  ) values (
+    p_organization_id,
+    v_business_id,
+    p_lead_id,
+    p_pipeline_id,
+    p_stage_id,
+    trim(p_title),
+    p_amount,
+    case when p_currency is null then null else upper(trim(p_currency)) end,
+    p_expected_close_at,
+    p_owner_user_id,
+    null,
+    'LEAD',
+    p_lead_id::text,
+    trim(p_request_key),
+    'USER',
+    auth.uid(),
+    p_metadata
+  )
+  returning id into v_deal_id;
+
+  return v_deal_id;
+exception
+  when unique_violation then
+    select d.id
+      into v_deal_id
+    from public.crm_deals d
+    where d.organization_id = p_organization_id
+      and d.request_key = trim(p_request_key);
+
+    if v_deal_id is not null then
+      return v_deal_id;
+    end if;
+    raise;
+end;
+$deal_from_lead$;
 
 create or replace view public.crm_deal_stage_history
 with (security_invoker = true)
@@ -752,6 +885,13 @@ revoke all on function public.get_crm_deals(
 ) from public, anon, service_role;
 grant execute on function public.get_crm_deals(
   uuid, uuid, uuid, uuid, text, integer, timestamptz, uuid
+) to authenticated;
+
+revoke all on function public.create_crm_deal_from_lead(
+  uuid, uuid, uuid, uuid, text, numeric, text, timestamptz, uuid, text, jsonb
+) from public, anon, service_role;
+grant execute on function public.create_crm_deal_from_lead(
+  uuid, uuid, uuid, uuid, text, numeric, text, timestamptz, uuid, text, jsonb
 ) to authenticated;
 
 revoke all on function public.guard_crm_pipeline_mutation()
