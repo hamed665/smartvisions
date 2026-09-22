@@ -674,6 +674,7 @@ create or replace function public.classify_usage_event(
   p_usage_classification text,
   p_reason text default null,
   p_correlation_id text default null,
+  p_causation_id text default null,
   p_actor_id text default 'billing-runtime'
 )
 returns table(
@@ -730,7 +731,8 @@ begin
     entity_id,
     before_data,
     after_data,
-    correlation_id
+    correlation_id,
+    causation_id
   ) values (
     p_organization_id,
     'SYSTEM',
@@ -743,16 +745,17 @@ begin
       'usage_classification', p_usage_classification,
       'reason', p_reason
     ),
-    p_correlation_id
+    coalesce(nullif(trim(p_correlation_id), ''), 'dbtx:' || txid_current()::text),
+    nullif(trim(p_causation_id), '')
   );
 
   return query select p_event_id, v_previous, p_usage_classification, true;
 end;
 $$;
 
-revoke all on function public.classify_usage_event(uuid, uuid, text, text, text, text)
+revoke all on function public.classify_usage_event(uuid, uuid, text, text, text, text, text)
   from public, anon, authenticated;
-grant execute on function public.classify_usage_event(uuid, uuid, text, text, text, text)
+grant execute on function public.classify_usage_event(uuid, uuid, text, text, text, text, text)
   to service_role;
 
 alter table public.audit_logs
@@ -803,6 +806,7 @@ declare
   v_department_id uuid;
   v_team_id uuid;
   v_actor uuid;
+  v_correlation_id text;
 begin
   v_before := case when tg_op in ('UPDATE','DELETE') then to_jsonb(old) else null end;
   v_after := case when tg_op in ('INSERT','UPDATE') then to_jsonb(new) else null end;
@@ -810,6 +814,7 @@ begin
   v_org_id := nullif(v_row ->> 'organization_id', '')::uuid;
   v_entity_id := v_row ->> 'id';
   v_actor := auth.uid();
+  v_correlation_id := 'dbtx:' || txid_current()::text;
 
   v_brand_id := case
     when tg_table_name = 'brands' then nullif(v_entity_id, '')::uuid
@@ -845,7 +850,8 @@ begin
     tenant_business_id,
     branch_id,
     department_id,
-    team_id
+    team_id,
+    correlation_id
   ) values (
     v_org_id,
     case when v_actor is null then 'SYSTEM' else 'USER' end,
@@ -859,7 +865,8 @@ begin
     v_tenant_business_id,
     v_branch_id,
     v_department_id,
-    v_team_id
+    v_team_id,
+    v_correlation_id
   );
 
   if tg_op = 'DELETE' then return old; end if;
