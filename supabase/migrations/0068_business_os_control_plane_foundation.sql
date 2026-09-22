@@ -517,6 +517,15 @@ begin
     or new.included_units is distinct from old.included_units
     or new.unit_prices is distinct from old.unit_prices
     or new.effective_from is distinct from old.effective_from
+    or (
+      new.effective_to is distinct from old.effective_to
+      and not (
+        old.status = 'ACTIVE'
+        and new.status = 'RETIRED'
+        and old.effective_to is null
+        and new.effective_to is not null
+      )
+    )
     or new.metadata is distinct from old.metadata
   ) then
     raise exception 'published pricing version commercial fields are immutable';
