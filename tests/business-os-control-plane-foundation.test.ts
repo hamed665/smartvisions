@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   assertCanonicalTenantScope,
+  assertTenantScopeLineage,
   canMutateControlPlane,
   customerAiChargeMultiplier,
   effectiveRoleForScope,
@@ -12,6 +13,7 @@ import {
   resolveFeatureFlag,
   resolveScopedValue,
   type TenantScope,
+  type TenantScopeLineage,
 } from '@/lib/business-os/control-plane';
 
 const migration = readFileSync(
@@ -28,16 +30,30 @@ const target: TenantScope = {
   teamId: 'team-a',
 };
 
+const targetLineage: TenantScopeLineage = {
+  brand: { id: 'brand-a', organizationId: 'org-a' },
+  tenantBusiness: { id: 'business-a', organizationId: 'org-a', brandId: 'brand-a' },
+  branch: { id: 'branch-a', organizationId: 'org-a', tenantBusinessId: 'business-a' },
+  department: { id: 'department-a', organizationId: 'org-a', branchId: 'branch-a' },
+  team: { id: 'team-a', organizationId: 'org-a', departmentId: 'department-a' },
+};
+
 describe('Business OS control plane runtime contracts', () => {
   it('requires an unbroken canonical scope chain', () => {
     expect(() => assertCanonicalTenantScope({ organizationId: 'org-a', branchId: 'branch-a' }))
       .toThrow('tenantBusinessId is required');
     expect(assertCanonicalTenantScope(target)).toEqual(target);
+    expect(assertTenantScopeLineage(target, targetLineage)).toEqual(target);
+    expect(() => assertTenantScopeLineage(target, {
+      ...targetLineage,
+      branch: { id: 'branch-a', organizationId: 'org-a', tenantBusinessId: 'business-b' },
+    })).toThrow('branch lineage does not match');
   });
 
   it('resolves configuration from organization to the most specific matching scope', () => {
     expect(resolveScopedValue({
       target,
+      lineage: targetLineage,
       legacyOrganizationValue: 'legacy',
       overrides: [
         { organizationId: 'org-a', scopeType: 'ORGANIZATION', value: 'org' },
@@ -52,6 +68,7 @@ describe('Business OS control plane runtime contracts', () => {
   it('never applies an override from another tenant', () => {
     expect(resolveScopedValue({
       target,
+      lineage: targetLineage,
       legacyOrganizationValue: 'safe',
       overrides: [
         { organizationId: 'org-b', scopeType: 'ORGANIZATION', value: 'wrong' },
@@ -63,6 +80,7 @@ describe('Business OS control plane runtime contracts', () => {
   it('resolves feature flags with the same deterministic scope precedence', () => {
     expect(resolveFeatureFlag({
       target,
+      lineage: targetLineage,
       defaultEnabled: false,
       overrides: [
         { organizationId: 'org-a', scopeType: 'ORGANIZATION', value: true },
@@ -85,6 +103,7 @@ describe('Business OS control plane runtime contracts', () => {
       organizationRole: 'VIEWER',
       userId: 'user-a',
       target,
+      lineage: targetLineage,
       assignments: [
         {
           organizationId: 'org-a',
@@ -107,6 +126,7 @@ describe('Business OS control plane runtime contracts', () => {
       organizationRole: 'OWNER',
       userId: 'user-a',
       target,
+      lineage: targetLineage,
       assignments: [{
         organizationId: 'org-a',
         userId: 'user-a',
@@ -132,6 +152,7 @@ describe('Business OS control plane runtime contracts', () => {
       organizationRole: 'VIEWER',
       userId: 'user-a',
       target,
+      lineage: targetLineage,
       assignments: [assignment],
       policyAttributes: { region: 'AE', channel: 'WHATSAPP' },
     })).toBe('VIEWER');
@@ -140,6 +161,7 @@ describe('Business OS control plane runtime contracts', () => {
       organizationRole: 'VIEWER',
       userId: 'user-a',
       target,
+      lineage: targetLineage,
       assignments: [assignment],
       policyAttributes: { region: 'OM', channel: 'WHATSAPP' },
     })).toBe('ADMIN');
@@ -152,6 +174,7 @@ describe('Business OS control plane runtime contracts', () => {
       organizationRole: 'VIEWER',
       userId: 'user-a',
       target,
+      lineage: targetLineage,
       assignments: [{
         organizationId: 'org-a',
         userId: 'user-b',
