@@ -157,7 +157,10 @@ begin
       t || '_member_read',
       t
     );
-    execute format('grant select on public.%I to authenticated, service_role', t);
+    execute format('grant select on public.%I to authenticated', t);
+    if t not in ('handoff_events','reply_events','operator_briefs') then
+      execute format('grant select on public.%I to service_role', t);
+    end if;
   end loop;
 end;
 $rls$;
