@@ -88,6 +88,8 @@ Child foreign keys use `(organization_id, parent_id)`, not only `parent_id`. A v
 
 Existing Growth OS tables remain organization-scoped and do not require a branch/business backfill in this PR.
 
+Runtime consumers MUST validate the assembled scope against trusted hierarchy lineage loaded from persistence. A syntactically complete chain is not sufficient: Brand must belong to the Organization, Business to that Brand, Branch to that Business, Department to that Branch, and Team to that Department. Configuration inheritance and scoped IAM fail closed when that lineage does not match.
+
 ## 5. Configuration inheritance contract
 
 Resolution order, lowest to highest precedence:
@@ -165,6 +167,7 @@ This PR stores and validates state. It does not call a payment provider and does
 ### Pricing/subscription invariants
 
 - active pricing is unique per `Plan + Currency + Billing Period` lane, so multi-currency/monthly/annual pricing can coexist without rewriting the model;
+- published commercial fields and the effective window are immutable while ACTIVE/RETIRED; `effective_to` may be set only as part of ACTIVE -> RETIRED retirement when it was previously unset;
 - one organization may have at most one live primary subscription in `TRIAL | ACTIVE | PAST_DUE | GRACE_PERIOD | SUSPENDED`;
 - `CANCELED` and `EXPIRED` subscriptions remain historical evidence and do not block a later subscription.
 
