@@ -384,11 +384,11 @@ as $timeline$
 $timeline$;
 
 revoke all on public.crm_customer_timeline from public, anon, authenticated, service_role;
-grant select on public.crm_customer_timeline to authenticated, service_role;
+grant select on public.crm_customer_timeline to authenticated;
 
 revoke all on function public.get_crm_customer_timeline(
   uuid, uuid, integer, timestamptz, text, boolean
-) from public, anon;
+) from public, anon, authenticated, service_role;
 grant execute on function public.get_crm_customer_timeline(
   uuid, uuid, integer, timestamptz, text, boolean
-) to authenticated, service_role;
+) to authenticated;
