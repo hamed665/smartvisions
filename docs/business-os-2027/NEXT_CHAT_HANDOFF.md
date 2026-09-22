@@ -33,6 +33,10 @@ Business OS status as of 2026-09-22:
 - Candidate smoke, controlled load, route verification, routed production smoke and safe API/webhook rejection smoke all passed; deployment smoke sent no provider message.
 - No customer/provider message was sent for timeline architecture verification.
 - Shadow Mode remains ON.
+- Phase 3 Slice 3 CRM Task Foundation is active in PR #181 / migration `0072_crm_task_foundation.sql`.
+- Activity remains existing immutable evidence and Customer 360 Timeline; `crm_tasks` is only actionable human work.
+- No historical follow-up/handoff/reply/operator/approval rows are auto-converted to Tasks.
+- Task authorization: Organization members read; OWNER/ADMIN/SALES_MANAGER manage; SALES_AGENT self-assigned only; VIEWER read-only.
 
 Runtime and Production evidence outrank stale documentation or chat memory.
 
@@ -179,12 +183,14 @@ A green CI run is necessary, not a substitute for review of a migration.
 
 ## Exact next action
 
-1. Start the next Phase 3 slice from clean `main@efcf979ff15d32062b48928672a25128c521987a` after this closeout documentation merges.
-2. Audit Production follow-up, handoff, reply, operator and approval/work-item primitives before adding any Task table.
-3. Produce an evidence-backed Activity/Task Gap Map: distinguish immutable historical activity from actionable work, assignee, due date, priority, status, source, idempotency and completion evidence.
-4. REUSE existing `followup_jobs`, `handoff_events`, `reply_events`, `operator_briefs` and approval primitives where they already own truth.
-5. Do not turn every Timeline item into a Task and do not build a second event store.
-6. Define the smallest safe Activity/Task first slice only after proving what current primitives cannot represent.
-7. Preserve Shadow Mode, Human takeover, Cost Guard and provider send boundaries. No real provider/customer sends for architecture verification.
+1. Use PR #181 as the active Phase 3 Slice 3 implementation.
+2. Run exact-head CI after all final documentation/contract commits.
+3. Review migration 0072 for composite CRM lineage FKs, Organization-member assignee FK, RLS role boundaries, source-provenance protection, task state transitions, optimistic versioning, audit minimization and absence of DELETE/provider sends.
+4. Mark PR #181 Ready only on a green final head with no open review threads.
+5. After merge, apply the exact main 0072 migration through the controlled Supabase migration path.
+6. Verify Production task table/RLS/grants/functions, zero fabricated backfill Tasks, advisor delta, Shadow Mode, heartbeat and zero architecture-test outbound sends.
+7. Verify Cloudflare Production deployment of the exact merge SHA before claiming the Task API is live.
+8. Reconcile docs to Production evidence.
+9. Continue Phase 3 with the next proven CRM gap. Do not auto-promote Activity into Task and do not fabricate Person Contacts.
 
 The goal remains production-grade Business OS behavior, not decorative UI or file count.
