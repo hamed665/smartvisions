@@ -34,6 +34,7 @@ as $$
 $$;
 
 grant usage on schema auth, public to authenticated, service_role;
+grant usage on schema extensions to authenticated, service_role;
 grant execute on function auth.uid() to authenticated, service_role;
 
 create table public.organizations (
