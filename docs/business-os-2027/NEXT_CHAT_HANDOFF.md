@@ -33,10 +33,14 @@ Business OS status as of 2026-09-22:
 - Candidate smoke, controlled load, route verification, routed production smoke and safe API/webhook rejection smoke all passed; deployment smoke sent no provider message.
 - No customer/provider message was sent for timeline architecture verification.
 - Shadow Mode remains ON.
-- Phase 3 Slice 3 CRM Task Foundation is active in PR #181 / migration `0072_crm_task_foundation.sql`.
+- Phase 3 Slice 3 CRM Task Foundation merged in PR #181 at `main@4c2a4d3bc78a57088f92ba8eae82542d501a37dc` and is live as Production migration `0072_crm_task_foundation` version `20260922214407`.
+- Post-0072 FK cleanup merged in PR #182 at `main@1eab75f73a5ae99a973e5616bb30c09325b9a680` and is live as Production migration `0073_crm_task_fk_indexes` version `20260922214843`.
 - Activity remains existing immutable evidence and Customer 360 Timeline; `crm_tasks` is only actionable human work.
-- No historical follow-up/handoff/reply/operator/approval rows are auto-converted to Tasks.
+- Production Task rows remained zero after migration and rollback-only smoke; no historical follow-up/handoff/reply/operator/approval rows were auto-converted to Tasks.
 - Task authorization: Organization members read; OWNER/ADMIN/SALES_MANAGER manage; SALES_AGENT self-assigned only; VIEWER read-only.
+- Supabase Performance Advisor has zero post-Slice-3 unindexed-FK findings after 0073; Security Advisor is unchanged baseline.
+- Cloudflare runtime heartbeat after Slice 3 changed Worker version to `84d19f06-ead7-4abe-b332-ba14309629d8`, with failed=0 and acquisition/dispatch SKIPPED.
+- Zero Email/WhatsApp outbound rows were created by Slice 3 verification.
 
 Runtime and Production evidence outrank stale documentation or chat memory.
 
@@ -183,14 +187,14 @@ A green CI run is necessary, not a substitute for review of a migration.
 
 ## Exact next action
 
-1. Use PR #181 as the active Phase 3 Slice 3 implementation.
-2. Run exact-head CI after all final documentation/contract commits.
-3. Review migration 0072 for composite CRM lineage FKs, Organization-member assignee FK, RLS role boundaries, source-provenance protection, task state transitions, optimistic versioning, audit minimization and absence of DELETE/provider sends.
-4. Mark PR #181 Ready only on a green final head with no open review threads.
-5. After merge, apply the exact main 0072 migration through the controlled Supabase migration path.
-6. Verify Production task table/RLS/grants/functions, zero fabricated backfill Tasks, advisor delta, Shadow Mode, heartbeat and zero architecture-test outbound sends.
-7. Verify Cloudflare Production deployment of the exact merge SHA before claiming the Task API is live.
-8. Reconcile docs to Production evidence.
-9. Continue Phase 3 with the next proven CRM gap. Do not auto-promote Activity into Task and do not fabricate Person Contacts.
+1. Start the next Phase 3 slice from current clean main after the CRM Task closeout docs merge.
+2. Audit current `leads`, `sales_conversations`, `growth_opportunities`, `intent_opportunities`, campaigns, quote/pricing primitives and CRM ownership semantics before adding Deal tables.
+3. Produce a Deal/Pipeline Gap Map. Treat Growth/Intent Opportunities as acquisition evidence, not CRM sales Deals.
+4. Preserve `leads` as Lead/Opportunity foundation and `sales_conversations` as conversation state; do not repurpose their current statuses into commercial pipeline stages.
+5. Define explicit Pipeline + Stage + Deal ownership only for missing commercial truth: amount/currency, expected close, owner, ordered stage, WON/LOST evidence, stage history and idempotent conversion.
+6. Do not auto-create Deals merely because a Lead or acquisition Opportunity exists.
+7. Keep Quote, Payment, Booking and Order as later owned domains; Deal may reference future outputs but must not absorb their state machines.
+8. Preserve Shadow Mode, provider send boundaries and Human takeover. No provider/customer sends are required for Deal architecture verification.
+9. Do not fabricate Person Contacts to unblock the Deal model.
 
 The goal remains production-grade Business OS behavior, not decorative UI or file count.
