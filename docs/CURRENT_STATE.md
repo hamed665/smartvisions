@@ -1,6 +1,6 @@
 # Smart Visions Growth OS — Current Production State
 
-**Reconciled:** 2026-09-07 (Oman, UTC+4)
+**Reconciled:** 2026-09-23 (Oman, UTC+4)
 
 This is the current operational handoff for Growth OS. Current `main`, routed Cloudflare Production and Production Supabase evidence override older planning documents, stale issue text and chat history.
 
@@ -13,10 +13,10 @@ This is the current operational handoff for Growth OS. Current `main`, routed Cl
 - Production Worker: `smartvisions-growth-os-production`
 - Production Worker Route: `app.smartvisionsai.com/* -> smartvisions-growth-os-production`
 - Production Supabase: `pkypexzpyfbikdnkrzvw`
-- Latest runtime-changing Production merge: PR #145, merge commit `fc569a460039afb43eded9ec96f4a9f049d44e47`
-- PR #145 runtime Worker version at verification: `18168cc7-170d-4999-94fc-2c7a44bb83f4`
-- Main CI: #673, green on the exact merge SHA
-- Cloudflare Production Deploy: #145, green on the exact merge SHA
+- Latest runtime-changing Production merge: PR #178, merge commit `27e980e417ec52c64055c029b8ffa6c6c77ab961`
+- Production Worker version at latest verified heartbeat: `562c495f-ceeb-4021-b2d9-122ddc04021b`
+- Latest Business OS Production migration: `0070_crm_identity_foundation`, version `20260922164110`
+- Active non-Production work: PR #179 / `feat/business-os-customer-360-timeline`; migration 0071 is not Production yet
 - Production cron: exactly `*/2 * * * *`
 - Release candidate: no scheduled trigger
 - Old Vercel deployment: frozen rollback/history only; not a Production health source
@@ -28,23 +28,49 @@ The Smart Visions Website repository and its Supabase project are separate and o
 
 The core system is beyond platform construction and is in **controlled Oman launch validation**. This is not permission for broad autonomous outreach.
 
-Current verified safety state after PR #145 Production deploy:
+Current verified safety state after PR #178 Production promotion:
 
 - Shadow Mode: **ON**
 - Global Kill Switch: OFF
 - Email pause: OFF
 - WhatsApp AI pause: OFF
 - Agents pause: OFF
-- zero outbound `SENT` outreach rows created from the PR #145 merge through post-deploy verification
-- zero Email `SENT` rows in that window
-- zero WhatsApp `SENT` rows in that window
-- zero WhatsApp outbound events in that window
-- zero Conversation `SENT` rows in that window
-- zero new Agent runs created by the deploy/smoke process
+- latest heartbeat: `failed=0`, acquisition `SKIPPED`, dispatch `SKIPPED`
+- zero Email outbound outreach rows created after the PR #178 merge in the verification window
+- zero WhatsApp outbound outreach rows created after the PR #178 merge in the verification window
+- CRM Identity backfill: 47 identities, 47 links, zero conflicts and zero cross-tenant mismatches
 
 Do not disable Shadow Mode merely because CI, transport or Production deployment are green. Scale only from measured real pilot evidence and an explicit owner decision.
 
 ## Recent Production work packages
+
+### PR #178 — CRM Identity Foundation
+
+Extended the existing CRM without creating a second CRM:
+
+- `businesses` remains the canonical Company/Account;
+- `leads` remains the current Lead/Opportunity foundation;
+- tenant-scoped `crm_identities` and `crm_identity_links` normalize Email, Phone, WhatsApp and Instagram identity evidence;
+- ambiguity fails closed as explicit conflict rather than auto-merging Businesses;
+- Email and WhatsApp use identity-registry-first resolution with the exact legacy lookup retained as deployment compatibility fallback;
+- audit stores identity fingerprints rather than copying raw normalized identity values;
+- migration `0070_crm_identity_foundation` is live in Production as version `20260922164110`;
+- Production backfill produced 47 identities and 47 links with zero conflicts;
+- Cloudflare runtime evidence after the merge is Worker version `562c495f-ceeb-4021-b2d9-122ddc04021b`.
+
+### PR #179 — Customer 360 Timeline (active, not Production)
+
+The current next slice is a read model, not another event store:
+
+- SECURITY INVOKER view over existing CRM/message/provider evidence;
+- provider journals enrich delivery status and do not become duplicate timeline rows;
+- actual customer interactions are separated from internal blocked/approval/follow-up/handoff evidence;
+- authenticated session + underlying RLS is the access boundary;
+- no service-role privilege expansion;
+- no provider send path;
+- implementation CI #854 passed, including PostgreSQL 17 dedupe/RLS/cursor smoke;
+- migration 0071 must not be treated as Production until PR #179 merges and the exact main migration is applied and verified.
+
 
 ### PR #142 — Runtime reliability and operational truth
 
@@ -200,7 +226,7 @@ The permanent deploy path proves:
 - routed Production smoke;
 - safe API/webhook rejection smoke with no outbound provider send.
 
-The runtime bundle introduced by PR #145 was verified as Production Worker version `18168cc7-170d-4999-94fc-2c7a44bb83f4`; the Production Cron remained exactly `*/2 * * * *` at that verification.
+The latest verified Production runtime after PR #178 is Worker version `562c495f-ceeb-4021-b2d9-122ddc04021b`; the Production Cron remains exactly `*/2 * * * *`. Vercel Git deployment remains disabled and Vercel is not a Production health source.
 
 ## Cost and paid-boundary rules
 
@@ -247,10 +273,12 @@ Do not invent another feature roadmap. Continue from the existing canonical path
 
 `real business evidence -> deterministic qualification/service fit -> smallest useful recommendation or NO_RECOMMENDATION -> selective Agent reasoning -> Shadow/approval/human gates -> canonical provider-boundary safety -> durable result evidence -> measured learning`
 
-After the PR #145 reconciliation, the next code/config change must correspond to one of these:
+For Business OS work, continue from the current dependency order without duplicating canonical stores. The active slice is PR #179 Customer 360 Timeline; it is intentionally a read model over existing evidence.
+
+For controlled Oman launch behavior, the next runtime behavior change must still correspond to one of these:
 
 1. a real Production defect;
 2. a provider/configuration requirement needed for the controlled pilot;
 3. measured pilot evidence showing a specific reply/qualification/handoff/market-allocation weakness.
 
-If the proposal is merely another Agent, another CRM/store, another analytics stack or broader autonomy without pilot evidence, stop rather than adding architecture for decoration.
+If a proposal adds another Agent, another CRM/event store, another analytics stack or broader autonomy without a proven dependency, stop rather than adding architecture for decoration.
