@@ -104,34 +104,34 @@ with candidates as (
 
   select organization_id, id,
          'PHONE',
-         regexp_replace(phone, '\\D', '', 'g'),
+         regexp_replace(phone, '\D', '', 'g'),
          trim(phone),
          'businesses.phone'
   from public.businesses
   where nullif(trim(phone), '') is not null
-    and length(regexp_replace(phone, '\\D', '', 'g')) >= 8
+    and length(regexp_replace(phone, '\D', '', 'g')) >= 8
 
   union all
 
   select organization_id, id,
          'PHONE',
-         regexp_replace(international_phone, '\\D', '', 'g'),
+         regexp_replace(international_phone, '\D', '', 'g'),
          trim(international_phone),
          'businesses.international_phone'
   from public.businesses
   where nullif(trim(international_phone), '') is not null
-    and length(regexp_replace(international_phone, '\\D', '', 'g')) >= 8
+    and length(regexp_replace(international_phone, '\D', '', 'g')) >= 8
 
   union all
 
   select organization_id, id,
          'WHATSAPP',
-         regexp_replace(whatsapp, '\\D', '', 'g'),
+         regexp_replace(whatsapp, '\D', '', 'g'),
          trim(whatsapp),
          'businesses.whatsapp'
   from public.businesses
   where nullif(trim(whatsapp), '') is not null
-    and length(regexp_replace(whatsapp, '\\D', '', 'g')) >= 8
+    and length(regexp_replace(whatsapp, '\D', '', 'g')) >= 8
 
   union all
 
@@ -143,7 +143,7 @@ with candidates as (
                regexp_replace(
                  regexp_replace(
                    trim(instagram),
-                   '^https?://(www\\.)?instagram\\.com/',
+                   '^https?://(www\.)?instagram\.com/',
                    '',
                    'i'
                  ),
@@ -196,31 +196,31 @@ with candidates as (
 
   select organization_id, id,
          'PHONE',
-         regexp_replace(phone, '\\D', '', 'g'),
+         regexp_replace(phone, '\D', '', 'g'),
          'businesses.phone'
   from public.businesses
   where nullif(trim(phone), '') is not null
-    and length(regexp_replace(phone, '\\D', '', 'g')) >= 8
+    and length(regexp_replace(phone, '\D', '', 'g')) >= 8
 
   union all
 
   select organization_id, id,
          'PHONE',
-         regexp_replace(international_phone, '\\D', '', 'g'),
+         regexp_replace(international_phone, '\D', '', 'g'),
          'businesses.international_phone'
   from public.businesses
   where nullif(trim(international_phone), '') is not null
-    and length(regexp_replace(international_phone, '\\D', '', 'g')) >= 8
+    and length(regexp_replace(international_phone, '\D', '', 'g')) >= 8
 
   union all
 
   select organization_id, id,
          'WHATSAPP',
-         regexp_replace(whatsapp, '\\D', '', 'g'),
+         regexp_replace(whatsapp, '\D', '', 'g'),
          'businesses.whatsapp'
   from public.businesses
   where nullif(trim(whatsapp), '') is not null
-    and length(regexp_replace(whatsapp, '\\D', '', 'g')) >= 8
+    and length(regexp_replace(whatsapp, '\D', '', 'g')) >= 8
 
   union all
 
@@ -232,7 +232,7 @@ with candidates as (
                regexp_replace(
                  regexp_replace(
                    trim(instagram),
-                   '^https?://(www\\.)?instagram\\.com/',
+                   '^https?://(www\.)?instagram\.com/',
                    '',
                    'i'
                  ),
