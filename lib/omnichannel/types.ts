@@ -22,7 +22,7 @@ export type CanonicalInboundEnvelope = {
   provider: 'RESEND' | 'META_CLOUD';
   providerMessageId: string;
   providerThreadId?: string;
-  occurredAt: string;
+  occurredAt?: string;
   from: string;
   to?: string;
   contentType: 'TEXT' | 'HTML' | 'AUDIO' | 'MEDIA' | 'UNKNOWN';
