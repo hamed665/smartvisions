@@ -7,6 +7,7 @@ import {
   effectiveRoleForScope,
   isCatalogTransitionAllowed,
   isSubscriptionTransitionAllowed,
+  matchesPolicyAttributes,
   resolveEntitlement,
   resolveFeatureFlag,
   resolveScopedValue,
@@ -114,6 +115,36 @@ describe('Business OS control plane runtime contracts', () => {
         role: 'VIEWER',
       }],
     })).toBe('OWNER');
+  });
+
+  it('fails scoped ABAC closed when required policy attributes do not match', () => {
+    const assignment = {
+      organizationId: 'org-a',
+      userId: 'user-a',
+      scopeType: 'TEAM' as const,
+      scopeId: 'team-a',
+      role: 'ADMIN' as const,
+      attributes: { region: 'OM', channel: 'WHATSAPP' },
+    };
+
+    expect(matchesPolicyAttributes(assignment.attributes, { region: 'AE', channel: 'WHATSAPP' })).toBe(false);
+    expect(effectiveRoleForScope({
+      organizationRole: 'VIEWER',
+      userId: 'user-a',
+      target,
+      assignments: [assignment],
+      policyAttributes: { region: 'AE', channel: 'WHATSAPP' },
+    })).toBe('VIEWER');
+
+    expect(effectiveRoleForScope({
+      organizationRole: 'VIEWER',
+      userId: 'user-a',
+      target,
+      assignments: [assignment],
+      policyAttributes: { region: 'OM', channel: 'WHATSAPP' },
+    })).toBe('ADMIN');
+
+    expect(matchesPolicyAttributes({ region: { code: 'OM' } }, { region: 'OM' })).toBe(false);
   });
 
   it('never applies another user scoped assignment', () => {
@@ -228,6 +259,14 @@ describe('Business OS control plane migration safety', () => {
     expect(migration).not.toContain('subscriptions_owner_insert');
   });
 
+  it('keeps pricing lanes versioned independently and one live subscription per tenant', () => {
+    expect(migration).toContain('unique (plan_id, currency, billing_period, version)');
+    expect(migration).toContain('pricing_versions_one_active_per_lane');
+    expect(migration).toContain('on public.pricing_versions(plan_id, currency, billing_period)');
+    expect(migration).toContain('subscriptions_one_live_per_org');
+    expect(migration).toContain("where status in ('TRIAL','ACTIVE','PAST_DUE','GRACE_PERIOD','SUSPENDED')");
+  });
+
   it('fails customer billing closed while preserving the raw Cost Guard ledger', () => {
     expect(migration).toContain("usage_classification text not null default 'INTERNAL'");
     expect(migration).toContain("'BILLABLE'");
@@ -238,9 +277,27 @@ describe('Business OS control plane migration safety', () => {
     expect(migration).toContain('revoke insert on table public.usage_events from authenticated;');
     expect(migration).toContain('create or replace function public.classify_usage_event(');
     expect(migration).toContain('grant execute on function public.classify_usage_event');
+    expect(migration).toContain('grant update (usage_classification)');
+    expect(migration).toContain('on table public.usage_events to service_role;');
     expect(migration).toContain('to service_role;');
+    expect(migration).not.toMatch(/security\s+definer/i);
     expect(migration).not.toContain('grant update (usage_classification) on table public.usage_events to authenticated;');
     expect(migration).not.toMatch(/alter\s+column\s+cost_usd/i);
+  });
+
+  it('keeps scoped IAM reads least-privilege and ABAC attributes object-shaped', () => {
+    expect(migration).toContain("attributes jsonb not null default '{}'::jsonb check (jsonb_typeof(attributes) = 'object')");
+    expect(migration).toContain('create policy member_scope_assignments_member_read on public.member_scope_assignments');
+    expect(migration).toContain('user_id = (select auth.uid())');
+    expect(migration).toContain('or public.is_org_owner(organization_id)');
+  });
+
+  it('keeps runtime catalog authoring closed until an audited platform command exists', () => {
+    expect(migration).toContain('revoke all on public.brands');
+    expect(migration).toContain('from service_role;');
+    expect(migration).toContain('grant select on public.plans');
+    expect(migration).toContain('public.pricing_versions');
+    expect(migration).toContain('public.plan_entitlements');
   });
 
   it('extends canonical audit logs and audits important control-plane mutations', () => {
