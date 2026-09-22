@@ -210,6 +210,7 @@ end;
 $$;
 
 reset role;
+select set_config('request.jwt.claim.sub', '', false);
 
 insert into public.plans(id, code, name, status)
 values ('60000000-0000-0000-0000-000000000001', 'CI_PLAN', 'CI Plan', 'DRAFT');
