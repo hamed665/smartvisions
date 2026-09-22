@@ -59,9 +59,9 @@ Renaming or repurposing `businesses` is explicitly out of scope because current 
 | Organization config | `organization_settings.config` | inherited Organization/Brand/Business/Branch/Department/Team configuration | **EXTEND** | Medium | Existing org config remains authoritative for legacy keys; new scope overrides layer on top. No forced dual-write. |
 | IAM boundary | `is_org_member`, `is_org_owner`, RLS | tenant-safe hierarchical IAM | **EXTEND** | Medium | New rows always carry `organization_id`; cross-org hierarchy is prevented by composite FKs; existing RLS helpers remain canonical. |
 | RBAC | fixed org role vocabulary | org + lower-scope roles | **EXTEND** | Medium | Reuse current role vocabulary initially; no role semantics are removed. |
-| ABAC | none | constrained scope attributes | **NEW** | Low | Attribute JSON exists only on scoped assignments and does not bypass RLS. |
+| ABAC | none | constrained scope attributes | **NEW** | Low | Scoped assignments support fail-closed scalar attribute matching in runtime policy; attributes never bypass RLS. |
 | Plans | none | plan catalog | **NEW** | Low | New global catalog, tenant users read only. |
-| Pricing Versions | service prices exist for agency offerings, but no SaaS plan pricing versions | immutable/versioned SaaS pricing | **NEW** | Medium | Do not replace `service_prices`; SaaS subscription pricing is a distinct source of truth. |
+| Pricing Versions | service prices exist for agency offerings, but no SaaS plan pricing versions | immutable/versioned SaaS pricing | **NEW** | Medium | Do not replace `service_prices`; SaaS pricing is versioned independently per Plan + Currency + Billing Period lane. |
 | Subscriptions | none | tenant subscription lifecycle | **NEW** | Low | Read-only to tenant users; service-side mutation only until billing Action Gateway exists. |
 | Entitlements | none | versioned plan entitlements + tenant override | **NEW** | Low | Entitlements gate future features but do not disable existing Growth OS paths in this PR. |
 | Usage ledger | `usage_events` raw provider costs | usage classification for customer billing | **EXTEND** | Medium | Preserve `cost_usd` and Cost Guard aggregation; add classification defaulting to `INTERNAL` so historical/current internal cost is never accidentally customer-billed. |
@@ -134,7 +134,11 @@ The organization role vocabulary remains:
 
 ### ABAC
 
-A scoped assignment may contain policy attributes, but attributes are inputs to application policy only. They cannot override RLS, ownership checks, entitlements, consent, approval, Cost Guard, or outbound safety.
+A scoped assignment may contain policy attributes. In this foundation, attribute requirements are scalar equality constraints (`string | number | boolean`) evaluated by the runtime role resolver. Every declared requirement must match the trusted policy context; unsupported/nested values fail closed and do not grant the scoped role.
+
+Attributes are inputs to application policy only. They cannot override RLS, ownership checks, entitlements, consent, approval, Cost Guard, or outbound safety.
+
+For backward compatibility, hierarchy/configuration rows remain organization-readable to existing organization members in this slice. Scoped assignments refine runtime role/policy decisions; they do not silently narrow the existing organization-level read contract at the database boundary. `member_scope_assignments` itself is readable only by the assigned user or the organization OWNER.
 
 ## 7. Entitlement and subscription contract
 
@@ -157,6 +161,12 @@ PAST_DUE -> ACTIVE
 ```
 
 This PR stores and validates state. It does not call a payment provider and does not create a billing side effect.
+
+### Pricing/subscription invariants
+
+- active pricing is unique per `Plan + Currency + Billing Period` lane, so multi-currency/monthly/annual pricing can coexist without rewriting the model;
+- one organization may have at most one live primary subscription in `TRIAL | ACTIVE | PAST_DUE | GRACE_PERIOD | SUSPENDED`;
+- `CANCELED` and `EXPIRED` subscriptions remain historical evidence and do not block a later subscription.
 
 ### Entitlement precedence
 
@@ -294,7 +304,8 @@ Subscriptions:
 
 - member reads require existing organization membership;
 - hierarchy/configuration/scoped-IAM mutations require existing organization OWNER;
-- plan/pricing/subscription/entitlement mutation is service-side only in this foundation;
+- hierarchy/subscription/organization-entitlement runtime mutation is service-side or OWNER-gated as defined by RLS and is audited;
+- Plan/Pricing Version/Plan Entitlement authoring is deliberately runtime read-only in this foundation and remains migration-managed until an audited platform-level catalog command boundary is introduced;
 - RLS remains the database tenant boundary;
 - no scoped assignment may grant access outside its organization.
 
@@ -302,7 +313,8 @@ Subscriptions:
 
 - hierarchy slugs/codes are unique inside the relevant parent scope;
 - scope configuration and feature overrides are unique for one scope + key;
-- pricing versions are unique by `plan_id + version`;
+- pricing versions are unique by `plan_id + currency + billing_period + version`, with at most one ACTIVE row per pricing lane;
+- at most one live primary subscription exists per organization;
 - one provider subscription identifier cannot be attached twice;
 - future command handlers must provide request keys before side effects are introduced.
 
@@ -321,7 +333,11 @@ No external side effect exists in this PR. Database writes are transactional. Fu
 
 ## Audit
 
-All future important mutation handlers must write the existing `audit_logs` table and propagate correlation/causation. This migration only adds the fields; it does not silently fabricate audit events for untouched historical data.
+Hierarchy, scoped IAM, configuration, feature-flag, subscription, and organization-entitlement runtime mutations are audited through the existing `audit_logs` primitive. Correlation/causation fields are additive and nullable for backward compatibility.
+
+Global Plan/Pricing/Plan-Entitlement authoring has no tenant `organization_id`, so this foundation does **not** pretend the tenant audit table is a valid platform audit sink. Runtime DML for that global catalog is revoked from `service_role` until a platform-level audit/command boundary exists. Reviewed migrations may still seed or evolve the catalog.
+
+The migration does not fabricate audit events for untouched historical data.
 
 ## Billing impact
 
@@ -366,6 +382,9 @@ Required before merge:
 - configuration inheritance precedence;
 - feature-flag precedence;
 - RBAC/scope applicability;
+- fail-closed ABAC attribute matching;
+- multi-currency pricing-lane uniqueness and one-live-subscription invariant;
+- least-privilege service-role/catalog grants;
 - entitlement precedence;
 - AI billing classification ×4 and exclusion classes;
 - lint;
