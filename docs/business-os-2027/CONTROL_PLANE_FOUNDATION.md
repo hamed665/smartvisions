@@ -3,7 +3,7 @@
 Status: **merged and promoted to Production**  
 Phase 1 merge: PR #173 -> `main@01d74f7c8d333c017f8f4790d7bc3e4a7d1f6ca4`  
 Production migration: `0068_business_os_control_plane_foundation` -> version `20260922100907`  
-Post-promotion cleanup: `0069_business_os_control_plane_fk_indexes.sql`
+Post-promotion cleanup: `0069_business_os_control_plane_fk_indexes` -> Production version `20260922101641`; all 15 post-0068 unindexed-FK advisor findings cleared
 
 ## 1. Runtime evidence used for this work package
 
