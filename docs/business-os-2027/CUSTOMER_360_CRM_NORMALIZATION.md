@@ -1,6 +1,6 @@
 # Customer 360 + CRM Normalization — Evidence, Gap Map, and Identity Foundation
 
-Status: **Phase 3 active — Slice 1 and Slice 2 Production-verified; Slice 3 CRM Task Foundation in PR #181**  
+Status: **Phase 3 active — Slice 1, Slice 2 and Slice 3 Production-verified**  
 Slice 1 merge: PR #178 -> `main@27e980e417ec52c64055c029b8ffa6c6c77ab961`  
 Slice 1 Production migration: `0070_crm_identity_foundation` -> version `20260922164110`  
 Slice 2 merge: PR #179 -> `main@efcf979ff15d32062b48928672a25128c521987a`  
@@ -511,3 +511,110 @@ Slice 3 does not:
 - fabricate Person Contacts;
 - add provider sends;
 - add a second activity/event store.
+
+
+## 18. Slice 3 Production verification
+
+Slice 3 merged in PR #181 at `main@4c2a4d3bc78a57088f92ba8eae82542d501a37dc`.
+
+Production migration:
+
+- `0072_crm_task_foundation` -> version `20260922214407`
+
+Post-promotion verification confirmed:
+
+- `crm_tasks` exists with RLS enabled;
+- authenticated grants are exactly SELECT / INSERT / UPDATE; no DELETE;
+- anon and service_role have no Task table SELECT;
+- `get_crm_tasks(...)` is SECURITY INVOKER and authenticated-only;
+- all Task trigger/helper/query functions remain SECURITY INVOKER;
+- Organization -> Business -> Lead -> Conversation composite lineage FKs are present;
+- Task assignee, creator, completer and canceler are Organization-member scoped;
+- Production Task row count remained exactly **0** after migration: historical Activity was not fabricated into Tasks;
+- no Task audit rows were fabricated by migration;
+- Shadow Mode remained ON;
+- global/channel/Agent safety controls remained unchanged;
+- outbound Email/WhatsApp rows created by architecture verification: **0**.
+
+A rollback-only Production transaction smoke then verified the real RLS/trigger path:
+
+```text
+OPEN version 1
+  -> DONE version 2 + completion evidence
+  -> OPEN version 3 + completion evidence cleared
+```
+
+The transaction also verified Task audit generation and confirmed the task title was not copied into audit before/after payloads. The entire smoke transaction was rolled back, leaving Task and audit fixture counts unchanged at zero.
+
+### Post-0072 advisor cleanup
+
+Supabase Performance Advisor reported five new unindexed Task foreign keys after 0072.
+
+PR #182 added only those five covering indexes and merged at:
+
+`main@1eab75f73a5ae99a973e5616bb30c09325b9a680`
+
+Production migration:
+
+- `0073_crm_task_fk_indexes` -> version `20260922214843`
+
+Verified indexes:
+
+- `crm_tasks_org_created_by_fk_idx`
+- `crm_tasks_org_completed_by_fk_idx`
+- `crm_tasks_org_canceled_by_fk_idx`
+- `crm_tasks_org_conversation_lead_fk_idx`
+- `crm_tasks_org_lead_business_fk_idx`
+
+After 0073, Supabase Performance Advisor reported **zero `unindexed_foreign_keys`**. Remaining Task index findings are only expected `unused_index` INFO immediately after creation.
+
+Security Advisor remained unchanged from the known baseline:
+
+- Telegram service-only RLS/no-policy INFO x2;
+- leaked-password protection setting warning.
+
+### Runtime evidence
+
+The first heartbeat after the Slice 3 runtime deployment changed the Cloudflare Worker version from:
+
+`417eab3e-1485-4f0b-925b-25f1c0e0acd6`
+
+to:
+
+`84d19f06-ead7-4abe-b332-ba14309629d8`
+
+with:
+
+- `failed=0`;
+- acquisition `SKIPPED`;
+- dispatch `SKIPPED`;
+- zero outbound Email/WhatsApp rows in the verification window;
+- zero persisted Task/audit smoke fixtures.
+
+A route-specific unauthenticated HTTP smoke could not be fetched from the current execution environment because its public DNS was unavailable there. Runtime deployment is therefore claimed from the new Worker heartbeat/version evidence, not from a fabricated HTTP result.
+
+## 19. Next Phase 3 dependency — Deal / Pipeline normalization
+
+Production evidence shows that the word "opportunity" is currently overloaded:
+
+- `growth_opportunities` is acquisition/qualification routing evidence for external Businesses;
+- `intent_opportunities` is detected external intent evidence;
+- neither is a canonical CRM sales Deal;
+- `leads.status` currently contains operational lead states such as `NEW`, `READY_TO_CONTACT`, `REPLIED`, and `HUMAN`;
+- `sales_conversations.stage` currently contains conversation states such as `NEW`, `ACTIVE`, `NEEDS_HUMAN`, and `FOLLOW_UP_DUE`.
+
+Those existing primitives must not be renamed or repurposed into sales-pipeline financial truth.
+
+The next slice must therefore first produce a Deal/Pipeline Gap Map covering:
+
+- pipeline definition and ordered stages;
+- Deal as a separate commercial aggregate linked to existing Business/Lead;
+- amount/currency and expected-close semantics;
+- owner/assignee;
+- WON/LOST terminal evidence and reason;
+- stage-history/audit;
+- idempotent creation/conversion from Lead only through an explicit command;
+- no automatic Deal creation merely because a Lead or acquisition Opportunity exists;
+- compatibility with future Quote/Booking/Payment modules.
+
+No Person Contact model should be fabricated merely to unblock Deals.
