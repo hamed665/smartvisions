@@ -60,8 +60,8 @@ export type CrmDealRow = {
 export type CrmDealCursor = { updatedAt: string; id: string };
 
 export class CrmDealMutationError extends Error {
-  code: 'NOT_FOUND' | 'VERSION_CONFLICT';
-  constructor(code: 'NOT_FOUND' | 'VERSION_CONFLICT', message: string) {
+  code: 'NOT_FOUND' | 'VERSION_CONFLICT' | 'FORBIDDEN';
+  constructor(code: 'NOT_FOUND' | 'VERSION_CONFLICT' | 'FORBIDDEN', message: string) {
     super(message);
     this.code = code;
   }
@@ -77,6 +77,34 @@ function normalizeCursor(cursor: CrmDealCursor | null | undefined) {
   const time = Date.parse(cursor.updatedAt);
   if (!Number.isFinite(time) || !/^[0-9a-f-]{36}$/i.test(cursor.id)) return null;
   return { updatedAt: new Date(time).toISOString(), id: cursor.id };
+}
+
+async function assertPipelineManagePermission(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+}) {
+  const { data, error } = await input.supabase.rpc('crm_pipeline_can_manage', {
+    p_organization_id: input.organizationId,
+  });
+  if (error) throw new Error(`CRM pipeline permission check failed: ${error.message}`);
+  if (data !== true) {
+    throw new CrmDealMutationError('FORBIDDEN', 'CRM pipeline mutation not permitted');
+  }
+}
+
+async function assertDealManagePermission(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  ownerUserId: string;
+}) {
+  const { data, error } = await input.supabase.rpc('crm_deal_can_manage', {
+    p_organization_id: input.organizationId,
+    p_owner_user_id: input.ownerUserId,
+  });
+  if (error) throw new Error(`CRM Deal permission check failed: ${error.message}`);
+  if (data !== true) {
+    throw new CrmDealMutationError('FORBIDDEN', 'CRM Deal mutation not permitted');
+  }
 }
 
 export async function listCrmPipelines(input: {
@@ -130,6 +158,11 @@ export async function updateCrmPipeline(input: {
   expectedVersion: number;
   patch: Partial<Pick<CrmPipelineRow, 'name' | 'status' | 'is_default'>>;
 }) {
+  await assertPipelineManagePermission({
+    supabase: input.supabase,
+    organizationId: input.organizationId,
+  });
+
   const { data, error } = await input.supabase
     .from('crm_pipelines')
     .update(input.patch)
@@ -164,6 +197,11 @@ export async function updateCrmPipelineStage(input: {
   expectedVersion: number;
   patch: Partial<Pick<CrmPipelineStageRow, 'name' | 'position' | 'is_active'>>;
 }) {
+  await assertPipelineManagePermission({
+    supabase: input.supabase,
+    organizationId: input.organizationId,
+  });
+
   const { data, error } = await input.supabase
     .from('crm_pipeline_stages')
     .update(input.patch)
@@ -359,6 +397,26 @@ export async function updateCrmDeal(input: {
     metadata?: Record<string, unknown>;
   };
 }) {
+  const currentOwner = await input.supabase
+    .from('crm_deals')
+    .select('owner_user_id')
+    .eq('organization_id', input.organizationId)
+    .eq('id', input.dealId)
+    .maybeSingle();
+
+  if (currentOwner.error) {
+    throw new Error(`CRM Deal owner lookup failed: ${currentOwner.error.message}`);
+  }
+  if (!currentOwner.data) {
+    throw new CrmDealMutationError('NOT_FOUND', 'CRM Deal not found');
+  }
+
+  await assertDealManagePermission({
+    supabase: input.supabase,
+    organizationId: input.organizationId,
+    ownerUserId: String(currentOwner.data.owner_user_id),
+  });
+
   const update: Record<string, unknown> = {};
   if (input.patch.title !== undefined) update.title = input.patch.title.trim();
   if (input.patch.stageId !== undefined) update.stage_id = input.patch.stageId;
