@@ -382,3 +382,38 @@ begin
   end if;
 end;
 $$;
+
+do $indexes$
+declare
+  v_expected text[] := array[
+    'audit_logs_org_brand_scope_idx',
+    'audit_logs_org_business_scope_idx',
+    'audit_logs_org_branch_scope_idx',
+    'audit_logs_org_department_scope_idx',
+    'audit_logs_org_team_scope_idx',
+    'feature_flag_overrides_updated_by_idx',
+    'member_scope_assignments_assigned_by_idx',
+    'member_scope_assignments_org_brand_fk_idx',
+    'member_scope_assignments_org_business_fk_idx',
+    'member_scope_assignments_org_branch_fk_idx',
+    'member_scope_assignments_org_department_fk_idx',
+    'member_scope_assignments_org_team_fk_idx',
+    'organization_entitlement_overrides_created_by_idx',
+    'scope_configuration_overrides_updated_by_idx',
+    'subscriptions_pricing_version_idx'
+  ];
+  v_count integer;
+begin
+  select count(*)
+    into v_count
+  from pg_indexes
+  where schemaname = 'public'
+    and indexname = any(v_expected);
+
+  if v_count <> cardinality(v_expected) then
+    raise exception 'expected % Control Plane FK indexes, found %',
+      cardinality(v_expected), v_count;
+  end if;
+end;
+$indexes$;
+
