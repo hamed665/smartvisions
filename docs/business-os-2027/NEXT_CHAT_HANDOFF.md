@@ -4,24 +4,19 @@
 
 Repository: `hamed665/smartvisions`
 
-Business OS Phase 0 was stabilized and merged:
+Business OS status as of 2026-09-22:
 
-- PR #172: `docs: establish AI Business OS 2027 production foundation`
-- merged to `main` as `144906c8f72c368851f8c4efb3e85dff8627f863`
-- main CI passed;
-- Cloudflare Production Deploy #261 passed on that same main SHA;
-- PR #172 was documentation-only, so Growth OS execution behavior was not redesigned.
+- Phase 0 merged in PR #172 at `main@144906c8f72c368851f8c4efb3e85dff8627f863`.
+- Phase 1 Control Plane Foundation merged in PR #173 at `main@01d74f7c8d333c017f8f4790d7bc3e4a7d1f6ca4`.
+- Migration `0068_business_os_control_plane_foundation` is live in Production as migration version `20260922100907`.
+- Production verification passed for schema, RLS, grants, SECURITY INVOKER boundaries, usage classification, audit correlation, runtime safety controls and empty initial Control Plane catalog data.
+- Supabase security-advisor findings after 0068 are unchanged from the pre-0068 baseline.
+- The only new advisor debt from 0068 was 15 performance INFO findings for unindexed foreign keys.
+- Branch `fix/business-os-control-plane-fk-indexes` / migration `0069_business_os_control_plane_fk_indexes.sql` exists solely to cover those FK indexes.
+- No customer/provider message was sent for Phase 1 verification.
+- Shadow Mode remains ON.
 
-The active implementation work is:
-
-- branch: `feat/business-os-control-plane-foundation`
-- PR: **#173**
-- scope: Phase 1 Control Plane Foundation
-- status: implementation/review branch; **not Production**
-- migration: `supabase/migrations/0068_business_os_control_plane_foundation.sql`
-- Production Supabase was still applied only through migration 0067 when this work package was created.
-
-Always verify the current PR head and CI before continuing because those are runtime repository facts and can move after this handoff is committed.
+Runtime and Production evidence outrank stale documentation or chat memory.
 
 ## Read before changing anything
 
@@ -164,12 +159,12 @@ A green CI run is necessary, not a substitute for review of a migration.
 
 ## Exact next action
 
-1. Finish CI and migration review on PR #173.
-2. Mark PR #173 ready only when its exact head is green.
-3. Obtain/complete review; do not merge a substantive database foundation merely because CI is green.
-4. After approved merge, promote migration 0068 through the controlled migration path.
-5. Verify Production schema, RLS, grants, tenant isolation, audit behavior, security advisors and performance advisors. Do not send provider messages during verification.
-6. Reconcile `docs/business-os-2027/` with the proven Production state.
-7. Only then start Phase 2: **Omnichannel Adapter Boundary**, reusing current WhatsApp/Email journals and the canonical send gate.
+1. Finish CI/review for the narrow 0069 FK-index cleanup.
+2. Merge 0069 only if exact-head CI is green.
+3. Promote 0069 and confirm the 15 new unindexed-FK advisor findings are gone; do not treat existing legacy advisor findings as regressions.
+4. Reconfirm runtime safety controls and heartbeat after 0069.
+5. Start Phase 2 from the new clean `main`: **Omnichannel Adapter Boundary**.
+6. Reuse current WhatsApp/Email journals, reconciliation evidence and canonical send gate. Do not create a second outbound path.
+7. Keep provider side effects behind the existing safety path and introduce no real customer sends during adapter-contract verification.
 
 The goal remains production-grade Business OS behavior, not decorative UI or file count.
