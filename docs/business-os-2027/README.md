@@ -17,7 +17,8 @@ Production changes are promoted only after the repository's safety, CI, migratio
 5. [MIGRATION_FROM_GROWTH_OS.md](./MIGRATION_FROM_GROWTH_OS.md) — reuse/extend/replace decisions for existing production primitives.
 6. [CONTROL_PLANE_FOUNDATION.md](./CONTROL_PLANE_FOUNDATION.md) — Production-evidence Gap Map, compatibility decisions, and Phase 1 domain contract.
 7. [OMNICHANNEL_ADAPTER_BOUNDARY.md](./OMNICHANNEL_ADAPTER_BOUNDARY.md) — Phase 2 evidence, Gap Map, capability matrix and semantic adapter contract.
-8. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
+8. [CUSTOMER_360_CRM_NORMALIZATION.md](./CUSTOMER_360_CRM_NORMALIZATION.md) — Phase 3 Production evidence, CRM Gap Map, identity-resolution contract and compatibility plan.
+9. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
 
 ## Phase 0 exit criteria
 
@@ -45,4 +46,5 @@ Phase 0 is complete only when:
 - Phase 2 Omnichannel Adapter Boundary is complete for the two Production-proven channels. PR #175 added the side-effect-free semantic adapter/status layer and PR #176 added fail-closed provider identity plus reconciliation contracts; final Phase 2 main is `a5396156afc58a22cdf78baf7a495fb07ec38b40`.
 - Production verification after PR #176 showed Shadow Mode ON, heartbeat `failed=0`, acquisition/dispatch SKIPPED, and zero Email/WhatsApp outbound messages after the merge.
 - Phase 2 keeps the canonical Email/WhatsApp send gate, journals and providers unchanged and does not claim native-app human activity where provider evidence is unavailable.
-- The next dependency is Phase 3: Customer 360 + CRM normalization.
+- Phase 3 Customer 360 + CRM normalization is active in PR #178 on `feat/business-os-crm-identity-foundation`. The first slice reuses canonical `businesses`/`leads` and adds deterministic tenant-scoped CRM identities plus evidence links; it deliberately does not fabricate Person contacts from provider display names.
+- The Phase 3 implementation head `7a394f3fe42aa7c25a758cfffd90d094f292294d` passed lint, typecheck, full Vitest, PostgreSQL 17 migration/backfill/RLS/conflict/audit smoke, Next build, Vinext build and Cloudflare scheduled verification before the final documentation reconciliation commits.

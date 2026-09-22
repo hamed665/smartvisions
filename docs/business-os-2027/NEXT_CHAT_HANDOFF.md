@@ -18,7 +18,14 @@ Business OS status as of 2026-09-22:
 - Phase 2 is complete for current Production-proven Email/Resend and WhatsApp/Meta Cloud channels.
 - Post-PR #176 Production verification: heartbeat `failed=0`, Shadow Mode ON, acquisition/dispatch SKIPPED, and zero Email/WhatsApp outbound rows after the merge.
 - Phase 2 reuses the current canonical Email/WhatsApp send gate, provider implementations, journals, lifecycle/reconciliation evidence and Human takeover semantics.
-- No customer/provider message was sent for Phase 1 verification.
+- Phase 2 closeout merged in PR #177 at `main@e677407bce74818e5d5c8fea4643fb9706acbefb`.
+- Phase 3 first slice is PR #178 on `feat/business-os-crm-identity-foundation`, migration `0070_crm_identity_foundation.sql`.
+- Phase 3 reuses `businesses` as canonical Company/Account and `leads` as the existing Lead/Opportunity foundation; it does not create a parallel CRM.
+- The first slice adds `crm_identities` and `crm_identity_links`, deterministic tenant-scoped resolution, explicit conflict state, PII-safe audit fingerprints, and Email/WhatsApp registry-first lookup with the old exact lookup retained as deployment compatibility fallback.
+- A Person/Contact row is deliberately not fabricated from WhatsApp profile/display names.
+- Implementation head `7a394f3fe42aa7c25a758cfffd90d094f292294d` passed full CI including PostgreSQL 17 migration/backfill/RLS/conflict/audit smoke before final docs reconciliation.
+- Migration 0070 is not Production yet while PR #178 remains under review.
+- No customer/provider message was sent for architecture verification.
 - Shadow Mode remains ON.
 
 Runtime and Production evidence outrank stale documentation or chat memory.
@@ -39,8 +46,9 @@ Read in this order:
 10. `docs/business-os-2027/MIGRATION_FROM_GROWTH_OS.md`
 11. `docs/business-os-2027/CONTROL_PLANE_FOUNDATION.md`
 12. `docs/business-os-2027/OMNICHANNEL_ADAPTER_BOUNDARY.md`
-13. current Phase 2 PR/branch diff, CI, reviews and review threads
-14. current `main` SHA, Production deploy evidence and Production Supabase migration state
+13. `docs/business-os-2027/CUSTOMER_360_CRM_NORMALIZATION.md`
+14. PR #178 diff, exact-head CI, reviews and review threads
+15. current `main` SHA, Production deploy evidence and Production Supabase migration state
 
 Runtime and Production evidence outrank stale documentation or chat memory.
 
@@ -165,12 +173,13 @@ A green CI run is necessary, not a substitute for review of a migration.
 
 ## Exact next action
 
-1. Start Phase 3 from clean `main@a5396156afc58a22cdf78baf7a495fb07ec38b40` after this Phase 2 closeout merges.
-2. Before changing CRM schema, inspect Production `businesses`, `leads`, `sales_conversations`, `conversation_messages`, existing activities/follow-up/handoff tables, RLS, indexes, and all current CRM assumptions.
-3. Produce an evidence-backed Phase 3 Gap Map for Contact Identity, identity resolution, accounts/companies, custom fields/objects, activities/tasks, pipelines/deals, segments, customer timeline, and merge/conflict rules.
-4. **EXTEND** the current CRM. Do not create a parallel CRM or repurpose the existing Hunter/prospect `businesses` table.
-5. Define the smallest safe first Phase 3 slice after the Gap Map. Prefer identity/contact normalization before deals/custom objects if Production evidence confirms that dependency.
-6. Preserve the existing outbound safety, Human takeover, Cost Guard, Omnichannel journals and send gate.
-7. Do not send real provider/customer messages for CRM architecture verification.
+1. Run exact-head CI after the final Phase 3 documentation reconciliation commits.
+2. Review PR #178 specifically for migration 0070 RLS/grants, tenant composite FKs, identity ambiguity behavior, PII-safe audit, and code-before-migration fallback.
+3. Mark PR #178 Ready for Review only if its final exact head is green.
+4. Do not promote migration 0070 to Production from a failing or stale head.
+5. After merge, apply the exact main migration through the controlled Supabase migration path.
+6. Immediately verify Production table/RLS/grants/function ACLs, backfill counts, conflict count, advisor delta, heartbeat, Shadow Mode and zero architecture-test outbound sends.
+7. Reconcile the Phase 3 docs to proven Production state.
+8. Continue Phase 3 with the next evidence-backed dependency. Do not fabricate Person Contacts; choose Customer 360 timeline or a Person model only after source/evidence semantics are proven.
 
 The goal remains production-grade Business OS behavior, not decorative UI or file count.

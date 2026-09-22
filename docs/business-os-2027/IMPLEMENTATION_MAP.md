@@ -59,6 +59,8 @@ Use the existing WhatsApp/Email paths as first adapters.
 
 ## Phase 3 — Customer 360 + CRM normalization
 
+Status: **ACTIVE IMPLEMENTATION** in PR #178 / `feat/business-os-crm-identity-foundation`. The first slice preserves `businesses` as canonical Company/Account and `leads` as the existing Lead/Opportunity foundation, then adds tenant-scoped normalized identity evidence and deterministic conflict-safe resolution. The implementation head `7a394f3fe42aa7c25a758cfffd90d094f292294d` passed the full CI + PostgreSQL 17 migration smoke before final docs reconciliation.
+
 Extend the existing Lead/Business/Conversation CRM instead of creating a second CRM.
 
 Add:

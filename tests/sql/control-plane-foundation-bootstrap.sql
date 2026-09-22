@@ -1,6 +1,7 @@
 \set ON_ERROR_STOP on
 
-create extension if not exists pgcrypto;
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
 
 do $$
 begin
@@ -33,6 +34,7 @@ as $$
 $$;
 
 grant usage on schema auth, public to authenticated, service_role;
+grant usage on schema extensions to authenticated, service_role;
 grant execute on function auth.uid() to authenticated, service_role;
 
 create table public.organizations (
@@ -47,6 +49,20 @@ create table public.organization_members (
   role text not null check (role in ('OWNER','ADMIN','SALES_MANAGER','SALES_AGENT','VIEWER')),
   created_at timestamptz not null default now(),
   primary key (organization_id, user_id)
+);
+
+create table public.businesses (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null,
+  country_code text not null,
+  email text,
+  phone text,
+  international_phone text,
+  whatsapp text,
+  instagram text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table public.usage_events (
@@ -112,11 +128,18 @@ revoke all on function public.is_org_owner(uuid) from public;
 grant execute on function public.is_org_member(uuid), public.is_org_owner(uuid) to authenticated, service_role;
 
 alter table public.organization_members enable row level security;
+alter table public.businesses enable row level security;
 create policy organization_members_self_read
   on public.organization_members
   for select
   to authenticated
   using (user_id = (select auth.uid()));
+
+create policy businesses_member_read
+  on public.businesses
+  for select
+  to authenticated
+  using (public.is_org_member(organization_id));
 
 alter table public.usage_events enable row level security;
 create policy usage_events_member_read
@@ -145,6 +168,7 @@ create policy org_member_audit_insert
   );
 
 grant select on public.organization_members to authenticated;
+grant select on public.businesses to authenticated, service_role;
 grant select, insert on public.usage_events to authenticated;
 grant select, insert on public.usage_events to service_role;
 grant update (cost_usd, input_tokens, output_tokens, units, metadata)
