@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { isDoNotContactReply, persistCustomerDoNotContact, persistCustomerReplyConversationState } from '@/lib/conversations/sales-lifecycle';
 import type { NormalizedWhatsAppInbound, NormalizedWhatsAppStatus } from './webhook';
+import { mapWhatsAppProviderStatus } from '@/lib/omnichannel';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -82,14 +83,7 @@ export function isWhatsAppInboundDuplicateError(code?: string | null) {
 }
 
 export function mapWhatsAppDeliveryStatus(status: NormalizedWhatsAppStatus['status']) {
-  switch (status) {
-    case 'sent': return 'SENT';
-    case 'delivered': return 'DELIVERED';
-    case 'read': return 'READ';
-    case 'failed': return 'FAILED';
-    case 'deleted': return 'DELETED';
-    default: return 'UNKNOWN';
-  }
+  return mapWhatsAppProviderStatus(status);
 }
 
 async function resolveExactBusinessByPhone(organizationId: string, from: string) {
