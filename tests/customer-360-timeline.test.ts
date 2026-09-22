@@ -78,6 +78,9 @@ describe('Business OS Customer 360 timeline', () => {
     expect(migration).not.toContain('security definer');
     expect(migration).toContain('t.occurred_at = p_before_at');
     expect(migration).toContain('t.item_id < p_before_item_id');
+    expect(migration).toContain('grant execute on function public.get_crm_customer_timeline');
+    expect(migration).toContain('to authenticated;');
+    expect(migration).not.toContain('to authenticated, service_role;');
   });
 
   it('uses signed-in Supabase session and RLS in the API route', () => {
