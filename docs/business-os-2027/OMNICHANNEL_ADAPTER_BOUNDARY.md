@@ -100,7 +100,7 @@ channel
 provider
 provider_message_id
 provider_thread_id?
-occurred_at
+occurred_at?
 from
 to?
 content_type
@@ -138,7 +138,7 @@ DELETED
 UNKNOWN
 ```
 
-Provider-specific statuses are mapped only when evidence exists. Unknown provider states remain `UNKNOWN`; they are not guessed into a success state.
+Provider-specific statuses are mapped only when evidence exists. Unknown provider states remain `UNKNOWN`; they are not guessed into a success state. Missing provider timestamps/content types remain absent/`UNKNOWN`; the adapter does not fabricate evidence.
 
 ## 7. Native-app coexistence
 
