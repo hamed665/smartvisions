@@ -72,21 +72,21 @@ begin
 end;
 $$;
 
-insert into public.usage_events(organization_id, provider, operation, cost_usd, metadata)
+insert into public.usage_events(id, organization_id, provider, operation, cost_usd, metadata)
 values (
+  '90000000-0000-0000-0000-000000000001',
   '00000000-0000-0000-0000-000000000a01',
   'OPENAI',
   'CI_SMOKE',
   0.123456,
   '{"source":"ci"}'::jsonb
-)
-returning id as usage_id \gset
+);
 
 do $$
 begin
   if not exists (
     select 1 from public.usage_events
-    where id = :'usage_id'
+    where id = '90000000-0000-0000-0000-000000000001'
       and usage_classification = 'INTERNAL'
   ) then
     raise exception 'usage classification did not fail closed to INTERNAL';
@@ -317,7 +317,7 @@ update public.subscriptions
 select *
 from public.classify_usage_event(
   '00000000-0000-0000-0000-000000000a01',
-  :'usage_id',
+  '90000000-0000-0000-0000-000000000001',
   'BILLABLE',
   'CI smoke reconciliation',
   null,
@@ -330,7 +330,7 @@ begin
   if not exists (
     select 1
     from public.usage_events
-    where id = :'usage_id'
+    where id = '90000000-0000-0000-0000-000000000001'
       and usage_classification = 'BILLABLE'
   ) then
     raise exception 'trusted classification RPC did not update usage classification';
@@ -340,7 +340,7 @@ begin
     select 1
     from public.audit_logs
     where entity_type = 'usage_event'
-      and entity_id = :'usage_id'
+      and entity_id = '90000000-0000-0000-0000-000000000001'
       and action = 'USAGE_CLASSIFICATION_CHANGED'
       and correlation_id like 'dbtx:%'
       and causation_id = 'ci-causation'
