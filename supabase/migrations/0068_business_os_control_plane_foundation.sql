@@ -125,7 +125,7 @@ create table if not exists public.member_scope_assignments (
   branch_id uuid,
   department_id uuid,
   team_id uuid,
-  attributes jsonb not null default '{}'::jsonb,
+  attributes jsonb not null default '{}'::jsonb check (jsonb_typeof(attributes) = 'object'),
   assigned_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -395,14 +395,14 @@ create table if not exists public.pricing_versions (
   metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (plan_id, version),
+  unique (plan_id, currency, billing_period, version),
   constraint pricing_versions_effective_window check (
     effective_to is null or effective_from is null or effective_to > effective_from
   )
 );
 
-create unique index if not exists pricing_versions_one_active_per_plan
-  on public.pricing_versions(plan_id)
+create unique index if not exists pricing_versions_one_active_per_lane
+  on public.pricing_versions(plan_id, currency, billing_period)
   where status = 'ACTIVE';
 
 create table if not exists public.plan_entitlements (
@@ -440,6 +440,10 @@ create unique index if not exists subscriptions_provider_id_unique
   where provider is not null and provider_subscription_id is not null;
 create index if not exists subscriptions_org_status_idx
   on public.subscriptions(organization_id, status, created_at desc);
+
+create unique index if not exists subscriptions_one_live_per_org
+  on public.subscriptions(organization_id)
+  where status in ('TRIAL','ACTIVE','PAST_DUE','GRACE_PERIOD','SUSPENDED');
 
 create table if not exists public.organization_entitlement_overrides (
   id uuid primary key default gen_random_uuid(),
@@ -652,6 +656,9 @@ grant insert (
   created_at
 ) on table public.usage_events to authenticated;
 
+grant update (usage_classification)
+  on table public.usage_events to service_role;
+
 create or replace function public.classify_usage_event(
   p_organization_id uuid,
   p_event_id uuid,
@@ -667,7 +674,7 @@ returns table(
   changed boolean
 )
 language plpgsql
-security definer
+security invoker
 set search_path = public, pg_catalog
 as $$
 declare
@@ -772,7 +779,7 @@ create index if not exists audit_logs_correlation_idx
 create or replace function public.audit_control_plane_mutation()
 returns trigger
 language plpgsql
-security definer
+security invoker
 set search_path = public, auth, pg_catalog
 as $$
 declare
@@ -969,7 +976,10 @@ create policy teams_owner_update on public.teams
   with check (public.is_org_owner(organization_id));
 
 create policy member_scope_assignments_member_read on public.member_scope_assignments
-  for select to authenticated using (public.is_org_member(organization_id));
+  for select to authenticated using (
+    user_id = (select auth.uid())
+    or public.is_org_owner(organization_id)
+  );
 create policy member_scope_assignments_owner_insert on public.member_scope_assignments
   for insert to authenticated with check (public.is_org_owner(organization_id));
 create policy member_scope_assignments_owner_update on public.member_scope_assignments
@@ -1069,7 +1079,10 @@ grant select on public.plans,
   public.organization_entitlement_overrides
 to authenticated;
 
-grant select, insert, update, delete on public.brands,
+-- Runtime service access is deliberately narrower than database-owner access.
+-- Catalog authoring stays migration-managed until a platform-audit command path exists.
+-- Hierarchy/subscription lifecycle uses state changes instead of hard deletes.
+revoke all on public.brands,
   public.tenant_businesses,
   public.branches,
   public.departments,
@@ -1082,6 +1095,25 @@ grant select, insert, update, delete on public.brands,
   public.plan_entitlements,
   public.subscriptions,
   public.organization_entitlement_overrides
+from service_role;
+
+grant select, insert, update on public.brands,
+  public.tenant_businesses,
+  public.branches,
+  public.departments,
+  public.teams,
+  public.subscriptions,
+  public.organization_entitlement_overrides
+to service_role;
+
+grant select, insert, update, delete on public.member_scope_assignments,
+  public.scope_configuration_overrides,
+  public.feature_flag_overrides
+to service_role;
+
+grant select on public.plans,
+  public.pricing_versions,
+  public.plan_entitlements
 to service_role;
 
 revoke all on function public.enforce_catalog_state_transition() from public, anon, authenticated;
