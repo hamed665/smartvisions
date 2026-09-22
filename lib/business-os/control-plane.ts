@@ -41,6 +41,9 @@ export const USAGE_CLASSIFICATIONS = [
 
 export type UsageClassification = (typeof USAGE_CLASSIFICATIONS)[number];
 
+export type PolicyAttributeValue = string | number | boolean;
+export type PolicyAttributes = Record<string, PolicyAttributeValue>;
+
 export type NormalizedScopeOverride<T> = {
   organizationId: string;
   scopeType: TenantScopeType;
@@ -186,18 +189,42 @@ export function isScopeAssignmentApplicable(
   return scopeId(target, assignment.scopeType) === assignment.scopeId;
 }
 
+function isPolicyAttributeValue(value: unknown): value is PolicyAttributeValue {
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+}
+
+/**
+ * Foundation ABAC is deliberately small and fail-closed: an assignment may
+ * require scalar attributes and every declared requirement must exactly match
+ * the trusted policy context supplied by the caller. Nested/unsupported values
+ * never grant access.
+ */
+export function matchesPolicyAttributes(
+  requiredAttributes: Record<string, unknown> | undefined,
+  actualAttributes: PolicyAttributes = {},
+) {
+  if (!requiredAttributes) return true;
+  for (const [key, requiredValue] of Object.entries(requiredAttributes)) {
+    if (!isPolicyAttributeValue(requiredValue)) return false;
+    if (actualAttributes[key] !== requiredValue) return false;
+  }
+  return true;
+}
+
 export function effectiveRoleForScope(input: {
   organizationRole: OrganizationRole;
   userId: string;
   target: TenantScope;
   assignments: MemberScopeAssignment[];
+  policyAttributes?: PolicyAttributes;
 }): OrganizationRole {
   if (input.organizationRole === 'OWNER') return 'OWNER';
 
   const applicable = input.assignments
     .filter((assignment) =>
       assignment.userId === input.userId
-      && isScopeAssignmentApplicable(input.target, assignment))
+      && isScopeAssignmentApplicable(input.target, assignment)
+      && matchesPolicyAttributes(assignment.attributes, input.policyAttributes))
     .sort((a, b) => scopeRank(b.scopeType) - scopeRank(a.scopeType));
 
   return applicable[0]?.role ?? input.organizationRole;
