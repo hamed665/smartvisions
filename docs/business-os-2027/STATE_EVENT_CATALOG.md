@@ -129,6 +129,33 @@ Failure outcomes:
 
 `BLOCKED | REJECTED | FAILED | COMPENSATING | COMPENSATED | MANUAL_REVIEW`
 
+## CRM Task
+
+Task is actionable human work. Historical activity remains immutable evidence in Customer 360 and must not be rewritten into Task rows.
+
+States:
+
+`OPEN -> IN_PROGRESS | BLOCKED | DONE | CANCELED`
+
+Additional allowed transitions:
+
+- `IN_PROGRESS -> OPEN | BLOCKED | DONE | CANCELED`
+- `BLOCKED -> OPEN | IN_PROGRESS | DONE | CANCELED`
+- `DONE -> OPEN` only as an explicit reopen/correction
+- `CANCELED` is terminal
+
+Events:
+
+- crm.task.created.v1
+- crm.task.assigned.v1
+- crm.task.updated.v1
+- crm.task.status_changed.v1
+- crm.task.completed.v1
+- crm.task.reopened.v1
+- crm.task.canceled.v1
+
+Task source provenance is immutable. A historical Follow-up, Handoff, Reply, Approval or Operator Brief may create/link a Task only through an explicit idempotent command; activity is never auto-converted merely because it exists.
+
 ## Event envelope
 
 All future domain events use:
