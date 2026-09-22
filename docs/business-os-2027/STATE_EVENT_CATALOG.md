@@ -68,6 +68,12 @@ Aggregate states:
 
 `WON` and `LOST` are terminal commercial states.
 
+Pipeline lifecycle:
+
+`DRAFT -> ACTIVE -> ARCHIVED`
+
+`ARCHIVED` is terminal. Activation is allowed only when the Pipeline has at least one active OPEN stage and exactly one active WON and LOST stage.
+
 Pipeline stages are configurable ordered labels. A typical default pipeline may use:
 
 `NEW -> QUALIFIED -> OPPORTUNITY -> PROPOSAL -> NEGOTIATION -> WON | LOST`
