@@ -46,6 +46,7 @@ jobs:
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/supabase/migrations/0071_customer_360_timeline.sql
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/tests/sql/customer-360-timeline-smoke.sql
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/supabase/migrations/0072_crm_task_foundation.sql
+          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/supabase/migrations/0073_crm_task_fk_indexes.sql
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/tests/sql/crm-task-foundation-smoke.sql
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/tests/sql/control-plane-foundation-smoke.sql
       - run: npm run build
