@@ -50,6 +50,19 @@ export type OutboundIdempotencyBoundary =
   | 'APPLICATION_AND_PROVIDER'
   | 'APPLICATION_CLAIM_ONLY';
 
+export type ChannelReconciliationContract = {
+  messageLedger: 'outreach_messages';
+  providerEventJournal: 'email_events' | 'whatsapp_events';
+  providerMessageUniqueness: 'organization_id+provider_message_id';
+  providerEventDedupeKey:
+    | 'organization_id+provider+provider_event_id'
+    | 'organization_id+provider_message_id+direction+event_type';
+  providerAcceptedPersistenceFailure: 'RECONCILIATION_ONLY';
+  preAcceptanceFailure: 'NO_AUTOMATIC_RETRY';
+  ambiguousProviderResult: 'NO_BLIND_RETRY';
+  statusAuthority: 'PROVIDER_WEBHOOK_JOURNAL';
+};
+
 export type ChannelCapabilityDescriptor = {
   channel: ActiveOmnichannelChannel;
   provider: 'RESEND' | 'META_CLOUD';
@@ -67,6 +80,7 @@ export type ChannelCapabilityDescriptor = {
     providerThreadIdentity: boolean;
   };
   idempotency: OutboundIdempotencyBoundary;
+  reconciliation: ChannelReconciliationContract;
   policy: {
     marketWindowRequired: true;
     suppressionRequired: true;
