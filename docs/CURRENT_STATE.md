@@ -20,7 +20,10 @@ This is the current operational handoff for Growth OS. Current `main`, routed Cl
 - Latest Business OS Production migration before Tasks: `0071_customer_360_timeline`, version `20260922202957`
 - CRM Task Foundation merged in PR #181 at `main@4c2a4d3bc78a57088f92ba8eae82542d501a37dc`; Production migration `0072_crm_task_foundation` version `20260922214407`
 - CRM Task FK cleanup merged in PR #182 at `main@1eab75f73a5ae99a973e5616bb30c09325b9a680`; Production migration `0073_crm_task_fk_indexes` version `20260922214843`
-- Latest verified Cloudflare Production Worker heartbeat after Slice 3: `84d19f06-ead7-4abe-b332-ba14309629d8`
+- Latest verified Cloudflare Production Worker heartbeat after Slice 4: `47d22421-109e-4c1e-81e6-20bb273078e1`
+- CRM Deal/Pipeline Foundation merged in PR #184 at `main@d416fcee020bc393a45096ee1330f8378bbd8e38`; Production migration `0074_crm_deal_pipeline_foundation` version `20260922225908`
+- Production Deal/Pipeline rows intentionally remain 0 Pipelines / 0 Stages / 0 Deals after migration and rollback-only verification
+- Cloudflare runtime after Slice 4 is proven by Worker version `47d22421-109e-4c1e-81e6-20bb273078e1`, with heartbeat `failed=0`, acquisition `SKIPPED`, dispatch `SKIPPED`, and zero Email/WhatsApp outbound rows after the PR #184 merge
 - Production cron: exactly `*/2 * * * *`
 - Release candidate: no scheduled trigger
 - Old Vercel deployment: frozen rollback/history only; not a Production health source
@@ -296,7 +299,7 @@ Do not invent another feature roadmap. Continue from the existing canonical path
 
 `real business evidence -> deterministic qualification/service fit -> smallest useful recommendation or NO_RECOMMENDATION -> selective Agent reasoning -> Shadow/approval/human gates -> canonical provider-boundary safety -> durable result evidence -> measured learning`
 
-For Business OS work, continue from the current dependency order without duplicating canonical stores. CRM Identity, Customer 360 Timeline and CRM Task Foundation are Production-verified. The next dependency is Deal/Pipeline normalization after an evidence-backed gap audit; Growth/Intent Opportunities are acquisition evidence and must not be repurposed as CRM Deals.
+For Business OS work, continue from the current dependency order without duplicating canonical stores. CRM Identity, Customer 360 Timeline, CRM Task Foundation and Deal/Pipeline Foundation are Production-verified. Growth/Intent Opportunities remain acquisition evidence and are not canonical CRM Deals. The next Phase 3 dependency is the remaining CRM-governance gap audit, with Custom Field/Object governance currently the strongest candidate before Segments; verify against fresh Production evidence before implementation.
 
 For controlled Oman launch behavior, the next runtime behavior change must still correspond to one of these:
 
