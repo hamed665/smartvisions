@@ -351,5 +351,44 @@ select * from operator_brief_items;
 comment on view public.crm_customer_timeline is
   'Security-invoker Customer 360 read model over canonical CRM/message/provider evidence. No copied event store and no side effects.';
 
+create or replace function public.get_crm_customer_timeline(
+  p_organization_id uuid,
+  p_business_id uuid,
+  p_limit integer default 50,
+  p_before_at timestamptz default null,
+  p_before_item_id text default null,
+  p_include_internal boolean default true
+)
+returns setof public.crm_customer_timeline
+language sql
+stable
+security invoker
+set search_path = public, pg_catalog
+as $timeline$
+  select t.*
+  from public.crm_customer_timeline t
+  where t.organization_id = p_organization_id
+    and t.business_id = p_business_id
+    and (p_include_internal or t.visibility = 'CUSTOMER')
+    and (
+      p_before_at is null
+      or t.occurred_at < p_before_at
+      or (
+        t.occurred_at = p_before_at
+        and p_before_item_id is not null
+        and t.item_id < p_before_item_id
+      )
+    )
+  order by t.occurred_at desc, t.item_id desc
+  limit least(greatest(coalesce(p_limit, 50), 1), 100);
+$timeline$;
+
 revoke all on public.crm_customer_timeline from public, anon, authenticated, service_role;
 grant select on public.crm_customer_timeline to authenticated, service_role;
+
+revoke all on function public.get_crm_customer_timeline(
+  uuid, uuid, integer, timestamptz, text, boolean
+) from public, anon;
+grant execute on function public.get_crm_customer_timeline(
+  uuid, uuid, integer, timestamptz, text, boolean
+) to authenticated, service_role;
