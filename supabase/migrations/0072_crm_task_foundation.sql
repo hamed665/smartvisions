@@ -223,21 +223,31 @@ begin
   end if;
 
   if new.status = 'DONE' then
-    new.completed_at := coalesce(new.completed_at, now());
-    new.completed_by_user_id := coalesce(new.completed_by_user_id, v_actor);
+    if old.status = 'DONE' then
+      new.completed_at := old.completed_at;
+      new.completed_by_user_id := old.completed_by_user_id;
+    else
+      new.completed_at := now();
+      new.completed_by_user_id := v_actor;
+    end if;
     new.canceled_at := null;
     new.canceled_by_user_id := null;
-  elsif old.status = 'DONE' and new.status <> 'DONE' then
+  else
     new.completed_at := null;
     new.completed_by_user_id := null;
   end if;
 
   if new.status = 'CANCELED' then
-    new.canceled_at := coalesce(new.canceled_at, now());
-    new.canceled_by_user_id := coalesce(new.canceled_by_user_id, v_actor);
+    if old.status = 'CANCELED' then
+      new.canceled_at := old.canceled_at;
+      new.canceled_by_user_id := old.canceled_by_user_id;
+    else
+      new.canceled_at := now();
+      new.canceled_by_user_id := v_actor;
+    end if;
     new.completed_at := null;
     new.completed_by_user_id := null;
-  elsif old.status <> 'CANCELED' then
+  else
     new.canceled_at := null;
     new.canceled_by_user_id := null;
   end if;
@@ -361,8 +371,56 @@ to authenticated
 using (public.crm_task_can_manage(organization_id, assignee_user_id))
 with check (public.crm_task_can_manage(organization_id, assignee_user_id));
 
+create or replace function public.get_crm_tasks(
+  p_organization_id uuid,
+  p_business_id uuid default null,
+  p_lead_id uuid default null,
+  p_assignee_user_id uuid default null,
+  p_status text default null,
+  p_include_closed boolean default false,
+  p_limit integer default 50,
+  p_before_updated_at timestamptz default null,
+  p_before_id uuid default null
+)
+returns setof public.crm_tasks
+language sql
+stable
+security invoker
+set search_path = public, pg_catalog
+as $task_query$
+  select t.*
+  from public.crm_tasks t
+  where t.organization_id = p_organization_id
+    and (p_business_id is null or t.business_id = p_business_id)
+    and (p_lead_id is null or t.lead_id = p_lead_id)
+    and (p_assignee_user_id is null or t.assignee_user_id = p_assignee_user_id)
+    and (p_status is null or t.status = p_status)
+    and (
+      p_include_closed
+      or t.status not in ('DONE','CANCELED')
+    )
+    and (
+      p_before_updated_at is null
+      or t.updated_at < p_before_updated_at
+      or (
+        t.updated_at = p_before_updated_at
+        and p_before_id is not null
+        and t.id < p_before_id
+      )
+    )
+  order by t.updated_at desc, t.id desc
+  limit least(greatest(coalesce(p_limit, 50), 1), 101);
+$task_query$;
+
 revoke all on public.crm_tasks from public, anon, authenticated, service_role;
 grant select, insert, update on public.crm_tasks to authenticated;
+
+revoke all on function public.get_crm_tasks(
+  uuid, uuid, uuid, uuid, text, boolean, integer, timestamptz, uuid
+) from public, anon, service_role;
+grant execute on function public.get_crm_tasks(
+  uuid, uuid, uuid, uuid, text, boolean, integer, timestamptz, uuid
+) to authenticated;
 
 revoke all on function public.crm_task_can_manage(uuid, uuid)
   from public, anon, service_role;
