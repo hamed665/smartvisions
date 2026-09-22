@@ -6,7 +6,7 @@ This directory is the implementation bridge from the existing **Smart Visions Gr
 
 This program **extends existing canonical Growth OS primitives**. It does not duplicate the current CRM, Agent framework, Knowledge/Prompt versioning, Cost Guard, outbound safety gate, webhook journals, Hunter, automation primitives, conversation memory, or provider accounting without a proven production blocker.
 
-Current production remains untouched until a later implementation PR passes the repository's normal safety, CI, migration, deployment, and production-verification gates.
+Production changes are promoted only after the repository's safety, CI, migration, review, and production-verification gates pass. Phase 1 has now passed those gates and is live; later phases must repeat the same discipline.
 
 ## Documents
 
@@ -35,7 +35,10 @@ Phase 0 is complete only when:
 ## Current implementation status — 2026-09-22
 
 - Phase 0 architecture foundation was merged in PR #172 at `main@144906c8f72c368851f8c4efb3e85dff8627f863`.
-- Phase 1 Control Plane Foundation is implemented on `feat/business-os-control-plane-foundation` and is not Production yet.
-- Production database migrations have **not** been applied by this branch.
+- Phase 1 Control Plane Foundation was merged in PR #173 at `main@01d74f7c8d333c017f8f4790d7bc3e4a7d1f6ca4`.
+- Production migration `0068_business_os_control_plane_foundation` was applied successfully as migration version `20260922100907`.
+- Production verification confirmed all new tables, RLS, grants, SECURITY INVOKER functions, fail-closed usage classification, required indexes, unchanged safety controls, and no seeded commercial data.
+- Post-promotion Supabase security advisor findings are unchanged from the pre-0068 baseline.
+- A small follow-up migration `0069_business_os_control_plane_fk_indexes.sql` covers the 15 new FK indexes reported by the performance advisor; this cleanup is isolated from runtime behavior.
 - Current Growth OS CRM/Hunter `businesses` remains unchanged; tenant-owned Business hierarchy uses `tenant_businesses`.
-- The next dependency after this PR is the Omnichannel Adapter Boundary, only after Control Plane review/CI/migration safety is closed.
+- The next product dependency after the 0069 cleanup is Phase 2: Omnichannel Adapter Boundary.
