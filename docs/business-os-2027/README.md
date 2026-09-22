@@ -16,7 +16,8 @@ Production changes are promoted only after the repository's safety, CI, migratio
 4. [STATE_EVENT_CATALOG.md](./STATE_EVENT_CATALOG.md) — initial canonical state machines and event naming.
 5. [MIGRATION_FROM_GROWTH_OS.md](./MIGRATION_FROM_GROWTH_OS.md) — reuse/extend/replace decisions for existing production primitives.
 6. [CONTROL_PLANE_FOUNDATION.md](./CONTROL_PLANE_FOUNDATION.md) — Production-evidence Gap Map, compatibility decisions, and Phase 1 domain contract.
-7. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
+7. [OMNICHANNEL_ADAPTER_BOUNDARY.md](./OMNICHANNEL_ADAPTER_BOUNDARY.md) — Phase 2 evidence, Gap Map, capability matrix and semantic adapter contract.
+8. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
 
 ## Phase 0 exit criteria
 
@@ -39,6 +40,7 @@ Phase 0 is complete only when:
 - Production migration `0068_business_os_control_plane_foundation` was applied successfully as migration version `20260922100907`.
 - Production verification confirmed all new tables, RLS, grants, SECURITY INVOKER functions, fail-closed usage classification, required indexes, unchanged safety controls, and no seeded commercial data.
 - Post-promotion Supabase security advisor findings are unchanged from the pre-0068 baseline.
-- A small follow-up migration `0069_business_os_control_plane_fk_indexes.sql` covers the 15 new FK indexes reported by the performance advisor; this cleanup is isolated from runtime behavior.
+- Follow-up migration `0069_business_os_control_plane_fk_indexes` is live as Production migration version `20260922101641`; it cleared all 15 post-0068 unindexed-FK advisor findings without changing runtime behavior.
 - Current Growth OS CRM/Hunter `businesses` remains unchanged; tenant-owned Business hierarchy uses `tenant_businesses`.
-- The next product dependency after the 0069 cleanup is Phase 2: Omnichannel Adapter Boundary.
+- Phase 2 Omnichannel Adapter Boundary is active on `feat/business-os-omnichannel-adapter-boundary`, based on `main@5bdcfb997d729446ae98485f81955c94db02d897`.
+- Phase 2 reuses the canonical Email/WhatsApp send gate, journals and providers; its first slice adds a side-effect-free semantic adapter/capability layer and shared status mapping only.

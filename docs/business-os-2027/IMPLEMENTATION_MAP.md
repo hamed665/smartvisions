@@ -21,7 +21,7 @@ No production schema changes in this phase.
 
 ## Phase 1 — SaaS Control Plane foundation
 
-Status: **MERGED AND PROMOTED TO PRODUCTION** in PR #173 / migration 0068. Production verification passed for schema, RLS, grants, runtime safety, usage classification and audit foundations. Migration 0069 is a post-promotion FK-index advisor cleanup only. See `CONTROL_PLANE_FOUNDATION.md` for the evidence-backed Gap Map and contract.
+Status: **MERGED AND PROMOTED TO PRODUCTION** in PR #173 / migration 0068, with post-promotion FK-index cleanup 0069 also live. Production verification passed for schema, RLS, grants, runtime safety, usage classification, audit foundations, and advisor FK coverage. See `CONTROL_PLANE_FOUNDATION.md` for the evidence-backed Gap Map and contract.
 
 Extend the existing organization model toward:
 
@@ -40,6 +40,8 @@ Add/normalize:
 Keep current production behavior backward compatible.
 
 ## Phase 2 — Omnichannel domain boundary
+
+Status: **ACTIVE IMPLEMENTATION** on `feat/business-os-omnichannel-adapter-boundary`. The first slice is contract/normalization only and requires no Production schema migration.
 
 Do not replace canonical provider journals/send gate.
 
