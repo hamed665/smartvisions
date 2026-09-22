@@ -1,8 +1,10 @@
 # Customer 360 + CRM Normalization — Evidence, Gap Map, and Identity Foundation
 
-Status: **Phase 3 active**  
-First slice: `feat/business-os-crm-identity-foundation`  
-Base: `main@e677407bce74818e5d5c8fea4643fb9706acbefb`
+Status: **Phase 3 active — first slice implemented in PR #178**  
+Branch: `feat/business-os-crm-identity-foundation`  
+Base: `main@e677407bce74818e5d5c8fea4643fb9706acbefb`  
+Migration: `0070_crm_identity_foundation.sql`  
+Verified implementation head before final docs reconciliation: `7a394f3fe42aa7c25a758cfffd90d094f292294d`
 
 ## 1. Production evidence
 
@@ -234,3 +236,35 @@ This first slice does not add:
 - a second Account/Company table;
 - provider messages;
 - autonomous merge.
+
+
+## 15. Implementation verification evidence
+
+The first implementation slice has been exercised on PostgreSQL 17 before Production promotion.
+
+Verified on implementation head `7a394f3fe42aa7c25a758cfffd90d094f292294d`:
+
+- lint passed;
+- typecheck passed;
+- full Vitest passed;
+- migration chain `0068 -> 0069 -> pre-0070 CRM fixtures -> 0070 -> CRM identity smoke -> Control Plane smoke` passed;
+- pre-migration Business contact points backfilled without rewriting Business IDs;
+- Phone and International Phone evidence for the same number deduped to one identity;
+- the same normalized identity remains isolated across Organizations;
+- authenticated direct identity mutation is denied;
+- service-role evidence recording is idempotent;
+- linking one identity to a second Business produces explicit conflict instead of auto-merge;
+- tenant ownership is immutable;
+- CRM identity audit stores SHA-256 fingerprints rather than raw normalized identity values;
+- the identity evidence RPC remains SECURITY INVOKER;
+- Email and WhatsApp remain registry-first with legacy exact fallback for controlled rollout;
+- Next build passed;
+- Vinext build passed;
+- Cloudflare scheduled verification passed.
+
+Two defects were caught by the PostgreSQL gate before Production:
+
+1. PostgreSQL regex escaping initially used the wrong backslash form and was corrected against live PostgreSQL behavior.
+2. RPC output parameter names initially collided with table column names in PL/pgSQL and were renamed to avoid ambiguity.
+
+Migration 0070 has not been promoted to Production merely because this verification passed.
