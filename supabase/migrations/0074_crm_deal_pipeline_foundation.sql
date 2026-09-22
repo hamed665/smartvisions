@@ -9,9 +9,10 @@ create table if not exists public.crm_pipelines (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   name text not null check (length(trim(name)) between 1 and 160),
-  status text not null default 'ACTIVE'
-    check (status in ('ACTIVE','ARCHIVED')),
+  status text not null default 'DRAFT'
+    check (status in ('DRAFT','ACTIVE','ARCHIVED')),
   is_default boolean not null default false,
+  check (not is_default or status = 'ACTIVE'),
   created_by_user_id uuid not null,
   version integer not null default 1 check (version >= 1),
   created_at timestamptz not null default now(),
@@ -222,11 +223,17 @@ language plpgsql
 security invoker
 set search_path = public, auth, pg_catalog
 as $pipeline_guard$
+declare
+  v_open_count integer;
+  v_won_count integer;
+  v_lost_count integer;
 begin
   if tg_op = 'INSERT' then
     if auth.uid() is null or new.created_by_user_id is distinct from auth.uid() then
       raise exception 'CRM pipeline creator must match auth.uid()';
     end if;
+    new.status := 'DRAFT';
+    new.is_default := false;
     new.version := 1;
     new.updated_at := now();
     return new;
@@ -242,6 +249,25 @@ begin
     raise exception 'ARCHIVED CRM pipeline is terminal';
   end if;
 
+  if old.status = 'ACTIVE' and new.status = 'DRAFT' then
+    raise exception 'ACTIVE CRM pipeline cannot return to DRAFT';
+  end if;
+
+  if old.status = 'DRAFT' and new.status = 'ACTIVE' then
+    select
+      count(*) filter (where s.is_active and s.category='OPEN'),
+      count(*) filter (where s.is_active and s.category='WON'),
+      count(*) filter (where s.is_active and s.category='LOST')
+    into v_open_count, v_won_count, v_lost_count
+    from public.crm_pipeline_stages s
+    where s.organization_id = old.organization_id
+      and s.pipeline_id = old.id;
+
+    if v_open_count < 1 or v_won_count <> 1 or v_lost_count <> 1 then
+      raise exception 'CRM pipeline activation requires active OPEN stage(s), exactly one WON stage and exactly one LOST stage';
+    end if;
+  end if;
+
   if old.status <> 'ARCHIVED' and new.status = 'ARCHIVED'
      and exists (
        select 1
@@ -252,6 +278,10 @@ begin
      )
   then
     raise exception 'CRM pipeline with OPEN deals cannot be archived';
+  end if;
+
+  if new.status <> 'ACTIVE' then
+    new.is_default := false;
   end if;
 
   new.version := old.version + 1;
@@ -266,20 +296,27 @@ language plpgsql
 security invoker
 set search_path = public, auth, pg_catalog
 as $pipeline_stage_guard$
+declare
+  v_pipeline_status text;
 begin
+  select p.status into v_pipeline_status
+  from public.crm_pipelines p
+  where p.organization_id = coalesce(new.organization_id, old.organization_id)
+    and p.id = coalesce(new.pipeline_id, old.pipeline_id);
+
+  if v_pipeline_status is null or v_pipeline_status = 'ARCHIVED' then
+    raise exception 'CRM pipeline stage requires non-ARCHIVED pipeline';
+  end if;
+
   if tg_op = 'INSERT' then
     if auth.uid() is null or new.created_by_user_id is distinct from auth.uid() then
       raise exception 'CRM pipeline stage creator must match auth.uid()';
     end if;
-    if not exists (
-      select 1
-      from public.crm_pipelines p
-      where p.organization_id = new.organization_id
-        and p.id = new.pipeline_id
-        and p.status = 'ACTIVE'
-    ) then
-      raise exception 'CRM pipeline stage requires ACTIVE pipeline';
+
+    if v_pipeline_status = 'ACTIVE' and new.category in ('WON','LOST') then
+      raise exception 'terminal CRM pipeline stages cannot be added after activation';
     end if;
+
     new.version := 1;
     new.updated_at := now();
     return new;
@@ -287,10 +324,40 @@ begin
 
   if new.organization_id is distinct from old.organization_id
      or new.pipeline_id is distinct from old.pipeline_id
-     or new.category is distinct from old.category
      or new.created_by_user_id is distinct from old.created_by_user_id
   then
-    raise exception 'CRM pipeline stage tenant/pipeline/category/creator is immutable';
+    raise exception 'CRM pipeline stage tenant/pipeline/creator is immutable';
+  end if;
+
+  if v_pipeline_status = 'ACTIVE'
+     and new.category is distinct from old.category
+  then
+    raise exception 'ACTIVE CRM pipeline stage category is immutable';
+  end if;
+
+  if v_pipeline_status = 'ACTIVE'
+     and old.category in ('WON','LOST')
+     and old.is_active
+     and not new.is_active
+  then
+    raise exception 'terminal CRM pipeline stage cannot be deactivated';
+  end if;
+
+  if v_pipeline_status = 'ACTIVE'
+     and old.category = 'OPEN'
+     and old.is_active
+     and not new.is_active
+     and not exists (
+       select 1
+       from public.crm_pipeline_stages s
+       where s.organization_id = old.organization_id
+         and s.pipeline_id = old.pipeline_id
+         and s.id <> old.id
+         and s.category = 'OPEN'
+         and s.is_active
+     )
+  then
+    raise exception 'CRM pipeline requires at least one active OPEN stage';
   end if;
 
   if old.is_active and not new.is_active
@@ -655,7 +722,7 @@ begin
   insert into public.crm_pipelines(
     organization_id, name, status, is_default, created_by_user_id
   ) values (
-    p_organization_id, trim(p_name), 'ACTIVE', coalesce(p_is_default,false), auth.uid()
+    p_organization_id, trim(p_name), 'DRAFT', false, auth.uid()
   )
   returning id into v_pipeline_id;
 
@@ -679,6 +746,12 @@ begin
       auth.uid()
     );
   end loop;
+
+  update public.crm_pipelines
+  set status = 'ACTIVE',
+      is_default = coalesce(p_is_default,false)
+  where organization_id = p_organization_id
+    and id = v_pipeline_id;
 
   return v_pipeline_id;
 end;
