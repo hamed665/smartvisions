@@ -1,6 +1,6 @@
 # Customer 360 + CRM Normalization — Evidence, Gap Map, and Identity Foundation
 
-Status: **Phase 3 active — Slice 1 and Slice 2 Production-verified**  
+Status: **Phase 3 active — Slice 1 and Slice 2 Production-verified; Slice 3 CRM Task Foundation in PR #181**  
 Slice 1 merge: PR #178 -> `main@27e980e417ec52c64055c029b8ffa6c6c77ab961`  
 Slice 1 Production migration: `0070_crm_identity_foundation` -> version `20260922164110`  
 Slice 2 merge: PR #179 -> `main@efcf979ff15d32062b48928672a25128c521987a`  
@@ -396,3 +396,118 @@ Migration 0071 was subsequently merged and promoted to Production. Production ve
 - zero Email/WhatsApp outbound rows were created by the merge/migration/deploy verification.
 
 Cloudflare Production Deploy #332 promoted exact `main@efcf979ff15d32062b48928672a25128c521987a`. Wrangler reported Production Worker version `a78567d8-e4f9-484e-a62b-2bd8e47b8583`; Worker Route, routed smoke, candidate smoke, safe production API/webhook rejection smoke and the `*/2 * * * *` scheduled-trigger invariant all passed. The deployment smoke invoked no outbound provider send.
+
+
+## 17. Slice 3 — Activity + Task Normalization
+
+### Production evidence
+
+Before this slice, Production already had durable Activity evidence but no general human Task lifecycle:
+
+- `followup_jobs`: 6 rows, all `PENDING`; 4 were already due at audit time. These are automation jobs and remain their own source of truth.
+- `handoff_events`: immutable conversation-mode change evidence.
+- `reply_events`: immutable reply-classification evidence.
+- `operator_briefs`: operator summaries with `requires_action`, but no assignee/due/priority/completion lifecycle.
+- `reply_decisions`: approval-specific commercial reply decisions; not a general Task system.
+- `conversation_messages`: 9 `APPROVAL_REQUIRED` rows and 4 `BLOCKED` rows. Approval remains an Action/Approval concern and is not auto-converted into Task.
+- Customer 360 Timeline already normalizes historical Activity. A second activity/event table would duplicate canonical evidence.
+
+### Decision
+
+**REUSE Activity, NEW Task.**
+
+Historical facts remain in their canonical stores and Customer 360 Timeline.  
+`crm_tasks` owns only actionable human work.
+
+A Task is not created merely because an Activity exists.
+
+### Task model
+
+Migration `0072_crm_task_foundation.sql` adds:
+
+- `crm_tasks`;
+- tenant-safe Business -> Lead -> Conversation lineage;
+- Organization-member assignee;
+- task type, priority, due date and current status;
+- optimistic `version`;
+- idempotent `request_key`;
+- immutable source provenance;
+- completion/cancellation evidence;
+- PII-minimized audit summaries;
+- SECURITY INVOKER cursor query `get_crm_tasks(...)`.
+
+Task states:
+
+```text
+OPEN
+  -> IN_PROGRESS | BLOCKED | DONE | CANCELED
+
+IN_PROGRESS
+  -> OPEN | BLOCKED | DONE | CANCELED
+
+BLOCKED
+  -> OPEN | IN_PROGRESS | DONE | CANCELED
+
+DONE
+  -> OPEN  # explicit reopen/correction only
+
+CANCELED
+  -> terminal
+```
+
+### Activity boundary
+
+Existing primitives keep ownership:
+
+- Follow-up execution -> `followup_jobs`;
+- Human/AI mode history -> `handoff_events`;
+- Reply classification -> `reply_events`;
+- Operator summary -> `operator_briefs`;
+- Approval -> existing approval/action primitives;
+- Customer interaction history -> Customer 360 Timeline.
+
+No historical row is backfilled into `crm_tasks`.
+
+### Source provenance
+
+Source types are reserved for future explicit commands:
+
+- `FOLLOWUP_JOB`
+- `HANDOFF_EVENT`
+- `REPLY_EVENT`
+- `OPERATOR_BRIEF`
+- `APPROVAL_REQUEST`
+- `OTHER`
+
+In this first slice, authenticated users may create only `MANUAL` tasks. This prevents a client from forging trusted source provenance.
+
+A later trusted system command may create a source-linked Task only with idempotency and audit.
+
+### Authorization
+
+- all Organization members may read Tasks;
+- `OWNER | ADMIN | SALES_MANAGER` may create/manage Tasks;
+- `SALES_AGENT` may create/manage only self-assigned Tasks;
+- `VIEWER` is read-only;
+- assignee must be a member of the same Organization;
+- no DELETE grant exists; cancellation is a state transition;
+- API uses the signed-in Supabase session and RLS;
+- no service-role browser path is introduced.
+
+### Concurrency and evidence
+
+Every update increments `version`. API PATCH requires `expectedVersion`; stale updates return a version conflict instead of silently overwriting newer work.
+
+Completion/cancellation actor and timestamps are database-governed. Task title/description are intentionally omitted from audit before/after summaries.
+
+### Non-scope
+
+Slice 3 does not:
+
+- auto-create Tasks from all Timeline items;
+- turn `followup_jobs` into human Tasks;
+- replace approvals;
+- add Deals/Pipelines;
+- fabricate Person Contacts;
+- add provider sends;
+- add a second activity/event store.
