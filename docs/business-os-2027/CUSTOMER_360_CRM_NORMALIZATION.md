@@ -16,7 +16,7 @@ Observed Production facts before this slice:
 - `sales_conversations` and `conversation_messages` reference Leads, not a separate Contact entity;
 - Email inbound currently resolves a customer by exact `businesses.email`;
 - WhatsApp inbound currently resolves a customer by exact normalized `businesses.whatsapp | phone | international_phone`;
-- current `businesses` contact-point coverage is 4 Email, 13 Phone, 14 WhatsApp and 3 Instagram values;
+- current `businesses` contact-point coverage is 4 Email, 13 Phone, 13 International Phone, 14 WhatsApp and 3 Instagram values;
 - current Business contact points contain no duplicate Email, Phone or WhatsApp identity inside the Organization;
 - WhatsApp durable evidence contains `from` and usually `contactName`;
 - every WhatsApp identity currently linked to a Lead matches that Lead's Business contact point; no linked identity maps to multiple Leads;
@@ -175,6 +175,7 @@ Initial backfill reads existing Business fields:
 
 - `businesses.email`
 - `businesses.phone`
+- `businesses.international_phone`
 - `businesses.whatsapp`
 - `businesses.instagram`
 
