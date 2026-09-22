@@ -28,6 +28,16 @@ export const EMAIL_CHANNEL_DESCRIPTOR = {
     providerThreadIdentity: true,
   },
   idempotency: 'APPLICATION_AND_PROVIDER',
+  reconciliation: {
+    messageLedger: 'outreach_messages',
+    providerEventJournal: 'email_events',
+    providerMessageUniqueness: 'organization_id+provider_message_id',
+    providerEventDedupeKey: 'organization_id+provider+provider_event_id',
+    providerAcceptedPersistenceFailure: 'RECONCILIATION_ONLY',
+    preAcceptanceFailure: 'NO_AUTOMATIC_RETRY',
+    ambiguousProviderResult: 'NO_BLIND_RETRY',
+    statusAuthority: 'PROVIDER_WEBHOOK_JOURNAL',
+  },
   policy: {
     marketWindowRequired: true,
     suppressionRequired: true,
@@ -59,6 +69,16 @@ export const WHATSAPP_CHANNEL_DESCRIPTOR = {
     providerThreadIdentity: true,
   },
   idempotency: 'APPLICATION_CLAIM_ONLY',
+  reconciliation: {
+    messageLedger: 'outreach_messages',
+    providerEventJournal: 'whatsapp_events',
+    providerMessageUniqueness: 'organization_id+provider_message_id',
+    providerEventDedupeKey: 'organization_id+provider_message_id+direction+event_type',
+    providerAcceptedPersistenceFailure: 'RECONCILIATION_ONLY',
+    preAcceptanceFailure: 'NO_AUTOMATIC_RETRY',
+    ambiguousProviderResult: 'NO_BLIND_RETRY',
+    statusAuthority: 'PROVIDER_WEBHOOK_JOURNAL',
+  },
   policy: {
     marketWindowRequired: true,
     suppressionRequired: true,

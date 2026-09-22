@@ -41,7 +41,7 @@ Keep current production behavior backward compatible.
 
 ## Phase 2 — Omnichannel domain boundary
 
-Status: **ACTIVE IMPLEMENTATION** on `feat/business-os-omnichannel-adapter-boundary`. The first slice is contract/normalization only and requires no Production schema migration.
+Status: **ACTIVE IMPLEMENTATION**. The semantic adapter/status slice merged in PR #175; provider-identity and reconciliation contract work continues on `feat/business-os-omnichannel-reconciliation`. No Production schema migration is required for either slice.
 
 Do not replace canonical provider journals/send gate.
 

@@ -12,8 +12,9 @@ Business OS status as of 2026-09-22:
 - Production verification passed for schema, RLS, grants, SECURITY INVOKER boundaries, usage classification, audit correlation, runtime safety controls and empty initial Control Plane catalog data.
 - Supabase security-advisor findings after 0068 are unchanged from the pre-0068 baseline.
 - The 15 post-0068 unindexed-FK findings were cleared by PR #174 / Production migration `0069_business_os_control_plane_fk_indexes` version `20260922101641`.
-- Current clean main after Phase 1 cleanup is `5bdcfb997d729446ae98485f81955c94db02d897`.
-- Phase 2 is active on `feat/business-os-omnichannel-adapter-boundary`.
+- Phase 2 semantic adapter/status slice merged in PR #175 at `main@5d812eee8a0e15dac658247b254660ae8f09aacd`.
+- Post-merge Production heartbeat was healthy, Shadow Mode remained ON, acquisition/dispatch were SKIPPED, and no Email/WhatsApp outbound send occurred in the verification window.
+- Phase 2 reconciliation/provider-identity slice is active on `feat/business-os-omnichannel-reconciliation`.
 - Phase 2 reuses the current canonical Email/WhatsApp send gate, provider implementations, journals, lifecycle/reconciliation evidence and Human takeover semantics.
 - No customer/provider message was sent for Phase 1 verification.
 - Shadow Mode remains ON.
@@ -162,13 +163,13 @@ A green CI run is necessary, not a substitute for review of a migration.
 
 ## Exact next action
 
-1. Complete Phase 2 semantic adapter tests and exact-head CI.
-2. Review the Phase 2 diff specifically for accidental provider-side effects or a second send path.
-3. Merge only if the adapter remains side-effect free and existing Email/WhatsApp lifecycle tests remain green.
-4. No Production database migration is required for this initial Phase 2 slice.
-5. After merge, reconcile Production/runtime evidence and then extend Phase 2 only where provider evidence exists.
-6. Native-app coexistence remains evidence-driven: Human takeover already wins, but native-provider human activity must stay `UNPROVEN` until a reliable provider signal exists.
-7. Do not register Instagram/Facebook/TikTok/Telegram/SMS/RCS/Voice as active adapters before their real provider paths, journals and reconciliation contracts are proven.
-8. Keep all provider side effects behind the existing canonical send gate, approval/claim, Cost Guard, verification and reconciliation path.
+1. Complete exact-head CI/review for the Phase 2 reconciliation/provider-identity slice.
+2. Verify approved-send still owns all provider side effects; the registry must only resolve integration identity.
+3. Verify reconciliation descriptors remain pinned to durable migrations 0004, 0030 and 0067 and to `approvedSendFailureDisposition`.
+4. Merge only if existing Email/WhatsApp lifecycle, approved-send, PostgreSQL smoke, Next/Vinext and Cloudflare verification remain green.
+5. No Production database migration is required for this slice.
+6. After merge, verify Production heartbeat/safety controls and that no architecture test generated a real provider send.
+7. Continue Phase 2 with evidence-backed coexistence/reconciliation hooks only; native-provider human activity remains `UNPROVEN`.
+8. Do not register future channels until their provider path, webhook verification, durable journal, idempotency and reconciliation semantics exist.
 
 The goal remains production-grade Business OS behavior, not decorative UI or file count.

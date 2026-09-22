@@ -42,5 +42,7 @@ Phase 0 is complete only when:
 - Post-promotion Supabase security advisor findings are unchanged from the pre-0068 baseline.
 - Follow-up migration `0069_business_os_control_plane_fk_indexes` is live as Production migration version `20260922101641`; it cleared all 15 post-0068 unindexed-FK advisor findings without changing runtime behavior.
 - Current Growth OS CRM/Hunter `businesses` remains unchanged; tenant-owned Business hierarchy uses `tenant_businesses`.
-- Phase 2 Omnichannel Adapter Boundary is active on `feat/business-os-omnichannel-adapter-boundary`, based on `main@5bdcfb997d729446ae98485f81955c94db02d897`.
-- Phase 2 reuses the canonical Email/WhatsApp send gate, journals and providers; its first slice adds a side-effect-free semantic adapter/capability layer and shared status mapping only.
+- Phase 2 Omnichannel Adapter Boundary semantic slice merged in PR #175 at `main@5d812eee8a0e15dac658247b254660ae8f09aacd`.
+- Production heartbeat after PR #175 was healthy with Shadow Mode ON, dispatch/acquisition SKIPPED and zero Email/WhatsApp outbound sends in the verification window.
+- Phase 2 reconciliation/provider-identity slice is active on `feat/business-os-omnichannel-reconciliation`.
+- Phase 2 continues to reuse the canonical Email/WhatsApp send gate, journals and providers; adapters remain side-effect free.

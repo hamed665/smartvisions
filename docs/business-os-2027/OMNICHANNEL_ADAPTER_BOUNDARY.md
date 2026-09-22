@@ -1,8 +1,8 @@
 # Omnichannel Adapter Boundary — Evidence, Gap Map, and Contract
 
-Status: **Phase 2 implementation branch**  
-Branch: `feat/business-os-omnichannel-adapter-boundary`  
-Base: `main@5bdcfb997d729446ae98485f81955c94db02d897`
+Status: **Phase 2 active**  
+Semantic adapter slice: PR #175 -> `main@5d812eee8a0e15dac658247b254660ae8f09aacd`  
+Active reconciliation slice: `feat/business-os-omnichannel-reconciliation`
 
 ## 1. Production evidence used
 
@@ -163,12 +163,39 @@ The active Email and WhatsApp adapters remain `UNPROVEN` for native-provider act
 
 ## 8. Failure and reconciliation contract
 
+The channel descriptor now carries a reconciliation contract backed by the existing durable schema.
+
+Shared outbound evidence:
+
+- message ledger: `outreach_messages`;
+- provider-message uniqueness: `organization_id + provider_message_id` from migration 0067;
+- provider acceptance followed by local persistence failure: `RECONCILIATION_ONLY`;
+- pre-acceptance provider failure: `NO_AUTOMATIC_RETRY`;
+- ambiguous provider result: `NO_BLIND_RETRY`;
+- status authority: provider webhook journal.
+
+Email evidence:
+
+- provider event journal: `email_events`;
+- event dedupe: `organization_id + provider + provider_event_id`;
+- integration identity: `EMAIL_PROVIDER / EMAIL`;
+- provider implementation identity: `RESEND`.
+
+WhatsApp evidence:
+
+- provider event journal: `whatsapp_events`;
+- event dedupe: `organization_id + provider_message_id + direction + event_type`;
+- integration identity: `META / WHATSAPP`;
+- provider implementation identity: `META_CLOUD`.
+
+The approved-send route resolves integration identity through the shared channel registry, but execution ownership remains unchanged. Provider calls, message claim, canonical safety recheck, Cost Guard and provider-accepted reconciliation remain in the existing approved-send/runtime paths.
+
+Additional invariants:
+
 - webhook signatures fail closed;
-- duplicate inbound/provider events are deduped by existing durable keys;
-- provider acceptance followed by local persistence failure is `RECONCILIATION_ONLY`;
-- provider rejection before acceptance is not automatically retried by the adapter;
 - status `UNKNOWN` never becomes a success signal;
-- adapter normalization is side-effect free.
+- adapter normalization is side-effect free;
+- the registry maps identity only; it cannot execute a send.
 
 ## 9. Data and migration impact
 
@@ -189,7 +216,7 @@ A future migration is allowed only if a later adapter needs durable facts that c
 
 ## 10. Test contract
 
-Required for this slice:
+Required for the semantic + reconciliation slices:
 
 - active registry contains only proven Email and WhatsApp adapters;
 - adapter layer contains no provider-send method;
@@ -200,6 +227,10 @@ Required for this slice:
 - Email inbound/status normalization;
 - WhatsApp inbound/referral/status normalization;
 - existing lifecycle tests remain green after consuming shared status mapping;
+- integration registry rejects unproven channels;
+- approved-send provider lookup uses the shared registry;
+- reconciliation descriptors match migrations 0004, 0030 and 0067;
+- reconciliation retry semantics match `approvedSendFailureDisposition`;
 - lint, typecheck, full Vitest, Next build, Vinext build, Cloudflare scheduled verification.
 
 ## 11. Explicit non-scope
