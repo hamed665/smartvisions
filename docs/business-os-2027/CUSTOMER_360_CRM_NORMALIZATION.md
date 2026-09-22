@@ -1,10 +1,11 @@
 # Customer 360 + CRM Normalization — Evidence, Gap Map, and Identity Foundation
 
-Status: **Phase 3 active — first slice implemented in PR #178**  
-Branch: `feat/business-os-crm-identity-foundation`  
-Base: `main@e677407bce74818e5d5c8fea4643fb9706acbefb`  
-Migration: `0070_crm_identity_foundation.sql`  
-Verified implementation head before final docs reconciliation: `7a394f3fe42aa7c25a758cfffd90d094f292294d`
+Status: **Phase 3 active — Slice 1 Production-verified, Slice 2 implemented in PR #179**  
+Slice 1 merge: PR #178 -> `main@27e980e417ec52c64055c029b8ffa6c6c77ab961`  
+Slice 1 Production migration: `0070_crm_identity_foundation` -> version `20260922164110`  
+Slice 2 branch: `feat/business-os-customer-360-timeline`  
+Slice 2 migration: `0071_customer_360_timeline.sql`  
+Slice 2 verified implementation head before final docs reconciliation: `3f25b41d052519ddffb8a5ce7f8f8503d38fa97f`
 
 ## 1. Production evidence
 
@@ -267,4 +268,113 @@ Two defects were caught by the PostgreSQL gate before Production:
 1. PostgreSQL regex escaping initially used the wrong backslash form and was corrected against live PostgreSQL behavior.
 2. RPC output parameter names initially collided with table column names in PL/pgSQL and were renamed to avoid ambiguity.
 
-Migration 0070 has not been promoted to Production merely because this verification passed.
+Migration 0070 was subsequently merged and promoted to Production. Production verification confirmed 47 identities, 47 evidence links, zero conflicted identities, zero cross-tenant mismatches, unchanged safety controls and zero outbound Email/WhatsApp rows after PR #178. Cloudflare runtime evidence after promotion shows Worker version `562c495f-ceeb-4021-b2d9-122ddc04021b`.
+
+
+## 16. Slice 2 — Customer 360 Timeline
+
+Production evidence showed that Customer 360 already has durable facts spread across canonical stores:
+
+- `conversation_messages`: Agent/Human outbound message lifecycle and internal blocked/approval-required/failed evidence;
+- `outreach_messages`: durable inbound customer messages plus cold/outbound ledger evidence;
+- `whatsapp_events` and `email_events`: provider delivery/read/bounce status authority;
+- `followup_jobs`: scheduled follow-up state;
+- `handoff_events`: durable Human/Auto mode changes;
+- `reply_events`: reply classification evidence;
+- `operator_briefs`: operator-facing handoff/action summaries.
+
+The current Production sample also proved overlap:
+
+- one provider message currently appears in both `conversation_messages` and `outreach_messages`;
+- provider journals overlap with the message ledgers and therefore must enrich delivery state rather than become duplicate timeline rows;
+- all current `conversation_messages` and `outreach_messages` are Lead-linked;
+- current Businesses have at most one Lead, but the read model supports multiple Leads per Business.
+
+### Slice 2 decision
+
+**ADAPT, do not copy.**
+
+Migration 0071 introduces:
+
+- `public.crm_customer_timeline`: conventional PostgreSQL view with `security_invoker=true`;
+- `public.get_crm_customer_timeline(...)`: stable SECURITY INVOKER cursor query;
+- no timeline table;
+- no materialized view;
+- no trigger;
+- no provider action;
+- no copied journal/event rows.
+
+The read model maps canonical evidence into:
+
+- customer-visible inbound messages;
+- actually sent outbound messages;
+- internal approval/blocked/failed message evidence;
+- follow-up jobs;
+- Human handoff events;
+- reply classification;
+- operator briefs.
+
+Provider journals only enrich the latest canonical delivery status.
+
+### Dedupe rule
+
+When `conversation_messages` and `outreach_messages` share the same Organization + Channel + provider message ID and the conversation row is customer-visible, the conversation row wins.
+
+This prevents one real message from appearing multiple times merely because multiple canonical ledgers record different parts of its lifecycle.
+
+### Visibility rule
+
+`CUSTOMER` means the event represents an actual customer interaction.
+
+`INTERNAL` includes:
+
+- blocked drafts;
+- approval-required drafts;
+- failed/unsent messages;
+- follow-up scheduling evidence;
+- handoff evidence;
+- reply classification;
+- operator briefs.
+
+An internal draft must never be presented as though the customer received it.
+
+### Security
+
+- the view is SECURITY INVOKER and therefore preserves RLS from underlying canonical tables;
+- the API uses the signed-in Supabase session, not service-role credentials;
+- `anon` has no view or RPC access;
+- `service_role` is intentionally not granted timeline view/RPC access because existing Production grants on handoff/reply/operator sources are narrower and do not need to be widened;
+- authenticated Organization members receive read-only access through existing underlying tenant RLS.
+
+### Pagination
+
+The RPC orders by:
+
+```text
+occurred_at DESC, item_id DESC
+```
+
+and uses the same two fields as the cursor. This avoids losing or repeating events when multiple facts share the same timestamp.
+
+### Verification
+
+Implementation head `3f25b41d052519ddffb8a5ce7f8f8503d38fa97f` passed CI #854:
+
+- lint;
+- typecheck;
+- full Vitest;
+- PostgreSQL 17 migration chain through 0071;
+- SECURITY INVOKER view/RPC verification;
+- authenticated tenant isolation and cross-tenant denial;
+- provider-ID message dedupe;
+- WhatsApp latest READ enrichment;
+- Email latest DELIVERED enrichment;
+- blocked-draft INTERNAL classification;
+- provider journal non-duplication;
+- customer-only filtering;
+- deterministic two-part cursor pagination;
+- Next build;
+- Vinext build;
+- Cloudflare scheduled-bundle verification.
+
+Migration 0071 is not Production merely because this implementation verification passed.
