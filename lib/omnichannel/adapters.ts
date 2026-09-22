@@ -115,16 +115,20 @@ export const emailSemanticAdapter: ChannelSemanticAdapter<
   descriptor: EMAIL_CHANNEL_DESCRIPTOR,
 
   normalizeInbound(event) {
-    if (event.eventType !== 'email.received' || !event.providerMessageId) return null;
+    if (
+      event.eventType !== 'email.received'
+      || !event.providerMessageId
+      || !event.from?.trim()
+    ) return null;
     return {
       channel: 'EMAIL',
       provider: 'RESEND',
       providerMessageId: event.providerMessageId,
       ...(event.messageId ? { providerThreadId: event.messageId } : {}),
       occurredAt: event.occurredAt,
-      from: event.from ?? '',
+      from: event.from,
       ...(event.to ? { to: event.to } : {}),
-      contentType: event.text ? 'TEXT' : 'HTML',
+      contentType: event.text ? 'TEXT' : 'UNKNOWN',
       ...(event.text ? { text: event.text } : {}),
       ...(event.subject ? { subject: event.subject } : {}),
       metadata: {
@@ -163,9 +167,9 @@ export const whatsappSemanticAdapter: ChannelSemanticAdapter<
       channel: 'WHATSAPP',
       provider: 'META_CLOUD',
       providerMessageId: event.providerMessageId,
-      occurredAt: event.timestamp
-        ? new Date(Number(event.timestamp) * 1000).toISOString()
-        : new Date(0).toISOString(),
+      ...(event.timestamp
+        ? { occurredAt: new Date(Number(event.timestamp) * 1000).toISOString() }
+        : {}),
       from: event.from,
       contentType: whatsappInboundContentType(event),
       ...(event.text ? { text: event.text } : {}),
