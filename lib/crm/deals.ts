@@ -228,6 +228,55 @@ export async function listCrmDeals(input: {
   };
 }
 
+
+export async function createCrmDealFromLead(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  leadId: string;
+  pipelineId: string;
+  stageId: string;
+  title: string;
+  amount?: number | null;
+  currency?: string | null;
+  expectedCloseAt?: string | null;
+  ownerUserId: string;
+  requestKey: string;
+  metadata?: Record<string, unknown>;
+}) {
+  const { data, error } = await input.supabase.rpc('create_crm_deal_from_lead', {
+    p_organization_id: input.organizationId,
+    p_lead_id: input.leadId,
+    p_pipeline_id: input.pipelineId,
+    p_stage_id: input.stageId,
+    p_title: input.title.trim(),
+    p_amount: input.amount ?? null,
+    p_currency: input.currency?.trim().toUpperCase() ?? null,
+    p_expected_close_at: input.expectedCloseAt ?? null,
+    p_owner_user_id: input.ownerUserId,
+    p_request_key: input.requestKey.trim(),
+    p_metadata: input.metadata ?? {},
+  });
+
+  if (error) throw new Error(`CRM Deal Lead conversion failed: ${error.message}`);
+  return String(data);
+}
+
+export async function listCrmDealStageHistory(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  dealId: string;
+}) {
+  const { data, error } = await input.supabase
+    .from('crm_deal_stage_history')
+    .select('*')
+    .eq('organization_id', input.organizationId)
+    .eq('deal_id', input.dealId)
+    .order('occurred_at', { ascending: true });
+
+  if (error) throw new Error(`CRM Deal stage history query failed: ${error.message}`);
+  return data ?? [];
+}
+
 export async function createCrmDeal(input: {
   supabase: SupabaseClient;
   organizationId: string;
