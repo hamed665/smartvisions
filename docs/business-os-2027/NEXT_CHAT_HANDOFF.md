@@ -1,19 +1,27 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
-## Purpose
+## Repository truth
 
-This file is the canonical handoff for continuing the Business OS 2027 work in a new ChatGPT/Codex/Claude session.
+Repository: `hamed665/smartvisions`
 
-The next session must **continue from repository evidence**, not reconstruct the plan from chat memory.
+Business OS Phase 0 was stabilized and merged:
 
-## Repository
+- PR #172: `docs: establish AI Business OS 2027 production foundation`
+- merged to `main` as `144906c8f72c368851f8c4efb3e85dff8627f863`
+- main CI passed;
+- Cloudflare Production Deploy #261 passed on that same main SHA;
+- PR #172 was documentation-only, so Growth OS execution behavior was not redesigned.
 
-- Repository: `hamed665/smartvisions`
-- Existing product: **Smart Visions Growth OS**
-- Business OS architecture branch: `architecture/business-os-2027-foundation`
-- Foundation PR: **#172**
-- Production branch: `main`
-- Production must not be modified merely because this handoff exists.
+The active implementation work is:
+
+- branch: `feat/business-os-control-plane-foundation`
+- PR: **#173**
+- scope: Phase 1 Control Plane Foundation
+- status: implementation/review branch; **not Production**
+- migration: `supabase/migrations/0068_business_os_control_plane_foundation.sql`
+- Production Supabase was still applied only through migration 0067 when this work package was created.
+
+Always verify the current PR head and CI before continuing because those are runtime repository facts and can move after this handoff is committed.
 
 ## Read before changing anything
 
@@ -23,268 +31,145 @@ Read in this order:
 2. `docs/CURRENT_STATE.md`
 3. `docs/EXECUTION_PLAYBOOK.md`
 4. `docs/business-os-2027/README.md`
-5. `docs/business-os-2027/MASTER_ARCHITECTURE.md`
-6. `docs/business-os-2027/IMPLEMENTATION_MAP.md`
-7. `docs/business-os-2027/SERVICE_CONTRACT_STANDARD.md`
-8. `docs/business-os-2027/STATE_EVENT_CATALOG.md`
-9. `docs/business-os-2027/MIGRATION_FROM_GROWTH_OS.md`
-10. PR #172 status, changed files, CI and review threads
-11. current `main` SHA and latest Production evidence
+5. this file
+6. `docs/business-os-2027/MASTER_ARCHITECTURE.md`
+7. `docs/business-os-2027/IMPLEMENTATION_MAP.md`
+8. `docs/business-os-2027/SERVICE_CONTRACT_STANDARD.md`
+9. `docs/business-os-2027/STATE_EVENT_CATALOG.md`
+10. `docs/business-os-2027/MIGRATION_FROM_GROWTH_OS.md`
+11. `docs/business-os-2027/CONTROL_PLANE_FOUNDATION.md`
+12. PR #173 changed files, CI, reviews and review threads
+13. current `main` SHA, Production deploy evidence and Production Supabase migration state
 
-If documentation conflicts with runtime/Production evidence, runtime/Production wins. Reconcile docs after proven changes.
+Runtime and Production evidence outrank stale documentation or chat memory.
 
-## Owner-approved product target
+## Control Plane decisions already closed by Production evidence
 
-Build **Smart Visions AI Business OS 2027** as a:
+Do not reopen these without new Production evidence:
 
-> Multi-Tenant, Multi-Brand, Multi-Branch, Multi-Industry, Omnichannel AI Business Operating System
+- **REUSE** `organizations` as the canonical tenant root.
+- **REUSE** Supabase `auth.users` as user identity.
+- **EXTEND** `organization_members` as the organization membership/RBAC boundary.
+- **REUSE** existing `businesses` as the Growth OS CRM/Hunter external/prospect business table.
+- **NEW** `tenant_businesses` as the tenant-owned Business entity in the Business OS hierarchy.
+- **EXTEND** existing `usage_events` rather than creating a second cost/usage ledger.
+- **EXTEND** existing `audit_logs` rather than creating a second tenant audit ledger.
+- No `REPLACE` decision exists in Phase 1.
 
-It must ultimately cover:
+Canonical hierarchy:
 
-- WhatsApp, Instagram, Facebook, TikTok, Telegram, Email, Web, SMS/RCS, Voice and custom channels;
-- native-app coexistence, so humans can still answer inside original channel apps while Smart Visions remains synchronized;
-- Unified Inbox and Human/AI reply arbitration;
-- complete CRM and Customer 360;
-- Business Digital Twin and Industry Packs;
-- strong business/customer memory;
-- governed Knowledge/RAG;
-- multi-agent AI runtime;
-- Policy Engine, Action Gateway and Approvals;
-- durable Workflows;
-- Sales, Quotes, Booking, Commerce, Payments, Support/Case and Field Service;
-- Marketing, Consent and customer-facing paid Lead Hunter;
-- full SaaS plans, subscriptions, entitlements, setup fees, channel fees and usage billing;
-- AI customer billing based on billable raw AI cost × configurable multiplier, initially 4x;
-- reporting/BI, XLSX/CSV/PDF/JSON and Google Sheets sync;
-- role-aware web/mobile apps;
-- professional Smart Visions Super Admin Command Center;
-- Enterprise SSO/SCIM, multi-region/cell architecture, marketplace, partner/reseller and developer platform.
+```text
+Organization -> Brand -> Business -> Branch -> Department -> Team -> User
+```
 
-## Critical rule: extend, do not duplicate
+Storage compatibility note: the Business node above is `tenant_businesses`; the old `businesses` table keeps its current CRM/Hunter meaning.
 
-The current Growth OS already contains production-proven primitives. Reuse or extend them.
+## PR #173 implemented scope
 
-Do **not** build a second version of these unless real production evidence proves the existing primitive cannot satisfy the requirement:
+The implementation branch contains:
 
-- Lead/Business/Campaign/Conversation CRM foundation;
-- Hunter / Google Places discovery;
-- qualification/service-fit logic;
+- Brand / tenant Business / Branch / Department / Team hierarchy;
+- composite `(organization_id, parent_id)` FKs for tenant-consistent hierarchy;
+- immutable `organization_id` guards on all new tenant-owned Control Plane entities, preventing cross-tenant row transfer by UPDATE;
+- runtime canonical-scope lineage validation for Brand -> Business -> Branch -> Department -> Team;
+- lower-scope member assignments attached to existing `organization_members`;
+- organization `OWNER` kept organization-wide only;
+- lower-scope roles limited to `ADMIN | SALES_MANAGER | SALES_AGENT | VIEWER`;
+- runtime scope resolution filtered by tenant, `user_id`, hierarchy scope, and fail-closed scalar ABAC attributes;
+- `member_scope_assignments` reads limited to the assigned user or organization OWNER;
+- configuration inheritance foundation;
+- feature-flag override scopes;
+- reserved safety controls excluded from ordinary config/feature override keys;
+- Plans, Pricing Versions, Subscriptions and Entitlements foundation;
+- ACTIVE pricing uniqueness per Plan + Currency + Billing Period lane;
+- one live primary subscription per organization;
+- formal catalog/subscription state guards aligned to `STATE_EVENT_CATALOG.md` (`TRIAL -> ACTIVE -> PAST_DUE -> GRACE_PERIOD -> SUSPENDED -> CANCELED | EXPIRED`, with `PAST_DUE -> ACTIVE` recovery);
+- published pricing commercial-field immutability;
+- plan entitlements mutable only while pricing version is DRAFT;
+- `usage_events.usage_classification` with:
+  - BILLABLE
+  - NON_BILLABLE
+  - SYSTEM_RETRY
+  - CACHED
+  - PROMOTIONAL
+  - INTERNAL
+- default classification `INTERNAL` so billing fails closed;
+- tenant clients cannot directly set customer-billing classification;
+- trusted classification mutation goes through service-role-only `classify_usage_event`, uses SECURITY INVOKER + column-scoped privilege, and writes audit evidence;
+- current customer AI billing policy is constrained to exactly 4× and only BILLABLE usage is chargeable;
+- audit correlation/causation and hierarchy scope;
+- database audit triggers for tenant-scoped important control-plane mutations;
+- global Plan/Pricing/Plan-Entitlement runtime DML is revoked until a platform-level audited catalog command exists;
+- runtime contract helpers and contract/isolation tests.
+
+## Production primitives that remain untouched
+
+Do not duplicate or redesign these as part of Phase 1:
+
+- CRM Business / Lead / Campaign / Conversation;
+- Hunter / Google Places;
 - Website Audit;
-- existing multi-agent pipeline;
+- existing multi-agent runtime;
 - Context Hydrator;
 - conversation memory and `sales_state`;
 - `knowledge_versions`;
 - `prompt_versions`;
 - ZERO_COST / LIGHT / FULL routing;
-- OpenAI model router;
+- OpenAI router;
 - Cost Guard;
-- canonical provider-bound outbound send gate;
-- WhatsApp/Email journals and idempotency;
-- `agent_runs.request_key`;
-- follow-up/automation primitives;
-- Telegram owner assistant/control plane;
-- Portfolio matcher and Preview infrastructure.
+- outbound send gate;
+- WhatsApp / Email journals;
+- idempotency and `agent_runs.request_key`;
+- automation/follow-up primitives;
+- Telegram Owner Assistant;
+- Portfolio / Preview infrastructure.
 
-Every proposed subsystem must be classified:
+## Safety state
 
-- `REUSE`
-- `EXTEND`
-- `ADAPT`
-- `MIGRATE`
-- `NEW`
+PR #173 must not:
 
-`REPLACE` requires explicit evidence and justification.
+- apply migration 0068 to Production while still under review;
+- disable Shadow Mode;
+- alter the global kill switch or channel send gates;
+- send real customer messages;
+- change live provider credentials;
+- enable broad autonomous outreach;
+- add Omnichannel v2, CRM v2, Mobile, Marketplace, Booking or Agent redesign.
 
-## Immediate next task
-
-Do **not** jump ahead to Booking, Mobile, Marketplace, or another Agent.
-
-First finish and verify Phase 0 / PR #172, then begin the first implementation slice:
-
-# Control Plane Foundation
-
-Target hierarchy:
+AI/customer/provider side effects remain governed by:
 
 ```text
-Organization
-  -> Brand
-      -> Business
-          -> Branch
-              -> Department
-                  -> Team
-                      -> User
+Agent -> Context -> Policy -> Approval -> Action Gateway -> Execute -> Verify -> Audit
 ```
 
-The first implementation slice must define and implement backward-compatibly:
+## Verification gate for PR #173
 
-1. canonical tenant/business scope;
-2. Organization/Brand/Business/Branch hierarchy;
-3. configuration inheritance;
-4. IAM role/permission boundary;
-5. Entitlement contract;
-6. Plan/Subscription/Pricing Version contract;
-7. usage classification;
-8. audit correlation standard;
-9. feature-flag scope;
-10. compatibility mapping from existing Growth OS organization/business records.
+Before merge:
 
-## Before writing code for Control Plane
-
-Inspect the current production schema and code. Identify:
-
-- existing organization tables;
-- business/lead/customer relationships;
-- current auth/RLS model;
-- current roles;
-- current plan/billing concepts if any;
-- current Cost Guard ownership;
-- current audit/logging primitives;
-- all code that assumes one organization/business shape.
-
-Produce a short gap map:
-
-```text
-CURRENT
-TARGET
-REUSE/EXTEND/NEW
-MIGRATION RISK
-BACKWARD-COMPATIBILITY PLAN
-```
-
-Do not invent a new table when an existing canonical table can be safely extended.
-
-## Required implementation contract
-
-For every new/changed domain, follow `SERVICE_CONTRACT_STANDARD.md`.
-
-At minimum specify:
-
-- Source of Truth
-- commands
-- queries
-- events produced/consumed
-- state transitions
-- permissions
-- idempotency
-- failure modes
-- audit
-- billing impact
-- retention
-- SLO/metrics
-- tests
-
-## Architecture invariants
-
-Never violate these:
-
-1. Tenant data must never leak across businesses.
-2. Human reply takes priority over AI.
-3. AI cannot call payment/channel/business side effects directly; use Action Gateway.
-4. AI cannot silently modify canonical Business Truth.
-5. All critical external sends/actions are idempotent and fail closed.
-6. Provider acceptance with ambiguous result is reconciled, not blindly retried.
-7. Billing comes from durable usage evidence.
-8. System retries/internal/cached/promotional work are distinguishable from customer-billable usage.
-9. Heavy analytics must not depend on expensive transactional dashboard queries.
-10. Every important mutation is audited.
-11. Every critical entity has a formal state machine.
-12. No cross-tenant memory retrieval.
-13. Current Shadow Mode / safety state is not disabled as part of Business OS foundation work.
-14. No broad autonomous outreach is enabled by architecture work.
-
-## Production safety
-
-Until the owner explicitly approves a later release:
-
-- do not change Production outreach autonomy;
-- do not disable Shadow Mode;
-- do not send real customer messages for architecture verification;
-- do not change live pricing;
-- do not change live channel credentials;
-- do not apply unsafe DB migrations;
-- do not create a second queue/CRM/Agent/Knowledge system for convenience;
-- do not merge with failing CI.
-
-Work through isolated branches and coherent PRs.
-
-## First implementation PR expected after foundation
-
-Suggested scope:
-
-> `feat/business-os-control-plane-foundation`
-
-Keep it narrowly focused.
-
-Expected outputs:
-
-- reviewed domain/gap map;
-- backward-compatible schema migration(s), if needed;
-- typed organization/brand/business/branch domain model;
-- tenant scope helpers;
-- configuration inheritance primitive;
-- entitlement interface/model;
-- permission checks;
-- audit/correlation support;
-- contract tests and tenant-isolation tests;
-- docs update.
-
-Do not combine Omnichannel, CRM v2, Billing UI, Mobile or Agent redesign into this PR.
-
-## Verification required
-
-Before claiming the slice complete:
-
+- current head SHA is known;
 - lint green;
 - typecheck green;
-- tests green;
-- build green;
-- relevant migration reviewed;
-- tenant isolation tests pass;
-- existing Growth OS behavior remains compatible;
-- no duplicate source of truth introduced;
-- no Production send/provider behavior changed;
-- PR review threads resolved;
-- exact head SHA known;
-- docs updated with the exact next action.
+- Vitest green;
+- Next build green;
+- Vinext build green;
+- Cloudflare scheduled-bundle verification green;
+- migration reviewed, including service-role grants and absence of new SECURITY DEFINER functions;
+- tenant isolation, user-scope isolation and ABAC fail-closed tests green;
+- multi-currency pricing lane and one-live-subscription invariants green;
+- review threads resolved;
+- no duplicate source of truth;
+- no Production provider/send behavior change.
 
-## How to continue after Control Plane
+A green CI run is necessary, not a substitute for review of a migration.
 
-Follow `IMPLEMENTATION_MAP.md` in dependency order:
+## Exact next action
 
-1. Control Plane
-2. Omnichannel Adapter Boundary
-3. Customer 360 / CRM
-4. Business Twin / Industry Packs
-5. AI Control Plane
-6. Memory v2
-7. Workflow + operational modules
-8. Billing/commercial platform
-9. Analytics/BI/Sheets
-10. customer-facing paid Hunter
-11. Enterprise/ecosystem
-12. Mobile/customer-facing surfaces
+1. Finish CI and migration review on PR #173.
+2. Mark PR #173 ready only when its exact head is green.
+3. Obtain/complete review; do not merge a substantive database foundation merely because CI is green.
+4. After approved merge, promote migration 0068 through the controlled migration path.
+5. Verify Production schema, RLS, grants, tenant isolation, audit behavior, security advisors and performance advisors. Do not send provider messages during verification.
+6. Reconcile `docs/business-os-2027/` with the proven Production state.
+7. Only then start Phase 2: **Omnichannel Adapter Boundary**, reusing current WhatsApp/Email journals and the canonical send gate.
 
-Do not skip dependency layers just to create visible UI faster.
-
-## Communication to the owner
-
-The owner wants production-grade work, not placeholder file counts.
-
-For each work package, report clearly:
-
-- what was inspected;
-- what already existed;
-- what was reused;
-- what changed;
-- what remains;
-- tests/CI status;
-- whether Production was touched;
-- exact next implementation step.
-
-Never call something "complete" merely because a page or schema stub exists.
-
-## Instruction for the next chat
-
-Continue the project autonomously from repository evidence. Do not ask the owner to repeat architecture already recorded here. Do not propose a new roadmap unless repository evidence invalidates this one.
-
-Start by verifying PR #172 and current `main`, then execute the next safe unfinished dependency.
+The goal remains production-grade Business OS behavior, not decorative UI or file count.

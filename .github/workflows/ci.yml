@@ -9,6 +9,18 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,6 +32,13 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - name: Verify Control Plane migration on PostgreSQL 17
+        env:
+          PGPASSWORD: postgres
+        run: |
+          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/tests/sql/control-plane-foundation-bootstrap.sql
+          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/supabase/migrations/0068_business_os_control_plane_foundation.sql
+          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/tests/sql/control-plane-foundation-smoke.sql
       - run: npm run build
       - run: npm run build:vinext
       - run: npm run verify:cloudflare-scheduled
