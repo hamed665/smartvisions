@@ -86,6 +86,8 @@ Hierarchy rows enforce both identity and tenant consistency:
 
 Child foreign keys use `(organization_id, parent_id)`, not only `parent_id`. A valid UUID from another tenant therefore cannot be attached to the current tenant.
 
+For every new tenant-owned Control Plane entity, `organization_id` is immutable after INSERT. Even a user/service that is authorized in multiple organizations cannot transfer a Brand, Business, Branch, Department, Team, scoped IAM assignment, configuration override, feature override, Subscription, or organization entitlement from Tenant A to Tenant B through UPDATE. Re-parenting inside the same tenant remains governed by hierarchy foreign keys and audit.
+
 Existing Growth OS tables remain organization-scoped and do not require a branch/business backfill in this PR.
 
 Runtime consumers MUST validate the assembled scope against trusted hierarchy lineage loaded from persistence. A syntactically complete chain is not sufficient: Brand must belong to the Organization, Business to that Brand, Branch to that Business, Department to that Branch, and Team to that Department. Configuration inheritance and scoped IAM fail closed when that lineage does not match.
