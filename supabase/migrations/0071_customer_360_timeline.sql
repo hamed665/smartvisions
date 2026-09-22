@@ -380,7 +380,7 @@ as $timeline$
       )
     )
   order by t.occurred_at desc, t.item_id desc
-  limit least(greatest(coalesce(p_limit, 50), 1), 100);
+  limit least(greatest(coalesce(p_limit, 50), 1), 101);
 $timeline$;
 
 revoke all on public.crm_customer_timeline from public, anon, authenticated, service_role;
