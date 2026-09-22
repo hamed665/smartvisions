@@ -32,6 +32,10 @@ begin
     raise exception 'authenticated lacks Customer timeline SELECT';
   end if;
 
+  if has_table_privilege('service_role', 'public.crm_customer_timeline', 'SELECT') then
+    raise exception 'service_role unexpectedly has Customer timeline SELECT';
+  end if;
+
   if has_table_privilege('authenticated', 'public.crm_customer_timeline', 'INSERT') then
     raise exception 'Customer timeline view unexpectedly exposes write privileges';
   end if;
@@ -50,6 +54,14 @@ begin
     'EXECUTE'
   ) then
     raise exception 'authenticated cannot execute Customer timeline query';
+  end if;
+
+  if has_function_privilege(
+    'service_role',
+    'public.get_crm_customer_timeline(uuid,uuid,integer,timestamptz,text,boolean)',
+    'EXECUTE'
+  ) then
+    raise exception 'service_role unexpectedly executes Customer timeline query';
   end if;
 end;
 $timeline_structure$;
