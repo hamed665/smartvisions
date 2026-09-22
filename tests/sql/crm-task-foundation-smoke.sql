@@ -16,6 +16,32 @@ insert into public.organization_members(organization_id,user_id,role) values
     'VIEWER'
   );
 
+do $task_fk_indexes$
+declare
+  v_expected text[] := array[
+    'crm_tasks_org_created_by_fk_idx',
+    'crm_tasks_org_completed_by_fk_idx',
+    'crm_tasks_org_canceled_by_fk_idx',
+    'crm_tasks_org_conversation_lead_fk_idx',
+    'crm_tasks_org_lead_business_fk_idx'
+  ];
+  v_name text;
+begin
+  foreach v_name in array v_expected
+  loop
+    if not exists (
+      select 1
+      from pg_indexes
+      where schemaname='public'
+        and tablename='crm_tasks'
+        and indexname=v_name
+    ) then
+      raise exception 'Missing CRM task FK covering index %', v_name;
+    end if;
+  end loop;
+end;
+$task_fk_indexes$;
+
 do $task_structure$
 begin
   if not (
