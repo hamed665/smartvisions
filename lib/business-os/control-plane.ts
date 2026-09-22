@@ -19,6 +19,14 @@ export type TenantScope = {
   teamId?: string;
 };
 
+export type TenantScopeLineage = {
+  brand?: { id: string; organizationId: string };
+  tenantBusiness?: { id: string; organizationId: string; brandId: string };
+  branch?: { id: string; organizationId: string; tenantBusinessId: string };
+  department?: { id: string; organizationId: string; branchId: string };
+  team?: { id: string; organizationId: string; departmentId: string };
+};
+
 export const ORGANIZATION_ROLES = [
   'OWNER',
   'ADMIN',
@@ -96,6 +104,64 @@ export function assertCanonicalTenantScope(scope: TenantScope): TenantScope {
   return scope;
 }
 
+export function assertTenantScopeLineage(
+  scope: TenantScope,
+  lineage: TenantScopeLineage = {},
+): TenantScope {
+  assertCanonicalTenantScope(scope);
+
+  if (scope.brandId) {
+    if (
+      lineage.brand?.id !== scope.brandId
+      || lineage.brand.organizationId !== scope.organizationId
+    ) {
+      throw new Error('brand lineage does not match canonical tenant scope');
+    }
+  }
+
+  if (scope.tenantBusinessId) {
+    if (
+      lineage.tenantBusiness?.id !== scope.tenantBusinessId
+      || lineage.tenantBusiness.organizationId !== scope.organizationId
+      || lineage.tenantBusiness.brandId !== scope.brandId
+    ) {
+      throw new Error('tenant business lineage does not match canonical tenant scope');
+    }
+  }
+
+  if (scope.branchId) {
+    if (
+      lineage.branch?.id !== scope.branchId
+      || lineage.branch.organizationId !== scope.organizationId
+      || lineage.branch.tenantBusinessId !== scope.tenantBusinessId
+    ) {
+      throw new Error('branch lineage does not match canonical tenant scope');
+    }
+  }
+
+  if (scope.departmentId) {
+    if (
+      lineage.department?.id !== scope.departmentId
+      || lineage.department.organizationId !== scope.organizationId
+      || lineage.department.branchId !== scope.branchId
+    ) {
+      throw new Error('department lineage does not match canonical tenant scope');
+    }
+  }
+
+  if (scope.teamId) {
+    if (
+      lineage.team?.id !== scope.teamId
+      || lineage.team.organizationId !== scope.organizationId
+      || lineage.team.departmentId !== scope.departmentId
+    ) {
+      throw new Error('team lineage does not match canonical tenant scope');
+    }
+  }
+
+  return scope;
+}
+
 export function deepestScopeType(scope: TenantScope): TenantScopeType {
   assertCanonicalTenantScope(scope);
   if (scope.teamId) return 'TEAM';
@@ -142,10 +208,11 @@ export function isOverrideApplicable<T>(
  */
 export function resolveScopedValue<T>(input: {
   target: TenantScope;
+  lineage?: TenantScopeLineage;
   legacyOrganizationValue?: T;
   overrides: NormalizedScopeOverride<T>[];
 }): T | undefined {
-  assertCanonicalTenantScope(input.target);
+  assertTenantScopeLineage(input.target, input.lineage);
   let value = input.legacyOrganizationValue;
 
   const applicable = input.overrides
@@ -158,11 +225,13 @@ export function resolveScopedValue<T>(input: {
 
 export function resolveFeatureFlag(input: {
   target: TenantScope;
+  lineage?: TenantScopeLineage;
   defaultEnabled: boolean;
   overrides: NormalizedScopeOverride<boolean>[];
 }) {
   return resolveScopedValue({
     target: input.target,
+    lineage: input.lineage,
     legacyOrganizationValue: input.defaultEnabled,
     overrides: input.overrides,
   }) ?? input.defaultEnabled;
@@ -215,9 +284,11 @@ export function effectiveRoleForScope(input: {
   organizationRole: OrganizationRole;
   userId: string;
   target: TenantScope;
+  lineage?: TenantScopeLineage;
   assignments: MemberScopeAssignment[];
   policyAttributes?: PolicyAttributes;
 }): OrganizationRole {
+  assertTenantScopeLineage(input.target, input.lineage);
   if (input.organizationRole === 'OWNER') return 'OWNER';
 
   const applicable = input.assignments
