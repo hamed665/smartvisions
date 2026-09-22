@@ -14,7 +14,9 @@ Business OS status as of 2026-09-22:
 - The 15 post-0068 unindexed-FK findings were cleared by PR #174 / Production migration `0069_business_os_control_plane_fk_indexes` version `20260922101641`.
 - Phase 2 semantic adapter/status slice merged in PR #175 at `main@5d812eee8a0e15dac658247b254660ae8f09aacd`.
 - Post-merge Production heartbeat was healthy, Shadow Mode remained ON, acquisition/dispatch were SKIPPED, and no Email/WhatsApp outbound send occurred in the verification window.
-- Phase 2 reconciliation/provider-identity slice is active on `feat/business-os-omnichannel-reconciliation`.
+- Phase 2 reconciliation/provider-identity slice merged in PR #176 at `main@a5396156afc58a22cdf78baf7a495fb07ec38b40`.
+- Phase 2 is complete for current Production-proven Email/Resend and WhatsApp/Meta Cloud channels.
+- Post-PR #176 Production verification: heartbeat `failed=0`, Shadow Mode ON, acquisition/dispatch SKIPPED, and zero Email/WhatsApp outbound rows after the merge.
 - Phase 2 reuses the current canonical Email/WhatsApp send gate, provider implementations, journals, lifecycle/reconciliation evidence and Human takeover semantics.
 - No customer/provider message was sent for Phase 1 verification.
 - Shadow Mode remains ON.
@@ -163,13 +165,12 @@ A green CI run is necessary, not a substitute for review of a migration.
 
 ## Exact next action
 
-1. Complete exact-head CI/review for the Phase 2 reconciliation/provider-identity slice.
-2. Verify approved-send still owns all provider side effects; the registry must only resolve integration identity.
-3. Verify reconciliation descriptors remain pinned to durable migrations 0004, 0030 and 0067 and to `approvedSendFailureDisposition`.
-4. Merge only if existing Email/WhatsApp lifecycle, approved-send, PostgreSQL smoke, Next/Vinext and Cloudflare verification remain green.
-5. No Production database migration is required for this slice.
-6. After merge, verify Production heartbeat/safety controls and that no architecture test generated a real provider send.
-7. Continue Phase 2 with evidence-backed coexistence/reconciliation hooks only; native-provider human activity remains `UNPROVEN`.
-8. Do not register future channels until their provider path, webhook verification, durable journal, idempotency and reconciliation semantics exist.
+1. Start Phase 3 from clean `main@a5396156afc58a22cdf78baf7a495fb07ec38b40` after this Phase 2 closeout merges.
+2. Before changing CRM schema, inspect Production `businesses`, `leads`, `sales_conversations`, `conversation_messages`, existing activities/follow-up/handoff tables, RLS, indexes, and all current CRM assumptions.
+3. Produce an evidence-backed Phase 3 Gap Map for Contact Identity, identity resolution, accounts/companies, custom fields/objects, activities/tasks, pipelines/deals, segments, customer timeline, and merge/conflict rules.
+4. **EXTEND** the current CRM. Do not create a parallel CRM or repurpose the existing Hunter/prospect `businesses` table.
+5. Define the smallest safe first Phase 3 slice after the Gap Map. Prefer identity/contact normalization before deals/custom objects if Production evidence confirms that dependency.
+6. Preserve the existing outbound safety, Human takeover, Cost Guard, Omnichannel journals and send gate.
+7. Do not send real provider/customer messages for CRM architecture verification.
 
 The goal remains production-grade Business OS behavior, not decorative UI or file count.

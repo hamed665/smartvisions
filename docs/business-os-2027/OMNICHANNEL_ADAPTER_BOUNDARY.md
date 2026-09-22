@@ -1,8 +1,9 @@
 # Omnichannel Adapter Boundary — Evidence, Gap Map, and Contract
 
-Status: **Phase 2 active**  
+Status: **Phase 2 completed and merged**  
 Semantic adapter slice: PR #175 -> `main@5d812eee8a0e15dac658247b254660ae8f09aacd`  
-Active reconciliation slice: `feat/business-os-omnichannel-reconciliation`
+Reconciliation/provider-identity slice: PR #176 -> `main@a5396156afc58a22cdf78baf7a495fb07ec38b40`  
+Production schema migration: **none required**
 
 ## 1. Production evidence used
 
@@ -245,3 +246,26 @@ This slice does not:
 - modify Production RLS;
 - send a real customer message;
 - claim native-app activity synchronization that is not evidenced.
+
+
+## 12. Completion evidence
+
+Phase 2 is complete for the currently proven Production channels, Email/Resend and WhatsApp/Meta Cloud.
+
+Completion evidence:
+
+- PR #175 and PR #176 merged with exact-head CI green;
+- shared semantic adapters are side-effect free;
+- approved-send remains the only provider execution route;
+- provider identity resolution is centralized and fail-closed;
+- Email/WhatsApp durable journals and reconciliation semantics remain canonical;
+- provider acceptance ambiguity remains reconciliation-only / no blind retry;
+- Human takeover remains authoritative;
+- native-provider human activity is intentionally still `UNPROVEN`, because no reliable provider evidence exists;
+- no schema migration was required;
+- post-merge Production heartbeat remained healthy;
+- Shadow Mode remained ON;
+- acquisition and dispatch remained SKIPPED during verification;
+- zero Email and zero WhatsApp outbound messages were created after PR #176 merge during the verification window.
+
+Phase 2 does not activate unproven future channels. Instagram, Facebook, TikTok, Telegram messaging, SMS/RCS and Voice must each satisfy the same provider, journal, webhook-verification, idempotency, reconciliation and safety contract before registration.
