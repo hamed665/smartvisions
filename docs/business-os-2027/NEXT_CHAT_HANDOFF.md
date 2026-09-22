@@ -45,6 +45,8 @@ Business OS status as of 2026-09-22:
 - Growth/Intent Opportunities remain acquisition evidence and are not canonical Deals.
 - Deal aggregate state is OPEN/WON/LOST; Pipeline stages are configurable labels categorized OPEN/WON/LOST.
 - Lead->Deal conversion is explicit/idempotent and does not mutate Lead state or auto-convert acquisition Opportunities.
+- Cloudflare runtime after Slice 4 is proven by Worker version `47d22421-109e-4c1e-81e6-20bb273078e1`; latest checked heartbeat had failed=0 with acquisition/dispatch SKIPPED.
+- Zero Email/WhatsApp outbound rows were created after the PR #184 merge in the verification window.
 
 Runtime and Production evidence outrank stale documentation or chat memory.
 
@@ -191,13 +193,12 @@ A green CI run is necessary, not a substitute for review of a migration.
 
 ## Exact next action
 
-1. Treat PR #184 / migration 0074 as Production database-verified.
-2. Do **not** call Slice 4 runtime-closed until a Cloudflare heartbeat after the PR #184 merge shows a Worker version different from `6d12f286-9584-4733-a168-eba61cf1a397` with `failed=0`.
-3. Re-check zero Email/WhatsApp outbound rows and unchanged safety controls when the new Worker appears.
-4. Current Production commercial rows intentionally remain 0 Pipelines / 0 Stages / 0 Deals; no migration/backfill should fabricate them.
-5. Security Advisor is unchanged baseline and Performance Advisor has no new unindexed-FK class after 0074.
-6. After runtime evidence is proven, reconcile this handoff to the exact Worker version and close Slice 4.
-7. Phase 3 remaining-gap audit currently shows no Segment/Custom Field/Contact/Merge tables, zero identity conflicts and zero duplicate Email/Phone/WhatsApp contact-point groups. Custom Field governance is the likely dependency before Segments, but perform a fresh Production/repository audit before implementation.
-8. Do not fabricate Person Contacts and do not auto-convert Growth/Intent Opportunities into Deals.
+1. Treat Phase 3 Slice 4 Deal/Pipeline Foundation as Production-verified: PR #184, migration `0074_crm_deal_pipeline_foundation`, Cloudflare Worker `47d22421-109e-4c1e-81e6-20bb273078e1`.
+2. Preserve the verified invariants: 0 seeded Pipelines/Stages/Deals, explicit/idempotent Lead conversion only, terminal WON/LOST commercial truth, Growth/Intent Opportunities remain acquisition evidence.
+3. Start the next Phase 3 gap with a fresh Production/repository audit. Current evidence shows no governed Custom Field/Object registry, no Segment domain, no canonical Person Contact, zero identity conflicts and no need to fabricate Contacts.
+4. Prefer Custom Field/Object governance before Segments if the fresh audit confirms that segmentation would otherwise depend on scattered JSON/domain-specific fields.
+5. Do not create Person Contacts from provider display names.
+6. Do not auto-convert Growth/Intent Opportunities into Deals.
+7. Keep Shadow Mode and existing provider safety gates unchanged.
 
 Runtime and Production evidence outrank stale docs or chat memory.
