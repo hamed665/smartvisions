@@ -73,11 +73,14 @@ The implementation branch contains:
 - lower-scope member assignments attached to existing `organization_members`;
 - organization `OWNER` kept organization-wide only;
 - lower-scope roles limited to `ADMIN | SALES_MANAGER | SALES_AGENT | VIEWER`;
-- runtime scope resolution filtered by both tenant and `user_id`;
+- runtime scope resolution filtered by tenant, `user_id`, hierarchy scope, and fail-closed scalar ABAC attributes;
+- `member_scope_assignments` reads limited to the assigned user or organization OWNER;
 - configuration inheritance foundation;
 - feature-flag override scopes;
 - reserved safety controls excluded from ordinary config/feature override keys;
 - Plans, Pricing Versions, Subscriptions and Entitlements foundation;
+- ACTIVE pricing uniqueness per Plan + Currency + Billing Period lane;
+- one live primary subscription per organization;
 - formal catalog/subscription state guards aligned to `STATE_EVENT_CATALOG.md` (`TRIAL -> ACTIVE -> PAST_DUE -> GRACE_PERIOD -> SUSPENDED -> CANCELED | EXPIRED`, with `PAST_DUE -> ACTIVE` recovery);
 - published pricing commercial-field immutability;
 - plan entitlements mutable only while pricing version is DRAFT;
@@ -90,10 +93,11 @@ The implementation branch contains:
   - INTERNAL
 - default classification `INTERNAL` so billing fails closed;
 - tenant clients cannot directly set customer-billing classification;
-- trusted classification mutation goes through service-role-only `classify_usage_event` and writes audit evidence;
+- trusted classification mutation goes through service-role-only `classify_usage_event`, uses SECURITY INVOKER + column-scoped privilege, and writes audit evidence;
 - current customer AI billing policy is constrained to exactly 4× and only BILLABLE usage is chargeable;
 - audit correlation/causation and hierarchy scope;
-- database audit triggers for important control-plane mutations;
+- database audit triggers for tenant-scoped important control-plane mutations;
+- global Plan/Pricing/Plan-Entitlement runtime DML is revoked until a platform-level audited catalog command exists;
 - runtime contract helpers and contract/isolation tests.
 
 ## Production primitives that remain untouched
@@ -147,8 +151,9 @@ Before merge:
 - Next build green;
 - Vinext build green;
 - Cloudflare scheduled-bundle verification green;
-- migration reviewed;
-- tenant isolation and user-scope isolation tests green;
+- migration reviewed, including service-role grants and absence of new SECURITY DEFINER functions;
+- tenant isolation, user-scope isolation and ABAC fail-closed tests green;
+- multi-currency pricing lane and one-live-subscription invariants green;
 - review threads resolved;
 - no duplicate source of truth;
 - no Production provider/send behavior change.
