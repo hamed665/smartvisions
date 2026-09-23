@@ -970,7 +970,7 @@ returns trigger
 language plpgsql
 security invoker
 set search_path = public, pg_catalog
-as $
+as $segment_current_constraint$
 begin
   if not exists (
     select 1 from public.crm_segment_versions v
@@ -982,14 +982,14 @@ begin
   end if;
   return new;
 end;
-$;
+$segment_current_constraint$;
 
 create or replace function public.enforce_crm_segment_version_reachable()
 returns trigger
 language plpgsql
 security invoker
 set search_path = public, pg_catalog
-as $
+as $segment_reachable_constraint$
 begin
   if not exists (
     select 1 from public.crm_segments s
@@ -1001,7 +1001,7 @@ begin
   end if;
   return new;
 end;
-$;
+$segment_reachable_constraint$;
 
 create or replace function public.audit_crm_segment_version()
 returns trigger
