@@ -28,6 +28,15 @@ This is the current operational handoff for Growth OS. Current `main`, routed Cl
 - Production intentionally has 0 custom-field definitions / 0 options / 0 values after migration and rollback-only verification
 - Slice 5 Cloudflare runtime is proven by Worker version `d42bd9c5-e862-4af6-ae70-787cbf81c5d6`; latest checked heartbeat had `failed=0`, acquisition `SKIPPED`, dispatch `SKIPPED`
 - Zero Email/WhatsApp outbound rows were created after the Slice 5 merge in the verification window
+- Phase 3 Slice 6 Segment Governance gap audit merged in PR #190 at `main@496811c80a550299c3d01d5b23c2ea9b82d491a1`.
+- Governed Dynamic Lead Segments merged in PR #191 at `main@a34bfd243d2f95e2ccad9895d5a753ef902a4299`; exact-head PR CI and post-merge push CI were fully green, including PostgreSQL 17 migration-chain smoke, Next/Vinext builds and scheduled-runtime verification.
+- Production migration `0076_crm_segment_governance` is live as version `20260923093619`.
+- Slice 6 is deliberately LEAD-only and DYNAMIC-only: stable Segment identity + immutable semantic versions + strict typed allowlisted predicate AST + bounded on-demand evaluation. It does not add Snapshot/current-membership persistence, Deal/Business/Task/Conversation/Person Contact segmentation, Campaign/Workflow execution or provider sends.
+- Segment predicate validation is enforced at both authenticated API and database boundaries; Custom Field predicates are limited to governed ACTIVE/filterable INTERNAL Lead fields. PII/SENSITIVE ordinary predicates, arbitrary SQL/JSONPath/PostgREST filters and arbitrary metadata JSON are rejected.
+- Production migration created 0 Segment identities and 0 Segment versions. Rollback-only Production smoke verified create -> evaluate -> semantic version update -> archive -> reactivate -> audit -> deferred constraints, then left 0 Segment rows, 0 version rows and 0 audit fixture residue.
+- Supabase Security Advisor after 0076 is unchanged from baseline. Performance Advisor adds only the four expected new Segment/FK/list indexes as unused on an intentionally empty table and reports no new unindexed-FK defect.
+- Zero Email/WhatsApp outbound rows were created from the 0076 promotion through verification.
+- Latest routed Cloudflare Worker heartbeat after Slice 6: `__SLICE6_WORKER_VERSION__`; failed=0, acquisition/evidence/auto-dispatch SKIPPED.
 - Production cron: exactly `*/2 * * * *`
 - Release candidate: no scheduled trigger
 - Old Vercel deployment: frozen rollback/history only; not a Production health source
@@ -39,7 +48,7 @@ The Smart Visions Website repository and its Supabase project are separate and o
 
 The core system is beyond platform construction and is in **controlled Oman launch validation**. This is not permission for broad autonomous outreach.
 
-Current verified safety state after PR #178 Production promotion:
+Current verified safety state after PR #191 Production promotion:
 
 - Shadow Mode: **ON**
 - Global Kill Switch: OFF
@@ -303,7 +312,7 @@ Do not invent another feature roadmap. Continue from the existing canonical path
 
 `real business evidence -> deterministic qualification/service fit -> smallest useful recommendation or NO_RECOMMENDATION -> selective Agent reasoning -> Shadow/approval/human gates -> canonical provider-boundary safety -> durable result evidence -> measured learning`
 
-For Business OS work, continue from the current dependency order without duplicating canonical stores. CRM Identity, Customer 360 Timeline, CRM Task Foundation, Deal/Pipeline Foundation and Custom Field Governance are Production-verified. The next Phase 3 dependency is a fresh Segment Governance gap audit. Do not build Segment execution/query logic until the audit proves the source fields, allowed operators, audience semantics, sensitivity rules, refresh model and indexing contract.
+For Business OS work, continue from the current dependency order without duplicating canonical stores. CRM Identity, Customer 360 Timeline, CRM Task Foundation, Deal/Pipeline Foundation, Custom Field Governance and governed Dynamic Lead Segments are Production-verified. Do not automatically build Custom Objects, Person Contact, Deal Segments, Snapshots or Campaign/Workflow Segment execution next. Re-audit the remaining Phase 3 gaps against current Production and the implementation map first, then implement only the next proven dependency.
 
 For controlled Oman launch behavior, the next runtime behavior change must still correspond to one of these:
 
