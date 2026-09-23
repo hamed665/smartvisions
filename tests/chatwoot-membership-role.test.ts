@@ -72,7 +72,7 @@ const args = { organizationId: ORG, tenantBusinessId: BUSINESS, smartUserId: MEM
 
 describe('Business-wide Chatwoot membership role read', () => {
   it('maps only a canonical Organization OWNER to administrator', async () => {
-    const { supabase } = setup({ assignments: [scoped('BUSINESS', 'ADMIN')] });
+    const { supabase } = setup({});
     expect(await readBusinessWideChatwootRole({
       supabase, ...args, smartUserId: OWNER,
     })).toEqual({ effectiveSmartRole: 'OWNER', chatwootRole: 'administrator' });
