@@ -432,9 +432,6 @@ set role service_role;
 do $$
 begin
   begin
-    delete from public.organization_membersdo $$
-begin
-  begin
     delete from public.organization_members
     where organization_id='00000000-0000-0000-0000-00000000e101'
       and user_id='00000000-0000-0000-0000-00000000d102';
