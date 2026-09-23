@@ -590,7 +590,7 @@ begin
     raise exception 'DEGRADED Chatwoot Team mapping requires bounded error code';
   end if;
 
-  new.projected_name := trim(new.projected_name);
+  new.projected_name := lower(trim(new.projected_name));
   new.updated_at := now();
   return new;
 end;
