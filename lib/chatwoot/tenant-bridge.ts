@@ -30,7 +30,7 @@ export type ChatwootAccountMappingRow = {
   id: string;
   organization_id: string;
   tenant_business_id: string;
-  chatwoot_account_id: string | null;
+  chatwoot_account_id: number | null;
   status: ChatwootAccountMappingStatus;
   version: number;
   last_request_key: string;
@@ -54,7 +54,7 @@ export class ChatwootTenantBridgeError extends Error {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ERROR_CODE_RE = /^[A-Z0-9_:.-]{1,120}$/;
-const MAX_BIGINT = 9223372036854775807n;
+const MAX_CHATWOOT_ACCOUNT_ID = 2147483647;
 
 export function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID_RE.test(value);
@@ -73,26 +73,20 @@ export function normalizeChatwootErrorCode(value: unknown) {
   return ERROR_CODE_RE.test(normalized) ? normalized : null;
 }
 
-export function normalizeChatwootAccountId(value: unknown): string | null {
+export function normalizeChatwootAccountId(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return null;
 
-  let normalized: string;
-  if (typeof value === 'number') {
-    if (!Number.isSafeInteger(value) || value <= 0) return null;
-    normalized = String(value);
-  } else if (typeof value === 'string') {
-    normalized = value.trim();
-    if (!/^[1-9][0-9]*$/.test(normalized)) return null;
-  } else {
-    return null;
-  }
+  const parsed = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && /^[1-9][0-9]*$/.test(value.trim())
+      ? Number(value.trim())
+      : Number.NaN;
 
-  try {
-    const parsed = BigInt(normalized);
-    return parsed > 0n && parsed <= MAX_BIGINT ? parsed.toString() : null;
-  } catch {
-    return null;
-  }
+  return Number.isSafeInteger(parsed)
+    && parsed > 0
+    && parsed <= MAX_CHATWOOT_ACCOUNT_ID
+    ? parsed
+    : null;
 }
 
 function mapMutationError(message: string) {
@@ -237,7 +231,7 @@ export async function setChatwootAccountMappingState(input: {
   mappingId: string;
   expectedVersion: number;
   status: ChatwootAccountMappingStatus;
-  chatwootAccountId?: string | null;
+  chatwootAccountId?: number | null;
   lastErrorCode?: string | null;
   requestKey: string;
 }) {
