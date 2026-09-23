@@ -666,8 +666,12 @@ begin
 
   perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
   return v_created;
+exception
+  when others then
+    perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
+    raise;
 end;
-$$;
+$;
 
 create or replace function public.set_communication_channel_binding_lifecycle(
   p_organization_id uuid,
@@ -748,8 +752,12 @@ begin
 
   perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
   return v_updated;
+exception
+  when others then
+    perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
+    raise;
 end;
-$$;
+$;
 
 create or replace function public.create_chatwoot_account_mapping(
   p_organization_id uuid,
@@ -830,8 +838,12 @@ begin
 
   perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
   return v_created;
+exception
+  when others then
+    perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
+    raise;
 end;
-$$;
+$;
 
 create or replace function public.set_chatwoot_account_mapping_state(
   p_organization_id uuid,
@@ -944,8 +956,12 @@ begin
 
   perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
   return v_updated;
+exception
+  when others then
+    perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
+    raise;
 end;
-$$;
+$;
 
 alter table public.communication_channel_bindings enable row level security;
 alter table public.chatwoot_account_mappings enable row level security;
