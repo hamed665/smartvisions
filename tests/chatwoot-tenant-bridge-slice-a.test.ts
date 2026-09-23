@@ -63,6 +63,13 @@ describe('COMM-TENANT-BRIDGE Slice A', () => {
     expect(migration).toContain("where status = 'ACTIVE'");
   });
 
+  it('prevents hierarchy archive from orphaning active communication mappings', () => {
+    expect(migration).toContain('enforce_tenant_business_chatwoot_bridge_archive');
+    expect(migration).toContain('enforce_branch_chatwoot_bridge_archive');
+    expect(migration).toContain('archive Chatwoot bridge resources before tenant Business');
+    expect(migration).toContain('archive communication binding before Branch');
+  });
+
   it('keeps audit payload bounded and avoids message/provider secrets', () => {
     expect(migration).toContain('COMMUNICATION_CHANNEL_BINDING_CREATED');
     expect(migration).toContain('CHATWOOT_ACCOUNT_MAPPING_ACTIVATED');
