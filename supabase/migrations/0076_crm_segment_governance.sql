@@ -965,6 +965,44 @@ begin
 end;
 $$;
 
+create or replace function public.enforce_crm_segment_current_version()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public, pg_catalog
+as $
+begin
+  if not exists (
+    select 1 from public.crm_segment_versions v
+    where v.organization_id=new.organization_id
+      and v.segment_id=new.id
+      and v.version=new.current_definition_version
+  ) then
+    raise exception 'CRM Segment current definition version does not exist';
+  end if;
+  return new;
+end;
+$;
+
+create or replace function public.enforce_crm_segment_version_reachable()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public, pg_catalog
+as $
+begin
+  if not exists (
+    select 1 from public.crm_segments s
+    where s.organization_id=new.organization_id
+      and s.id=new.segment_id
+      and s.current_definition_version>=new.version
+  ) then
+    raise exception 'CRM Segment semantic version is not reachable from identity';
+  end if;
+  return new;
+end;
+$;
+
 create or replace function public.audit_crm_segment_version()
 returns trigger
 language plpgsql
@@ -1039,6 +1077,18 @@ drop trigger if exists crm_segment_version_guard on public.crm_segment_versions;
 create trigger crm_segment_version_guard
 before insert or update or delete on public.crm_segment_versions
 for each row execute function public.guard_crm_segment_version();
+
+drop trigger if exists crm_segment_current_version_constraint on public.crm_segments;
+create constraint trigger crm_segment_current_version_constraint
+after insert or update of current_definition_version on public.crm_segments
+deferrable initially deferred
+for each row execute function public.enforce_crm_segment_current_version();
+
+drop trigger if exists crm_segment_version_reachable_constraint on public.crm_segment_versions;
+create constraint trigger crm_segment_version_reachable_constraint
+after insert on public.crm_segment_versions
+deferrable initially deferred
+for each row execute function public.enforce_crm_segment_version_reachable();
 
 drop trigger if exists crm_segment_version_audit on public.crm_segment_versions;
 create trigger crm_segment_version_audit
@@ -1548,6 +1598,10 @@ grant execute on function public.evaluate_crm_lead_segment(
 revoke all on function public.guard_crm_segment_identity()
   from public,anon,authenticated,service_role;
 revoke all on function public.guard_crm_segment_version()
+  from public,anon,authenticated,service_role;
+revoke all on function public.enforce_crm_segment_current_version()
+  from public,anon,authenticated,service_role;
+revoke all on function public.enforce_crm_segment_version_reachable()
   from public,anon,authenticated,service_role;
 revoke all on function public.audit_crm_segment_version()
   from public,anon,authenticated,service_role;
