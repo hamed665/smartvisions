@@ -438,7 +438,7 @@ begin
       'CHATWOOT_ACCOUNT_MAPPING',
       gen_random_uuid(),
       1,
-      md5('{}'),
+      encode(extensions.digest('{}', 'sha256'), 'hex'),
       '00000000-0000-0000-0000-00000000b101'
     );
     raise exception 'direct command claim insert unexpectedly bypassed governed context';
