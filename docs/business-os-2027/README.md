@@ -37,7 +37,7 @@ Phase 0 is complete only when:
 - the first implementation slice can be built without inventing architecture during coding.
 
 
-## Current implementation status — 2026-09-22
+## Current implementation status — 2026-09-23
 
 - Phase 0 architecture foundation was merged in PR #172 at `main@144906c8f72c368851f8c4efb3e85dff8627f863`.
 - Phase 1 Control Plane Foundation was merged in PR #173 at `main@01d74f7c8d333c017f8f4790d7bc3e4a7d1f6ca4`.
@@ -54,10 +54,8 @@ Phase 0 is complete only when:
 - Phase 3 Slice 2 Customer 360 Timeline merged in PR #179 at `main@efcf979ff15d32062b48928672a25128c521987a` and is live in Production as migration `0071_customer_360_timeline` version `20260922202957`.
 - Production verification confirmed a SECURITY INVOKER timeline view/RPC, authenticated-only access, preserved service-role restrictions, 85 timeline items across 9 Businesses, 65 customer-visible interactions, 20 internal items, zero duplicate customer provider IDs, zero provider-journal standalone rows and zero customer-visible unsent rows.
 - Cloudflare Production Deploy #332 promoted the exact green main bundle and reported Production Worker version `a78567d8-e4f9-484e-a62b-2bd8e47b8583`; route, routed smoke and safe API/webhook smoke all passed with no provider send invoked.
-- The next Phase 3 dependency is Activity/Task normalization over existing follow-up, handoff, reply and operator evidence.
-
 - Phase 3 Slice 3 CRM Task Foundation is Production-verified in PR #181 / migration 0072, with advisor cleanup PR #182 / migration 0073. `crm_tasks` owns actionable human work only; Customer 360 remains the historical Activity read model. Post-promotion verification kept Task rows at zero, cleared all new unindexed-FK findings, preserved Shadow Mode and produced zero architecture-test outbound sends. Cloudflare heartbeat evidence shows Worker version `84d19f06-ead7-4abe-b332-ba14309629d8`.
-- The next Phase 3 dependency is Deal/Pipeline normalization. Existing `growth_opportunities` / `intent_opportunities` remain acquisition/intent evidence and must not be repurposed as canonical CRM Deals.
+- Existing `growth_opportunities` / `intent_opportunities` remain acquisition/intent evidence and must not be repurposed as canonical CRM Deals.
 
 - Phase 3 Slice 4 Deal/Pipeline Foundation merged in PR #184 at `main@d416fcee020bc393a45096ee1330f8378bbd8e38`; Production migration 0074 is database-verified with zero seeded commercial rows and zero new unindexed-FK findings. Cloudflare runtime promotion is intentionally still evidence-gated until a post-merge Worker version is observed.
 
