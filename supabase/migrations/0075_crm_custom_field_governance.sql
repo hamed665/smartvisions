@@ -251,6 +251,28 @@ create index if not exists crm_custom_field_values_deal_read_idx
 create index if not exists crm_custom_field_options_definition_idx
   on public.crm_custom_field_options(organization_id, definition_id, position);
 
+create index if not exists crm_custom_field_definitions_created_by_fk_idx
+  on public.crm_custom_field_definitions(organization_id, created_by_user_id);
+
+create index if not exists crm_custom_field_definitions_updated_by_fk_idx
+  on public.crm_custom_field_definitions(organization_id, updated_by_user_id);
+
+create index if not exists crm_custom_field_options_created_by_fk_idx
+  on public.crm_custom_field_options(organization_id, created_by_user_id);
+
+create index if not exists crm_custom_field_options_updated_by_fk_idx
+  on public.crm_custom_field_options(organization_id, updated_by_user_id);
+
+create index if not exists crm_custom_field_values_created_by_fk_idx
+  on public.crm_custom_field_values(organization_id, created_by_user_id);
+
+create index if not exists crm_custom_field_values_updated_by_fk_idx
+  on public.crm_custom_field_values(organization_id, updated_by_user_id);
+
+create index if not exists crm_custom_field_values_cleared_by_fk_idx
+  on public.crm_custom_field_values(organization_id, cleared_by_user_id)
+  where cleared_by_user_id is not null;
+
 create or replace function public.crm_custom_field_is_schema_manager(
   p_organization_id uuid
 )
@@ -305,7 +327,7 @@ language sql
 stable
 security invoker
 set search_path = public, auth, pg_catalog
-as $
+as $custom_field_read_value$
   select public.crm_custom_field_can_read_definition(
     p_organization_id, p_definition_id
   )
@@ -332,7 +354,7 @@ as $
       )
     )
   );
-$;
+$custom_field_read_value$;
 
 create or replace function public.crm_custom_field_can_manage_value(
   p_organization_id uuid,
