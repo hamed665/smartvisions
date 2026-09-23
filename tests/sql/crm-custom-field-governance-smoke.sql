@@ -198,35 +198,27 @@ begin
 
   insert into public.crm_custom_field_values(
     organization_id,definition_id,definition_version,entity_type,data_type,
-    lead_id,state,value_text,version,last_request_key,
+    lead_id,state,value_text,value_option_keys,version,last_request_key,
     created_by_user_id,updated_by_user_id
   ) values
   (
     '00000000-0000-0000-0000-000000000c01',v_ref,1,'LEAD','TEXT',
-    '20000000-0000-0000-0000-000000000c01','SET','REF-001',1,'custom-value-ref-1',
+    '20000000-0000-0000-0000-000000000c01','SET','REF-001',null,1,'custom-value-ref-1',
     '00000000-0000-0000-0000-00000000c001',
     '00000000-0000-0000-0000-00000000c001'
   ),
   (
     '00000000-0000-0000-0000-000000000c01',v_region,1,'LEAD','SINGLE_SELECT',
-    '20000000-0000-0000-0000-000000000c01','SET',null,1,'custom-value-region-1',
+    '20000000-0000-0000-0000-000000000c01','SET',null,array['muscat'],1,'custom-value-region-1',
     '00000000-0000-0000-0000-00000000c001',
     '00000000-0000-0000-0000-00000000c001'
   ),
   (
     '00000000-0000-0000-0000-000000000c01',v_secret,1,'LEAD','TEXT',
-    '20000000-0000-0000-0000-000000000c01','SET','private-fixture-secret',1,'custom-value-secret-1',
+    '20000000-0000-0000-0000-000000000c01','SET','private-fixture-secret',null,1,'custom-value-secret-1',
     '00000000-0000-0000-0000-00000000c001',
     '00000000-0000-0000-0000-00000000c001'
   );
-
-  update public.crm_custom_field_values
-  set value_option_keys=array['muscat'],
-      updated_by_user_id='00000000-0000-0000-0000-00000000c001',
-      last_request_key='custom-value-region-1-set'
-  where organization_id='00000000-0000-0000-0000-000000000c01'
-    and definition_id=v_region
-    and lead_id='20000000-0000-0000-0000-000000000c01';
 end;
 $create_values$;
 
@@ -487,23 +479,23 @@ select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000c003'
 
 do $sales_agent_lead_denied_deal_owned_allowed$
 declare
-  v_region uuid;
+  v_ref uuid;
   v_contract uuid;
   v_agent_deal uuid;
 begin
-  select id into v_region
+  select id into v_ref
   from public.crm_custom_field_definitions
   where organization_id='00000000-0000-0000-0000-000000000c01'
-    and field_key='region';
+    and field_key='external_ref';
 
   begin
     insert into public.crm_custom_field_values(
       organization_id,definition_id,definition_version,entity_type,data_type,
-      lead_id,state,value_option_keys,last_request_key,
+      lead_id,state,value_text,last_request_key,
       created_by_user_id,updated_by_user_id
     ) values (
-      '00000000-0000-0000-0000-000000000c01',v_region,2,'LEAD','SINGLE_SELECT',
-      '20000000-0000-0000-0000-000000000c01','SET',array['muscat'],'agent-lead-write',
+      '00000000-0000-0000-0000-000000000c01',v_ref,1,'LEAD','TEXT',
+      '20000000-0000-0000-0000-000000000c02','SET','AGENT-REF-2','agent-lead-write',
       '00000000-0000-0000-0000-00000000c003',
       '00000000-0000-0000-0000-00000000c003'
     );
