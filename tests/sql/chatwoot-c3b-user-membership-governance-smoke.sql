@@ -7,6 +7,8 @@ create temp table c3b_writer_state (
   value text not null
 ) on commit drop;
 
+grant select, insert, update on c3b_writer_state to authenticated, service_role;
+
 insert into auth.users(id) values
   ('00000000-0000-0000-0000-00000000e401'),
   ('00000000-0000-0000-0000-00000000e402'),
