@@ -7,6 +7,7 @@ const migration = fs.readFileSync(
   'utf8',
 );
 const runtime = fs.readFileSync('lib/chatwoot/vault.ts', 'utf8');
+const vaultRefSource = fs.readFileSync('lib/chatwoot/vault-ref.ts', 'utf8');
 const serviceClient = fs.readFileSync('lib/supabase/service.ts', 'utf8');
 const bootstrap = fs.readFileSync(
   'tests/sql/chatwoot-vault-bootstrap.sql',
@@ -68,8 +69,8 @@ describe('COMM-TENANT-BRIDGE Slice C1 Vault boundary', () => {
       'Chatwoot Vault secret name collision requires reconciliation',
     );
     expect(migration).toContain('chatwoot_vault_find_secret_ref');
+    expect(migration).toContain("if not found or v_secret is null then");
     expect(migration.match(/v_existing_secret is distinct from v_secret/g)).toHaveLength(2);
-
   });
 
   it('never stores plaintext secret in Smart Core mapping or audit tables', () => {
@@ -90,7 +91,7 @@ describe('COMM-TENANT-BRIDGE Slice C1 Vault boundary', () => {
 
   it('uses exact secret-reference parsing in both SQL and TypeScript', () => {
     expect(migration).toContain('secretref://supabase-vault/');
-    expect(runtime).toContain('secretref:\\/\\/supabase-vault');
+    expect(vaultRefSource).toContain('secretref:\\/\\/supabase-vault');
   });
 
   it('keeps the synthetic Vault bootstrap clearly CI-only', () => {
