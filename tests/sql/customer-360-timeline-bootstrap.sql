@@ -5,8 +5,11 @@ create table public.leads (
   organization_id uuid not null references public.organizations(id) on delete cascade,
   business_id uuid not null references public.businesses(id) on delete cascade,
   status text not null default 'ACTIVE',
+  opportunity_score integer not null default 0,
+  intent_score integer not null default 0,
   agent_mode text not null default 'AUTO',
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table public.sales_conversations (
