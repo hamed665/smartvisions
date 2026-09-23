@@ -144,6 +144,17 @@ describe('Business-wide Chatwoot membership role read', () => {
     ]);
   });
 
+  it('rejects duplicate scope rows or a different Business returned by a read', async () => {
+    for (const assignments of [
+      [scoped('BUSINESS', 'ADMIN'), scoped('BUSINESS', 'VIEWER')],
+      [{ ...scoped('BUSINESS', 'ADMIN'), tenant_business_id: BRAND }],
+    ]) {
+      const { supabase } = setup({ assignments });
+      await expect(readBusinessWideChatwootRole({ supabase, ...args }))
+        .rejects.toThrow('unavailable');
+    }
+  });
+
   it('rejects a mismatched target Organization member row', async () => {
     const { supabase } = setup({ memberOrganizationId: BRAND });
     await expect(readBusinessWideChatwootRole({ supabase, ...args }))
