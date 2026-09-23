@@ -2,6 +2,11 @@
 
 begin;
 
+create temp table chatwoot_vault_test_state (
+  key text primary key,
+  value text not null
+) on commit drop;
+
 set role service_role;
 
 select public.chatwoot_vault_create_secret(
@@ -10,9 +15,12 @@ select public.chatwoot_vault_create_secret(
   'synthetic CI secret'
 ) as secret_ref \gset
 
+insert into chatwoot_vault_test_state(key,value)
+values ('secret_ref', :'secret_ref');
+
 do $$
 declare
-  v_ref text := :'secret_ref';
+  v_ref text := (select value from chatwoot_vault_test_state where key='secret_ref');
   v_secret text;
 begin
   if v_ref !~ '^secretref://supabase-vault/[0-9a-f-]{36}$' then
@@ -33,10 +41,13 @@ select public.chatwoot_vault_update_secret(
   'synthetic CI rotated secret'
 ) as updated_ref \gset
 
+insert into chatwoot_vault_test_state(key,value)
+values ('updated_ref', :'updated_ref');
+
 do $$
 declare
-  v_ref text := :'secret_ref';
-  v_updated_ref text := :'updated_ref';
+  v_ref text := (select value from chatwoot_vault_test_state where key='secret_ref');
+  v_updated_ref text := (select value from chatwoot_vault_test_state where key='updated_ref');
   v_secret text;
 begin
   if v_updated_ref <> v_ref then
