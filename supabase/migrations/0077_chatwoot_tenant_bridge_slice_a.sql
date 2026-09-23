@@ -139,7 +139,7 @@ create table if not exists public.chatwoot_bridge_command_claims (
   )),
   entity_id uuid not null,
   applied_version integer not null check (applied_version >= 1),
-  payload_hash text not null check (payload_hash ~ '^[0-9a-f]{32}$'),
+  payload_hash text not null check (payload_hash ~ '^[0-9a-f]{64}$'),
   created_by_user_id uuid not null,
   created_at timestamptz not null default now(),
 
@@ -276,7 +276,7 @@ begin
      )
      or p_applied_version is null
      or p_applied_version < 1
-     or v_payload_hash !~ '^[0-9a-f]{32}$'
+     or v_payload_hash !~ '^[0-9a-f]{64}$'
   then
     raise exception 'invalid Chatwoot bridge command claim';
   end if;
@@ -773,13 +773,13 @@ begin
     raise exception 'unsupported communication channel';
   end if;
 
-  v_payload_hash := md5(jsonb_build_object(
+  v_payload_hash := encode(extensions.digest(jsonb_build_object(
     'organizationId', p_organization_id,
     'tenantBusinessId', p_tenant_business_id,
     'branchId', p_branch_id,
     'integrationConnectionId', p_integration_connection_id,
     'channel', v_channel
-  )::text);
+  )::text, 'sha256'), 'hex');
 
   perform set_config('smartvisions.chatwoot_bridge_command', '1', true);
 
@@ -885,12 +885,12 @@ begin
     raise exception 'request key must contain 1..200 characters';
   end if;
 
-  v_payload_hash := md5(jsonb_build_object(
+  v_payload_hash := encode(extensions.digest(jsonb_build_object(
     'organizationId', p_organization_id,
     'bindingId', p_binding_id,
     'expectedVersion', p_expected_version,
     'status', v_status
-  )::text);
+  )::text, 'sha256'), 'hex');
 
   perform set_config('smartvisions.chatwoot_bridge_command', '1', true);
 
@@ -982,10 +982,10 @@ begin
     raise exception 'request key must contain 1..200 characters';
   end if;
 
-  v_payload_hash := md5(jsonb_build_object(
+  v_payload_hash := encode(extensions.digest(jsonb_build_object(
     'organizationId', p_organization_id,
     'tenantBusinessId', p_tenant_business_id
-  )::text);
+  )::text, 'sha256'), 'hex');
 
   perform set_config('smartvisions.chatwoot_bridge_command', '1', true);
 
@@ -1107,14 +1107,14 @@ begin
     raise exception 'request key must contain 1..200 characters';
   end if;
 
-  v_payload_hash := md5(jsonb_build_object(
+  v_payload_hash := encode(extensions.digest(jsonb_build_object(
     'organizationId', p_organization_id,
     'mappingId', p_mapping_id,
     'expectedVersion', p_expected_version,
     'status', v_status,
     'chatwootAccountId', p_chatwoot_account_id,
     'lastErrorCode', v_error_code
-  )::text);
+  )::text, 'sha256'), 'hex');
 
   perform set_config('smartvisions.chatwoot_bridge_command', '1', true);
 
