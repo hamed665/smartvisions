@@ -193,8 +193,8 @@ begin
   from vault.decrypted_secrets ds
   where ds.id = v_id;
 
-  if not found then
-    raise exception 'Chatwoot Vault secret reference not found';
+  if not found or v_secret is null then
+    raise exception 'Chatwoot Vault secret unavailable';
   end if;
 
   return v_secret;
