@@ -5,6 +5,7 @@ import {
   normalizeChatwootAccessToken,
   normalizeChatwootBaseUrl,
   normalizeChatwootRequestPath,
+  parseChatwootJson,
   parseRetryAfterMs,
 } from '@/lib/chatwoot/http-contract';
 
@@ -100,6 +101,26 @@ describe('Chatwoot HTTP safety contract', () => {
         networkFailure: true,
       }),
     ).toBe(false);
+  });
+
+  it('preserves unsafe JSON integer IDs as exact decimal strings', () => {
+    const parsed = parseChatwootJson(
+      '{"safe":9007199254740991,"large":9223372036854775807,"negative":-9223372036854775807,"decimal":1.25,"text":"9223372036854775807","items":[9223372036854775806]}',
+    ) as {
+      safe: number;
+      large: string;
+      negative: string;
+      decimal: number;
+      text: string;
+      items: string[];
+    };
+
+    expect(parsed.safe).toBe(9007199254740991);
+    expect(parsed.large).toBe('9223372036854775807');
+    expect(parsed.negative).toBe('-9223372036854775807');
+    expect(parsed.decimal).toBe(1.25);
+    expect(parsed.text).toBe('9223372036854775807');
+    expect(parsed.items).toEqual(['9223372036854775806']);
   });
 
   it('bounds Retry-After values instead of sleeping arbitrarily long', () => {
