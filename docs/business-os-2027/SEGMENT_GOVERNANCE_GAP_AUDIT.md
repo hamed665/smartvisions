@@ -562,3 +562,27 @@ This audit intentionally did not:
 - add indexes.
 
 The exact first implementation migration/API contract must be checked again against current `main`, open PRs, CI and Production immediately before implementation, because runtime evidence outranks this document if the system changes after this audit.
+
+
+## 15. Production closeout
+
+Slice 6 implementation merged in PR #191 at `main@a34bfd243d2f95e2ccad9895d5a753ef902a4299`.
+
+Production evidence:
+
+- exact implementation migration blob on merged main matches the exact green PR head blob;
+- post-merge main CI passed lint, typecheck, Vitest, PostgreSQL 17 migration-chain smoke, Next build, Vinext build and Cloudflare scheduled verification;
+- migration `0076_crm_segment_governance` is live as Production version `20260923093619`;
+- Production RLS is enabled on `crm_segments` and `crm_segment_versions`;
+- authenticated grants are limited to the required SELECT/INSERT/UPDATE surface; no anon/service-role table grant and no authenticated DELETE exists;
+- all Segment functions are SECURITY INVOKER;
+- Production migration created zero Segment identities and zero Segment versions;
+- Security Advisor findings are unchanged from pre-0076 baseline;
+- Performance Advisor introduced no unindexed-FK defect; the four new Segment/list/FK indexes are initially unused because the canonical Segment tables intentionally contain zero rows;
+- rollback-only Production smoke verified create, deterministic evaluation, semantic version advancement, archive/reactivate lifecycle, material audit and deferred version constraints;
+- rollback left zero Segment rows, zero Segment-version rows and zero Segment audit fixture residue;
+- zero Email/WhatsApp outbound rows were created during 0076 promotion verification;
+- exact-merge Cloudflare Production deploy succeeded, kept Shadow Mode ON, preserved `*/2 * * * *` Cron and route attachment, kept workers.dev disabled and invoked no outbound provider send in safe smoke;
+- latest routed Worker heartbeat after Slice 6: `__SLICE6_WORKER_VERSION__`, failed=0 with acquisition/evidence/auto-dispatch SKIPPED.
+
+The implemented first slice therefore remains exactly the audited contract: governed organization-wide Dynamic Lead Segments only. Snapshot membership, persistent current membership, Deal/Business/Task/Conversation/Person Contact Segment entities and campaign/workflow/provider execution remain deferred.
