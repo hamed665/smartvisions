@@ -208,54 +208,35 @@ A green CI run is necessary, not a substitute for review of a migration.
 
 ## Current stacked Chatwoot execution checkpoint — 2026-09-23
 
-Dependency order:
+Dependency order now extends through Slice B:
 
-1. PR #195 — `COMM-CHATWOOT-SOURCE` source foundation, Draft.
-2. PR #196 — `COMM-TENANT-BRIDGE` gap audit, Draft and stacked on #195.
-3. PR #197 — `COMM-TENANT-BRIDGE / Slice A`, Draft and stacked on #196.
+1. PR #195 — `COMM-CHATWOOT-SOURCE`, Draft.
+2. PR #196 — Tenant Bridge gap audit, Draft.
+3. PR #197 — Tenant Bridge Slice A, Draft.
+4. PR #198 — Tenant Bridge Slice B audit, Draft.
+5. Slice B implementation branch — `feat/comm-tenant-bridge-slice-b`; create/verify its Draft PR before further implementation.
 
-Slice A is implemented but **not merged and not applied to Production**.
+Slice B implementation currently includes:
 
-It currently provides:
-
-- migration `0077_chatwoot_tenant_bridge_slice_a.sql`;
-- `communication_channel_bindings`;
-- `chatwoot_account_mappings`;
-- immutable `chatwoot_bridge_command_claims` with SHA-256 payload fingerprints;
-- OWNER-only mutation and OWNER/ADMIN infrastructure read;
-- RLS plus explicit Data API grants;
-- optimistic versions and formal lifecycle guards;
-- hierarchy archive protection;
-- PII-minimized canonical audit;
-- authenticated Smart Core API/runtime wrapper;
-- PostgreSQL 17 rollback-only synthetic smoke wired into CI;
+- migration `0078_chatwoot_tenant_bridge_slice_b.sql`;
+- `chatwoot_user_mappings`;
+- `chatwoot_account_memberships`;
+- `chatwoot_inbox_mappings`;
+- `chatwoot_team_mappings`;
+- server-only Supabase service client;
+- safe OWNER/ADMIN resource-read API with no secret references;
+- role projection: OWNER -> administrator; ADMIN/SALES_MANAGER/SALES_AGENT -> agent; VIEWER -> no membership;
+- external IDs aligned to Chatwoot v4.18.0: User/Inbox integer; AccountUser/Team bigint;
+- secret-store reference fields only for API Inbox secrets;
+- no authenticated direct Data API access to Slice B mapping tables;
+- reverse hierarchy/member guards;
+- PostgreSQL 17 rollback-only smoke wired into CI;
 - zero Chatwoot HTTP calls;
 - zero provider sends.
 
-Latest implementation design facts to preserve:
+Current external blocker remains GitHub-hosted runner allocation. Do not merge around `runner_id=0 / steps=0`.
 
-- Chatwoot v4.18.0 Account ID is integer/serial, so `chatwoot_account_id` is PostgreSQL `integer`, not bigint/string.
-- old request-key replay remains durable across later lifecycle/version changes;
-- the same request key with a different canonical payload fails closed;
-- failed commands roll back their command claim atomically;
-- command claims are idempotency infrastructure only, not a second event store;
-- channel binding create/reactivation does not fabricate `last_verified_at` without external verification;
-- current `integration_connections` remains Organization-scoped and unique by `(organization_id, provider, channel)`; Slice A does not silently weaken it.
-
-Current external blocker:
-
-GitHub-hosted Actions jobs are still failing before any step executes with `runner_id=0`, blank runner name and zero steps. This affects #195, #196 and #197. Do not weaken CI or merge around it. First verify/fix account/repository Actions allocation/budget/payment/eligibility, then rerun exact-head checks.
-
-Production currently remains:
-
-- migration `0076_crm_segment_governance`;
-- Shadow Mode ON;
-- 0 Brands;
-- 0 tenant Businesses;
-- 0 Chatwoot bridge tables/rows;
-- no persistent real Chatwoot Account mapping.
-
-Do not fabricate hierarchy or external Chatwoot IDs merely to demonstrate the bridge.
+Production remains on migration `0076_crm_segment_governance`, with zero Brand/tenant-Business/Chatwoot mapping rows.
 
 ## Stable program cursor
 
