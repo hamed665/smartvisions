@@ -55,6 +55,31 @@ Durable workflows, scheduling, action gateway, approvals, retries, compensation,
 
 WhatsApp, Instagram, Facebook, TikTok, Telegram, Email, Website, Mobile, Voice, SMS, RCS and custom adapters.
 
+### Source-based Chatwoot Communication Plane
+
+Smart Visions will use **Chatwoot Community Edition source code** as the source-based human communication plane / Unified Inbox, not merely as an external SaaS API.
+
+Ownership boundary:
+
+- Chatwoot source owns communication-plane UX and operational inbox state such as inbox/team/agent assignment, internal notes, presence and conversation projection;
+- Smart Core remains authoritative for tenant/business/customer CRM truth, identity resolution, consent/DNC/suppression, pricing, sales, booking, commerce, payments, billing, Knowledge/Memory policy, automation/action safety and audit;
+- a Chatwoot-composed outbound reply must cross Smart Core Policy -> Approval if required -> Action Gateway -> canonical provider send gate -> Verification/Reconciliation -> Audit;
+- Chatwoot must never become a bypass around Shadow Mode, Kill Switch, Human takeover, DNC/suppression, consent/reply-window policy, canonical recipient checks or Cost Guard;
+- provider/native-app events are reconciled into both Smart Core evidence and Chatwoot projections without creating a second canonical provider journal.
+
+Source/license boundary:
+
+- use the upstream-trackable Chatwoot Community source available under its MIT license;
+- preserve required license/copyright notices;
+- do not copy, vendor, redistribute or use Chatwoot `enterprise/` code in Production unless Smart Visions intentionally holds the required valid Enterprise license;
+- if a capability is Enterprise-only and no license is adopted, implement the needed Smart Visions capability independently rather than copying proprietary code.
+
+Deployment boundary:
+
+- keep the Chatwoot source fork/upstream history maintainable as its own deployable communication-plane component rather than dumping the upstream tree into the Smart Core repository;
+- pin exact upstream source versions/commits and maintain an explicit upgrade/rebase/rollback procedure;
+- the concrete fork repository and deployment identity become canonical only after they are actually created and Production-verified.
+
 ### Data Plane
 
 PostgreSQL transactional source of truth, Redis/ephemeral state where justified, vector retrieval, object storage, search, event backbone, CDC and analytics warehouse.
@@ -75,6 +100,7 @@ PostgreSQL transactional source of truth, Redis/ephemeral state where justified,
 12. Cross-tenant intelligence is aggregated/anonymized only.
 13. Provider abstractions prevent strategic lock-in.
 14. Production behavior beats stale documentation; documentation is reconciled afterward.
+15. Chatwoot is a source-based Communication Plane; it never becomes the canonical CRM/business truth or a provider-send safety bypass.
 
 ## Core domains
 
