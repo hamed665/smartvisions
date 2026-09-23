@@ -42,6 +42,16 @@ describe('COMM-TENANT-BRIDGE Slice A', () => {
     expect(migration).toContain('Chatwoot bridge rows use lifecycle state; DELETE is not permitted');
   });
 
+  it('uses immutable durable command claims instead of mutable last-key-only idempotency', () => {
+    expect(migration).toContain('create table if not exists public.chatwoot_bridge_command_claims');
+    expect(migration).toContain('create or replace function public.claim_chatwoot_bridge_command');
+    expect(migration).toContain('payload_hash');
+    expect(migration).toContain('request key already used with different Chatwoot bridge payload');
+    expect(migration).toContain('Chatwoot bridge command claims are immutable');
+    expect(migration).toContain('chatwoot_bridge_command_claims_insert_guard');
+    expect(migration).not.toContain('chatwoot_bridge_command_claims_audit');
+  });
+
   it('keeps writes OWNER-only and infrastructure reads OWNER/ADMIN', () => {
     expect(migration).toContain("m.role = 'OWNER'");
     expect(migration).toContain("m.role in ('OWNER','ADMIN')");
@@ -50,9 +60,12 @@ describe('COMM-TENANT-BRIDGE Slice A', () => {
   });
 
   it('uses explicit grants because Data API auto-exposure is not assumed', () => {
-    expect(migration).toContain('revoke all on table public.communication_channel_bindings');
+    expect(migration).toContain('revoke all on table public.chatwoot_bridge_command_claims');
+    expect(migration).toContain('grant select, insert on table public.chatwoot_bridge_command_claims');
     expect(migration).toContain('grant select, insert, update on table public.communication_channel_bindings');
-    expect(migration).toContain('grant select on table public.communication_channel_bindings');
+    expect(migration).toContain('grant select on table public.chatwoot_bridge_command_claims');
+    expect(migration).not.toMatch(/grant\s+update[^;]*chatwoot_bridge_command_claims/is);
+    expect(migration).not.toMatch(/grant\s+delete[^;]*chatwoot_bridge_command_claims/is);
   });
 
   it('enforces one live Chatwoot Account mapping per tenant Business', () => {
@@ -83,7 +96,8 @@ describe('COMM-TENANT-BRIDGE Slice A', () => {
 
   it('keeps every database function SECURITY INVOKER', () => {
     expect(migration).not.toMatch(/security\s+definer/i);
-    expect((migration.match(/security invoker/gi) ?? []).length).toBeGreaterThanOrEqual(10);
+    expect((migration.match(/security invoker/gi) ?? []).length)
+      .toBe((migration.match(/create or replace function public\./gi) ?? []).length);
   });
 
   it('normalizes request keys and safe Chatwoot scalar evidence', () => {
