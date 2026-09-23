@@ -766,6 +766,7 @@ Implemented:
 - upstream error-body/token redaction;
 - response-body cancellation on retry/error;
 - Web Crypto correlation ID;
+- lossless unsafe-integer JSON parsing for Chatwoot bigint IDs;
 - mock-only tests for Platform and ephemeral user-token requests.
 
 No live Chatwoot request is executed by PR #202.
