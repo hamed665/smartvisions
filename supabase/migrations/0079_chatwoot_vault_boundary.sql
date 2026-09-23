@@ -42,6 +42,7 @@ declare
   v_name text := trim(coalesce(p_name, ''));
   v_description text := nullif(trim(coalesce(p_description, '')), '');
   v_id uuid;
+  v_existing_secret text;
 begin
   if length(v_secret) < 1 or length(v_secret) > 16384 then
     raise exception 'Chatwoot Vault secret length is invalid';
@@ -55,15 +56,70 @@ begin
     raise exception 'Chatwoot Vault secret description is too long';
   end if;
 
-  select vault.create_secret(
-    v_secret,
-    v_name,
-    coalesce(v_description, ''),
-    null
-  ) into v_id;
+  select ds.id, ds.decrypted_secret
+    into v_id, v_existing_secret
+  from vault.decrypted_secrets ds
+  where ds.name = v_name;
+
+  if found then
+    if v_existing_secret <> v_secret then
+      raise exception 'Chatwoot Vault secret name already exists with different secret';
+    end if;
+
+    return 'secretref://supabase-vault/' || v_id::text;
+  end if;
+
+  begin
+    select vault.create_secret(
+      v_secret,
+      v_name,
+      coalesce(v_description, ''),
+      null
+    ) into v_id;
+  exception
+    when unique_violation then
+      select ds.id, ds.decrypted_secret
+        into v_id, v_existing_secret
+      from vault.decrypted_secrets ds
+      where ds.name = v_name;
+
+      if not found or v_existing_secret <> v_secret then
+        raise exception 'Chatwoot Vault secret name collision requires reconciliation';
+      end if;
+  end;
 
   if v_id is null then
     raise exception 'Chatwoot Vault secret creation returned no identifier';
+  end if;
+
+  return 'secretref://supabase-vault/' || v_id::text;
+end;
+$$;
+
+create or replace function public.chatwoot_vault_find_secret_ref(
+  p_name text
+)
+returns text
+language plpgsql
+stable
+security invoker
+set search_path = pg_catalog
+as $$
+declare
+  v_name text := trim(coalesce(p_name, ''));
+  v_id uuid;
+begin
+  if v_name !~ '^chatwoot/[A-Za-z0-9/_:.-]{1,180}$' then
+    raise exception 'Chatwoot Vault secret name is invalid';
+  end if;
+
+  select s.id
+    into v_id
+  from vault.secrets s
+  where s.name = v_name;
+
+  if not found then
+    return null;
   end if;
 
   return 'secretref://supabase-vault/' || v_id::text;
@@ -149,6 +205,10 @@ revoke all on function public.chatwoot_vault_secret_id(text)
   from public, anon, authenticated, service_role;
 revoke all on function public.chatwoot_vault_create_secret(text, text, text)
   from public, anon, authenticated, service_role;
+revoke all on function public.chatwoot_vault_find_secret_ref(text)
+  from public, anon, authenticated, service_role;
+grant execute on function public.chatwoot_vault_find_secret_ref(text)
+  to service_role;
 revoke all on function public.chatwoot_vault_update_secret(text, text, text, text)
   from public, anon, authenticated, service_role;
 revoke all on function public.chatwoot_vault_read_secret(text)
