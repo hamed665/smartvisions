@@ -12,6 +12,10 @@ const migration = fs.readFileSync(
 );
 const runtime = fs.readFileSync('lib/chatwoot/tenant-bridge.ts', 'utf8');
 const route = fs.readFileSync('app/api/chatwoot/tenant-bridge/route.ts', 'utf8');
+const sqlSmoke = fs.readFileSync(
+  'tests/sql/chatwoot-tenant-bridge-slice-a-smoke.sql',
+  'utf8',
+);
 
 describe('COMM-TENANT-BRIDGE Slice A', () => {
   it('keeps the canonical tenant Business separate from Growth/Hunter businesses', () => {
@@ -95,5 +99,7 @@ describe('COMM-TENANT-BRIDGE Slice A', () => {
 
   it('contains no malformed single-dollar PL/pgSQL terminator', () => {
     expect(migration).not.toMatch(/\n\$;\n/);
+    expect(sqlSmoke).not.toMatch(/\bdo \$\n/);
+    expect(sqlSmoke).not.toMatch(/\n\$;\n/);
   });
 });
