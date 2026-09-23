@@ -39,6 +39,8 @@ function verifyLock(lock) {
   requireValue(/^[0-9a-f]{40}$/.test(lock.upstream?.commit ?? ''), 'upstream commit must be a full 40-character SHA');
   requireValue(lock.license?.communityPolicy === 'MIT_EXCEPT_ENTERPRISE', 'community license policy is not locked');
   requireValue(lock.license?.enterpriseProductionUse === 'LICENSE_REQUIRED', 'enterprise production policy is not locked');
+  requireValue(lock.license?.enterpriseFilesInProductionImage === false, 'enterprise source must be absent from Production image');
+  requireValue(lock.license?.runtimeDisableEnterprise === true, 'runtime Enterprise disable guard must remain enabled');
   requireValue(lock.image?.registry === 'ghcr.io/hamed665/smartvisions-chatwoot', 'unexpected Chatwoot image registry');
   requireValue(lock.image?.allowLatestTag === false, 'floating latest tag is prohibited');
   requireValue(lock.image?.requireImmutableDeploymentDigest === true, 'Production must require immutable image digest');
