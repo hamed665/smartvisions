@@ -348,9 +348,9 @@ begin
     'bridge-binding-reactivate-1'
   );
 end;
-$;
+$$;
 
-do $
+do $$
 begin
   begin
     update public.branches
@@ -376,9 +376,9 @@ begin
       end if;
   end;
 end;
-$;
+$$;
 
-do $
+do $$
 declare
   v_mapping_id uuid := (select value::uuid from bridge_test_state where key='mapping_id');
 begin
@@ -400,9 +400,9 @@ begin
       end if;
   end;
 end;
-$;
+$$;
 
-do $
+do $$
 declare
   v_binding_id uuid := (select value::uuid from bridge_test_state where key='binding_id');
   v_mapping_id uuid := (select value::uuid from bridge_test_state where key='mapping_id');
