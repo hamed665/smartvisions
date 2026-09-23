@@ -353,6 +353,18 @@ export async function createCustomFieldOption(input: {
     .single();
 
   if (!error && data) return data as CustomFieldOptionRow;
+
+  if (error?.code === '23505') {
+    const retry = await input.supabase
+      .from('crm_custom_field_options')
+      .select('*')
+      .eq('organization_id', input.organizationId)
+      .eq('last_request_key', input.requestKey)
+      .maybeSingle();
+
+    if (!retry.error && retry.data) return retry.data as CustomFieldOptionRow;
+  }
+
   throw new Error(`Custom-field option create failed: ${error?.message ?? 'unknown error'}`);
 }
 
@@ -489,6 +501,18 @@ export async function createCustomFieldValue(input: {
     .single();
 
   if (!error && data) return data as CustomFieldValueRow;
+
+  if (error?.code === '23505') {
+    const retry = await input.supabase
+      .from('crm_custom_field_values')
+      .select('*')
+      .eq('organization_id', input.organizationId)
+      .eq('last_request_key', input.requestKey)
+      .maybeSingle();
+
+    if (!retry.error && retry.data) return retry.data as CustomFieldValueRow;
+  }
+
   throw new Error(`Custom-field value create failed: ${error?.message ?? 'unknown error'}`);
 }
 
