@@ -744,3 +744,28 @@ Fresh Production evidence used before implementation:
 - authenticated has no Vault schema usage or decrypted-secret access.
 
 No secret was created in Production while implementing C1.
+
+
+---
+
+## 31. Slice C2 implementation checkpoint
+
+Stacked Draft PR #202 implements the approved Chatwoot provisioning HTTP client.
+
+Implemented:
+
+- `api_access_token` authentication for Platform and account-scoped APIs;
+- fail-closed `CHATWOOT_PROVISIONING_ENABLED`;
+- HTTPS-only Production base URL;
+- path traversal/fragment rejection;
+- bounded request and response sizes;
+- bounded timeouts;
+- GET-only retries;
+- no automatic mutation retry;
+- ambiguous mutation outcome classification;
+- upstream error-body/token redaction;
+- response-body cancellation on retry/error;
+- Web Crypto correlation ID;
+- mock-only tests for Platform and ephemeral user-token requests.
+
+No live Chatwoot request is executed by PR #202.
