@@ -62,7 +62,7 @@ begin
   where ds.name = v_name;
 
   if found then
-    if v_existing_secret <> v_secret then
+    if v_existing_secret is distinct from v_secret then
       raise exception 'Chatwoot Vault secret name already exists with different secret';
     end if;
 
@@ -83,7 +83,7 @@ begin
       from vault.decrypted_secrets ds
       where ds.name = v_name;
 
-      if not found or v_existing_secret <> v_secret then
+      if not found or v_existing_secret is distinct from v_secret then
         raise exception 'Chatwoot Vault secret name collision requires reconciliation';
       end if;
   end;
