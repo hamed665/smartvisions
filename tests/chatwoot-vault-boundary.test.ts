@@ -30,7 +30,7 @@ describe('COMM-TENANT-BRIDGE Slice C1 Vault boundary', () => {
   it('uses SECURITY INVOKER only and grants wrappers only to service_role', () => {
     const functions =
       migration.match(/create or replace function public\./gi) ?? [];
-    const invokers = migration.match(/security invoker/gi) ?? [];
+    const invokers = migration.match(/^\s*security invoker\s*$/gim) ?? [];
 
     expect(migration).not.toMatch(/security\s+definer/i);
     expect(invokers).toHaveLength(functions.length);
