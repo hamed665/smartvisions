@@ -123,7 +123,7 @@ export async function POST(request: Request) {
         ? null
         : body.branchId;
       const integrationConnectionId = body.integrationConnectionId;
-      const channel = typeof body.channel === 'string' ? body.channel.toUpperCase() : '';
+      const channel = typeof body.channel === 'string' ? body.channel.trim().toUpperCase() : '';
 
       if (
         (branchId !== null && !isUuid(branchId))
@@ -199,7 +199,7 @@ export async function PATCH(request: Request) {
   try {
     if (mode === 'CHANNEL_BINDING_LIFECYCLE') {
       const bindingId = body.bindingId;
-      const status = typeof body.status === 'string' ? body.status.toUpperCase() : '';
+      const status = typeof body.status === 'string' ? body.status.trim().toUpperCase() : '';
 
       if (!isUuid(bindingId) || (status !== 'ACTIVE' && status !== 'ARCHIVED')) {
         return NextResponse.json({ error: 'Invalid communication binding lifecycle payload' }, { status: 400 });
@@ -219,7 +219,7 @@ export async function PATCH(request: Request) {
 
     if (mode === 'ACCOUNT_MAPPING_STATE') {
       const mappingId = body.mappingId;
-      const status = typeof body.status === 'string' ? body.status.toUpperCase() : '';
+      const status = typeof body.status === 'string' ? body.status.trim().toUpperCase() : '';
       const chatwootAccountId = normalizeChatwootAccountId(body.chatwootAccountId);
       const lastErrorCode = normalizeChatwootErrorCode(body.lastErrorCode);
 
