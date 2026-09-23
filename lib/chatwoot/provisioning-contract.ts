@@ -123,15 +123,33 @@ export function parseChatwootAccountUser(
   };
 }
 
+export function inspectChatwootAccountProjectionMarker(
+  account: ChatwootAccountProjection,
+  tenantBusinessId: string,
+): 'NO_MATCH' | 'MATCH' | 'INVALID_TARGET' {
+  const attributes = account.customAttributes;
+  if (attributes[CHATWOOT_ACCOUNT_MARKER_KEY] !== tenantBusinessId) {
+    return 'NO_MATCH';
+  }
+
+  if (
+    attributes[CHATWOOT_PROJECTION_MARKER_KEY] !== true ||
+    attributes[CHATWOOT_PROJECTION_VERSION_KEY] !==
+      CHATWOOT_PROJECTION_VERSION
+  ) {
+    return 'INVALID_TARGET';
+  }
+
+  return 'MATCH';
+}
+
 export function accountProjectionMatchesTenant(
   account: ChatwootAccountProjection,
   tenantBusinessId: string,
 ) {
   return (
-    account.customAttributes[CHATWOOT_ACCOUNT_MARKER_KEY] === tenantBusinessId &&
-    account.customAttributes[CHATWOOT_PROJECTION_MARKER_KEY] === true &&
-    account.customAttributes[CHATWOOT_PROJECTION_VERSION_KEY] ===
-      CHATWOOT_PROJECTION_VERSION
+    inspectChatwootAccountProjectionMarker(account, tenantBusinessId) ===
+    'MATCH'
   );
 }
 
@@ -175,21 +193,32 @@ export function userProjectionMarker(
 export function findProjectedAccount(
   values: unknown,
   tenantBusinessId: string,
-):
-  | { kind: 'NONE' }
-  | { kind: 'ONE'; account: ChatwootAccountProjection }
-  | { kind: 'AMBIGUOUS'; accounts: ChatwootAccountProjection[] } {
+){
   if (!Array.isArray(values)) {
     throw new Error('Chatwoot Account list response is invalid');
   }
 
-  const matches = values
-    .map(parseChatwootAccount)
-    .filter((account) => accountProjectionMatchesTenant(account, tenantBusinessId));
+  const accounts = values.map(parseChatwootAccount);
+  const invalidTargets = accounts.filter(
+    (account) =>
+      inspectChatwootAccountProjectionMarker(account, tenantBusinessId) ===
+      'INVALID_TARGET',
+  );
+  if (invalidTargets.length > 0) {
+    return { kind: 'INVALID', accounts: invalidTargets } as const;
+  }
 
-  if (matches.length === 0) return { kind: 'NONE' };
-  if (matches.length === 1) return { kind: 'ONE', account: matches[0] };
-  return { kind: 'AMBIGUOUS', accounts: matches };
+  const matches = accounts.filter(
+    (account) =>
+      inspectChatwootAccountProjectionMarker(account, tenantBusinessId) ===
+      'MATCH',
+  );
+
+  if (matches.length === 0) return { kind: 'NONE' } as const;
+  if (matches.length === 1) {
+    return { kind: 'ONE', account: matches[0] } as const;
+  }
+  return { kind: 'AMBIGUOUS', accounts: matches } as const;
 }
 
 export function buildChatwootUserPresentation(input: {
