@@ -8,6 +8,7 @@ import {
   normalizeChatwootAccessToken,
   normalizeChatwootBaseUrl,
   normalizeChatwootRequestPath,
+  parseChatwootJson,
   parseRetryAfterMs,
   type ChatwootHttpErrorCode,
   type ChatwootHttpMethod,
@@ -297,7 +298,7 @@ export async function chatwootProvisioningRequest<T>(input: {
       if (!text) return null as T;
 
       try {
-        return JSON.parse(text) as T;
+        return parseChatwootJson(text) as T;
       } catch {
         throw new ChatwootHttpError({
           code: 'INVALID_RESPONSE',
