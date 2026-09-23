@@ -109,16 +109,41 @@ async function readBoundedResponse(response: Response) {
     }
   }
 
-  const text = await response.text();
-  if (new TextEncoder().encode(text).byteLength > MAX_RESPONSE_BYTES) {
-    throw new ChatwootHttpError({
-      code: 'RESPONSE_TOO_LARGE',
-      message: 'Chatwoot response exceeded the configured size limit',
-      status: response.status,
-    });
+  if (!response.body) return '';
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_RESPONSE_BYTES) {
+        await reader.cancel();
+        throw new ChatwootHttpError({
+          code: 'RESPONSE_TOO_LARGE',
+          message: 'Chatwoot response exceeded the configured size limit',
+          status: response.status,
+        });
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
   }
 
-  return text;
+  const joined = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    joined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return new TextDecoder().decode(joined);
 }
 
 async function sleep(ms: number) {
@@ -141,6 +166,25 @@ export async function chatwootProvisioningRequest<T>(input: {
   }
 
   const method = input.method ?? 'GET';
+  if (isChatwootReadMethod(method) && input.body !== undefined) {
+    throw new ChatwootHttpError({
+      code: 'CONFIG_INVALID',
+      message: 'Chatwoot GET requests cannot include a body',
+    });
+  }
+
+  let requestBody: string | undefined;
+  if (input.body !== undefined) {
+    try {
+      requestBody = JSON.stringify(input.body);
+    } catch {
+      throw new ChatwootHttpError({
+        code: 'CONFIG_INVALID',
+        message: 'Chatwoot request body is not serializable',
+      });
+    }
+  }
+
   const fetchImpl = input.fetchImpl ?? fetch;
   const token = authToken(input.auth);
   const url = requestUrl(input.path);
@@ -162,7 +206,7 @@ export async function chatwootProvisioningRequest<T>(input: {
           'Content-Type': 'application/json',
           api_access_token: token,
         },
-        body: input.body === undefined ? undefined : JSON.stringify(input.body),
+        body: requestBody,
         cache: 'no-store',
         redirect: 'error',
         signal: controller.signal,
