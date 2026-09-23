@@ -77,6 +77,13 @@ Deliver:
 
 License boundary:
 
+Upstream references to re-verify at implementation time:
+
+- Community/root license: https://github.com/chatwoot/chatwoot/blob/develop/LICENSE
+- Enterprise license: https://github.com/chatwoot/chatwoot/blob/develop/enterprise/LICENSE
+
+Rules:
+
 - Chatwoot code outside the repository's `enterprise/` directory is used under its MIT license;
 - proprietary `enterprise/` source is not copied, vendored, redistributed, or used in Production without the required Chatwoot license;
 - features needed by Smart Visions that exist only in Chatwoot Enterprise are implemented independently in Smart Core/Community-safe code unless a valid Enterprise subscription/license is intentionally adopted.
