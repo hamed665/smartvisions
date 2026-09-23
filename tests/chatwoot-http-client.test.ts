@@ -130,6 +130,50 @@ describe('Chatwoot provisioning HTTP client', () => {
     expect(message).not.toContain('platform-secret-token');
   });
 
+  it('rejects an unserializable mutation body before any network side effect', async () => {
+    enableProvisioning();
+    const fetchMock = vi.fn();
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+
+    await expect(
+      chatwootPlatformProvisioningRequest({
+        path: '/platform/api/v1/accounts',
+        method: 'POST',
+        body: circular,
+        fetchImpl: fetchMock as unknown as typeof fetch,
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONFIG_INVALID',
+      ambiguousMutationOutcome: false,
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('stream-limits large successful responses even without Content-Length', async () => {
+    enableProvisioning();
+    const oversized = JSON.stringify({ payload: 'x'.repeat(1_000_100) });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(oversized, {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    await expect(
+      chatwootPlatformProvisioningRequest({
+        path: '/platform/api/v1/accounts',
+        fetchImpl: fetchMock as unknown as typeof fetch,
+      }),
+    ).rejects.toMatchObject({
+      code: 'RESPONSE_TOO_LARGE',
+      ambiguousMutationOutcome: false,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects encoded traversal before fetch', async () => {
     enableProvisioning();
     const fetchMock = vi.fn();
