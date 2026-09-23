@@ -80,8 +80,9 @@ Read in this order:
 14. `docs/business-os-2027/CUSTOMER_360_CRM_NORMALIZATION.md`
 15. `docs/business-os-2027/CUSTOM_FIELD_GOVERNANCE_GAP_AUDIT.md`
 16. `docs/business-os-2027/SEGMENT_GOVERNANCE_GAP_AUDIT.md`
-17. current relevant Section/Work Package branch/PR, if any
-18. current `main` SHA, Production Cloudflare Worker evidence and Production Supabase migration state
+17. `docs/business-os-2027/CHATWOOT_SOURCE_GAP_AUDIT.md`
+18. current relevant Section/Work Package branch/PR, if any
+19. current `main` SHA, Production Cloudflare Worker evidence and Production Supabase migration state
 
 Runtime and Production evidence outrank stale documentation or chat memory.
 
@@ -235,7 +236,13 @@ A work package can require any number of actual PRs. Record those PR numbers as 
    - zero Email/WhatsApp outbound delta from promotion verification.
 3. Preserve Slice 6 boundaries: LEAD-only, DYNAMIC-only, no Snapshot/current-membership table, no Campaign/Workflow/provider execution, no arbitrary query language, no PII/SENSITIVE ordinary predicates.
 4. Do **not** automatically extend Segment to Deal, Business, Task, Conversation or Person Contact. Require fresh evidence.
-5. Owner roadmap decision now selects `SECTION COMMUNICATION / COMM-CHATWOOT-SOURCE` as the next planned program target. Before coding, perform a focused Chatwoot source/integration gap audit against current Production and confirm the source-fork/deployment boundary. Do not jump to a guessed future PR number, and do not vendor proprietary Chatwoot Enterprise code.
+5. `COMM-CHATWOOT-SOURCE` gap audit is complete. Implement the approved source foundation from `CHATWOOT_SOURCE_GAP_AUDIT.md`:
+   - pin Chatwoot Community `v4.18.0` / commit `9f920b549c14491a4e587687a3eed5d21c6ccc7d`;
+   - use a separate source/deployable Chatwoot component;
+   - separate Chatwoot PostgreSQL/Redis/storage from Smart Core;
+   - preserve Community/Enterprise license boundary;
+   - do not activate provider channels or send customer messages;
+   - if external fork/repository provisioning is unavailable through the active GitHub connection, record the dependency honestly and complete every source-lock/build/runbook artifact that can be verified without pretending the fork exists.
 6. Keep `businesses` as the existing Growth OS CRM/Hunter Company/Account and `tenant_businesses` as tenant-owned Business hierarchy.
 7. Do not fabricate Person Contact from provider display names.
 8. Keep Shadow Mode and all canonical provider-boundary safety gates unchanged.

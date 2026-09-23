@@ -21,7 +21,8 @@ Production changes are promoted only after the repository's safety, CI, migratio
 9. [CUSTOMER_360_CRM_NORMALIZATION.md](./CUSTOMER_360_CRM_NORMALIZATION.md) — Phase 3 Production evidence, CRM Gap Map, identity-resolution contract and compatibility plan.
 10. [CUSTOM_FIELD_GOVERNANCE_GAP_AUDIT.md](./CUSTOM_FIELD_GOVERNANCE_GAP_AUDIT.md) — Phase 3 Slice 5 governed Custom Field contract and Production evidence.
 11. [SEGMENT_GOVERNANCE_GAP_AUDIT.md](./SEGMENT_GOVERNANCE_GAP_AUDIT.md) — Phase 3 Slice 6 Segment decisions, implementation boundaries and Production closeout.
-12. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
+12. [CHATWOOT_SOURCE_GAP_AUDIT.md](./CHATWOOT_SOURCE_GAP_AUDIT.md) — source/license/deployment/provider-ownership audit for the Chatwoot Communication Plane.
+13. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
 
 ## Phase 0 exit criteria
 
@@ -78,3 +79,19 @@ Use:
 The current planned continuation cursor is `SECTION COMMUNICATION / COMM-CHATWOOT-SOURCE`, subject to fresh Production verification before implementation.
 
 Chatwoot is explicitly planned as a **source-based Community Edition communication plane**, with Smart Core retaining canonical business truth and provider-action safety. See `MASTER_ARCHITECTURE.md` and `MASTER_PROGRAM_SECTIONS.md`.
+
+
+## Communication Plane continuation
+
+`COMM-CHATWOOT-SOURCE` gap audit is complete.
+
+Approved source baseline:
+
+- Chatwoot Community `v4.18.0`
+- exact upstream commit `9f920b549c14491a4e587687a3eed5d21c6ccc7d`
+- separate Chatwoot runtime/database/Redis/storage boundary
+- existing Smart Core WhatsApp/Email providers remain canonical
+- first bridge uses Chatwoot API Inbox projections, not duplicated native provider ownership
+- `tenant_business -> Chatwoot Account` tenancy projection
+
+Next action remains `COMM-CHATWOOT-SOURCE`, now moving from audit to source-foundation implementation.

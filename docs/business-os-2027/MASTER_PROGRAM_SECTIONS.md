@@ -63,6 +63,17 @@ Use Chatwoot Community Edition source code as the operational communication plan
 
 ### COMM-CHATWOOT-SOURCE — Community source foundation
 
+Status: **GAP AUDIT COMPLETE; SOURCE FOUNDATION IMPLEMENTATION NEXT**
+
+Approved upstream baseline:
+
+- `v4.18.0`
+- commit `9f920b549c14491a4e587687a3eed5d21c6ccc7d`
+
+Approved first provider projection: Chatwoot `Channel::Api`, with provider send authority retained by Smart Core.
+
+Detailed decisions: `CHATWOOT_SOURCE_GAP_AUDIT.md`.
+
 Deliver:
 
 - an upstream-tracked fork/build of Chatwoot Community Edition source;
