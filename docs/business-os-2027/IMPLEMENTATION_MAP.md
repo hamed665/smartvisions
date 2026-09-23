@@ -59,7 +59,7 @@ Use the existing WhatsApp/Email paths as first adapters.
 
 ## Phase 3 — Customer 360 + CRM normalization
 
-Status: **ACTIVE IMPLEMENTATION**. Slice 1 CRM Identity Foundation is Production-verified in PR #178 / migration 0070. Slice 2 Customer 360 Timeline is Production-verified in PR #179 / migration 0071. Slice 3 CRM Task Foundation is Production-verified in PR #181 / migration 0072 with FK-index cleanup 0073. Slice 4 Deal/Pipeline Foundation is Production-verified in PR #184 / migration 0074. Existing Growth/Intent Opportunities remain acquisition evidence and are not repurposed as CRM Deals. Cloudflare runtime promotion is proven by Worker version `47d22421-109e-4c1e-81e6-20bb273078e1` with `failed=0`, acquisition/dispatch SKIPPED and zero Email/WhatsApp outbound rows after merge.
+Status: **ACTIVE IMPLEMENTATION**. Slice 1 CRM Identity Foundation is Production-verified in PR #178 / migration 0070. Slice 2 Customer 360 Timeline is Production-verified in PR #179 / migration 0071. Slice 3 CRM Task Foundation is Production-verified in PR #181 / migration 0072 with FK-index cleanup 0073. Slice 4 Deal/Pipeline Foundation is Production-verified in PR #184 / migration 0074. Slice 5 Custom Field Governance is Production-verified in PR #188 / migration 0075. Slice 6 governed Dynamic Lead Segments is Production-verified in PR #191 / migration 0076. Existing Growth/Intent Opportunities remain acquisition evidence and are not repurposed as CRM Deals. Slice 6 remains LEAD-only + DYNAMIC-only and does not authorize Snapshot membership or Campaign/Workflow/provider execution. Latest routed Worker after Slice 6 is `__SLICE6_WORKER_VERSION__` with `failed=0`, acquisition/evidence/auto-dispatch SKIPPED and zero Email/WhatsApp outbound delta from promotion verification.
 
 Extend the existing Lead/Business/Conversation CRM instead of creating a second CRM.
 
@@ -221,3 +221,17 @@ Status: **PRODUCTION-VERIFIED**.
 - Production has 0 definitions / 0 options / 0 values after migration and rollback-only verification.
 - Cloudflare runtime is proven by Worker `d42bd9c5-e862-4af6-ae70-787cbf81c5d6` with `failed=0`, acquisition/dispatch SKIPPED and zero Email/WhatsApp outbound rows after merge.
 - Next dependency: Segment Governance gap audit. Do not build Segments on arbitrary JSON or ungoverned fields.
+
+
+### Phase 3 Slice 6 — Governed Dynamic Lead Segments
+
+- Gap audit: PR #190.
+- Implementation: PR #191 at `main@a34bfd243d2f95e2ccad9895d5a753ef902a4299`.
+- Production migration: `0076_crm_segment_governance` version `20260923093619`.
+- Scope is LEAD-only, DYNAMIC-only, organization-wide Segment definitions with immutable semantic versions.
+- Predicate AST is typed/allowlisted and enforced at API + database boundaries.
+- Governed Custom Field predicates are restricted to compatible ACTIVE/filterable INTERNAL Lead definitions.
+- Evaluation is authenticated, on-demand, deterministic and bounded; no persistent current-membership table exists.
+- Segment evaluation is audience truth only and never invokes Campaign, Workflow or provider actions.
+- Rollback-only Production verification left zero Segment data and zero audit fixture residue.
+- Do not infer that Custom Objects are automatically the next implementation. Re-audit the remaining Phase 3 gap against Production evidence first.
