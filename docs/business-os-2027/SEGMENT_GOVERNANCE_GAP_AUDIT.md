@@ -583,6 +583,6 @@ Production evidence:
 - rollback left zero Segment rows, zero Segment-version rows and zero Segment audit fixture residue;
 - zero Email/WhatsApp outbound rows were created during 0076 promotion verification;
 - exact-merge Cloudflare Production deploy succeeded, kept Shadow Mode ON, preserved `*/2 * * * *` Cron and route attachment, kept workers.dev disabled and invoked no outbound provider send in safe smoke;
-- latest routed Worker heartbeat after Slice 6: `__SLICE6_WORKER_VERSION__`, failed=0 with acquisition/evidence/auto-dispatch SKIPPED.
+- implementation-runtime Worker checkpoint after PR #191 (before docs-only closeout): `b6ad6482-11e1-4658-97e8-7f5d1a842318`, failed=0 with acquisition/evidence/auto-dispatch SKIPPED.
 
 The implemented first slice therefore remains exactly the audited contract: governed organization-wide Dynamic Lead Segments only. Snapshot membership, persistent current membership, Deal/Business/Task/Conversation/Person Contact Segment entities and campaign/workflow/provider execution remain deferred.
