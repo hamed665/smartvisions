@@ -149,6 +149,27 @@ describe('C3B Candidate Account orchestration', () => {
     expect(rpc).toHaveBeenCalledTimes(1);
   });
 
+  it('adopts one exact marker on replay with GET only', async () => {
+    enabled();
+    const { supabase, rpc } = setup({ claimNew: false });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([{
+        id: 51, name: 'Canonical Business', custom_attributes: marker(),
+      }]), { status: 200 }),
+    );
+
+    const mapping = await provisionCandidateChatwootAccount({
+      supabase, organizationId: ORGANIZATION_ID, mappingId: MAPPING_ID,
+      requestKey: REQUEST_KEY, fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+    expect(mapping.status).toBe('ACTIVE');
+    expect(fetchMock.mock.calls.map((call) => call[1]?.method)).toEqual(['GET']);
+    expect(rpc.mock.calls.map((call) => call[0])).toEqual([
+      'claim_chatwoot_account_external_create',
+      'set_chatwoot_account_mapping_state',
+    ]);
+  });
+
   it('rejects ADMIN before the durable claim or external call', async () => {
     enabled();
     const { supabase, rpc } = setup({ claimNew: true, role: 'ADMIN' });
