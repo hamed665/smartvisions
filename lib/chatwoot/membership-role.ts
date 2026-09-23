@@ -75,13 +75,17 @@ export async function readBusinessWideChatwootRole(input: {
       .select('organization_id,user_id,scope_type,brand_id,tenant_business_id,role,attributes')
       .eq('organization_id', input.organizationId)
       .eq('user_id', input.smartUserId)
-      .in('scope_type', ['BRAND', 'BUSINESS']),
+      .or(
+        `and(scope_type.eq.BRAND,brand_id.eq.${business.data.brand_id}),` +
+        `and(scope_type.eq.BUSINESS,tenant_business_id.eq.${input.tenantBusinessId})`,
+      )
+      .limit(3),
   ]);
 
   if (brand.error || !brand.data || brand.data.id !== business.data.brand_id ||
       brand.data.organization_id !== input.organizationId ||
       brand.data.status !== 'ACTIVE' || assignments.error ||
-      !Array.isArray(assignments.data)) return reject();
+      !Array.isArray(assignments.data) || assignments.data.length > 2) return reject();
 
   const scoped: MemberScopeAssignment[] = assignments.data.map((row) => {
     if (row.organization_id !== input.organizationId ||
