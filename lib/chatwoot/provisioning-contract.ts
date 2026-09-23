@@ -127,14 +127,49 @@ export function accountProjectionMatchesTenant(
   account: ChatwootAccountProjection,
   tenantBusinessId: string,
 ) {
-  return account.customAttributes[CHATWOOT_ACCOUNT_MARKER_KEY] === tenantBusinessId;
+  return (
+    account.customAttributes[CHATWOOT_ACCOUNT_MARKER_KEY] === tenantBusinessId &&
+    account.customAttributes[CHATWOOT_PROJECTION_MARKER_KEY] === true &&
+    account.customAttributes[CHATWOOT_PROJECTION_VERSION_KEY] ===
+      CHATWOOT_PROJECTION_VERSION
+  );
+}
+
+export function inspectChatwootUserProjectionMarker(
+  user: ChatwootUserProjection,
+):
+  | { kind: 'ABSENT' }
+  | { kind: 'VALID'; smartUserId: string }
+  | { kind: 'INVALID' } {
+  const attributes = user.customAttributes;
+  const rawUserId = attributes[CHATWOOT_USER_MARKER_KEY];
+  const projection = attributes[CHATWOOT_PROJECTION_MARKER_KEY];
+  const version = attributes[CHATWOOT_PROJECTION_VERSION_KEY];
+
+  const hasAnyMarker =
+    rawUserId !== undefined ||
+    projection !== undefined ||
+    version !== undefined;
+
+  if (!hasAnyMarker) return { kind: 'ABSENT' };
+
+  if (
+    typeof rawUserId !== 'string' ||
+    !rawUserId.trim() ||
+    projection !== true ||
+    version !== CHATWOOT_PROJECTION_VERSION
+  ) {
+    return { kind: 'INVALID' };
+  }
+
+  return { kind: 'VALID', smartUserId: rawUserId.trim() };
 }
 
 export function userProjectionMarker(
   user: ChatwootUserProjection,
 ): string | null {
-  const value = user.customAttributes[CHATWOOT_USER_MARKER_KEY];
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
+  const marker = inspectChatwootUserProjectionMarker(user);
+  return marker.kind === 'VALID' ? marker.smartUserId : null;
 }
 
 export function findProjectedAccount(
