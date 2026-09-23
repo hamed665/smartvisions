@@ -215,6 +215,8 @@ It has no:
 - `tenant_business_id`;
 - `branch_id`.
 
+It also currently enforces `UNIQUE (organization_id, provider, channel)`. Therefore the present Growth OS connection model can represent only one row for a lane such as Meta/WhatsApp per Organization. Slice A does not silently weaken that invariant. Its binding references `integration_connection_id` so a later governed multi-instance connection model can add multiple provider accounts/numbers without redesigning the Tenant Bridge mapping contract.
+
 Current Production integrations include connected WhatsApp and Email at Organization scope.
 
 That is sufficient for the existing single-organization Growth OS runtime.
