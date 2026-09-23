@@ -9,6 +9,7 @@ import {
   type ScopedRole,
 } from '@/lib/business-os/control-plane';
 import { isUuid } from '@/lib/chatwoot/tenant-bridge';
+import { createSupabaseServiceClient } from '@/lib/supabase/service';
 
 export type BusinessWideChatwootRole = 'administrator' | 'agent' | null;
 
@@ -27,10 +28,13 @@ function memberRole(value: unknown): OrganizationRole {
 }
 
 /**
- * Read-only Candidate projection. Use an authenticated OWNER client: RLS must
- * permit reading the target member and assignments. This is not an authorization
- * ticket for a future mutation; the governed writer must recheck fresh canonical
- * state in its transaction before any external AccountUser change.
+ * Read-only Candidate projection. The caller must supply the authenticated
+ * Smart session, but canonical Smart Core reads use the existing server-only
+ * service client after that session is verified as the current Organization
+ * OWNER. Every service read is explicitly tenant/user scoped and fail closed.
+ *
+ * This bypass is read-only and is not an authorization ticket for mutation;
+ * the governed writer must independently solve transactional authorization.
  */
 export async function readBusinessWideChatwootRole(input: {
   supabase: SupabaseClient;
@@ -44,14 +48,16 @@ export async function readBusinessWideChatwootRole(input: {
   const { data: auth, error: authError } = await input.supabase.auth.getUser();
   if (authError || !auth.user?.id || !isUuid(auth.user.id)) return reject();
 
+  const smartCore = createSupabaseServiceClient();
+
   const [owner, member, business] = await Promise.all([
-    input.supabase.from('organization_members').select('organization_id,user_id,role')
+    smartCore.from('organization_members').select('organization_id,user_id,role')
       .eq('organization_id', input.organizationId)
       .eq('user_id', auth.user.id).single(),
-    input.supabase.from('organization_members').select('organization_id,user_id,role')
+    smartCore.from('organization_members').select('organization_id,user_id,role')
       .eq('organization_id', input.organizationId)
       .eq('user_id', input.smartUserId).single(),
-    input.supabase.from('tenant_businesses')
+    smartCore.from('tenant_businesses')
       .select('id,organization_id,brand_id,status')
       .eq('organization_id', input.organizationId)
       .eq('id', input.tenantBusinessId).single(),
@@ -68,10 +74,10 @@ export async function readBusinessWideChatwootRole(input: {
 
   const role = memberRole(member.data.role);
   const [brand, assignments] = await Promise.all([
-    input.supabase.from('brands').select('id,organization_id,status')
+    smartCore.from('brands').select('id,organization_id,status')
       .eq('organization_id', input.organizationId)
       .eq('id', business.data.brand_id).single(),
-    input.supabase.from('member_scope_assignments')
+    smartCore.from('member_scope_assignments')
       .select('organization_id,user_id,scope_type,brand_id,tenant_business_id,role,attributes')
       .eq('organization_id', input.organizationId)
       .eq('user_id', input.smartUserId)
