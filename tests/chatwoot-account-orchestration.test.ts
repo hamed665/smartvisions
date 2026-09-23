@@ -19,7 +19,7 @@ function marker() {
   };
 }
 
-function setup(input: { claimNew: boolean; role?: string; roles?: string[] }) {
+function setup(input: { claimNew: boolean; role?: string; roles?: string[]; mappingVersionAfterClaim?: number }) {
   const mapping = {
     id: MAPPING_ID,
     organization_id: ORGANIZATION_ID,
@@ -36,6 +36,7 @@ function setup(input: { claimNew: boolean; role?: string; roles?: string[] }) {
   };
   const tableReads: string[] = [];
   let memberReads = 0;
+  let mappingReads = 0;
   const rpc = vi.fn(async (name: string) => {
     if (name === 'claim_chatwoot_account_external_create') {
       return {
@@ -63,7 +64,12 @@ function setup(input: { claimNew: boolean; role?: string; roles?: string[] }) {
         select: () => builder,
         eq: () => builder,
         single: async () => {
-          if (table === 'chatwoot_account_mappings') return { data: mapping, error: null };
+          if (table === 'chatwoot_account_mappings') {
+            const version = mappingReads > 0 && input.mappingVersionAfterClaim
+              ? input.mappingVersionAfterClaim : mapping.version;
+            mappingReads += 1;
+            return { data: { ...mapping, version }, error: null };
+          }
           if (table === 'organization_members') {
             const role = input.roles?.[memberReads] ?? input.role ?? 'OWNER';
             memberReads += 1;
@@ -186,6 +192,20 @@ describe('C3B Candidate Account orchestration', () => {
     expect(rpc.mock.calls.map((call) => call[0])).toEqual([
       'claim_chatwoot_account_external_create',
     ]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('stops before HTTP if mapping version changes after the claim', async () => {
+    enabled();
+    const { supabase, rpc } = setup({
+      claimNew: true, mappingVersionAfterClaim: 2,
+    });
+    const fetchMock = vi.fn();
+    await expect(provisionCandidateChatwootAccount({
+      supabase, organizationId: ORGANIZATION_ID, mappingId: MAPPING_ID,
+      requestKey: REQUEST_KEY, fetchImpl: fetchMock as unknown as typeof fetch,
+    })).rejects.toThrow('changed after external claim');
+    expect(rpc).toHaveBeenCalledTimes(1);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
