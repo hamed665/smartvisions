@@ -65,4 +65,4 @@ Phase 0 is complete only when:
 - Phase 3 Slice 6 Segment Governance audit merged in PR #190; governed Dynamic Lead Segments merged in PR #191 at `main@a34bfd243d2f95e2ccad9895d5a753ef902a4299`.
 - Production migration `0076_crm_segment_governance` is live as version `20260923093619`, with zero persistent Segment rows after rollback-only verification and no provider-send delta.
 - Slice 6 deliberately remains LEAD-only + DYNAMIC-only. Snapshot/current-membership persistence and broader entity segmentation remain deferred.
-- Routed Cloudflare runtime after Slice 6 is `__SLICE6_WORKER_VERSION__`; latest checked heartbeat failed=0 with acquisition/evidence/auto-dispatch SKIPPED and Shadow Mode remained ON.
+- Implementation-runtime Cloudflare checkpoint after PR #191 (before docs-only closeout) is `b6ad6482-11e1-4658-97e8-7f5d1a842318`; latest checked heartbeat failed=0 with acquisition/evidence/auto-dispatch SKIPPED and Shadow Mode remained ON.
