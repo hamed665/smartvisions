@@ -205,7 +205,7 @@ A green CI run is necessary, not a substitute for review of a migration.
 
 ## Exact next action
 
-1. Start from canonical `main@a34bfd243d2f95e2ccad9895d5a753ef902a4299`, but re-check current main, open PRs, CI, Production Supabase and routed Cloudflare evidence before any change.
+1. Start from the **current canonical `main` at the time of the next session** and re-check its SHA, open PRs, CI, Production Supabase and routed Cloudflare evidence before any change. The last runtime-changing implementation checkpoint for Slice 6 is PR #191 at `a34bfd243d2f95e2ccad9895d5a753ef902a4299`; later closeout commits may be documentation-only.
 2. Treat Phase 3 Slice 6 Dynamic Lead Segments as Production-verified:
    - gap audit PR #190;
    - implementation PR #191;
