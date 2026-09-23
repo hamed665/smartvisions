@@ -1,6 +1,10 @@
 # Business OS 2027 — Dependency-Ordered Implementation Map
 
-This is not a feature wishlist. It is the order required to avoid rebuilding the same primitive twice.
+This is not a feature wishlist. It is the dependency history required to avoid rebuilding the same primitive twice.
+
+For future execution, **do not assign or infer projected GitHub PR numbers**. The stable program roadmap is `MASTER_PROGRAM_SECTIONS.md`, which uses semantic Section and Work Package IDs. Historical PR numbers in this file remain implementation evidence only.
+
+Current planned continuation cursor: `SECTION COMMUNICATION / COMM-CHATWOOT-SOURCE`, after fresh runtime/Production verification.
 
 ## Phase 0 — Architecture contracts
 
@@ -235,3 +239,12 @@ Status: **PRODUCTION-VERIFIED**.
 - Segment evaluation is audience truth only and never invokes Campaign, Workflow or provider actions.
 - Rollback-only Production verification left zero Segment data and zero audit fixture residue.
 - Do not infer that Custom Objects are automatically the next implementation. Re-audit the remaining Phase 3 gap against Production evidence first.
+
+
+## Future execution numbering policy
+
+- Phases above remain useful dependency/history groupings.
+- Future completion is tracked by stable Sections/Work Package IDs from `MASTER_PROGRAM_SECTIONS.md`.
+- Extra audit, hardening, migration-fix, index-cleanup, hotfix or closeout PRs do not renumber later work.
+- Actual PR numbers are recorded only after they exist.
+- Chatwoot Community source integration is owned by `SECTION COMMUNICATION`; it is not represented as a guessed future PR number.

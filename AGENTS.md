@@ -11,7 +11,9 @@ Continue from repository and Production state, never from chat memory alone. Rea
 3. current Cloudflare Production deployment at `https://app.smartvisionsai.com`;
 4. `docs/CURRENT_STATE.md`;
 5. this file for non-negotiable engineering/operational rules;
-6. older plans/Issue #18 only as historical planning context.
+6. `docs/business-os-2027/MASTER_PROGRAM_SECTIONS.md` for stable future program Sections/Work Package IDs;
+7. `docs/business-os-2027/NEXT_CHAT_HANDOFF.md` for the current continuation cursor;
+8. older plans/Issue #18 only as historical planning context.
 
 If any document conflicts with runtime/Production evidence, runtime and Production win. Reconcile the document after the change is proven.
 
@@ -199,4 +201,12 @@ The pre-pilot safety suite already covers positive interest, price objection/han
 
 ## Immediate continuation rule
 
-At the start of any new session, do not invent another roadmap. Verify current `main`, Cloudflare Production, Production Supabase controls/cost/provider state and `docs/CURRENT_STATE.md`, then continue only a proven gap. Runtime/Production evidence always overrides stale historical handoffs.
+At the start of any new session, do not invent another roadmap. Verify current `main`, Cloudflare Production, Production Supabase controls/cost/provider state and `docs/CURRENT_STATE.md`, then read `docs/business-os-2027/MASTER_PROGRAM_SECTIONS.md` and `docs/business-os-2027/NEXT_CHAT_HANDOFF.md`.
+
+Continuation is identified by **Section + Work Package ID**, never by a projected GitHub PR number. A work package may span multiple PRs without renumbering anything downstream. Actual PR numbers are evidence only after they exist.
+
+The owner-approved planned continuation cursor after the Production-verified Segment baseline is `SECTION COMMUNICATION / COMM-CHATWOOT-SOURCE`, subject to fresh runtime evidence before implementation.
+
+For that work, Chatwoot Community Edition source is the planned source-based Communication Plane. Smart Core remains authoritative for CRM/business truth and provider-action safety; Chatwoot must not bypass the canonical send gate. Proprietary Chatwoot `enterprise/` code is out of bounds unless a valid license is intentionally adopted.
+
+Runtime/Production evidence always overrides stale historical handoffs.

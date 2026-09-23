@@ -13,10 +13,10 @@ This is the current operational handoff for Growth OS. Current `main`, routed Cl
 - Production Worker: `smartvisions-growth-os-production`
 - Production Worker Route: `app.smartvisionsai.com/* -> smartvisions-growth-os-production`
 - Production Supabase: `pkypexzpyfbikdnkrzvw`
-- Latest runtime-changing Production merge: PR #178, merge commit `27e980e417ec52c64055c029b8ffa6c6c77ab961`
-- Production Worker version at latest verified heartbeat: `562c495f-ceeb-4021-b2d9-122ddc04021b`
-- Latest Business OS Production migration: `0070_crm_identity_foundation`, version `20260922164110`
-- Latest Business OS runtime merge: PR #179, merge commit `efcf979ff15d32062b48928672a25128c521987a`
+- Latest runtime-changing Production merge: PR #191, merge commit `a34bfd243d2f95e2ccad9895d5a753ef902a4299`
+- Current routed Production Worker version at latest verified heartbeat: `09d84ef6-5928-429a-a926-ef4324ed99ab` (Worker timestamp `2026-09-23T09:50:07.867348Z`; heartbeat `2026-09-23T12:21:16.135625Z`, failed=0). The last runtime-changing implementation merge remains PR #191; later docs-only deploys can legitimately produce a newer Worker version without a runtime-code change.
+- Latest Business OS Production migration: `0076_crm_segment_governance`, version `20260923093619`
+- Latest Business OS runtime-changing merge: PR #191, merge commit `a34bfd243d2f95e2ccad9895d5a753ef902a4299`; later closeout commits are documentation-only
 - Latest Business OS Production migration before Tasks: `0071_customer_360_timeline`, version `20260922202957`
 - CRM Task Foundation merged in PR #181 at `main@4c2a4d3bc78a57088f92ba8eae82542d501a37dc`; Production migration `0072_crm_task_foundation` version `20260922214407`
 - CRM Task FK cleanup merged in PR #182 at `main@1eab75f73a5ae99a973e5616bb30c09325b9a680`; Production migration `0073_crm_task_fk_indexes` version `20260922214843`
