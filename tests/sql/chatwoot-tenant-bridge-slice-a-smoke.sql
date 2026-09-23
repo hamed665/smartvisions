@@ -309,6 +309,32 @@ $$;
 
 do $$
 declare
+  v_mapping_id uuid := (select value::uuid from bridge_test_state where key='mapping_id');
+  v_replay public.chatwoot_account_mappings%rowtype;
+begin
+  select * into v_replay
+  from public.create_chatwoot_account_mapping(
+    '00000000-0000-0000-0000-00000000c101',
+    '20000000-0000-0000-0000-00000000c101',
+    'bridge-account-create-1'
+  );
+
+  if v_replay.id <> v_mapping_id
+     or v_replay.status <> 'ARCHIVED'
+     or v_replay.version <> 5
+  then
+    raise exception 'old Account create request key did not replay current archived entity';
+  end if;
+
+  if (select count(*) from public.chatwoot_account_mappings
+      where organization_id='00000000-0000-0000-0000-00000000c101') <> 1 then
+    raise exception 'old Account create replay created a replacement mapping';
+  end if;
+end;
+$$;
+
+do $$
+declare
   v_binding_id uuid := (select value::uuid from bridge_test_state where key='binding_id');
   v_version integer;
 begin
@@ -347,6 +373,109 @@ begin
     'ACTIVE',
     'bridge-binding-reactivate-1'
   );
+end;
+$$;
+
+do $$
+declare
+  v_binding_id uuid := (select value::uuid from bridge_test_state where key='binding_id');
+  v_replay public.communication_channel_bindings%rowtype;
+begin
+  select * into v_replay
+  from public.create_communication_channel_binding(
+    '00000000-0000-0000-0000-00000000c101',
+    '20000000-0000-0000-0000-00000000c101',
+    '30000000-0000-0000-0000-00000000c101',
+    '40000000-0000-0000-0000-00000000c101',
+    'EMAIL',
+    'bridge-binding-create-1'
+  );
+
+  if v_replay.id <> v_binding_id or v_replay.version <> 3 or v_replay.status <> 'ACTIVE' then
+    raise exception 'old binding create request key did not replay current entity';
+  end if;
+
+  if (select count(*) from public.communication_channel_bindings
+      where organization_id='00000000-0000-0000-0000-00000000c101') <> 1 then
+    raise exception 'old binding create replay created duplicate binding';
+  end if;
+
+  begin
+    perform public.create_communication_channel_binding(
+      '00000000-0000-0000-0000-00000000c101',
+      '20000000-0000-0000-0000-00000000c111',
+      null,
+      '40000000-0000-0000-0000-00000000c111',
+      'WHATSAPP',
+      'bridge-binding-create-1'
+    );
+    raise exception 'same request key with changed payload unexpectedly succeeded';
+  exception
+    when others then
+      if sqlerrm not like 'request key already used with different Chatwoot bridge payload%' then
+        raise;
+      end if;
+  end;
+end;
+$$;
+
+do $$
+begin
+  begin
+    insert into public.chatwoot_bridge_command_claims(
+      organization_id,
+      request_key,
+      command_type,
+      entity_type,
+      entity_id,
+      applied_version,
+      payload_hash,
+      created_by_user_id
+    ) values (
+      '00000000-0000-0000-0000-00000000c101',
+      'forbidden-direct-claim',
+      'CREATE_ACCOUNT_MAPPING',
+      'CHATWOOT_ACCOUNT_MAPPING',
+      gen_random_uuid(),
+      1,
+      md5('{}'),
+      '00000000-0000-0000-0000-00000000b101'
+    );
+    raise exception 'direct command claim insert unexpectedly bypassed governed context';
+  exception
+    when others then
+      if sqlerrm not like 'Chatwoot bridge command claim requires governed command context%' then
+        raise;
+      end if;
+  end;
+end;
+$$;
+
+do $$
+begin
+  if (select count(*)
+      from public.chatwoot_bridge_command_claims
+      where organization_id='00000000-0000-0000-0000-00000000c101') <> 8 then
+    raise exception 'unexpected durable Chatwoot bridge command claim count';
+  end if;
+
+  if exists (
+    select 1
+    from public.chatwoot_bridge_command_claims
+    where organization_id='00000000-0000-0000-0000-00000000c101'
+      and request_key in (
+        'bridge-binding-duplicate-lane',
+        'bridge-cross-tenant-business',
+        'bridge-wrong-branch',
+        'bridge-account-replace-id',
+        'bridge-account-reactivate-forbidden',
+        'bridge-binding-stale-version',
+        'bridge-account-archived-mutate-forbidden',
+        'forbidden-direct-claim'
+      )
+  ) then
+    raise exception 'failed Chatwoot bridge command left orphan idempotency claim';
+  end if;
 end;
 $$;
 
@@ -486,16 +615,22 @@ do $$
 begin
   if has_table_privilege('authenticated', 'public.communication_channel_bindings', 'DELETE')
      or has_table_privilege('authenticated', 'public.chatwoot_account_mappings', 'DELETE')
+     or has_table_privilege('authenticated', 'public.chatwoot_bridge_command_claims', 'UPDATE')
+     or has_table_privilege('authenticated', 'public.chatwoot_bridge_command_claims', 'DELETE')
      or has_table_privilege('service_role', 'public.communication_channel_bindings', 'INSERT')
      or has_table_privilege('service_role', 'public.chatwoot_account_mappings', 'UPDATE')
+     or has_table_privilege('service_role', 'public.chatwoot_bridge_command_claims', 'INSERT')
   then
     raise exception 'Chatwoot bridge table grants are broader than Slice A contract';
   end if;
 
   if not has_table_privilege('authenticated', 'public.communication_channel_bindings', 'SELECT')
      or not has_table_privilege('authenticated', 'public.chatwoot_account_mappings', 'SELECT')
+     or not has_table_privilege('authenticated', 'public.chatwoot_bridge_command_claims', 'SELECT')
+     or not has_table_privilege('authenticated', 'public.chatwoot_bridge_command_claims', 'INSERT')
+     or not has_table_privilege('service_role', 'public.chatwoot_bridge_command_claims', 'SELECT')
   then
-    raise exception 'authenticated bridge read grants are missing';
+    raise exception 'Chatwoot bridge grants are missing';
   end if;
 end;
 $$;
