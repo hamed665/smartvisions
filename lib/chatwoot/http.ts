@@ -1,6 +1,5 @@
 import 'server-only';
 
-import { randomUUID } from 'node:crypto';
 import {
   classifyChatwootHttpStatus,
   isChatwootReadMethod,
@@ -231,7 +230,7 @@ export async function chatwootProvisioningRequest<T>(input: {
   const fetchImpl = input.fetchImpl ?? fetch;
   const token = authToken(input.auth);
   const url = requestUrl(input.path);
-  const requestId = randomUUID();
+  const requestId = globalThis.crypto.randomUUID();
   const timeoutMs = Math.min(
     Math.max(Math.trunc(input.timeoutMs ?? DEFAULT_TIMEOUT_MS), 1_000),
     30_000,
