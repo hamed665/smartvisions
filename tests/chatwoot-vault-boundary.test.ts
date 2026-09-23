@@ -31,12 +31,18 @@ describe('COMM-TENANT-BRIDGE Slice C1 Vault boundary', () => {
   });
 
   it('keeps all Vault wrappers SECURITY INVOKER', () => {
-    const functions =
-      migration.match(/create or replace function public\./gi) ?? [];
-    const invokers = migration.match(/security invoker/gi) ?? [];
+    const functions = [
+      ...migration.matchAll(
+        /create or replace function public\.([A-Za-z0-9_]+)\([\s\S]*?\n\$\$;/gi,
+      ),
+    ];
 
     expect(functions.length).toBeGreaterThanOrEqual(5);
-    expect(invokers).toHaveLength(functions.length);
+    for (const match of functions) {
+      expect(match[0]).toMatch(/security\s+invoker/i);
+      expect(match[0]).not.toMatch(/security\s+definer/i);
+    }
+
     expect(migration).not.toMatch(/security\s+definer/i);
   });
 
