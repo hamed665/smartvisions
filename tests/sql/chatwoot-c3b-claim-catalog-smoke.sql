@@ -92,6 +92,40 @@ begin
       raise;
     end if;
   end;
+
+  begin
+    perform public.claim_chatwoot_bridge_command(
+      '00000000-0000-0000-0000-00000000c301',
+      'c3b-invalid-pair',
+      'CREATE_USER_MAPPING',
+      'CHATWOOT_TEAM_MAPPING',
+      '10000000-0000-0000-0000-00000000c301',
+      1,
+      repeat('a', 64)
+    );
+    raise exception 'mismatched command/entity pair unexpectedly succeeded';
+  exception when others then
+    if sqlerrm not like 'invalid Chatwoot bridge command claim%' then
+      raise;
+    end if;
+  end;
+
+  begin
+    perform public.claim_chatwoot_bridge_command(
+      '00000000-0000-0000-0000-00000000c301',
+      'c3b-catalog-5',
+      'CREATE_USER_MAPPING',
+      'CHATWOOT_USER_MAPPING',
+      '10000000-0000-0000-0000-00000000c301',
+      2,
+      repeat('a', 64)
+    );
+    raise exception 'changed applied version replay unexpectedly succeeded';
+  exception when others then
+    if sqlerrm not like 'request key already used with different Chatwoot bridge payload%' then
+      raise;
+    end if;
+  end;
 end;
 $claim_smoke$;
 
