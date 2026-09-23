@@ -188,4 +188,60 @@ begin
 end;
 $$;
 
+
+-- The bootstrap checks the wrapper contract; it deliberately does not emulate encryption.
+-- Inspect the actual Vault extension's encrypted storage separately in a safe environment.
+do $vault_check$
+declare
+  v_fn record;
+  v_role text;
+begin
+  for v_fn in
+    select p.oid, p.proname, p.prosecdef
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname in (
+        'chatwoot_vault_secret_id',
+        'chatwoot_vault_create_secret',
+        'chatwoot_vault_find_secret_ref',
+        'chatwoot_vault_update_secret',
+        'chatwoot_vault_read_secret'
+      )
+  loop
+    if v_fn.prosecdef then
+      raise exception 'Chatwoot Vault wrapper % must be SECURITY INVOKER', v_fn.proname;
+    end if;
+    if not has_function_privilege('service_role', v_fn.oid, 'EXECUTE') then
+      raise exception 'service_role cannot execute Chatwoot Vault wrapper %', v_fn.proname;
+    end if;
+    foreach v_role in array array['anon', 'authenticated'] loop
+      if has_function_privilege(v_role, v_fn.oid, 'EXECUTE') then
+        raise exception '% can execute Chatwoot Vault wrapper %', v_role, v_fn.proname;
+      end if;
+    end loop;
+  end loop;
+  if (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+      where n.nspname='public' and p.proname in (
+        'chatwoot_vault_secret_id','chatwoot_vault_create_secret',
+        'chatwoot_vault_find_secret_ref','chatwoot_vault_update_secret',
+        'chatwoot_vault_read_secret')) <> 5 then
+    raise exception 'Chatwoot Vault wrapper set is incomplete';
+  end if;
+end;
+$vault_check$;
+
+do $vault_check$
+declare
+  v_ref text := (select value from chatwoot_vault_test_state where key='secret_ref');
+begin
+  if (select count(*) from vault.secrets where name='chatwoot/ci/slice-c1/webhook') <> 1 then
+    raise exception 'deterministic Vault name created duplicate rows';
+  end if;
+  if (select count(*) from vault.secrets where id=public.chatwoot_vault_secret_id(v_ref)) <> 1 then
+    raise exception 'Vault reference does not identify the existing secret';
+  end if;
+end;
+$vault_check$;
+
 rollback;
