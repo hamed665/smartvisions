@@ -32,6 +32,7 @@ function setup(input: {
   brandStatus?: string;
   assignments?: Assignment[];
   assignmentError?: boolean;
+  memberOrganizationId?: string;
 }) {
   const reads: string[] = [];
   const supabase = {
@@ -47,7 +48,7 @@ function setup(input: {
         },
         single: async () => {
           if (table === 'organization_members') {
-            return { data: { role: userId === OWNER ? (input.ownerRole ?? 'OWNER') : (input.memberRole ?? 'ADMIN') }, error: null };
+            return { data: { organization_id: userId === MEMBER ? (input.memberOrganizationId ?? ORG) : ORG, user_id: userId, role: userId === OWNER ? (input.ownerRole ?? 'OWNER') : (input.memberRole ?? 'ADMIN') }, error: null };
           }
           if (table === 'tenant_businesses') {
             return { data: { id: BUSINESS, organization_id: ORG, brand_id: BRAND, status: 'ACTIVE' }, error: null };
@@ -121,6 +122,18 @@ describe('Business-wide Chatwoot membership role read', () => {
     });
     await expect(readBusinessWideChatwootRole({ supabase, ...args }))
       .rejects.toThrow('unavailable');
+  });
+
+  it('rejects a mismatched target Organization member row', async () => {
+    const { supabase } = setup({ memberOrganizationId: BRAND });
+    await expect(readBusinessWideChatwootRole({ supabase, ...args }))
+      .rejects.toThrow('unavailable');
+  });
+
+  it('lets a Business VIEWER assignment suppress an Organization ADMIN membership', async () => {
+    const { supabase } = setup({ assignments: [scoped('BUSINESS', 'VIEWER')] });
+    expect(await readBusinessWideChatwootRole({ supabase, ...args }))
+      .toEqual({ effectiveSmartRole: 'VIEWER', chatwootRole: null });
   });
 
   it('rejects a non-OWNER reader, archived Brand, or incomplete RLS read', async () => {
