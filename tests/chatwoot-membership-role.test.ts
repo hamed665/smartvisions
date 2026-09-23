@@ -35,6 +35,7 @@ function setup(input: {
   memberOrganizationId?: string;
 }) {
   const reads: string[] = [];
+  const assignmentFilters: string[] = [];
   const supabase = {
     auth: { getUser: vi.fn(async () => ({ data: { user: { id: OWNER } }, error: null })) },
     from: vi.fn((table: string) => {
@@ -58,7 +59,11 @@ function setup(input: {
           }
           throw new Error('unexpected table');
         },
-        in: async () => ({
+        or: (filter: string) => {
+          assignmentFilters.push(filter);
+          return builder;
+        },
+        limit: async () => ({
           data: input.assignments ?? [],
           error: input.assignmentError ? { message: 'permission denied' } : null,
         }),
@@ -66,7 +71,7 @@ function setup(input: {
       return builder;
     }),
   } as unknown as SupabaseClient;
-  return { supabase, reads };
+  return { supabase, reads, assignmentFilters };
 }
 
 const args = { organizationId: ORG, tenantBusinessId: BUSINESS, smartUserId: MEMBER };
@@ -122,6 +127,21 @@ describe('Business-wide Chatwoot membership role read', () => {
     });
     await expect(readBusinessWideChatwootRole({ supabase, ...args }))
       .rejects.toThrow('unavailable');
+  });
+
+  it('queries only the exact Brand and Business and rejects an oversized result', async () => {
+    const { supabase, assignmentFilters } = setup({
+      assignments: [
+        scoped('BRAND', 'ADMIN'),
+        scoped('BUSINESS', 'SALES_AGENT'),
+        scoped('BUSINESS', 'VIEWER'),
+      ],
+    });
+    await expect(readBusinessWideChatwootRole({ supabase, ...args }))
+      .rejects.toThrow('unavailable');
+    expect(assignmentFilters).toEqual([
+      `and(scope_type.eq.BRAND,brand_id.eq.${BRAND}),and(scope_type.eq.BUSINESS,tenant_business_id.eq.${BUSINESS})`,
+    ]);
   });
 
   it('rejects a mismatched target Organization member row', async () => {
