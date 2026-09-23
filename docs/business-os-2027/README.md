@@ -18,7 +18,9 @@ Production changes are promoted only after the repository's safety, CI, migratio
 6. [CONTROL_PLANE_FOUNDATION.md](./CONTROL_PLANE_FOUNDATION.md) — Production-evidence Gap Map, compatibility decisions, and Phase 1 domain contract.
 7. [OMNICHANNEL_ADAPTER_BOUNDARY.md](./OMNICHANNEL_ADAPTER_BOUNDARY.md) — Phase 2 evidence, Gap Map, capability matrix and semantic adapter contract.
 8. [CUSTOMER_360_CRM_NORMALIZATION.md](./CUSTOMER_360_CRM_NORMALIZATION.md) — Phase 3 Production evidence, CRM Gap Map, identity-resolution contract and compatibility plan.
-9. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
+9. [CUSTOM_FIELD_GOVERNANCE_GAP_AUDIT.md](./CUSTOM_FIELD_GOVERNANCE_GAP_AUDIT.md) — Phase 3 Slice 5 governed Custom Field contract and Production evidence.
+10. [SEGMENT_GOVERNANCE_GAP_AUDIT.md](./SEGMENT_GOVERNANCE_GAP_AUDIT.md) — Phase 3 Slice 6 Segment decisions, implementation boundaries and Production closeout.
+11. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
 
 ## Phase 0 exit criteria
 
@@ -57,3 +59,10 @@ Phase 0 is complete only when:
 - The next Phase 3 dependency is Deal/Pipeline normalization. Existing `growth_opportunities` / `intent_opportunities` remain acquisition/intent evidence and must not be repurposed as canonical CRM Deals.
 
 - Phase 3 Slice 4 Deal/Pipeline Foundation merged in PR #184 at `main@d416fcee020bc393a45096ee1330f8378bbd8e38`; Production migration 0074 is database-verified with zero seeded commercial rows and zero new unindexed-FK findings. Cloudflare runtime promotion is intentionally still evidence-gated until a post-merge Worker version is observed.
+
+
+- Phase 3 Slice 5 Custom Field Governance is Production-verified in PR #188 / migration 0075 version `20260923012557`.
+- Phase 3 Slice 6 Segment Governance audit merged in PR #190; governed Dynamic Lead Segments merged in PR #191 at `main@a34bfd243d2f95e2ccad9895d5a753ef902a4299`.
+- Production migration `0076_crm_segment_governance` is live as version `20260923093619`, with zero persistent Segment rows after rollback-only verification and no provider-send delta.
+- Slice 6 deliberately remains LEAD-only + DYNAMIC-only. Snapshot/current-membership persistence and broader entity segmentation remain deferred.
+- Implementation-runtime Cloudflare checkpoint after PR #191 (before docs-only closeout) is `b6ad6482-11e1-4658-97e8-7f5d1a842318`; latest checked heartbeat failed=0 with acquisition/evidence/auto-dispatch SKIPPED and Shadow Mode remained ON.
