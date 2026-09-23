@@ -68,14 +68,16 @@ begin
 end;
 $$;
 
+revoke all on schema vault from public, anon, authenticated, service_role;
+revoke all on table vault.secrets from public, anon, authenticated, service_role;
+revoke all on table vault.decrypted_secrets from public, anon, authenticated, service_role;
+revoke all on function vault.create_secret(text,text,text,uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function vault.update_secret(uuid,text,text,text,uuid)
+  from public, anon, authenticated, service_role;
+
 grant usage on schema vault to service_role;
-grant select, insert, update on vault.secrets to service_role;
-grant select on vault.decrypted_secrets to service_role;
+grant select, insert, update on table vault.secrets to service_role;
+grant select on table vault.decrypted_secrets to service_role;
 grant execute on function vault.create_secret(text,text,text,uuid) to service_role;
 grant execute on function vault.update_secret(uuid,text,text,text,uuid) to service_role;
-
-revoke all on schema vault from anon, authenticated;
-revoke all on vault.secrets from anon, authenticated;
-revoke all on vault.decrypted_secrets from anon, authenticated;
-revoke all on function vault.create_secret(text,text,text,uuid) from anon, authenticated;
-revoke all on function vault.update_secret(uuid,text,text,text,uuid) from anon, authenticated;
