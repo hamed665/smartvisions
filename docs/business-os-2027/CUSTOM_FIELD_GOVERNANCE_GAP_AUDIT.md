@@ -160,3 +160,33 @@ Before implementation PR is considered complete, the normal project workflow sti
 - Supabase live schema, latest migrations, production controls and advisors were read-only inspected.
 - This execution workspace has no authenticated local checkout of the private repository. No local migration-chain, runtime, or application test was run as part of the audit.
 - The available Cloudflare evidence is the successful exact-SHA deployment workflow and its completed steps. A separate post-deploy Worker version/heartbeat endpoint was not available here; obtain that evidence before claiming runtime promotion for any new runtime change.
+
+
+## 6. Production closeout
+
+Slice 5 implementation merged in PR #188 at:
+
+`main@b771883b1ba2f4787c6a466aea49f95a9052bd5f`
+
+Production migration:
+
+- `0075_crm_custom_field_governance`
+- version `20260923012557`
+
+Verified Production evidence:
+
+- RLS enabled on definitions, options and values;
+- authenticated has SELECT/INSERT/UPDATE only; no DELETE grant;
+- no service-role direct table SELECT for the new custom-field tables;
+- query/filter functions are SECURITY INVOKER;
+- 0 definitions / 0 options / 0 values were fabricated by migration;
+- rollback-only Production smoke verified create -> exact filter -> clear -> minimized audit and left 0 fixture/audit residue;
+- security advisor showed no Slice 5 regression;
+- no new unindexed-FK regression was reported;
+- Cloudflare Worker promoted to `d42bd9c5-e862-4af6-ae70-787cbf81c5d6`;
+- latest checked heartbeat had `failed=0`, acquisition `SKIPPED`, dispatch `SKIPPED`;
+- zero Email/WhatsApp outbound rows were created after the Slice 5 merge in the verification window.
+
+Slice 5 is therefore Production-verified across schema, runtime and safety evidence.
+
+The next Phase 3 step is a read-only Segment Governance gap audit. Segment implementation must not begin by adding arbitrary JSON predicates, raw SQL/JSONPath expressions or campaign side effects.
