@@ -19,7 +19,10 @@ import {
   type ChatwootAccountUserProjection,
   type ChatwootUserProjection,
 } from '@/lib/chatwoot/provisioning-contract';
-import type { ChatwootAccountRole } from '@/lib/chatwoot/tenant-bridge-slice-b';
+import {
+  normalizeChatwootInt32Id,
+  type ChatwootAccountRole,
+} from '@/lib/chatwoot/tenant-bridge-slice-b';
 
 export type ChatwootProvisioningErrorCode =
   | 'INVALID_INPUT'
@@ -262,19 +265,33 @@ export async function ensureChatwootUser(input: {
     );
   }
 
-  const patchedRaw = await chatwootPlatformProvisioningRequest<unknown>({
-    path: `/platform/api/v1/users/${adopted.id}`,
-    method: 'PATCH',
-    body: {
-      email: presentation.email,
-      name: presentation.name,
-      ...(presentation.displayName
-        ? { display_name: presentation.displayName }
-        : {}),
-      custom_attributes: buildChatwootUserCustomAttributes(smartUserId),
-    },
-    fetchImpl: input.fetchImpl,
-  });
+  let patchedRaw: unknown;
+  try {
+    patchedRaw = await chatwootPlatformProvisioningRequest<unknown>({
+      path: `/platform/api/v1/users/${adopted.id}`,
+      method: 'PATCH',
+      body: {
+        email: presentation.email,
+        name: presentation.name,
+        ...(presentation.displayName
+          ? { display_name: presentation.displayName }
+          : {}),
+        custom_attributes: buildChatwootUserCustomAttributes(smartUserId),
+      },
+      fetchImpl: input.fetchImpl,
+    });
+  } catch (error) {
+    if (
+      error instanceof ChatwootHttpError &&
+      error.ambiguousMutationOutcome
+    ) {
+      throw new ChatwootProvisioningError(
+        'RECONCILIATION_REQUIRED',
+        'Chatwoot User marker update has an ambiguous external outcome',
+      );
+    }
+    throw error;
+  }
 
   const user = parseChatwootUser(patchedRaw);
   if (
@@ -317,17 +334,24 @@ export async function ensureChatwootAccountUser(input: {
   accountUser: ChatwootAccountUserProjection;
   outcome: 'CREATED_OR_UPDATED' | 'RECOVERED_BY_SAFE_MEMBERSHIP_RETRY';
 }> {
+  const accountId = normalizeChatwootInt32Id(input.accountId);
+  const userId = normalizeChatwootInt32Id(input.userId);
   if (
-    !Number.isInteger(input.accountId) ||
-    input.accountId <= 0 ||
-    !Number.isInteger(input.userId) ||
-    input.userId <= 0
+    accountId === null ||
+    userId === null ||
+    (input.role !== 'agent' && input.role !== 'administrator')
   ) {
     throw new ChatwootProvisioningError(
       'INVALID_INPUT',
-      'Chatwoot Account/User IDs must be positive integers',
+      'Chatwoot Account/User membership input is invalid',
     );
   }
+
+  const normalizedInput = {
+    ...input,
+    accountId,
+    userId,
+  };
 
   let raw: unknown;
   let outcome:
@@ -335,14 +359,14 @@ export async function ensureChatwootAccountUser(input: {
     | 'RECOVERED_BY_SAFE_MEMBERSHIP_RETRY' = 'CREATED_OR_UPDATED';
 
   try {
-    raw = await createOrUpdateAccountUserOnce(input);
+    raw = await createOrUpdateAccountUserOnce(normalizedInput);
   } catch (error) {
     if (!(error instanceof ChatwootHttpError) || !error.ambiguousMutationOutcome) {
       throw error;
     }
 
     try {
-      raw = await createOrUpdateAccountUserOnce(input);
+      raw = await createOrUpdateAccountUserOnce(normalizedInput);
       outcome = 'RECOVERED_BY_SAFE_MEMBERSHIP_RETRY';
     } catch (retryError) {
       if (
@@ -360,8 +384,8 @@ export async function ensureChatwootAccountUser(input: {
 
   const accountUser = parseChatwootAccountUser(raw);
   if (
-    accountUser.accountId !== input.accountId ||
-    accountUser.userId !== input.userId ||
+    accountUser.accountId !== accountId ||
+    accountUser.userId !== userId ||
     accountUser.role !== input.role
   ) {
     throw new ChatwootProvisioningError(
