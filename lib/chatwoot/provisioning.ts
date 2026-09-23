@@ -106,6 +106,13 @@ export async function ensureChatwootAccount(input: {
     fetchImpl: input.fetchImpl,
   });
 
+  if (existing.kind === 'INVALID') {
+    throw new ChatwootProvisioningError(
+      'IDENTITY_CONFLICT',
+      'Chatwoot Account has incomplete Smart projection metadata for this tenant Business',
+    );
+  }
+
   if (existing.kind === 'AMBIGUOUS') {
     throw new ChatwootProvisioningError(
       'DUPLICATE_MATCH',
@@ -148,6 +155,13 @@ export async function ensureChatwootAccount(input: {
       tenantBusinessId,
       fetchImpl: input.fetchImpl,
     });
+
+    if (reconciled.kind === 'INVALID') {
+      throw new ChatwootProvisioningError(
+        'IDENTITY_CONFLICT',
+        'Ambiguous Account create reconciled to incomplete Smart projection metadata',
+      );
+    }
 
     if (reconciled.kind === 'ONE') {
       return {
