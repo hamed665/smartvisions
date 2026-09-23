@@ -171,7 +171,7 @@ end;
 $conditional_brand$;
 
 -- Organization OWNER always remains OWNER despite a lower-scope VIEWER assignment.
-perform public.create_member_scope_assignment(
+select public.create_member_scope_assignment(
   '00000000-0000-0000-0000-00000000f301',
   '00000000-0000-0000-0000-00000000e305',
   'BRAND',
