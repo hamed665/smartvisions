@@ -176,6 +176,69 @@ Events:
 
 Task source provenance is immutable. A historical Follow-up, Handoff, Reply, Approval or Operator Brief may create/link a Task only through an explicit idempotent command; activity is never auto-converted merely because it exists.
 
+## CRM Custom Field Definition
+
+States:
+
+`ACTIVE -> DEPRECATED -> ACTIVE`
+
+Rules:
+
+- definition identity (`organization_id + entity_type + field_key`) is immutable;
+- data type and uniqueness contract are immutable in Slice 5;
+- constraint tightening fails closed when an existing SET value would become invalid;
+- deprecated definitions remain readable and preserve historical/current values, but reject new SET values by default;
+- destructive definition deletion is not part of the contract.
+
+Events:
+
+- crm.custom_field.definition_created.v1
+- crm.custom_field.definition_updated.v1
+- crm.custom_field.definition_deprecated.v1
+- crm.custom_field.definition_reactivated.v1
+
+## CRM Custom Field Option
+
+States:
+
+`ACTIVE -> DEPRECATED -> ACTIVE`
+
+Rules:
+
+- option keys are stable identities; labels may change;
+- an option cannot be deprecated while a SET value or definition default still references it;
+- select value writes and option lifecycle mutations serialize on the same definition-scoped lock.
+
+Events:
+
+- crm.custom_field.option_created.v1
+- crm.custom_field.option_updated.v1
+- crm.custom_field.option_deprecated.v1
+- crm.custom_field.option_reactivated.v1
+
+## CRM Custom Field Value
+
+States:
+
+`SET <-> CLEARED`
+
+Rules:
+
+- one current row exists per Organization + Definition + canonical Lead/Deal entity;
+- clearing preserves the row/history and erases typed value slots; DELETE is not the lifecycle;
+- required fields cannot be cleared;
+- enabling `required` requires all currently existing target entities to already have SET values;
+- Slice 5 does not add a deferred constraint to legacy Lead/Deal creation paths, so `required` is not claimed as an atomic entity-creation invariant yet;
+- AI suggestions do not silently mutate values; a permitted authenticated mutation is still required;
+- audit evidence records identifiers/state/version, not raw custom-field values.
+
+Events:
+
+- crm.custom_field.value_created.v1
+- crm.custom_field.value_updated.v1
+- crm.custom_field.value_cleared.v1
+- crm.custom_field.value_restored.v1
+
 ## Event envelope
 
 All future domain events use:
