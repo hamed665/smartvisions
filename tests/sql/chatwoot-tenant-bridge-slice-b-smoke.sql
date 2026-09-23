@@ -58,6 +58,9 @@ select (public.create_communication_channel_binding(
   'slice-b-binding-create'
 )).id as binding_id \gset
 
+insert into slice_b_state(key, value)
+values ('binding_id', :'binding_id');
+
 select (public.create_chatwoot_account_mapping(
   '00000000-0000-0000-0000-00000000e101',
   '20000000-0000-0000-0000-00000000e101',
@@ -226,7 +229,41 @@ set chatwoot_account_user_id=5000000002, status='ACTIVE', version=2,
     updated_by_user_id='00000000-0000-0000-0000-00000000d101'
 where id='80000000-0000-0000-0000-00000000e102';
 
-insert into public.chatwoot_inbox_mappings(
+do $$
+begin
+  begin
+    update public.chatwoot_user_mappings
+    set status='PROVISIONING',
+        version=3,
+        last_request_key='slice-b-user-invalid-backward-state',
+        updated_by_user_id='00000000-0000-0000-0000-00000000d101'
+    where id='70000000-0000-0000-0000-00000000e101';
+    raise exception 'ACTIVE Chatwoot User mapping unexpectedly returned to PROVISIONING';
+  exception
+    when others then
+      if sqlerrm not like 'invalid Chatwoot User mapping transition%' then
+        raise;
+      end if;
+  end;
+
+  begin
+    update public.chatwoot_user_mappings
+    set status='ARCHIVED',
+        version=3,
+        last_request_key='slice-b-user-archive-with-live-membership',
+        updated_by_user_id='00000000-0000-0000-0000-00000000d101'
+    where id='70000000-0000-0000-0000-00000000e101';
+    raise exception 'User mapping with live Account membership unexpectedly archived';
+  exception
+    when others then
+      if sqlerrm not like 'archive Chatwoot Account memberships before User mapping%' then
+        raise;
+      end if;
+  end;
+end;
+$$;
+
+insert into public.chatwoot_inbox_mappings(insert into public.chatwoot_inbox_mappings(
   id, organization_id, tenant_business_id, branch_id,
   communication_channel_binding_id, chatwoot_account_mapping_id,
   status, version, last_request_key, created_by_user_id, updated_by_user_id
@@ -244,11 +281,27 @@ insert into public.chatwoot_inbox_mappings(
   '00000000-0000-0000-0000-00000000d101'
 );
 
+do $$
+begin
+  begin
+    update public.chatwoot_inbox_mappings
+    set webhook_secret_ref='this-is-a-plaintext-secret',
+        version=2,
+        last_request_key='slice-b-inbox-plaintext-secret'
+    where id='90000000-0000-0000-0000-00000000e101';
+    raise exception 'plaintext Inbox secret unexpectedly accepted as secret reference';
+  exception
+    when check_violation then null;
+  end;
+end;
+$$;
+
 update public.chatwoot_inbox_mappings
+set chatwoot_inbox_id=201,update public.chatwoot_inbox_mappings
 set chatwoot_inbox_id=201,
     chatwoot_channel_identifier='synthetic-channel-identifier',
-    webhook_secret_ref='vault://chatwoot/slice-b/webhook',
-    hmac_token_ref='vault://chatwoot/slice-b/hmac',
+    webhook_secret_ref='secretref://chatwoot/slice-b/webhook',
+    hmac_token_ref='secretref://chatwoot/slice-b/hmac',
     status='ACTIVE',
     version=2,
     last_request_key='slice-b-inbox-active',
@@ -316,8 +369,8 @@ begin
     where organization_id='00000000-0000-0000-0000-00000000e101'
       and entity_type='chatwoot_inbox_mappings'
       and (
-        coalesce(before_data::text,'') ilike '%vault://%'
-        or coalesce(after_data::text,'') ilike '%vault://%'
+        coalesce(before_data::text,'') ilike '%secretref://%'
+        or coalesce(after_data::text,'') ilike '%secretref://%'
         or coalesce(before_data::text,'') ilike '%webhook_secret_ref%'
         or coalesce(after_data::text,'') ilike '%hmac_token_ref%'
       )
@@ -327,7 +380,59 @@ begin
 end;
 $$;
 
+reset role;
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000d101', false);
+
 do $$
+declare
+  v_account_mapping_id uuid := (select value::uuid from slice_b_state where key='account_mapping_id');
+  v_binding_id uuid := (select value::uuid from slice_b_state where key='binding_id');
+begin
+  begin
+    perform public.set_chatwoot_account_mapping_state(
+      '00000000-0000-0000-0000-00000000e101',
+      v_account_mapping_id,
+      2,
+      'ARCHIVED',
+      301,
+      null,
+      'slice-b-account-archive-with-live-children'
+    );
+    raise exception 'Account mapping with live Slice B children unexpectedly archived';
+  exception
+    when others then
+      if sqlerrm not like 'archive Chatwoot child projections before Account mapping%' then
+        raise;
+      end if;
+  end;
+
+  begin
+    perform public.set_communication_channel_binding_lifecycle(
+      '00000000-0000-0000-0000-00000000e101',
+      v_binding_id,
+      1,
+      'ARCHIVED',
+      'slice-b-binding-archive-with-live-inbox'
+    );
+    raise exception 'communication binding with live Inbox mapping unexpectedly archived';
+  exception
+    when others then
+      if sqlerrm not like 'archive Chatwoot Inbox mapping before communication binding%' then
+        raise;
+      end if;
+  end;
+end;
+$$;
+
+reset role;
+select set_config('request.jwt.claim.sub', '', false);
+set role service_role;
+
+do $$
+begin
+  begin
+    delete from public.organization_membersdo $$
 begin
   begin
     delete from public.organization_members
