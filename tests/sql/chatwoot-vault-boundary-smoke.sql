@@ -191,7 +191,7 @@ $$;
 
 -- The bootstrap checks the wrapper contract; it deliberately does not emulate encryption.
 -- Inspect the actual Vault extension's encrypted storage separately in a safe environment.
-do $
+do $vault_check$
 declare
   v_fn record;
   v_role text;
@@ -229,9 +229,9 @@ begin
     raise exception 'Chatwoot Vault wrapper set is incomplete';
   end if;
 end;
-$;
+$vault_check$;
 
-do $
+do $vault_check$
 declare
   v_ref text := (select value from chatwoot_vault_test_state where key='secret_ref');
 begin
@@ -242,6 +242,6 @@ begin
     raise exception 'Vault reference does not identify the existing secret';
   end if;
 end;
-$;
+$vault_check$;
 
 rollback;
