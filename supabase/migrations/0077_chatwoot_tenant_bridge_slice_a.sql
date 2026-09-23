@@ -323,7 +323,7 @@ begin
       raise exception 'Chatwoot Account ID is immutable once adopted';
     end if;
 
-    if old.status = 'ARCHIVED' and new.status <> 'ARCHIVED' then
+    if old.status = 'ARCHIVED' then
       raise exception 'ARCHIVED Chatwoot Account mapping is terminal';
     end if;
 
@@ -386,6 +386,56 @@ begin
   return new;
 end;
 $$;
+
+create or replace function public.enforce_tenant_business_chatwoot_bridge_archive()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public, pg_catalog
+as $
+begin
+  if old.status = 'ACTIVE' and new.status = 'ARCHIVED' then
+    if exists (
+      select 1
+      from public.communication_channel_bindings cb
+      where cb.organization_id = old.organization_id
+        and cb.tenant_business_id = old.id
+        and cb.status = 'ACTIVE'
+    ) or exists (
+      select 1
+      from public.chatwoot_account_mappings cam
+      where cam.organization_id = old.organization_id
+        and cam.tenant_business_id = old.id
+        and cam.status in ('PROVISIONING','ACTIVE','DEGRADED')
+    ) then
+      raise exception 'archive Chatwoot bridge resources before tenant Business';
+    end if;
+  end if;
+  return new;
+end;
+$;
+
+create or replace function public.enforce_branch_chatwoot_bridge_archive()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public, pg_catalog
+as $
+begin
+  if old.status = 'ACTIVE' and new.status = 'ARCHIVED'
+     and exists (
+       select 1
+       from public.communication_channel_bindings cb
+       where cb.organization_id = old.organization_id
+         and cb.branch_id = old.id
+         and cb.status = 'ACTIVE'
+     )
+  then
+    raise exception 'archive communication binding before Branch';
+  end if;
+  return new;
+end;
+$;
 
 create or replace function public.audit_chatwoot_bridge_mutation()
 returns trigger
@@ -482,6 +532,18 @@ begin
   return new;
 end;
 $$;
+
+drop trigger if exists tenant_businesses_chatwoot_bridge_archive_guard
+  on public.tenant_businesses;
+create trigger tenant_businesses_chatwoot_bridge_archive_guard
+before update of status on public.tenant_businesses
+for each row execute function public.enforce_tenant_business_chatwoot_bridge_archive();
+
+drop trigger if exists branches_chatwoot_bridge_archive_guard
+  on public.branches;
+create trigger branches_chatwoot_bridge_archive_guard
+before update of status on public.branches
+for each row execute function public.enforce_branch_chatwoot_bridge_archive();
 
 drop trigger if exists communication_channel_bindings_command_guard
   on public.communication_channel_bindings;
@@ -948,6 +1010,10 @@ revoke all on function public.enforce_communication_channel_binding_contract()
 revoke all on function public.enforce_chatwoot_account_mapping_contract()
   from public, anon, authenticated, service_role;
 revoke all on function public.audit_chatwoot_bridge_mutation()
+  from public, anon, authenticated, service_role;
+revoke all on function public.enforce_tenant_business_chatwoot_bridge_archive()
+  from public, anon, authenticated, service_role;
+revoke all on function public.enforce_branch_chatwoot_bridge_archive()
   from public, anon, authenticated, service_role;
 
 revoke all on function public.create_communication_channel_binding(
