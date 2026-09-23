@@ -10,53 +10,87 @@ create temp table chatwoot_vault_test_state (
 set role service_role;
 
 select public.chatwoot_vault_create_secret(
-  'synthetic-secret-v1',
-  'chatwoot/test/inbox/webhook',
-  'synthetic CI secret'
+  'slice-c1-secret-v1',
+  'chatwoot/ci/slice-c1/webhook',
+  'CI synthetic Chatwoot secret'
 ) as secret_ref \gset
 
-insert into chatwoot_vault_test_state(key,value)
+insert into chatwoot_vault_test_state(key, value)
 values ('secret_ref', :'secret_ref');
 
 do $$
 declare
   v_ref text := (select value from chatwoot_vault_test_state where key='secret_ref');
-  v_secret text;
+  v_read text;
+  v_replay text;
+  v_found text;
 begin
-  if v_ref !~ '^secretref://supabase-vault/[0-9a-f-]{36}$' then
-    raise exception 'Vault create returned invalid reference';
+  if v_ref !~ '^secretref://supabase-vault/[0-9a-fA-F-]{36}$' then
+    raise exception 'Chatwoot Vault create returned invalid secret reference';
   end if;
 
-  select public.chatwoot_vault_read_secret(v_ref) into v_secret;
-  if v_secret <> 'synthetic-secret-v1' then
-    raise exception 'Vault read returned wrong secret';
+  select public.chatwoot_vault_read_secret(v_ref) into v_read;
+  if v_read <> 'slice-c1-secret-v1' then
+    raise exception 'Chatwoot Vault read returned wrong plaintext';
   end if;
+
+  select public.chatwoot_vault_create_secret(
+    'slice-c1-secret-v1',
+    'chatwoot/ci/slice-c1/webhook',
+    'CI synthetic Chatwoot secret'
+  ) into v_replay;
+
+  if v_replay <> v_ref then
+    raise exception 'same Vault name + same secret did not replay the same reference';
+  end if;
+
+  select public.chatwoot_vault_find_secret_ref(
+    'chatwoot/ci/slice-c1/webhook'
+  ) into v_found;
+
+  if v_found <> v_ref then
+    raise exception 'Vault name reconciliation did not resolve the canonical reference';
+  end if;
+end;
+$$;
+
+do $$
+begin
+  begin
+    perform public.chatwoot_vault_create_secret(
+      'different-secret',
+      'chatwoot/ci/slice-c1/webhook',
+      'collision'
+    );
+    raise exception 'same Vault name with different secret unexpectedly succeeded';
+  exception
+    when others then
+      if sqlerrm not like 'Chatwoot Vault secret name already exists with different secret%' then
+        raise;
+      end if;
+  end;
 end;
 $$;
 
 select public.chatwoot_vault_update_secret(
   :'secret_ref',
-  'synthetic-secret-v2',
-  'chatwoot/test/inbox/webhook',
-  'synthetic CI rotated secret'
+  'slice-c1-secret-v2',
+  null,
+  'CI updated description'
 ) as updated_ref \gset
-
-insert into chatwoot_vault_test_state(key,value)
-values ('updated_ref', :'updated_ref');
 
 do $$
 declare
   v_ref text := (select value from chatwoot_vault_test_state where key='secret_ref');
-  v_updated_ref text := (select value from chatwoot_vault_test_state where key='updated_ref');
-  v_secret text;
+  v_read text;
 begin
-  if v_updated_ref <> v_ref then
-    raise exception 'Vault update changed secret reference';
+  if :'updated_ref' <> v_ref then
+    raise exception 'Vault update changed the secret reference';
   end if;
 
-  select public.chatwoot_vault_read_secret(v_ref) into v_secret;
-  if v_secret <> 'synthetic-secret-v2' then
-    raise exception 'Vault update did not rotate secret';
+  select public.chatwoot_vault_read_secret(v_ref) into v_read;
+  if v_read <> 'slice-c1-secret-v2' then
+    raise exception 'Vault update did not replace the secret value';
   end if;
 end;
 $$;
@@ -65,7 +99,7 @@ do $$
 begin
   begin
     perform public.chatwoot_vault_read_secret('secretref://supabase-vault/not-a-uuid');
-    raise exception 'invalid Vault reference unexpectedly accepted';
+    raise exception 'invalid Vault reference unexpectedly succeeded';
   exception
     when others then
       if sqlerrm not like 'invalid Chatwoot Vault secret reference%' then
@@ -74,17 +108,36 @@ begin
   end;
 
   begin
-    perform public.chatwoot_vault_create_secret(
+    perform public.chatwoot_vault_update_secret(
+      'secretref://supabase-vault/00000000-0000-0000-0000-000000000000',
       'x',
-      'not-chatwoot/test',
-      'bad name'
+      null,
+      null
     );
-    raise exception 'invalid Vault name unexpectedly accepted';
+    raise exception 'unknown Vault reference unexpectedly updated';
   exception
     when others then
-      if sqlerrm not like 'Chatwoot Vault secret name is invalid%' then
+      if sqlerrm not like 'Chatwoot Vault secret reference not found%' then
         raise;
       end if;
+  end;
+end;
+$$;
+
+reset role;
+set role authenticated;
+
+do $$
+begin
+  begin
+    perform public.chatwoot_vault_create_secret(
+      'forbidden',
+      'chatwoot/ci/forbidden',
+      null
+    );
+    raise exception 'authenticated unexpectedly executed Chatwoot Vault wrapper';
+  exception
+    when insufficient_privilege then null;
   end;
 end;
 $$;
@@ -93,42 +146,40 @@ reset role;
 
 do $$
 begin
-  if has_function_privilege(
-       'authenticated',
-       'public.chatwoot_vault_create_secret(text,text,text)',
-       'EXECUTE'
-     )
-     or has_function_privilege(
-       'authenticated',
-       'public.chatwoot_vault_update_secret(text,text,text,text)',
-       'EXECUTE'
-     )
-     or has_function_privilege(
-       'authenticated',
-       'public.chatwoot_vault_read_secret(text)',
-       'EXECUTE'
-     )
-  then
-    raise exception 'authenticated unexpectedly has Chatwoot Vault wrapper access';
+  if not has_function_privilege(
+    'service_role',
+    'public.chatwoot_vault_create_secret(text,text,text)',
+    'EXECUTE'
+  ) or not has_function_privilege(
+    'service_role',
+    'public.chatwoot_vault_find_secret_ref(text)',
+    'EXECUTE'
+  ) or not has_function_privilege(
+    'service_role',
+    'public.chatwoot_vault_update_secret(text,text,text,text)',
+    'EXECUTE'
+  ) or not has_function_privilege(
+    'service_role',
+    'public.chatwoot_vault_read_secret(text)',
+    'EXECUTE'
+  ) then
+    raise exception 'service_role is missing Chatwoot Vault wrapper execution';
   end if;
 
-  if not has_function_privilege(
-       'service_role',
-       'public.chatwoot_vault_create_secret(text,text,text)',
-       'EXECUTE'
-     )
-     or not has_function_privilege(
-       'service_role',
-       'public.chatwoot_vault_update_secret(text,text,text,text)',
-       'EXECUTE'
-     )
-     or not has_function_privilege(
-       'service_role',
-       'public.chatwoot_vault_read_secret(text)',
-       'EXECUTE'
-     )
-  then
-    raise exception 'service_role Chatwoot Vault wrapper access missing';
+  if has_function_privilege(
+    'authenticated',
+    'public.chatwoot_vault_create_secret(text,text,text)',
+    'EXECUTE'
+  ) or has_function_privilege(
+    'authenticated',
+    'public.chatwoot_vault_read_secret(text)',
+    'EXECUTE'
+  ) or has_function_privilege(
+    'anon',
+    'public.chatwoot_vault_read_secret(text)',
+    'EXECUTE'
+  ) then
+    raise exception 'Chatwoot Vault wrappers are broader than service-role-only contract';
   end if;
 end;
 $$;
