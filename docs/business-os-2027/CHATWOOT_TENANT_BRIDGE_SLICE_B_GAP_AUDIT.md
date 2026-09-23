@@ -363,12 +363,20 @@ Approved projection:
 | Smart effective role | Chatwoot Account role |
 | --- | --- |
 | OWNER | administrator |
-| ADMIN | administrator |
+| ADMIN | agent, with broad governed Inbox access |
 | SALES_MANAGER | agent |
 | SALES_AGENT | agent |
 | VIEWER | no Chatwoot Account membership |
 
 This is fail-closed.
+
+Why ADMIN is **not** Chatwoot administrator in the first version:
+
+- verified Chatwoot Community policies allow administrator to create/update/delete Inbox and Team resources;
+- current Smart Core control-plane mutations are OWNER-only;
+- mapping Smart ADMIN to Chatwoot administrator would create a parallel infrastructure mutation path outside Smart Core governance.
+
+Smart ADMIN receives agent membership plus broad governed Inbox access for operational visibility without Chatwoot infrastructure mutation privileges.
 
 Do not map VIEWER to agent merely so they can open Chatwoot.
 
@@ -586,10 +594,16 @@ Chatwoot agents require explicit Inbox and/or Team access.
 
 Approved first-version projection:
 
-### OWNER / ADMIN
+### OWNER
 
 - Chatwoot role administrator;
-- no explicit Inbox-member row required for visibility.
+- administrator can see all Account Inboxes.
+
+### ADMIN
+
+- Chatwoot role agent;
+- explicit membership in all active Inboxes of tenant Businesses the Smart ADMIN may operationally access;
+- no Chatwoot Inbox/Team infrastructure mutation authority.
 
 ### Organization-wide SALES_MANAGER / SALES_AGENT
 
@@ -935,7 +949,8 @@ Static/database tests:
 - Chatwoot User ID uses integer;
 - Account membership cannot cross tenant Business/Account mapping;
 - role projection exact:
-  - OWNER/ADMIN administrator;
+  - OWNER administrator;
+  - ADMIN agent with broad governed Inbox access;
   - SALES_MANAGER/SALES_AGENT agent;
   - VIEWER no membership;
 - Team mapping lineage is same tenant Business;
@@ -1007,6 +1022,8 @@ Key non-negotiable decisions:
 - normal login uses governed Chatwoot SSO link;
 - Platform token never leaves server;
 - temporary user access token is memory-only for account API provisioning;
+- OWNER is the only first-version Chatwoot administrator;
+- ADMIN remains an agent with broad governed Inbox access so Smart Core OWNER-only infrastructure governance is not bypassed;
 - VIEWER receives no Chatwoot membership;
 - API Inbox uses `Channel::Api`;
 - API Inbox webhook signing uses `channel.secret`;
