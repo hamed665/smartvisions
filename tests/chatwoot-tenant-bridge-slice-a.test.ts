@@ -90,6 +90,20 @@ describe('COMM-TENANT-BRIDGE Slice A', () => {
     expect(migration).toContain('archive communication binding before Branch');
   });
 
+  it('does not fabricate channel verification timestamps without external evidence', () => {
+    const createBinding = migration.slice(
+      migration.indexOf('create or replace function public.create_communication_channel_binding'),
+      migration.indexOf('create or replace function public.set_communication_channel_binding_lifecycle'),
+    );
+    const setBindingLifecycle = migration.slice(
+      migration.indexOf('create or replace function public.set_communication_channel_binding_lifecycle'),
+      migration.indexOf('create or replace function public.create_chatwoot_account_mapping'),
+    );
+
+    expect(createBinding).not.toContain('last_verified_at');
+    expect(setBindingLifecycle).not.toContain('last_verified_at =');
+  });
+
   it('keeps audit payload bounded and avoids message/provider secrets', () => {
     expect(migration).toContain('COMMUNICATION_CHANNEL_BINDING_CREATED');
     expect(migration).toContain('CHATWOOT_ACCOUNT_MAPPING_ACTIVATED');
