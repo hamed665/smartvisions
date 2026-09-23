@@ -174,6 +174,55 @@ describe('Chatwoot provisioning HTTP client', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('marks a successful mutation with invalid JSON as ambiguous instead of retrying it', async () => {
+    enableProvisioning();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response('not-json', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    await expect(
+      chatwootPlatformProvisioningRequest({
+        path: '/platform/api/v1/accounts',
+        method: 'POST',
+        body: { name: 'Synthetic Candidate' },
+        fetchImpl: fetchMock as unknown as typeof fetch,
+      }),
+    ).rejects.toMatchObject({
+      code: 'INVALID_RESPONSE',
+      ambiguousMutationOutcome: true,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks an oversized successful mutation response as ambiguous', async () => {
+    enableProvisioning();
+    const oversized = JSON.stringify({ payload: 'x'.repeat(1_000_100) });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(oversized, {
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    await expect(
+      chatwootPlatformProvisioningRequest({
+        path: '/platform/api/v1/accounts',
+        method: 'POST',
+        body: { name: 'Synthetic Candidate' },
+        fetchImpl: fetchMock as unknown as typeof fetch,
+      }),
+    ).rejects.toMatchObject({
+      code: 'RESPONSE_TOO_LARGE',
+      ambiguousMutationOutcome: true,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects encoded traversal before fetch', async () => {
     enableProvisioning();
     const fetchMock = vi.fn();
