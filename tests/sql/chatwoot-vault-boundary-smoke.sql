@@ -79,12 +79,16 @@ select public.chatwoot_vault_update_secret(
   'CI updated description'
 ) as updated_ref \gset
 
+insert into chatwoot_vault_test_state(key, value)
+values ('updated_ref', :'updated_ref');
+
 do $$
 declare
   v_ref text := (select value from chatwoot_vault_test_state where key='secret_ref');
+  v_updated_ref text := (select value from chatwoot_vault_test_state where key='updated_ref');
   v_read text;
 begin
-  if :'updated_ref' <> v_ref then
+  if v_updated_ref <> v_ref then
     raise exception 'Vault update changed the secret reference';
   end if;
 
