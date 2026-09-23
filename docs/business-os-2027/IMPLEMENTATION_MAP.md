@@ -207,3 +207,17 @@ Customer portal for appointments, orders, quotes, invoices, payments, subscripti
 Applicable UI + API + persistence + permissions + audit + events + metrics + billing implications + retries/failure states + tests + observability + documentation + migration/rollback must be complete.
 
 A decorative UI is not a completed feature.
+
+
+### Phase 3 Slice 5 — Custom Field Governance
+
+Status: **PRODUCTION-VERIFIED**.
+
+- Gap audit merged in PR #187.
+- Implementation merged in PR #188 at `main@b771883b1ba2f4787c6a466aea49f95a9052bd5f`.
+- Production migration `0075_crm_custom_field_governance` version `20260923012557`.
+- First slice supports governed Lead + Deal custom fields only.
+- No Custom Objects, Segments or Person Contact were introduced.
+- Production has 0 definitions / 0 options / 0 values after migration and rollback-only verification.
+- Cloudflare runtime is proven by Worker `d42bd9c5-e862-4af6-ae70-787cbf81c5d6` with `failed=0`, acquisition/dispatch SKIPPED and zero Email/WhatsApp outbound rows after merge.
+- Next dependency: Segment Governance gap audit. Do not build Segments on arbitrary JSON or ungoverned fields.
