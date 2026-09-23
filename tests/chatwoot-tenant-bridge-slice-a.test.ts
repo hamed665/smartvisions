@@ -46,6 +46,9 @@ describe('COMM-TENANT-BRIDGE Slice A', () => {
     expect(migration).toContain('create table if not exists public.chatwoot_bridge_command_claims');
     expect(migration).toContain('create or replace function public.claim_chatwoot_bridge_command');
     expect(migration).toContain('payload_hash');
+    expect(migration).toContain('extensions.digest(jsonb_build_object(');
+    expect(migration).toContain("'sha256'");
+    expect(migration).not.toMatch(/\bmd5\(/i);
     expect(migration).toContain('request key already used with different Chatwoot bridge payload');
     expect(migration).toContain('Chatwoot bridge command claims are immutable');
     expect(migration).toContain('chatwoot_bridge_command_claims_insert_guard');
