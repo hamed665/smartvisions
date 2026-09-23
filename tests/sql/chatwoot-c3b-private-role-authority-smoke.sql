@@ -150,6 +150,14 @@ begin
   ) <> 'ADMIN' then
     raise exception 'private canonical role did not resolve Organization ADMIN';
   end if;
+
+  if private.chatwoot_business_wide_role(
+    '00000000-0000-0000-0000-00000000d501',
+    '20000000-0000-0000-0000-00000000d501',
+    '00000000-0000-0000-0000-00000000c503'
+  ) <> 'VIEWER' then
+    raise exception 'private canonical role did not preserve Organization VIEWER';
+  end if;
 end;
 $rls_proof$;
 
@@ -319,6 +327,65 @@ begin
   end;
 end;
 $cross_tenant_denied$;
+
+reset role;
+select set_config('request.jwt.claim.sub','',false);
+
+-- Archived lineage is never valid authority context.
+update public.tenant_businesses
+set status='ARCHIVED'
+where id='20000000-0000-0000-0000-00000000d501';
+
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000c501',false);
+
+do $archived_business_denied$
+begin
+  begin
+    perform private.chatwoot_business_wide_role(
+      '00000000-0000-0000-0000-00000000d501',
+      '20000000-0000-0000-0000-00000000d501',
+      '00000000-0000-0000-0000-00000000c502'
+    );
+    raise exception 'ARCHIVED tenant Business unexpectedly resolved canonical role';
+  exception when others then
+    if sqlerrm not like 'ACTIVE tenant Business lineage required%' then
+      raise;
+    end if;
+  end;
+end;
+$archived_business_denied$;
+
+reset role;
+select set_config('request.jwt.claim.sub','',false);
+
+update public.tenant_businesses
+set status='ACTIVE'
+where id='20000000-0000-0000-0000-00000000d501';
+
+update public.brands
+set status='ARCHIVED'
+where id='10000000-0000-0000-0000-00000000d501';
+
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000c501',false);
+
+do $archived_brand_denied$
+begin
+  begin
+    perform private.chatwoot_business_wide_role(
+      '00000000-0000-0000-0000-00000000d501',
+      '20000000-0000-0000-0000-00000000d501',
+      '00000000-0000-0000-0000-00000000c502'
+    );
+    raise exception 'ARCHIVED Brand unexpectedly resolved canonical role';
+  exception when others then
+    if sqlerrm not like 'ACTIVE tenant Business lineage required%' then
+      raise;
+    end if;
+  end;
+end;
+$archived_brand_denied$;
 
 reset role;
 select set_config('request.jwt.claim.sub','',false);
