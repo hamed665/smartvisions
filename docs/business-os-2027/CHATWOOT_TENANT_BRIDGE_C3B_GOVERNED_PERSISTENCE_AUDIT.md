@@ -41,3 +41,10 @@ An external Chatwoot mutation and the Smart Core database commit cannot be one a
 ## Next implementation unit
 
 C3B should first connect Account mapping persistence to the existing governed OWNER RPCs with crash/reconciliation tests. Separately, close the concrete Slice B gap: update the claim function whitelist to match the intended command catalog and add narrowly scoped governed User/AccountUser mutation RPCs or equivalent command enforcement before enabling their external adapter. These must remain SECURITY INVOKER, preserve the current contract/audit triggers and use the existing command-claim table. Do not introduce a parallel source of truth.
+
+
+## Follow-on role-integrity gap (observed while reviewing 0078)
+
+The `enforce_chatwoot_account_membership_contract` trigger verifies that the row's *declared* `effective_smart_role` maps OWNER to Chatwoot administrator and other supported roles to agent. It verifies that a Smart user belongs to the Organization. It does **not** compare the declared effective role with current `organization_members.role` or applicable `member_scope_assignments`. Slice B also grants direct service-role INSERT/UPDATE. Therefore a future writer must never accept the row's effective role as authority: in particular, it must not project Chatwoot administrator for an Organization member who is not currently OWNER. OWNER demotion with an already-live administrator projection also needs an ordering/reconciliation guard before live activation.
+
+Before User/AccountUser orchestration, verify the canonical scope resolution rules from the current control plane, add a narrow governed write path that recomputes them, and add reverse role-change tests. Do not solve this by making every Organization VIEWER ineligible if a valid Business scope assignment grants an agent role; the correct effective scope needs evidence. No membership mutation is enabled by C3B Account PRs #205–#207.
