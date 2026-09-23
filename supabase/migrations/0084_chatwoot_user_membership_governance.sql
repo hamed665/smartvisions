@@ -1004,11 +1004,6 @@ begin
     raise exception 'verified external Chatwoot role does not match canonical projection';
   end if;
 
-  if v_current.version <> p_expected_version then
-    raise exception 'Chatwoot Account membership version conflict; current version is %',
-      v_current.version;
-  end if;
-
   if v_current.chatwoot_account_user_id is not null
      and p_chatwoot_account_user_id is not null
      and v_current.chatwoot_account_user_id <> p_chatwoot_account_user_id
@@ -1057,6 +1052,11 @@ begin
   if not v_claim.is_new then
     perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
     return v_current;
+  end if;
+
+  if v_current.version <> p_expected_version then
+    raise exception 'Chatwoot Account membership version conflict; current version is %',
+      v_current.version;
   end if;
 
   update public.chatwoot_account_memberships
