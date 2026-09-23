@@ -26,10 +26,12 @@ Smart Visions uses a reproducible source-build overlay:
 4. verify the upstream version and Community/Enterprise license boundary;
 5. apply only ordered patches from `ops/chatwoot/patches/`;
 6. reject any patch that modifies `enterprise/`;
-7. generate source provenance;
-8. build using the pinned upstream source Dockerfile;
-9. inspect the resulting image;
-10. on trusted `main`, publish an immutable Smart Visions image to GHCR.
+7. remove upstream `enterprise/` from the Production build tree entirely;
+8. set `DISABLE_ENTERPRISE=true` as defense in depth;
+9. generate source provenance;
+10. build using the pinned upstream source Dockerfile;
+11. inspect the resulting image and prove `/app/enterprise` is absent;
+12. on trusted `main`, publish an immutable Smart Visions image to GHCR.
 
 The upstream Chatwoot source tree is therefore used directly, but it is not copied into Smart Core Git history.
 
