@@ -41,6 +41,7 @@ function setup(input: {
   assignments?: Assignment[];
   assignmentError?: boolean;
   memberOrganizationId?: string;
+  authError?: boolean;
 }) {
   const reads: string[] = [];
   const assignmentFilters: string[] = [];
@@ -82,7 +83,11 @@ function setup(input: {
   serviceClientFactory.mockReturnValue(serviceSupabase);
 
   const supabase = {
-    auth: { getUser: vi.fn(async () => ({ data: { user: { id: OWNER } }, error: null })) },
+    auth: {
+      getUser: vi.fn(async () => input.authError
+        ? { data: { user: null }, error: { message: 'unauthenticated' } }
+        : { data: { user: { id: OWNER } }, error: null }),
+    },
   } as unknown as SupabaseClient;
 
   return { supabase, reads, assignmentFilters };
@@ -193,6 +198,14 @@ describe('Business-wide Chatwoot membership role read', () => {
       'brands',
       'member_scope_assignments',
     ]);
+  });
+
+  it('does not create a service client when caller authentication fails', async () => {
+    serviceClientFactory.mockClear();
+    const { supabase } = setup({ authError: true });
+    await expect(readBusinessWideChatwootRole({ supabase, ...args }))
+      .rejects.toThrow('unavailable');
+    expect(serviceClientFactory).not.toHaveBeenCalled();
   });
 
   it('rejects a non-OWNER reader, archived Brand, or incomplete canonical read', async () => {
