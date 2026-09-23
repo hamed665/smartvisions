@@ -251,6 +251,14 @@ create index if not exists crm_custom_field_values_deal_read_idx
 create index if not exists crm_custom_field_options_definition_idx
   on public.crm_custom_field_options(organization_id, definition_id, position);
 
+create index if not exists crm_custom_field_definitions_list_idx
+  on public.crm_custom_field_definitions(organization_id, field_key, id);
+
+create index if not exists crm_custom_field_values_definition_contract_fk_idx
+  on public.crm_custom_field_values(
+    organization_id, definition_id, entity_type, data_type
+  );
+
 create index if not exists crm_custom_field_definitions_created_by_fk_idx
   on public.crm_custom_field_definitions(organization_id, created_by_user_id);
 
