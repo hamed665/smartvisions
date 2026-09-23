@@ -11,16 +11,17 @@ Production changes are promoted only after the repository's safety, CI, migratio
 ## Documents
 
 1. [MASTER_ARCHITECTURE.md](./MASTER_ARCHITECTURE.md) — target product/domain architecture.
-2. [IMPLEMENTATION_MAP.md](./IMPLEMENTATION_MAP.md) — dependency-ordered execution plan.
-3. [SERVICE_CONTRACT_STANDARD.md](./SERVICE_CONTRACT_STANDARD.md) — required contract for every domain/service.
-4. [STATE_EVENT_CATALOG.md](./STATE_EVENT_CATALOG.md) — initial canonical state machines and event naming.
-5. [MIGRATION_FROM_GROWTH_OS.md](./MIGRATION_FROM_GROWTH_OS.md) — reuse/extend/replace decisions for existing production primitives.
-6. [CONTROL_PLANE_FOUNDATION.md](./CONTROL_PLANE_FOUNDATION.md) — Production-evidence Gap Map, compatibility decisions, and Phase 1 domain contract.
-7. [OMNICHANNEL_ADAPTER_BOUNDARY.md](./OMNICHANNEL_ADAPTER_BOUNDARY.md) — Phase 2 evidence, Gap Map, capability matrix and semantic adapter contract.
-8. [CUSTOMER_360_CRM_NORMALIZATION.md](./CUSTOMER_360_CRM_NORMALIZATION.md) — Phase 3 Production evidence, CRM Gap Map, identity-resolution contract and compatibility plan.
-9. [CUSTOM_FIELD_GOVERNANCE_GAP_AUDIT.md](./CUSTOM_FIELD_GOVERNANCE_GAP_AUDIT.md) — Phase 3 Slice 5 governed Custom Field contract and Production evidence.
-10. [SEGMENT_GOVERNANCE_GAP_AUDIT.md](./SEGMENT_GOVERNANCE_GAP_AUDIT.md) — Phase 3 Slice 6 Segment decisions, implementation boundaries and Production closeout.
-11. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
+2. [IMPLEMENTATION_MAP.md](./IMPLEMENTATION_MAP.md) — dependency-ordered execution history and phase map.
+3. [MASTER_PROGRAM_SECTIONS.md](./MASTER_PROGRAM_SECTIONS.md) — stable future execution program using Sections/Work Package IDs instead of future PR numbers.
+4. [SERVICE_CONTRACT_STANDARD.md](./SERVICE_CONTRACT_STANDARD.md) — required contract for every domain/service.
+5. [STATE_EVENT_CATALOG.md](./STATE_EVENT_CATALOG.md) — initial canonical state machines and event naming.
+6. [MIGRATION_FROM_GROWTH_OS.md](./MIGRATION_FROM_GROWTH_OS.md) — reuse/extend/replace decisions for existing production primitives.
+7. [CONTROL_PLANE_FOUNDATION.md](./CONTROL_PLANE_FOUNDATION.md) — Production-evidence Gap Map, compatibility decisions, and Phase 1 domain contract.
+8. [OMNICHANNEL_ADAPTER_BOUNDARY.md](./OMNICHANNEL_ADAPTER_BOUNDARY.md) — Phase 2 evidence, Gap Map, capability matrix and semantic adapter contract.
+9. [CUSTOMER_360_CRM_NORMALIZATION.md](./CUSTOMER_360_CRM_NORMALIZATION.md) — Phase 3 Production evidence, CRM Gap Map, identity-resolution contract and compatibility plan.
+10. [CUSTOM_FIELD_GOVERNANCE_GAP_AUDIT.md](./CUSTOM_FIELD_GOVERNANCE_GAP_AUDIT.md) — Phase 3 Slice 5 governed Custom Field contract and Production evidence.
+11. [SEGMENT_GOVERNANCE_GAP_AUDIT.md](./SEGMENT_GOVERNANCE_GAP_AUDIT.md) — Phase 3 Slice 6 Segment decisions, implementation boundaries and Production closeout.
+12. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
 
 ## Phase 0 exit criteria
 
@@ -66,3 +67,16 @@ Phase 0 is complete only when:
 - Production migration `0076_crm_segment_governance` is live as version `20260923093619`, with zero persistent Segment rows after rollback-only verification and no provider-send delta.
 - Slice 6 deliberately remains LEAD-only + DYNAMIC-only. Snapshot/current-membership persistence and broader entity segmentation remain deferred.
 - Implementation-runtime Cloudflare checkpoint after PR #191 (before docs-only closeout) is `b6ad6482-11e1-4658-97e8-7f5d1a842318`; latest checked heartbeat failed=0 with acquisition/evidence/auto-dispatch SKIPPED and Shadow Mode remained ON.
+
+
+## Stable continuation model
+
+Future work is no longer identified by projected PR numbers.
+
+Use:
+
+`SECTION -> WORK PACKAGE ID -> actual PR evidence`
+
+The current planned continuation cursor is `SECTION COMMUNICATION / COMM-CHATWOOT-SOURCE`, subject to fresh Production verification before implementation.
+
+Chatwoot is explicitly planned as a **source-based Community Edition communication plane**, with Smart Core retaining canonical business truth and provider-action safety. See `MASTER_ARCHITECTURE.md` and `MASTER_PROGRAM_SECTIONS.md`.
