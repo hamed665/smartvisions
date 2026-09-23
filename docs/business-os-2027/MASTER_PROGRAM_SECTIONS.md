@@ -108,6 +108,11 @@ Repository topology rule:
 
 ### COMM-TENANT-BRIDGE — Tenant/business/user mapping
 
+Slice C1 status: **VAULT BOUNDARY IMPLEMENTED ON STACKED DRAFT BRANCH; NOT PRODUCTION**
+
+C1 uses the already-installed Supabase Vault through service-role-only SECURITY INVOKER wrappers. Dynamic API Inbox secrets remain encrypted in Vault and mapping rows keep only `secretref://supabase-vault/<uuid>` references. No live Chatwoot call occurs in C1.
+
+
 Slice B status: **IMPLEMENTED ON STACKED DRAFT BRANCH; NOT MERGED / NOT PRODUCTION**
 
 Slice B adds server-only User/AccountUser/API-Inbox/Team projection contracts. It preserves OWNER as the only first-version Chatwoot administrator; ADMIN and sales roles project to agent, and VIEWER receives no Chatwoot membership. Live Chatwoot provisioning remains deferred to the Candidate adapter slice.
