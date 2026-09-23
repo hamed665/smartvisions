@@ -19,7 +19,7 @@ function marker() {
   };
 }
 
-function setup(input: { claimNew: boolean; role?: string; roles?: string[]; mappingVersionAfterClaim?: number }) {
+function setup(input: { claimNew: boolean; role?: string; roles?: string[]; mappingVersionAfterClaim?: number; mappingBusinessAfterClaim?: string }) {
   const mapping = {
     id: MAPPING_ID,
     organization_id: ORGANIZATION_ID,
@@ -68,7 +68,7 @@ function setup(input: { claimNew: boolean; role?: string; roles?: string[]; mapp
             const version = mappingReads > 0 && input.mappingVersionAfterClaim
               ? input.mappingVersionAfterClaim : mapping.version;
             mappingReads += 1;
-            return { data: { ...mapping, version }, error: null };
+            return { data: { ...mapping, version, tenant_business_id: mappingReads > 1 && input.mappingBusinessAfterClaim ? input.mappingBusinessAfterClaim : BUSINESS_ID }, error: null };
           }
           if (table === 'organization_members') {
             const role = input.roles?.[memberReads] ?? input.role ?? 'OWNER';
@@ -199,6 +199,21 @@ describe('C3B Candidate Account orchestration', () => {
     enabled();
     const { supabase, rpc } = setup({
       claimNew: true, mappingVersionAfterClaim: 2,
+    });
+    const fetchMock = vi.fn();
+    await expect(provisionCandidateChatwootAccount({
+      supabase, organizationId: ORGANIZATION_ID, mappingId: MAPPING_ID,
+      requestKey: REQUEST_KEY, fetchImpl: fetchMock as unknown as typeof fetch,
+    })).rejects.toThrow('changed after external claim');
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('stops before HTTP if tenant Business identity changes after the claim', async () => {
+    enabled();
+    const { supabase, rpc } = setup({
+      claimNew: true,
+      mappingBusinessAfterClaim: '00000000-0000-4000-8000-000000000105',
     });
     const fetchMock = vi.fn();
     await expect(provisionCandidateChatwootAccount({
