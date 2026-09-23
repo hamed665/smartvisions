@@ -84,6 +84,12 @@ jobs:
             exit 1
           fi
 
+      - name: Add Smart Visions Community-safe runtime overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp smartvisions/ops/chatwoot/configure-smartvisions.rb chatwoot/SMARTVISIONS_CONFIGURE.rb
+
       - name: Generate immutable source provenance
         shell: bash
         run: |
@@ -128,6 +134,7 @@ jobs:
             -lc '
               test "$(cat /app/.git_sha)" = "$EXPECTED_UPSTREAM"
               test -f /app/SMARTVISIONS_SOURCE_PROVENANCE.json
+              test -f /app/SMARTVISIONS_CONFIGURE.rb
               grep -F "\"smartvisionsCommit\": \"$EXPECTED_SMARTVISIONS\"" /app/SMARTVISIONS_SOURCE_PROVENANCE.json
               grep -F "\"providerAuthority\": \"SMART_CORE\"" /app/SMARTVISIONS_SOURCE_PROVENANCE.json
               ruby --version
