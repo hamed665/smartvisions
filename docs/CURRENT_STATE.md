@@ -36,7 +36,7 @@ This is the current operational handoff for Growth OS. Current `main`, routed Cl
 - Production migration created 0 Segment identities and 0 Segment versions. Rollback-only Production smoke verified create -> evaluate -> semantic version update -> archive -> reactivate -> audit -> deferred constraints, then left 0 Segment rows, 0 version rows and 0 audit fixture residue.
 - Supabase Security Advisor after 0076 is unchanged from baseline. Performance Advisor adds only the four expected new Segment/FK/list indexes as unused on an intentionally empty table and reports no new unindexed-FK defect.
 - Zero Email/WhatsApp outbound rows were created from the 0076 promotion through verification.
-- Latest routed Cloudflare Worker heartbeat after Slice 6: `__SLICE6_WORKER_VERSION__`; failed=0, acquisition/evidence/auto-dispatch SKIPPED.
+- Implementation-runtime Cloudflare Worker checkpoint after PR #191 (before docs-only closeout): `b6ad6482-11e1-4658-97e8-7f5d1a842318`; failed=0, acquisition/evidence/auto-dispatch SKIPPED.
 - Production cron: exactly `*/2 * * * *`
 - Release candidate: no scheduled trigger
 - Old Vercel deployment: frozen rollback/history only; not a Production health source
