@@ -14,7 +14,7 @@ create table if not exists public.communication_channel_bindings (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   tenant_business_id uuid not null,
-  branch_id uuid,
+  branch_id uuid references public.branches(id) on delete restrict,
   integration_connection_id uuid not null references public.integration_connections(id) on delete restrict,
   channel text not null check (channel in ('EMAIL','WHATSAPP')),
   status text not null default 'ACTIVE' check (status in ('ACTIVE','ARCHIVED')),
@@ -71,7 +71,7 @@ create table if not exists public.chatwoot_account_mappings (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   tenant_business_id uuid not null,
-  chatwoot_account_id bigint check (chatwoot_account_id is null or chatwoot_account_id > 0),
+  chatwoot_account_id integer check (chatwoot_account_id is null or chatwoot_account_id > 0),
   status text not null default 'PROVISIONING'
     check (status in ('PROVISIONING','ACTIVE','DEGRADED','ARCHIVED')),
   version integer not null default 1 check (version >= 1),
@@ -251,6 +251,28 @@ begin
      or v_connection_channel <> new.channel
   then
     raise exception 'integration connection does not match communication binding';
+  end if;
+
+  if tg_op = 'UPDATE'
+     and old.status = 'ACTIVE'
+     and new.status = 'ARCHIVED'
+     and exists (
+       select 1
+       from public.chatwoot_account_mappings cam
+       where cam.organization_id = new.organization_id
+         and cam.tenant_business_id = new.tenant_business_id
+         and cam.status in ('PROVISIONING','ACTIVE','DEGRADED')
+     )
+     and not exists (
+       select 1
+       from public.communication_channel_bindings sibling
+       where sibling.organization_id = new.organization_id
+         and sibling.tenant_business_id = new.tenant_business_id
+         and sibling.status = 'ACTIVE'
+         and sibling.id <> old.id
+     )
+  then
+    raise exception 'archive live Chatwoot Account mapping before last communication binding';
   end if;
 
   if new.status = 'ACTIVE' then
@@ -551,6 +573,7 @@ begin
       status,
       version,
       last_request_key,
+      last_verified_at,
       created_by_user_id,
       updated_by_user_id
     ) values (
@@ -562,6 +585,7 @@ begin
       'ACTIVE',
       1,
       v_request_key,
+      now(),
       v_actor,
       v_actor
     )
@@ -752,7 +776,7 @@ create or replace function public.set_chatwoot_account_mapping_state(
   p_mapping_id uuid,
   p_expected_version integer,
   p_status text,
-  p_chatwoot_account_id bigint,
+  p_chatwoot_account_id integer,
   p_last_error_code text,
   p_request_key text
 )
@@ -769,7 +793,7 @@ declare
   v_status text := upper(trim(coalesce(p_status, '')));
   v_request_key text := trim(coalesce(p_request_key, ''));
   v_error_code text := nullif(upper(trim(coalesce(p_last_error_code, ''))), '');
-  v_account_id bigint;
+  v_account_id integer;
 begin
   if v_actor is null or not public.chatwoot_bridge_can_manage(p_organization_id) then
     raise exception 'Chatwoot bridge mutation not permitted';
@@ -948,8 +972,8 @@ grant execute on function public.create_chatwoot_account_mapping(
 ) to authenticated;
 
 revoke all on function public.set_chatwoot_account_mapping_state(
-  uuid, uuid, integer, text, bigint, text, text
+  uuid, uuid, integer, text, integer, text, text
 ) from public, anon, authenticated, service_role;
 grant execute on function public.set_chatwoot_account_mapping_state(
-  uuid, uuid, integer, text, bigint, text, text
+  uuid, uuid, integer, text, integer, text, text
 ) to authenticated;
