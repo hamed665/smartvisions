@@ -1,0 +1,159 @@
+name: Chatwoot Source Image
+
+on:
+  pull_request:
+    paths:
+      - "ops/chatwoot/**"
+      - "scripts/chatwoot/**"
+      - ".github/workflows/chatwoot-source-image.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "ops/chatwoot/**"
+      - "scripts/chatwoot/**"
+      - ".github/workflows/chatwoot-source-image.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: chatwoot-source-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CHATWOOT_UPSTREAM_REPOSITORY: chatwoot/chatwoot
+  CHATWOOT_UPSTREAM_TAG: v4.18.0
+  CHATWOOT_UPSTREAM_COMMIT: 9f920b549c14491a4e587687a3eed5d21c6ccc7d
+  CHATWOOT_IMAGE_REPOSITORY: ghcr.io/hamed665/smartvisions-chatwoot
+
+jobs:
+  source-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout Smart Visions source
+        uses: actions/checkout@v4
+        with:
+          path: smartvisions
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Verify Smart Visions source lock
+        run: |
+          node smartvisions/scripts/chatwoot/verify-source-lock.mjs \
+            smartvisions/ops/chatwoot/source.lock.json
+
+      - name: Checkout pinned Chatwoot Community source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CHATWOOT_UPSTREAM_REPOSITORY }}
+          ref: ${{ env.CHATWOOT_UPSTREAM_COMMIT }}
+          path: chatwoot
+          fetch-depth: 1
+
+      - name: Verify exact upstream source and license boundary
+        run: |
+          node smartvisions/scripts/chatwoot/verify-source-lock.mjs \
+            smartvisions/ops/chatwoot/source.lock.json \
+            --upstream-dir chatwoot
+
+      - name: Apply Smart Visions Community patch stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          patches=(smartvisions/ops/chatwoot/patches/*.patch)
+
+          for patch in "${patches[@]}"; do
+            echo "Applying $patch"
+            git -C chatwoot apply --check "$GITHUB_WORKSPACE/$patch"
+            git -C chatwoot apply "$GITHUB_WORKSPACE/$patch"
+          done
+
+          enterprise_changes="$(git -C chatwoot diff --name-only "$CHATWOOT_UPSTREAM_COMMIT" -- enterprise/)"
+          if [[ -n "$enterprise_changes" ]]; then
+            echo "Smart Visions patch stack modified proprietary enterprise/ source:"
+            echo "$enterprise_changes"
+            exit 1
+          fi
+
+      - name: Generate immutable source provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > chatwoot/SMARTVISIONS_SOURCE_PROVENANCE.json <<EOF
+          {
+            "workPackage": "COMM-CHATWOOT-SOURCE",
+            "upstreamRepository": "${CHATWOOT_UPSTREAM_REPOSITORY}",
+            "upstreamTag": "${CHATWOOT_UPSTREAM_TAG}",
+            "upstreamCommit": "${CHATWOOT_UPSTREAM_COMMIT}",
+            "smartvisionsCommit": "${GITHUB_SHA}",
+            "providerAuthority": "SMART_CORE",
+            "initialChatwootChannel": "Channel::Api"
+          }
+          EOF
+
+      - name: Build Chatwoot from pinned source
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="${CHATWOOT_IMAGE_REPOSITORY}:${CHATWOOT_UPSTREAM_TAG}-sv-${GITHUB_SHA}"
+          echo "CHATWOOT_IMAGE=$image" >> "$GITHUB_ENV"
+
+          docker build \
+            --file chatwoot/docker/Dockerfile \
+            --label "org.opencontainers.image.source=https://github.com/hamed665/smartvisions" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --label "io.smartvisions.chatwoot.upstream=${CHATWOOT_UPSTREAM_COMMIT}" \
+            --tag "$image" \
+            chatwoot
+
+      - name: Inspect built source provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            --entrypoint sh \
+            -e EXPECTED_UPSTREAM="${CHATWOOT_UPSTREAM_COMMIT}" \
+            -e EXPECTED_SMARTVISIONS="${GITHUB_SHA}" \
+            "${CHATWOOT_IMAGE}" \
+            -lc '
+              test "$(cat /app/.git_sha)" = "$EXPECTED_UPSTREAM"
+              test -f /app/SMARTVISIONS_SOURCE_PROVENANCE.json
+              grep -F "\"smartvisionsCommit\": \"$EXPECTED_SMARTVISIONS\"" /app/SMARTVISIONS_SOURCE_PROVENANCE.json
+              grep -F "\"providerAuthority\": \"SMART_CORE\"" /app/SMARTVISIONS_SOURCE_PROVENANCE.json
+              ruby --version
+              node --version
+            '
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+
+      - name: Publish immutable source image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker push "${CHATWOOT_IMAGE}"
+          digest="$(docker inspect --format='{{index .RepoDigests 0}}' "${CHATWOOT_IMAGE}" 2>/dev/null || true)"
+          {
+            echo "### Chatwoot source image"
+            echo ""
+            echo "- Upstream: \`${CHATWOOT_UPSTREAM_TAG}@${CHATWOOT_UPSTREAM_COMMIT}\`"
+            echo "- Smart Visions: \`${GITHUB_SHA}\`"
+            echo "- Image: \`${CHATWOOT_IMAGE}\`"
+            if [[ -n "$digest" ]]; then
+              echo "- Digest: \`$digest\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
