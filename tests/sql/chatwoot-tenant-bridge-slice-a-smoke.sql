@@ -348,9 +348,61 @@ begin
     'bridge-binding-reactivate-1'
   );
 end;
-$$;
+$;
 
-do $$
+do $
+begin
+  begin
+    update public.branches
+       set status='ARCHIVED'
+     where id='30000000-0000-0000-0000-00000000c101';
+    raise exception 'Branch with ACTIVE communication binding unexpectedly archived';
+  exception
+    when others then
+      if sqlerrm not like 'archive communication binding before Branch%' then
+        raise;
+      end if;
+  end;
+
+  begin
+    update public.tenant_businesses
+       set status='ARCHIVED'
+     where id='20000000-0000-0000-0000-00000000c101';
+    raise exception 'tenant Business with ACTIVE communication binding unexpectedly archived';
+  exception
+    when others then
+      if sqlerrm not like 'archive Chatwoot bridge resources before tenant Business%' then
+        raise;
+      end if;
+  end;
+end;
+$;
+
+do $
+declare
+  v_mapping_id uuid := (select value::uuid from bridge_test_state where key='mapping_id');
+begin
+  begin
+    perform public.set_chatwoot_account_mapping_state(
+      '00000000-0000-0000-0000-00000000c101',
+      v_mapping_id,
+      5,
+      'ARCHIVED',
+      101,
+      null,
+      'bridge-account-archived-mutate-forbidden'
+    );
+    raise exception 'ARCHIVED mapping unexpectedly accepted another mutation';
+  exception
+    when others then
+      if sqlerrm not like 'ARCHIVED Chatwoot Account mapping is terminal%' then
+        raise;
+      end if;
+  end;
+end;
+$;
+
+do $
 declare
   v_binding_id uuid := (select value::uuid from bridge_test_state where key='binding_id');
   v_mapping_id uuid := (select value::uuid from bridge_test_state where key='mapping_id');
