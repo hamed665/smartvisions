@@ -156,7 +156,8 @@ export async function provisionCandidateChatwootAccount(input: {
     tenantBusinessId: mapping.tenant_business_id,
   });
   mapping = await loadMapping(input);
-  if (mapping.version !== claim.mapping_version ||
+  if (mapping.tenant_business_id !== claim.tenant_business_id ||
+      mapping.version !== claim.mapping_version ||
       (mapping.status !== 'PROVISIONING' && mapping.status !== 'DEGRADED') ||
       mapping.chatwoot_account_id !== null) {
     return fail('Chatwoot Account mapping changed after external claim');
