@@ -54,6 +54,8 @@ Verify:
 - exact upstream commit `9f920b549c14491a4e587687a3eed5d21c6ccc7d`;
 - Smart Visions commit;
 - no Smart Visions patch under `enterprise/`;
+- upstream `enterprise/` removed before image build;
+- `DISABLE_ENTERPRISE=true` retained as runtime defense in depth;
 - source lock validation;
 - successful source Docker build;
 - `/app/.git_sha` equals the pinned upstream commit;
