@@ -104,7 +104,7 @@ export async function provisionCandidateChatwootAccount(input: {
   }
 
   let mapping = await loadMapping(input);
-  const name = await requireActiveOwnerAndBusiness({
+  let name = await requireActiveOwnerAndBusiness({
     supabase: input.supabase,
     organizationId: input.organizationId,
     tenantBusinessId: mapping.tenant_business_id,
@@ -150,7 +150,7 @@ export async function provisionCandidateChatwootAccount(input: {
 
   // Recheck after the durable claim. A revoked owner or archived Business
   // must never start an external mutation.
-  await requireActiveOwnerAndBusiness({
+  name = await requireActiveOwnerAndBusiness({
     supabase: input.supabase,
     organizationId: input.organizationId,
     tenantBusinessId: mapping.tenant_business_id,
