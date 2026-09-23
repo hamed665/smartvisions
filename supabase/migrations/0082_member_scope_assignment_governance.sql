@@ -337,7 +337,7 @@ begin
       end if;
 
       if v_existing.command_type <> v_command_type
-         or v_existing.assignment_id <> v_assignment_id
+         or (p_assignment_id is not null and v_existing.assignment_id <> p_assignment_id)
          or v_existing.applied_version <> p_applied_version
          or v_existing.payload_hash <> v_payload_hash
       then
