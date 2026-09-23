@@ -2,6 +2,11 @@
 
 begin;
 
+create temp table bridge_test_state (
+  key text primary key,
+  value text not null
+) on commit drop;
+
 insert into auth.users(id) values
   ('00000000-0000-0000-0000-00000000b101'),
   ('00000000-0000-0000-0000-00000000b102'),
@@ -42,41 +47,41 @@ insert into public.integration_connections(
 set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000b101', false);
 
-select (public.create_communication_channel_binding(
+insert into bridge_test_state(key, value)
+select 'binding_id', (public.create_communication_channel_binding(
   '00000000-0000-0000-0000-00000000c101',
   '20000000-0000-0000-0000-00000000c101',
   '30000000-0000-0000-0000-00000000c101',
   '40000000-0000-0000-0000-00000000c101',
   'EMAIL',
   'bridge-binding-create-1'
-)).id as binding_id \gset
+)).id::text;
 
 do $$
+declare
+  v_binding_id uuid := (select value::uuid from bridge_test_state where key='binding_id');
+  v_replay_id uuid;
 begin
   if not exists (
     select 1 from public.communication_channel_bindings
-    where id = :'binding_id'::uuid
+    where id = v_binding_id
       and status = 'ACTIVE'
       and version = 1
       and channel = 'EMAIL'
   ) then
     raise exception 'communication binding create failed';
   end if;
-end;
-$$;
 
-select (public.create_communication_channel_binding(
-  '00000000-0000-0000-0000-00000000c101',
-  '20000000-0000-0000-0000-00000000c101',
-  '30000000-0000-0000-0000-00000000c101',
-  '40000000-0000-0000-0000-00000000c101',
-  'EMAIL',
-  'bridge-binding-create-1'
-)).id as replay_binding_id \gset
+  select (public.create_communication_channel_binding(
+    '00000000-0000-0000-0000-00000000c101',
+    '20000000-0000-0000-0000-00000000c101',
+    '30000000-0000-0000-0000-00000000c101',
+    '40000000-0000-0000-0000-00000000c101',
+    'EMAIL',
+    'bridge-binding-create-1'
+  )).id into v_replay_id;
 
-do $$
-begin
-  if :'replay_binding_id'::uuid <> :'binding_id'::uuid then
+  if v_replay_id <> v_binding_id then
     raise exception 'binding request-key replay did not return same row';
   end if;
 
@@ -172,45 +177,46 @@ begin
 end;
 $$;
 
-select (public.create_chatwoot_account_mapping(
+insert into bridge_test_state(key, value)
+select 'mapping_id', (public.create_chatwoot_account_mapping(
   '00000000-0000-0000-0000-00000000c101',
   '20000000-0000-0000-0000-00000000c101',
   'bridge-account-create-1'
-)).id as mapping_id \gset
-
-select (public.create_chatwoot_account_mapping(
-  '00000000-0000-0000-0000-00000000c101',
-  '20000000-0000-0000-0000-00000000c101',
-  'bridge-account-create-1'
-)).id as replay_mapping_id \gset
+)).id::text;
 
 do $$
+declare
+  v_mapping_id uuid := (select value::uuid from bridge_test_state where key='mapping_id');
+  v_replay_id uuid;
+  v_version integer;
 begin
-  if :'mapping_id'::uuid <> :'replay_mapping_id'::uuid then
+  select (public.create_chatwoot_account_mapping(
+    '00000000-0000-0000-0000-00000000c101',
+    '20000000-0000-0000-0000-00000000c101',
+    'bridge-account-create-1'
+  )).id into v_replay_id;
+
+  if v_mapping_id <> v_replay_id then
     raise exception 'account mapping request-key replay did not return same row';
   end if;
-end;
-$$;
 
-select (public.set_chatwoot_account_mapping_state(
-  '00000000-0000-0000-0000-00000000c101',
-  :'mapping_id'::uuid,
-  1,
-  'ACTIVE',
-  101,
-  null,
-  'bridge-account-active-1'
-)).version as active_version \gset
+  select (public.set_chatwoot_account_mapping_state(
+    '00000000-0000-0000-0000-00000000c101',
+    v_mapping_id,
+    1,
+    'ACTIVE',
+    101,
+    null,
+    'bridge-account-active-1'
+  )).version into v_version;
 
-do $$
-begin
-  if :'active_version'::integer <> 2 then
+  if v_version <> 2 then
     raise exception 'account mapping ACTIVE transition did not increment version';
   end if;
 
   if not exists (
     select 1 from public.chatwoot_account_mappings
-    where id=:'mapping_id'::uuid
+    where id=v_mapping_id
       and status='ACTIVE'
       and chatwoot_account_id=101
       and last_verified_at is not null
@@ -218,33 +224,25 @@ begin
   ) then
     raise exception 'account mapping ACTIVE state evidence invalid';
   end if;
-end;
-$$;
 
-select (public.set_chatwoot_account_mapping_state(
-  '00000000-0000-0000-0000-00000000c101',
-  :'mapping_id'::uuid,
-  1,
-  'ACTIVE',
-  101,
-  null,
-  'bridge-account-active-1'
-)).version as replay_active_version \gset
+  select (public.set_chatwoot_account_mapping_state(
+    '00000000-0000-0000-0000-00000000c101',
+    v_mapping_id,
+    1,
+    'ACTIVE',
+    101,
+    null,
+    'bridge-account-active-1'
+  )).version into v_version;
 
-do $$
-begin
-  if :'replay_active_version'::integer <> 2 then
+  if v_version <> 2 then
     raise exception 'account state replay did not return current logical result';
   end if;
-end;
-$$;
 
-do $$
-begin
   begin
     perform public.set_chatwoot_account_mapping_state(
       '00000000-0000-0000-0000-00000000c101',
-      :'mapping_id'::uuid,
+      v_mapping_id,
       2,
       'ACTIVE',
       102,
@@ -258,45 +256,41 @@ begin
         raise;
       end if;
   end;
-end;
-$$;
 
-perform public.set_chatwoot_account_mapping_state(
-  '00000000-0000-0000-0000-00000000c101',
-  :'mapping_id'::uuid,
-  2,
-  'DEGRADED',
-  101,
-  'UPSTREAM_TIMEOUT',
-  'bridge-account-degraded-1'
-);
+  perform public.set_chatwoot_account_mapping_state(
+    '00000000-0000-0000-0000-00000000c101',
+    v_mapping_id,
+    2,
+    'DEGRADED',
+    101,
+    'UPSTREAM_TIMEOUT',
+    'bridge-account-degraded-1'
+  );
 
-perform public.set_chatwoot_account_mapping_state(
-  '00000000-0000-0000-0000-00000000c101',
-  :'mapping_id'::uuid,
-  3,
-  'ACTIVE',
-  101,
-  null,
-  'bridge-account-recovered-1'
-);
+  perform public.set_chatwoot_account_mapping_state(
+    '00000000-0000-0000-0000-00000000c101',
+    v_mapping_id,
+    3,
+    'ACTIVE',
+    101,
+    null,
+    'bridge-account-recovered-1'
+  );
 
-perform public.set_chatwoot_account_mapping_state(
-  '00000000-0000-0000-0000-00000000c101',
-  :'mapping_id'::uuid,
-  4,
-  'ARCHIVED',
-  101,
-  null,
-  'bridge-account-archive-1'
-);
+  perform public.set_chatwoot_account_mapping_state(
+    '00000000-0000-0000-0000-00000000c101',
+    v_mapping_id,
+    4,
+    'ARCHIVED',
+    101,
+    null,
+    'bridge-account-archive-1'
+  );
 
-do $$
-begin
   begin
     perform public.set_chatwoot_account_mapping_state(
       '00000000-0000-0000-0000-00000000c101',
-      :'mapping_id'::uuid,
+      v_mapping_id,
       5,
       'ACTIVE',
       101,
@@ -313,20 +307,27 @@ begin
 end;
 $$;
 
-select (public.set_communication_channel_binding_lifecycle(
-  '00000000-0000-0000-0000-00000000c101',
-  :'binding_id'::uuid,
-  1,
-  'ARCHIVED',
-  'bridge-binding-archive-1'
-)).version as binding_archived_version \gset
-
 do $$
+declare
+  v_binding_id uuid := (select value::uuid from bridge_test_state where key='binding_id');
+  v_version integer;
 begin
+  select (public.set_communication_channel_binding_lifecycle(
+    '00000000-0000-0000-0000-00000000c101',
+    v_binding_id,
+    1,
+    'ARCHIVED',
+    'bridge-binding-archive-1'
+  )).version into v_version;
+
+  if v_version <> 2 then
+    raise exception 'binding archive did not increment version';
+  end if;
+
   begin
     perform public.set_communication_channel_binding_lifecycle(
       '00000000-0000-0000-0000-00000000c101',
-      :'binding_id'::uuid,
+      v_binding_id,
       1,
       'ACTIVE',
       'bridge-binding-stale-version'
@@ -338,24 +339,27 @@ begin
         raise;
       end if;
   end;
+
+  perform public.set_communication_channel_binding_lifecycle(
+    '00000000-0000-0000-0000-00000000c101',
+    v_binding_id,
+    2,
+    'ACTIVE',
+    'bridge-binding-reactivate-1'
+  );
 end;
 $$;
 
-perform public.set_communication_channel_binding_lifecycle(
-  '00000000-0000-0000-0000-00000000c101',
-  :'binding_id'::uuid,
-  2,
-  'ACTIVE',
-  'bridge-binding-reactivate-1'
-);
-
 do $$
+declare
+  v_binding_id uuid := (select value::uuid from bridge_test_state where key='binding_id');
+  v_mapping_id uuid := (select value::uuid from bridge_test_state where key='mapping_id');
 begin
   if not exists (
     select 1 from public.audit_logs
     where organization_id='00000000-0000-0000-0000-00000000c101'
       and action='COMMUNICATION_CHANNEL_BINDING_CREATED'
-      and entity_id=:'binding_id'
+      and entity_id=v_binding_id::text
       and tenant_business_id='20000000-0000-0000-0000-00000000c101'
   ) then
     raise exception 'communication binding audit event missing';
@@ -365,7 +369,7 @@ begin
     select 1 from public.audit_logs
     where organization_id='00000000-0000-0000-0000-00000000c101'
       and action='CHATWOOT_ACCOUNT_MAPPING_ACTIVATED'
-      and entity_id=:'mapping_id'
+      and entity_id=v_mapping_id::text
       and after_data->>'chatwoot_account_id'='101'
   ) then
     raise exception 'Chatwoot Account activation audit event missing';
