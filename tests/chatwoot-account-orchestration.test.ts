@@ -19,7 +19,7 @@ function marker() {
   };
 }
 
-function setup(input: { claimNew: boolean; role?: string; roles?: string[]; mappingVersionAfterClaim?: number; mappingBusinessAfterClaim?: string }) {
+function setup(input: { claimNew: boolean; role?: string; roles?: string[]; mappingVersionAfterClaim?: number; mappingBusinessAfterClaim?: string; ambiguousClaim?: boolean }) {
   const mapping = {
     id: MAPPING_ID,
     organization_id: ORGANIZATION_ID,
@@ -40,7 +40,10 @@ function setup(input: { claimNew: boolean; role?: string; roles?: string[]; mapp
   const rpc = vi.fn(async (name: string) => {
     if (name === 'claim_chatwoot_account_external_create') {
       return {
-        data: [{
+        data: input.ambiguousClaim ? [
+          { may_attempt_create: true, mapping_id: MAPPING_ID, tenant_business_id: BUSINESS_ID, mapping_version: 1 },
+          { may_attempt_create: true, mapping_id: MAPPING_ID, tenant_business_id: BUSINESS_ID, mapping_version: 1 },
+        ] : [{
           may_attempt_create: input.claimNew,
           mapping_id: MAPPING_ID,
           tenant_business_id: BUSINESS_ID,
@@ -220,6 +223,18 @@ describe('C3B Candidate Account orchestration', () => {
       supabase, organizationId: ORGANIZATION_ID, mappingId: MAPPING_ID,
       requestKey: REQUEST_KEY, fetchImpl: fetchMock as unknown as typeof fetch,
     })).rejects.toThrow('changed after external claim');
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects an ambiguous claim response before external HTTP', async () => {
+    enabled();
+    const { supabase, rpc } = setup({ claimNew: true, ambiguousClaim: true });
+    const fetchMock = vi.fn();
+    await expect(provisionCandidateChatwootAccount({
+      supabase, organizationId: ORGANIZATION_ID, mappingId: MAPPING_ID,
+      requestKey: REQUEST_KEY, fetchImpl: fetchMock as unknown as typeof fetch,
+    })).rejects.toThrow('claim is unavailable');
     expect(rpc).toHaveBeenCalledTimes(1);
     expect(fetchMock).not.toHaveBeenCalled();
   });
