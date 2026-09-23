@@ -353,3 +353,18 @@ The proposed shape keeps the eventual mutation writer SECURITY INVOKER. Only the
 The PostgreSQL 17 rollback-only smoke proves the intended contract: direct organization_members target-row access remains self-read under RLS; the private primitive returns only the canonical role for a current Organization OWNER; BUSINESS outranks BRAND; conditional attributes do not grant without trusted context; non-OWNER/cross-tenant/archived lineage calls fail closed; anon/service_role lack helper access; public.is_org_owner remains SECURITY INVOKER.
 
 No migration or runtime activation is included. Do not implement or activate external User/AccountUser membership until #210 exact-head CI executes real steps successfully and the security boundary is reviewed.
+
+
+## C3B reverse-role mutation interlock audit — next stacked Draft
+
+Fresh Production review found two different IAM mutation boundaries.
+
+`organization_members` is currently effectively read-only through normal authenticated runtime: RLS exposes only self-read SELECT, service_role has SELECT only, and no normal member-role mutation RPC exists. Future Organization member management must therefore adopt Chatwoot reverse-role safety before it becomes writable.
+
+`member_scope_assignments` is already OWNER-mutable for SELECT/INSERT/UPDATE/DELETE and service_role has table DML privileges, but the table has no version column and no governed request-key/expected-version mutation RPC. This is the first real pre-activation reverse-role gap.
+
+The required invariant is now explicit: external Chatwoot privilege may be equal to or weaker than Smart Core, never stronger. Promotions may commit Smart Core first and temporarily leave Chatwoot under-privileged. Demotions must be external-first: administrator -> agent must be verified before canonical OWNER demotion; membership -> VIEWER/no membership must be removed and the mapping archived before canonical authority is reduced.
+
+BRAND assignment changes must evaluate every affected ACTIVE tenant Business. Do not perform Chatwoot HTTP inside a DB transaction. Use external claim/reconciliation first for demotions, then permit the canonical mutation only from persisted safe mapping evidence. Ambiguous external outcomes remain reconciliation-only.
+
+Before external User/AccountUser membership activation, add a governed versioned scope-mutation boundary and prove the interlock with PostgreSQL 17 rollback + mock orchestration tests. Direct service-role IAM or Chatwoot mapping writes are not acceptable shortcuts.
