@@ -19,7 +19,7 @@ function marker() {
   };
 }
 
-function setup(input: { claimNew: boolean; role?: string; roles?: string[]; mappingVersionAfterClaim?: number; mappingBusinessAfterClaim?: string; ambiguousClaim?: boolean }) {
+function setup(input: { claimNew: boolean; role?: string; roles?: string[]; mappingVersionAfterClaim?: number; mappingBusinessAfterClaim?: string; ambiguousClaim?: boolean; replayClaimAfterFirst?: boolean; failStateOnce?: boolean }) {
   const mapping = {
     id: MAPPING_ID,
     organization_id: ORGANIZATION_ID,
@@ -37,14 +37,19 @@ function setup(input: { claimNew: boolean; role?: string; roles?: string[]; mapp
   const tableReads: string[] = [];
   let memberReads = 0;
   let mappingReads = 0;
+  let claimCalls = 0;
+  let stateCalls = 0;
   const rpc = vi.fn(async (name: string) => {
     if (name === 'claim_chatwoot_account_external_create') {
+      const mayAttemptCreate = claimCalls > 0 && input.replayClaimAfterFirst
+        ? false : input.claimNew;
+      claimCalls += 1;
       return {
         data: input.ambiguousClaim ? [
           { may_attempt_create: true, mapping_id: MAPPING_ID, tenant_business_id: BUSINESS_ID, mapping_version: 1 },
           { may_attempt_create: true, mapping_id: MAPPING_ID, tenant_business_id: BUSINESS_ID, mapping_version: 1 },
         ] : [{
-          may_attempt_create: input.claimNew,
+          may_attempt_create: mayAttemptCreate,
           mapping_id: MAPPING_ID,
           tenant_business_id: BUSINESS_ID,
           mapping_version: 1,
@@ -53,6 +58,10 @@ function setup(input: { claimNew: boolean; role?: string; roles?: string[]; mapp
       };
     }
     if (name === 'set_chatwoot_account_mapping_state') {
+      stateCalls += 1;
+      if (input.failStateOnce && stateCalls === 1) {
+        return { data: null, error: { message: 'network timeout' } };
+      }
       return { data: updated, error: null };
     }
     throw new Error('unexpected RPC');
@@ -187,6 +196,36 @@ describe('C3B Candidate Account orchestration', () => {
     })).rejects.toThrow('Multiple Chatwoot Accounts');
     expect(fetchMock.mock.calls.map((call) => call[1]?.method)).toEqual(['GET']);
     expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('reconciles a mapping commit timeout on replay without a second POST', async () => {
+    enabled();
+    const { supabase, rpc } = setup({
+      claimNew: true, replayClaimAfterFirst: true, failStateOnce: true,
+    });
+    const projected = {
+      id: 51, name: 'Canonical Business', custom_attributes: marker(),
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(projected), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([projected]), { status: 200 }));
+    const input = {
+      supabase, organizationId: ORGANIZATION_ID, mappingId: MAPPING_ID,
+      requestKey: REQUEST_KEY, fetchImpl: fetchMock as unknown as typeof fetch,
+    };
+    await expect(provisionCandidateChatwootAccount(input)).rejects.toThrow();
+    const mapping = await provisionCandidateChatwootAccount(input);
+    expect(mapping.chatwoot_account_id).toBe(51);
+    expect(fetchMock.mock.calls.map((call) => call[1]?.method)).toEqual([
+      'GET', 'POST', 'GET',
+    ]);
+    expect(rpc.mock.calls.map((call) => call[0])).toEqual([
+      'claim_chatwoot_account_external_create',
+      'set_chatwoot_account_mapping_state',
+      'claim_chatwoot_account_external_create',
+      'set_chatwoot_account_mapping_state',
+    ]);
   });
 
   it('reconciles a replay by GET only and refuses another POST on zero matches', async () => {
