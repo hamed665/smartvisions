@@ -19,7 +19,7 @@ function marker() {
   };
 }
 
-function setup(input: { claimNew: boolean; role?: string }) {
+function setup(input: { claimNew: boolean; role?: string; roles?: string[] }) {
   const mapping = {
     id: MAPPING_ID,
     organization_id: ORGANIZATION_ID,
@@ -35,6 +35,7 @@ function setup(input: { claimNew: boolean; role?: string }) {
     version: 2,
   };
   const tableReads: string[] = [];
+  let memberReads = 0;
   const rpc = vi.fn(async (name: string) => {
     if (name === 'claim_chatwoot_account_external_create') {
       return {
@@ -64,7 +65,9 @@ function setup(input: { claimNew: boolean; role?: string }) {
         single: async () => {
           if (table === 'chatwoot_account_mappings') return { data: mapping, error: null };
           if (table === 'organization_members') {
-            return { data: { role: input.role ?? 'OWNER' }, error: null };
+            const role = input.roles?.[memberReads] ?? input.role ?? 'OWNER';
+            memberReads += 1;
+            return { data: { role }, error: null };
           }
           if (table === 'tenant_businesses') {
             return {
@@ -168,6 +171,22 @@ describe('C3B Candidate Account orchestration', () => {
       'claim_chatwoot_account_external_create',
       'set_chatwoot_account_mapping_state',
     ]);
+  });
+
+  it('stops before HTTP when OWNER is revoked after the claim', async () => {
+    enabled();
+    const { supabase, rpc } = setup({
+      claimNew: true, roles: ['OWNER', 'ADMIN'],
+    });
+    const fetchMock = vi.fn();
+    await expect(provisionCandidateChatwootAccount({
+      supabase, organizationId: ORGANIZATION_ID, mappingId: MAPPING_ID,
+      requestKey: REQUEST_KEY, fetchImpl: fetchMock as unknown as typeof fetch,
+    })).rejects.toThrow('owner');
+    expect(rpc.mock.calls.map((call) => call[0])).toEqual([
+      'claim_chatwoot_account_external_create',
+    ]);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('rejects ADMIN before the durable claim or external call', async () => {
