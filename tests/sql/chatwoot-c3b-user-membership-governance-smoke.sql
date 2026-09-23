@@ -171,6 +171,9 @@ insert into c3b_writer_state(key,value) values
   ('owner_user_version', :'owner_user_version'),
   ('admin_user_version', :'admin_user_version');
 
+reset role;
+set role service_role;
+
 do $user_activation_verified$
 begin
   if (select value::integer from c3b_writer_state where key='owner_user_version') <> 2
@@ -192,6 +195,11 @@ begin
   end if;
 end;
 $user_activation_verified$;
+
+reset role;
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000e401',false);
+
 
 -- User state replay does not trip expected-version after the first success.
 do $user_state_replay$
@@ -226,6 +234,9 @@ select (public.create_chatwoot_account_membership(
 insert into c3b_writer_state(key,value)
 values ('owner_membership_id', :'owner_membership_id');
 
+reset role;
+set role service_role;
+
 do $owner_projection_created$
 begin
   if not exists (
@@ -241,6 +252,11 @@ begin
   end if;
 end;
 $owner_projection_created$;
+
+reset role;
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000e401',false);
+
 
 -- A false external role cannot activate OWNER membership.
 do $owner_wrong_external_role_denied$
@@ -283,6 +299,9 @@ select (public.create_chatwoot_account_membership(
 insert into c3b_writer_state(key,value)
 values ('admin_membership_id', :'admin_membership_id');
 
+reset role;
+set role service_role;
+
 do $admin_projection_created$
 begin
   if not exists (
@@ -295,7 +314,15 @@ begin
   ) then
     raise exception 'ADMIN membership did not use canonical agent projection';
   end if;
+end;
+$admin_projection_created$;
 
+reset role;
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000e401',false);
+
+do $admin_wrong_external_role_denied$
+begin
   begin
     perform public.set_chatwoot_account_membership_state(
       '00000000-0000-0000-0000-00000000f401',
@@ -311,7 +338,7 @@ begin
     end if;
   end;
 end;
-$admin_projection_created$;
+$admin_wrong_external_role_denied$;
 
 select (public.set_chatwoot_account_membership_state(
   '00000000-0000-0000-0000-00000000f401',
@@ -324,6 +351,9 @@ select (public.set_chatwoot_account_membership_state(
 insert into c3b_writer_state(key,value) values
   ('owner_membership_version', :'owner_membership_version'),
   ('admin_membership_version', :'admin_membership_version');
+
+reset role;
+set role service_role;
 
 do $active_memberships_verified$
 begin
@@ -356,6 +386,11 @@ begin
   end if;
 end;
 $active_memberships_verified$;
+
+reset role;
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000e401',false);
+
 
 -- Membership state replay is version-safe.
 do $membership_state_replay$
@@ -399,6 +434,9 @@ select (public.set_chatwoot_account_membership_state(
 insert into c3b_writer_state(key,value)
 values ('admin_membership_role_version', :'admin_membership_role_version');
 
+reset role;
+set role service_role;
+
 do $canonical_role_recomputed$
 begin
   if (select value::integer from c3b_writer_state where key='admin_membership_role_version') <> 3 then
@@ -418,6 +456,11 @@ begin
   end if;
 end;
 $canonical_role_recomputed$;
+
+reset role;
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000e401',false);
+
 
 -- Live child membership prevents weakening the global User mapping.
 do $live_child_blocks_user_degrade$
