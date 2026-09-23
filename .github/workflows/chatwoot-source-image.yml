@@ -109,6 +109,8 @@ jobs:
             "upstreamTag": "${CHATWOOT_UPSTREAM_TAG}",
             "upstreamCommit": "${CHATWOOT_UPSTREAM_COMMIT}",
             "smartvisionsCommit": "${GITHUB_SHA}",
+            "enterpriseSourceIncluded": false,
+            "runtimeDisableEnterprise": true,
             "providerAuthority": "SMART_CORE",
             "initialChatwootChannel": "Channel::Api"
           }
@@ -145,6 +147,8 @@ jobs:
               test -f /app/SMARTVISIONS_CONFIGURE.rb
               test ! -e /app/enterprise
               grep -F "\"smartvisionsCommit\": \"$EXPECTED_SMARTVISIONS\"" /app/SMARTVISIONS_SOURCE_PROVENANCE.json
+              grep -F "\"enterpriseSourceIncluded\": false" /app/SMARTVISIONS_SOURCE_PROVENANCE.json
+              grep -F "\"runtimeDisableEnterprise\": true" /app/SMARTVISIONS_SOURCE_PROVENANCE.json
               grep -F "\"providerAuthority\": \"SMART_CORE\"" /app/SMARTVISIONS_SOURCE_PROVENANCE.json
               ruby --version
               node --version
