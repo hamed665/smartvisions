@@ -537,14 +537,22 @@ begin
     elsif new.data_type = 'EMAIL'
       and (
         length(new.default_text) > 320
-        or new.default_text !~ '^[^@\s]+@[^@\s]+\.[^@\s]+    elsif new.data_type = 'PHONE'
-      and new.default_text !~ '^\+[1-9][0-9]{7,14}$'
+        or new.default_text !~ '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$'
+      )
+    then
+      raise exception 'Invalid EMAIL default';
+    elsif new.data_type = 'PHONE'
+      and new.default_text !~ '^\\+[1-9][0-9]{7,14}$'
     then
       raise exception 'PHONE default must be E.164';
     elsif new.data_type = 'URL'
       and (
         length(new.default_text) > 2048
-        or new.default_text !~* '^https?://[^\s]+    end if;
+        or new.default_text !~* '^https?://[^\\s]+$'
+      )
+    then
+      raise exception 'URL default must use http/https and fit 2048 characters';
+    end if;
 
     if new.text_min_length is not null and length(new.default_text) < new.text_min_length then
       raise exception 'Default text shorter than text_min_length';
@@ -932,19 +940,21 @@ begin
     when 'EMAIL' then
       if new.value_text is null
          or length(new.value_text) > 320
-         or new.value_text !~ '^[^@\s]+@[^@\s]+\.[^@\s]+      then
+         or new.value_text !~ '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$'
+      then
         raise exception 'EMAIL custom value invalid';
       end if;
     when 'PHONE' then
       if new.value_text is null
-         or new.value_text !~ '^\+[1-9][0-9]{7,14}$'
+         or new.value_text !~ '^\\+[1-9][0-9]{7,14}$'
       then
         raise exception 'PHONE custom value must be E.164';
       end if;
     when 'URL' then
       if new.value_text is null
          or length(new.value_text) > 2048
-         or new.value_text !~* '^https?://[^\s]+      then
+         or new.value_text !~* '^https?://[^\\s]+$'
+      then
         raise exception 'URL custom value must use http/https';
       end if;
     when 'NUMBER' then
