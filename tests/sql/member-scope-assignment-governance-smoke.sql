@@ -370,6 +370,7 @@ reset role;
 select set_config('request.jwt.claim.sub','',false);
 
 -- Existing ON DELETE CASCADE semantics remain usable for parent cleanup.
+select set_config('smartvisions.member_scope_assignment_command','1',true);
 insert into public.member_scope_assignments(
   organization_id,user_id,scope_type,role,tenant_business_id,
   attributes,assigned_by,version,last_request_key,updated_by_user_id
@@ -383,20 +384,24 @@ insert into public.member_scope_assignments(
   '00000000-0000-0000-0000-00000000e201'
 );
 
--- The fixture above is database-owner setup, so open the command context explicitly.
+select set_config('smartvisions.member_scope_assignment_command','0',true);
+
 -- Parent delete below should cascade without being mistaken for a top-level app delete.
-select set_config('smartvisions.member_scope_assignment_command','1',true);
 delete from public.organization_members
 where organization_id='00000000-0000-0000-0000-00000000f201'
   and user_id='00000000-0000-0000-0000-00000000e203';
 select set_config('smartvisions.member_scope_assignment_command','0',true);
 
-if exists (
-  select 1 from public.member_scope_assignments
-  where organization_id='00000000-0000-0000-0000-00000000f201'
-    and user_id='00000000-0000-0000-0000-00000000e203'
-) then
-  raise exception 'parent cascade left a member scope assignment row';
-end if;
+do $cascade_verified$
+begin
+  if exists (
+    select 1 from public.member_scope_assignments
+    where organization_id='00000000-0000-0000-0000-00000000f201'
+      and user_id='00000000-0000-0000-0000-00000000e203'
+  ) then
+    raise exception 'parent cascade left a member scope assignment row';
+  end if;
+end;
+$cascade_verified$;
 
 rollback;
