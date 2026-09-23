@@ -84,6 +84,14 @@ jobs:
             exit 1
           fi
 
+      - name: Enforce Community-only build tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f chatwoot/enterprise/LICENSE
+          rm -rf chatwoot/enterprise
+          test ! -e chatwoot/enterprise
+
       - name: Add Smart Visions Community-safe runtime overlay
         shell: bash
         run: |
@@ -135,6 +143,7 @@ jobs:
               test "$(cat /app/.git_sha)" = "$EXPECTED_UPSTREAM"
               test -f /app/SMARTVISIONS_SOURCE_PROVENANCE.json
               test -f /app/SMARTVISIONS_CONFIGURE.rb
+              test ! -e /app/enterprise
               grep -F "\"smartvisionsCommit\": \"$EXPECTED_SMARTVISIONS\"" /app/SMARTVISIONS_SOURCE_PROVENANCE.json
               grep -F "\"providerAuthority\": \"SMART_CORE\"" /app/SMARTVISIONS_SOURCE_PROVENANCE.json
               ruby --version
