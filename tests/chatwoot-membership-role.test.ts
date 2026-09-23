@@ -3,6 +3,14 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 vi.mock('server-only', () => ({}));
 
+const { serviceClientFactory } = vi.hoisted(() => ({
+  serviceClientFactory: vi.fn(),
+}));
+
+vi.mock('@/lib/supabase/service', () => ({
+  createSupabaseServiceClient: serviceClientFactory,
+}));
+
 import { readBusinessWideChatwootRole } from '@/lib/chatwoot/membership-role';
 
 const ORG = '00000000-0000-4000-8000-000000000101';
@@ -36,8 +44,7 @@ function setup(input: {
 }) {
   const reads: string[] = [];
   const assignmentFilters: string[] = [];
-  const supabase = {
-    auth: { getUser: vi.fn(async () => ({ data: { user: { id: OWNER } }, error: null })) },
+  const serviceSupabase = {
     from: vi.fn((table: string) => {
       reads.push(table);
       let userId: string | undefined;
@@ -71,6 +78,13 @@ function setup(input: {
       return builder;
     }),
   } as unknown as SupabaseClient;
+
+  serviceClientFactory.mockReturnValue(serviceSupabase);
+
+  const supabase = {
+    auth: { getUser: vi.fn(async () => ({ data: { user: { id: OWNER } }, error: null })) },
+  } as unknown as SupabaseClient;
+
   return { supabase, reads, assignmentFilters };
 }
 
@@ -167,7 +181,21 @@ describe('Business-wide Chatwoot membership role read', () => {
       .toEqual({ effectiveSmartRole: 'VIEWER', chatwootRole: null });
   });
 
-  it('rejects a non-OWNER reader, archived Brand, or incomplete RLS read', async () => {
+  it('uses the service client only after authenticating the caller', async () => {
+    serviceClientFactory.mockClear();
+    const { supabase, reads } = setup({});
+    await readBusinessWideChatwootRole({ supabase, ...args });
+    expect(serviceClientFactory).toHaveBeenCalledTimes(1);
+    expect(reads).toEqual([
+      'organization_members',
+      'organization_members',
+      'tenant_businesses',
+      'brands',
+      'member_scope_assignments',
+    ]);
+  });
+
+  it('rejects a non-OWNER reader, archived Brand, or incomplete canonical read', async () => {
     for (const options of [
       { ownerRole: 'ADMIN' },
       { brandStatus: 'ARCHIVED' },
