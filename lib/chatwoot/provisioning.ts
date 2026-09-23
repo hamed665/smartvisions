@@ -87,6 +87,30 @@ async function listProjectedAccounts(input: {
   return findProjectedAccount(values, input.tenantBusinessId);
 }
 
+export async function reconcileChatwootAccount(input: {
+  tenantBusinessId: string;
+  fetchImpl?: typeof fetch;
+}): Promise<ChatwootAccountProjection | null> {
+  const tenantBusinessId = requireUuid(input.tenantBusinessId, 'tenantBusinessId');
+  const result = await listProjectedAccounts({
+    tenantBusinessId,
+    fetchImpl: input.fetchImpl,
+  });
+  if (result.kind === 'INVALID') {
+    throw new ChatwootProvisioningError(
+      'IDENTITY_CONFLICT',
+      'Chatwoot Account has incomplete Smart projection metadata',
+    );
+  }
+  if (result.kind === 'AMBIGUOUS') {
+    throw new ChatwootProvisioningError(
+      'DUPLICATE_MATCH',
+      'Multiple Chatwoot Accounts match the tenant Business marker',
+    );
+  }
+  return result.kind === 'ONE' ? result.account : null;
+}
+
 export async function ensureChatwootAccount(input: {
   tenantBusinessId: string;
   name: string;
