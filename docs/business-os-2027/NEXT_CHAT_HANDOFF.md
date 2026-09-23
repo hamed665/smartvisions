@@ -227,7 +227,8 @@ A work package can require any number of actual PRs. Record those PR numbers as 
    - gap audit PR #190;
    - implementation PR #191;
    - migration `0076_crm_segment_governance` -> Production version `20260923093619`;
-   - routed Worker `b6ad6482-11e1-4658-97e8-7f5d1a842318`;
+   - implementation-runtime Worker checkpoint `b6ad6482-11e1-4658-97e8-7f5d1a842318`;
+   - current routed Production Worker at latest verified heartbeat `09d84ef6-5928-429a-a926-ef4324ed99ab` (Worker timestamp `2026-09-23T09:50:07.867348Z`, heartbeat `2026-09-23T12:21:16.135625Z`);
    - latest checked heartbeat failed=0 with acquisition/evidence/auto-dispatch SKIPPED;
    - 0 Segment identities / 0 Segment versions intentionally persisted;
    - rollback-only Production smoke left zero fixture residue;
