@@ -333,3 +333,12 @@ PR #208 is stacked on #207 and adds only a server-only Candidate read. The calle
 The resolver reuses `effectiveRoleForScope`, fails closed on incomplete/mismatched rows, excludes narrower branch/team assignments from a Business-wide Account role, and does not accept caller-supplied ABAC attributes. Only a canonical Organization OWNER resolves to Chatwoot administrator. ADMIN and sales roles resolve to agent; VIEWER has no membership. Mock-only tests also assert that no service client is created before caller authentication succeeds.
 
 This remains a read-only Candidate projection, not transactional mutation authority. The same service-role read bypass must not be reused as a writer shortcut. A SECURITY INVOKER User/AccountUser writer cannot currently recompute another member's canonical Organization role through self-read-only `organization_members` RLS without either a source-backed delegation/read primitive or a security-boundary change. Treat that as the explicit C3B writer blocker: do not activate external membership, do not use direct service_role writes, and do not reintroduce SECURITY DEFINER merely to bypass the block. Exact-head runner-backed CI and review remain mandatory; preserve dependency order.
+
+
+## C3B User / AccountUser writer blocker — Draft PR #209
+
+PR #208 review established that its read-only role resolver may safely use the existing server-only service client for exact canonical reads only after authenticating the caller and verifying current Organization OWNER authority. That does **not** solve mutation authority.
+
+The User/AccountUser writer remains blocked because authenticated `SECURITY INVOKER` cannot read another member's `organization_members.role` under the current self-read RLS boundary. Direct `service_role` writes are forbidden, and a broad `SECURITY DEFINER` bypass would reverse prior hardening. PR #209 therefore contains no writer migration or runtime activation; it records the blocker and required reverse-role contract in `CHATWOOT_C3B_USER_MEMBERSHIP_WRITER_BLOCKER.md`.
+
+Before writer implementation resumes, require a reviewed least-privilege transactional authorization design that recomputes canonical Organization/Brand/Business role at the mutation boundary, reuses the existing claim ledger/version/request semantics, and proves safe OWNER demotion and VIEWER membership removal. Keep external User/AccountUser membership disabled.
