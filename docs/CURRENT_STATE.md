@@ -14,7 +14,7 @@ This is the current operational handoff for Growth OS. Current `main`, routed Cl
 - Production Worker Route: `app.smartvisionsai.com/* -> smartvisions-growth-os-production`
 - Production Supabase: `pkypexzpyfbikdnkrzvw`
 - Latest runtime-changing Production merge: PR #191, merge commit `a34bfd243d2f95e2ccad9895d5a753ef902a4299`
-- Production Worker version at the verified PR #191 implementation heartbeat before docs-only closeout: `b6ad6482-11e1-4658-97e8-7f5d1a842318`
+- Current routed Production Worker version at latest verified heartbeat: `09d84ef6-5928-429a-a926-ef4324ed99ab` (Worker timestamp `2026-09-23T09:50:07.867348Z`; heartbeat `2026-09-23T12:21:16.135625Z`, failed=0). The last runtime-changing implementation merge remains PR #191; later docs-only deploys can legitimately produce a newer Worker version without a runtime-code change.
 - Latest Business OS Production migration: `0076_crm_segment_governance`, version `20260923093619`
 - Latest Business OS runtime-changing merge: PR #191, merge commit `a34bfd243d2f95e2ccad9895d5a753ef902a4299`; later closeout commits are documentation-only
 - Latest Business OS Production migration before Tasks: `0071_customer_360_timeline`, version `20260922202957`
