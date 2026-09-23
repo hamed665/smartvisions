@@ -153,11 +153,17 @@ create table if not exists public.chatwoot_inbox_mappings (
     check (channel_type = 'Channel::Api'),
   webhook_secret_ref text check (
     webhook_secret_ref is null
-    or length(trim(webhook_secret_ref)) between 1 and 240
+    or (
+      length(trim(webhook_secret_ref)) between 16 and 240
+      and webhook_secret_ref ~ '^secretref://[A-Za-z0-9/_:.-]+$'
+    )
   ),
   hmac_token_ref text check (
     hmac_token_ref is null
-    or length(trim(hmac_token_ref)) between 1 and 240
+    or (
+      length(trim(hmac_token_ref)) between 16 and 240
+      and hmac_token_ref ~ '^secretref://[A-Za-z0-9/_:.-]+$'
+    )
   ),
   status text not null default 'PROVISIONING'
     check (status in ('PROVISIONING','ACTIVE','DEGRADED','ARCHIVED')),
@@ -197,6 +203,11 @@ create unique index if not exists chatwoot_inbox_mappings_one_live_per_channel_b
 create unique index if not exists chatwoot_inbox_mappings_external_unique
   on public.chatwoot_inbox_mappings(chatwoot_inbox_id)
   where chatwoot_inbox_id is not null
+    and status in ('PROVISIONING','ACTIVE','DEGRADED');
+
+create unique index if not exists chatwoot_inbox_mappings_channel_identifier_unique
+  on public.chatwoot_inbox_mappings(chatwoot_channel_identifier)
+  where chatwoot_channel_identifier is not null
     and status in ('PROVISIONING','ACTIVE','DEGRADED');
 
 create index if not exists chatwoot_inbox_mappings_account_idx
@@ -285,6 +296,27 @@ begin
     if old.status = 'ARCHIVED' then
       raise exception 'ARCHIVED Chatwoot User mapping is terminal';
     end if;
+
+    if old.status = 'ACTIVE'
+       and new.status not in ('ACTIVE','DEGRADED','ARCHIVED')
+    then
+      raise exception 'invalid Chatwoot User mapping transition';
+    elsif old.status = 'DEGRADED'
+       and new.status not in ('DEGRADED','ACTIVE','ARCHIVED')
+    then
+      raise exception 'invalid Chatwoot User mapping transition';
+    elsif old.status = 'PROVISIONING'
+       and new.status not in ('PROVISIONING','ACTIVE','DEGRADED','ARCHIVED')
+    then
+      raise exception 'invalid Chatwoot User mapping transition';
+    end if;
+
+    if new.status = 'ACTIVE'
+       and old.status <> 'ACTIVE'
+       and new.last_verified_at is not distinct from old.last_verified_at
+    then
+      raise exception 'Chatwoot User activation requires fresh verification evidence';
+    end if;
   elsif new.version <> 1 or new.status <> 'PROVISIONING' then
     raise exception 'new Chatwoot User mapping must start PROVISIONING at version 1';
   end if;
@@ -340,6 +372,31 @@ begin
 
     if old.status = 'ARCHIVED' then
       raise exception 'ARCHIVED Chatwoot Account membership is terminal';
+    end if;
+
+    if old.status = 'ACTIVE'
+       and new.status not in ('ACTIVE','DEGRADED','ARCHIVED')
+    then
+      raise exception 'invalid Chatwoot Account membership transition';
+    elsif old.status = 'DEGRADED'
+       and new.status not in ('DEGRADED','ACTIVE','ARCHIVED')
+    then
+      raise exception 'invalid Chatwoot Account membership transition';
+    elsif old.status = 'PROVISIONING'
+       and new.status not in ('PROVISIONING','ACTIVE','DEGRADED','ARCHIVED')
+    then
+      raise exception 'invalid Chatwoot Account membership transition';
+    end if;
+
+    if new.status = 'ACTIVE'
+       and (
+         old.status <> 'ACTIVE'
+         or new.effective_smart_role is distinct from old.effective_smart_role
+         or new.chatwoot_role is distinct from old.chatwoot_role
+       )
+       and new.last_verified_at is not distinct from old.last_verified_at
+    then
+      raise exception 'Chatwoot Account membership change requires fresh verification evidence';
     end if;
   elsif new.version <> 1 or new.status <> 'PROVISIONING' then
     raise exception 'new Chatwoot Account membership must start PROVISIONING at version 1';
@@ -449,6 +506,32 @@ begin
     if old.status = 'ARCHIVED' then
       raise exception 'ARCHIVED Chatwoot Inbox mapping is terminal';
     end if;
+
+    if old.status = 'ACTIVE'
+       and new.status not in ('ACTIVE','DEGRADED','ARCHIVED')
+    then
+      raise exception 'invalid Chatwoot Inbox mapping transition';
+    elsif old.status = 'DEGRADED'
+       and new.status not in ('DEGRADED','ACTIVE','ARCHIVED')
+    then
+      raise exception 'invalid Chatwoot Inbox mapping transition';
+    elsif old.status = 'PROVISIONING'
+       and new.status not in ('PROVISIONING','ACTIVE','DEGRADED','ARCHIVED')
+    then
+      raise exception 'invalid Chatwoot Inbox mapping transition';
+    end if;
+
+    if new.status = 'ACTIVE'
+       and (
+         old.status <> 'ACTIVE'
+         or new.chatwoot_channel_identifier is distinct from old.chatwoot_channel_identifier
+         or new.webhook_secret_ref is distinct from old.webhook_secret_ref
+         or new.hmac_token_ref is distinct from old.hmac_token_ref
+       )
+       and new.last_verified_at is not distinct from old.last_verified_at
+    then
+      raise exception 'Chatwoot Inbox change requires fresh verification evidence';
+    end if;
   elsif new.version <> 1 or new.status <> 'PROVISIONING' then
     raise exception 'new Chatwoot Inbox mapping must start PROVISIONING at version 1';
   end if;
@@ -541,6 +624,30 @@ begin
 
     if old.status = 'ARCHIVED' then
       raise exception 'ARCHIVED Chatwoot Team mapping is terminal';
+    end if;
+
+    if old.status = 'ACTIVE'
+       and new.status not in ('ACTIVE','DEGRADED','ARCHIVED')
+    then
+      raise exception 'invalid Chatwoot Team mapping transition';
+    elsif old.status = 'DEGRADED'
+       and new.status not in ('DEGRADED','ACTIVE','ARCHIVED')
+    then
+      raise exception 'invalid Chatwoot Team mapping transition';
+    elsif old.status = 'PROVISIONING'
+       and new.status not in ('PROVISIONING','ACTIVE','DEGRADED','ARCHIVED')
+    then
+      raise exception 'invalid Chatwoot Team mapping transition';
+    end if;
+
+    if new.status = 'ACTIVE'
+       and (
+         old.status <> 'ACTIVE'
+         or lower(trim(new.projected_name)) is distinct from lower(trim(old.projected_name))
+       )
+       and new.last_verified_at is not distinct from old.last_verified_at
+    then
+      raise exception 'Chatwoot Team change requires fresh verification evidence';
     end if;
   elsif new.version <> 1 or new.status <> 'PROVISIONING' then
     raise exception 'new Chatwoot Team mapping must start PROVISIONING at version 1';
@@ -708,6 +815,81 @@ begin
     'dbtx:' || txid_current()::text
   );
 
+  return new;
+end;
+$$;
+
+create or replace function public.enforce_chatwoot_user_mapping_archive_dependencies()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public, pg_catalog
+as $$
+begin
+  if old.status <> 'ARCHIVED'
+     and new.status = 'ARCHIVED'
+     and exists (
+       select 1
+       from public.chatwoot_account_memberships cm
+       where cm.chatwoot_user_mapping_id = old.id
+         and cm.status in ('PROVISIONING','ACTIVE','DEGRADED')
+     )
+  then
+    raise exception 'archive Chatwoot Account memberships before User mapping';
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.enforce_chatwoot_account_mapping_slice_b_dependencies()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public, pg_catalog
+as $$
+begin
+  if old.status <> 'ARCHIVED' and new.status = 'ARCHIVED' then
+    if exists (
+      select 1 from public.chatwoot_account_memberships cm
+      where cm.organization_id=old.organization_id
+        and cm.chatwoot_account_mapping_id=old.id
+        and cm.status in ('PROVISIONING','ACTIVE','DEGRADED')
+    ) or exists (
+      select 1 from public.chatwoot_inbox_mappings im
+      where im.organization_id=old.organization_id
+        and im.chatwoot_account_mapping_id=old.id
+        and im.status in ('PROVISIONING','ACTIVE','DEGRADED')
+    ) or exists (
+      select 1 from public.chatwoot_team_mappings tm
+      where tm.organization_id=old.organization_id
+        and tm.chatwoot_account_mapping_id=old.id
+        and tm.status in ('PROVISIONING','ACTIVE','DEGRADED')
+    ) then
+      raise exception 'archive Chatwoot child projections before Account mapping';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.enforce_communication_binding_chatwoot_inbox_archive()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public, pg_catalog
+as $$
+begin
+  if old.status = 'ACTIVE'
+     and new.status = 'ARCHIVED'
+     and exists (
+       select 1 from public.chatwoot_inbox_mappings im
+       where im.organization_id=old.organization_id
+         and im.communication_channel_binding_id=old.id
+         and im.status in ('PROVISIONING','ACTIVE','DEGRADED')
+     )
+  then
+    raise exception 'archive Chatwoot Inbox mapping before communication binding';
+  end if;
   return new;
 end;
 $$;
@@ -892,6 +1074,24 @@ create trigger chatwoot_team_mappings_audit
 after insert or update on public.chatwoot_team_mappings
 for each row execute function public.audit_chatwoot_slice_b_mapping_mutation();
 
+drop trigger if exists chatwoot_user_mappings_archive_dependency_guard
+  on public.chatwoot_user_mappings;
+create trigger chatwoot_user_mappings_archive_dependency_guard
+before update of status on public.chatwoot_user_mappings
+for each row execute function public.enforce_chatwoot_user_mapping_archive_dependencies();
+
+drop trigger if exists chatwoot_account_mappings_slice_b_dependency_guard
+  on public.chatwoot_account_mappings;
+create trigger chatwoot_account_mappings_slice_b_dependency_guard
+before update of status on public.chatwoot_account_mappings
+for each row execute function public.enforce_chatwoot_account_mapping_slice_b_dependencies();
+
+drop trigger if exists communication_channel_bindings_inbox_dependency_guard
+  on public.communication_channel_bindings;
+create trigger communication_channel_bindings_inbox_dependency_guard
+before update of status on public.communication_channel_bindings
+for each row execute function public.enforce_communication_binding_chatwoot_inbox_archive();
+
 drop trigger if exists departments_chatwoot_bridge_archive_guard
   on public.departments;
 create trigger departments_chatwoot_bridge_archive_guard
@@ -936,6 +1136,12 @@ revoke all on function public.enforce_chatwoot_inbox_mapping_contract()
 revoke all on function public.enforce_chatwoot_team_mapping_contract()
   from public, anon, authenticated, service_role;
 revoke all on function public.audit_chatwoot_slice_b_mapping_mutation()
+  from public, anon, authenticated, service_role;
+revoke all on function public.enforce_chatwoot_user_mapping_archive_dependencies()
+  from public, anon, authenticated, service_role;
+revoke all on function public.enforce_chatwoot_account_mapping_slice_b_dependencies()
+  from public, anon, authenticated, service_role;
+revoke all on function public.enforce_communication_binding_chatwoot_inbox_archive()
   from public, anon, authenticated, service_role;
 revoke all on function public.enforce_department_chatwoot_bridge_archive()
   from public, anon, authenticated, service_role;
