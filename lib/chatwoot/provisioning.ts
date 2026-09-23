@@ -10,6 +10,7 @@ import {
   buildChatwootUserCustomAttributes,
   buildChatwootUserPresentation,
   findProjectedAccount,
+  inspectChatwootUserProjectionMarker,
   normalizeCanonicalEmail,
   parseChatwootAccount,
   parseChatwootAccountUser,
@@ -257,8 +258,14 @@ export async function ensureChatwootUser(input: {
     );
   }
 
-  const marker = userProjectionMarker(adopted);
-  if (marker !== null && marker !== smartUserId) {
+  const marker = inspectChatwootUserProjectionMarker(adopted);
+  if (marker.kind === 'INVALID') {
+    throw new ChatwootProvisioningError(
+      'IDENTITY_CONFLICT',
+      'Chatwoot User has malformed Smart projection identity metadata',
+    );
+  }
+  if (marker.kind === 'VALID' && marker.smartUserId !== smartUserId) {
     throw new ChatwootProvisioningError(
       'IDENTITY_CONFLICT',
       'Chatwoot User is already projected from another Smart user',
