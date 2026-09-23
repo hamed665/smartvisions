@@ -80,7 +80,7 @@ function setup(input: { claimNew: boolean; role?: string; roles?: string[]; mapp
             const version = mappingReads > 0 && input.mappingVersionAfterClaim
               ? input.mappingVersionAfterClaim : mapping.version;
             mappingReads += 1;
-            return { data: { ...mapping, version, tenant_business_id: mappingReads > 0 && input.mappingBusinessAfterClaim ? input.mappingBusinessAfterClaim : BUSINESS_ID }, error: null };
+            return { data: { ...mapping, version, tenant_business_id: mappingReads > 1 && input.mappingBusinessAfterClaim ? input.mappingBusinessAfterClaim : BUSINESS_ID }, error: null };
           }
           if (table === 'organization_members') {
             const role = input.roles?.[memberReads] ?? input.role ?? 'OWNER';
