@@ -184,7 +184,7 @@ begin
       '20000000-0000-0000-0000-00000000e101',
       '00000000-0000-0000-0000-00000000d103',
       '70000000-0000-0000-0000-00000000e103',
-      :'account_mapping_id'::uuid,
+      (select value::uuid from slice_b_state where key='account_mapping_id'),
       'VIEWER',
       'agent',
       'PROVISIONING',
