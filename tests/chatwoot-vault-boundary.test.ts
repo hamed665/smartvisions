@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { isChatwootVaultRef } from '@/lib/chatwoot/vault';
+import { isChatwootVaultRef } from '@/lib/chatwoot/vault-ref';
 
 const migration = fs.readFileSync(
   'supabase/migrations/0079_chatwoot_vault_boundary.sql',
