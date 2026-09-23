@@ -138,7 +138,7 @@ export async function provisionCandidateChatwootAccount(input: {
     },
   );
 
-  const claim = (Array.isArray(data) ? data[0] : data) as
+  const claim = (Array.isArray(data) ? (data.length === 1 ? data[0] : null) : data) as
     | AccountAttemptClaim | null;
   if (error || !claim ||
       typeof claim.may_attempt_create !== 'boolean' ||
