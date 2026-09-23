@@ -324,3 +324,10 @@ Next work: runner-backed exact-head tests; review the claim and Account orchestr
 
 
 Additional C3B review finding: the Slice B membership trigger checks declared `effective_smart_role` against Chatwoot role but does not recompute canonical Organization/Business scope. Before User/AccountUser writes, close this role-integrity gap; a non-OWNER must never become a Chatwoot administrator. The Account-only PR #207 has no membership writer.
+
+
+## C3B Business-wide membership role read — Draft PR #208
+
+PR #208 is stacked on #207 and adds only a server-only read of canonical Organization membership, ACTIVE Brand/tenant Business lineage and BRAND/BUSINESS scope assignments under an authenticated current OWNER. It reuses `effectiveRoleForScope`, fails closed on incomplete/mismatched rows, excludes narrower branch/team assignments from a Business-wide Account role, and does not accept caller-supplied ABAC attributes. Only a current Organization OWNER resolves to Chatwoot administrator. ADMIN and sales roles resolve to agent; VIEWER has no membership. Mock-only tests cover role precedence, VIEWER override, conditional attributes, malformed/cross-tenant rows, revoked owner and RLS read failure.
+
+This is not a transactionally authoritative mutation grant. No AccountUser writer, Chatwoot call, mapping write or production change is introduced. Before external User/AccountUser activation, a narrowly governed writer must recompute current role/scope at its mutation boundary, handle owner demotion/reconciliation, and close Slice B direct-write gap. Do not merge or apply any Chatwoot migration while exact-head runner-backed CI remains unavailable; preserve #195–#208 dependency order.
