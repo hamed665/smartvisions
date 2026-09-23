@@ -55,7 +55,7 @@ Business OS status as of 2026-09-23:
 - Snapshot/current-membership persistence, Deal/Business/Task/Conversation/Person Contact Segment entities, Campaign/Workflow execution, arbitrary SQL/JSONPath/PostgREST/metadata predicates and PII/SENSITIVE ordinary Custom Field predicates remain out of scope.
 - Production 0076 created zero Segment data. Rollback-only Production smoke passed and left zero Segment/version/audit-fixture residue and no outbound delta.
 - Post-0076 Security Advisor is unchanged; no new unindexed-FK finding was introduced.
-- Latest routed Cloudflare Worker heartbeat after Slice 6 is `__SLICE6_WORKER_VERSION__`, with failed=0 and acquisition/evidence/auto-dispatch SKIPPED.
+- Implementation-runtime Cloudflare Worker checkpoint after PR #191 (before docs-only closeout) is `b6ad6482-11e1-4658-97e8-7f5d1a842318`, with failed=0 and acquisition/evidence/auto-dispatch SKIPPED.
 - Zero Email/WhatsApp outbound rows were created from 0076 promotion through verification.
 
 Runtime and Production evidence outrank stale documentation or chat memory.
@@ -210,7 +210,7 @@ A green CI run is necessary, not a substitute for review of a migration.
    - gap audit PR #190;
    - implementation PR #191;
    - migration `0076_crm_segment_governance` -> Production version `20260923093619`;
-   - routed Worker `__SLICE6_WORKER_VERSION__`;
+   - routed Worker `b6ad6482-11e1-4658-97e8-7f5d1a842318`;
    - latest checked heartbeat failed=0 with acquisition/evidence/auto-dispatch SKIPPED;
    - 0 Segment identities / 0 Segment versions intentionally persisted;
    - rollback-only Production smoke left zero fixture residue;
