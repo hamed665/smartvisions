@@ -68,6 +68,7 @@ begin
       and status = 'ACTIVE'
       and version = 1
       and channel = 'EMAIL'
+      and last_verified_at is null
   ) then
     raise exception 'communication binding create failed';
   end if;
