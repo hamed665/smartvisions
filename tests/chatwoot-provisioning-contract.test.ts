@@ -6,6 +6,7 @@ import {
   buildChatwootUserCustomAttributes,
   buildChatwootUserPresentation,
   findProjectedAccount,
+  inspectChatwootUserProjectionMarker,
   parseChatwootAccountUser,
   parseChatwootUser,
   userProjectionMarker,
@@ -49,6 +50,51 @@ describe('Chatwoot core provisioning contract', () => {
       tenantBusinessId,
     );
     expect(ambiguous.kind).toBe('AMBIGUOUS');
+  });
+
+  it('marks incomplete Account projection metadata INVALID instead of NONE', () => {
+    const tenantBusinessId = '20000000-0000-4000-8000-000000000001';
+
+    const result = findProjectedAccount(
+      [
+        {
+          id: 9,
+          name: 'Partial',
+          custom_attributes: {
+            smartvisions_tenant_business_id: tenantBusinessId,
+          },
+        },
+      ],
+      tenantBusinessId,
+    );
+
+    expect(result.kind).toBe('INVALID');
+  });
+
+  it('distinguishes absent and malformed User projection metadata', () => {
+    const absent = parseChatwootUser({
+      id: 10,
+      email: 'owner@example.com',
+      name: 'Owner',
+      custom_attributes: {},
+    });
+    const malformed = parseChatwootUser({
+      id: 11,
+      email: 'owner@example.com',
+      name: 'Owner',
+      custom_attributes: {
+        smartvisions_user_id: 123,
+        smartvisions_projection: true,
+        smartvisions_projection_version: '1',
+      },
+    });
+
+    expect(inspectChatwootUserProjectionMarker(absent)).toEqual({
+      kind: 'ABSENT',
+    });
+    expect(inspectChatwootUserProjectionMarker(malformed)).toEqual({
+      kind: 'INVALID',
+    });
   });
 
   it('sanitizes User responses and never returns upstream access_token', () => {
