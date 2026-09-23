@@ -259,6 +259,8 @@ That means:
 
 Unknown node types, fields, operators or value shapes fail closed.
 
+Validation must be enforced at both the authenticated API boundary **and** the database mutation boundary (guard/validated SECURITY INVOKER contract). Direct authenticated table access must not be able to persist an unvalidated predicate AST, and no SECURITY DEFINER bypass is introduced.
+
 The evaluator compiles only server-owned allowlisted predicates.
 
 Tree depth, leaf count, IN-list size and request/page size must be bounded. Exact numeric caps should be locked by PostgreSQL 17 smoke/EXPLAIN evidence rather than guessed in architecture docs.
