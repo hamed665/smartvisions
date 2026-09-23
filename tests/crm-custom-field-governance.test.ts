@@ -95,3 +95,64 @@ describe('Business OS CRM custom-field governance', () => {
     );
   });
 });
+
+
+const runtime = readFileSync(
+  new URL('../lib/crm/custom-fields.ts', import.meta.url),
+  'utf8',
+);
+const definitionRoute = readFileSync(
+  new URL('../app/api/crm/custom-fields/definitions/route.ts', import.meta.url),
+  'utf8',
+);
+const optionRoute = readFileSync(
+  new URL('../app/api/crm/custom-fields/options/route.ts', import.meta.url),
+  'utf8',
+);
+const valueRoute = readFileSync(
+  new URL('../app/api/crm/custom-fields/values/route.ts', import.meta.url),
+  'utf8',
+);
+const filterRoute = readFileSync(
+  new URL('../app/api/crm/custom-fields/filter/route.ts', import.meta.url),
+  'utf8',
+);
+
+describe('CRM custom-field runtime boundary', () => {
+  it('uses signed-in Supabase session and never browser service credentials', () => {
+    for (const route of [definitionRoute, optionRoute, valueRoute, filterRoute]) {
+      expect(route).toContain("import { createClient } from '@/lib/supabase/server'");
+      expect(route).toContain('supabase.auth.getUser()');
+      expect(route).not.toContain('SUPABASE_SERVICE_ROLE_KEY');
+      expect(route).not.toContain('SUPABASE_SECRET_KEY');
+    }
+  });
+
+  it('keeps immutable type/entity/version authority out of value payloads', () => {
+    expect(valueRoute).not.toContain("body.dataType");
+    expect(valueRoute).not.toContain("body.definitionVersion");
+    expect(runtime).toContain("data_type: 'TEXT'");
+    expect(migration).toContain('new.data_type := d.data_type');
+    expect(migration).toContain('new.definition_version := d.version');
+  });
+
+  it('uses request replay and optimistic version checks for mutations', () => {
+    expect(runtime).toContain(".eq('last_request_key', input.requestKey)");
+    expect(runtime).toContain(".eq('version', input.expectedVersion)");
+    expect(runtime).toContain("'VERSION_CONFLICT'");
+    expect(runtime).toContain("'ALREADY_EXISTS'");
+  });
+
+  it('does not introduce provider actions or generic arbitrary-query surfaces', () => {
+    const combined = [
+      migration, runtime, definitionRoute, optionRoute, valueRoute, filterRoute,
+    ].join('\n');
+
+    expect(combined).not.toContain('MetaCloudWhatsAppProvider');
+    expect(combined).not.toContain('ResendEmailProvider');
+    expect(combined).not.toMatch(/send(?:Email|Text|Template)\s*\(/);
+    expect(filterRoute).toContain('exactFilterCustomField');
+    expect(filterRoute).not.toContain('sql');
+    expect(filterRoute).not.toContain('jsonPath');
+  });
+});
