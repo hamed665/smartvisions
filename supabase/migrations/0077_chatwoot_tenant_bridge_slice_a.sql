@@ -573,13 +573,15 @@ begin
         from public.communication_channel_bindings
        where organization_id = p_organization_id
          and last_request_key = v_request_key;
+      perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
       if found then return v_existing; end if;
       raise;
   end;
 
+  perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
   return v_created;
 end;
-$$;
+$;
 
 create or replace function public.set_communication_channel_binding_lifecycle(
   p_organization_id uuid,
@@ -658,9 +660,10 @@ begin
      and id = p_binding_id
   returning * into v_updated;
 
+  perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
   return v_updated;
 end;
-$$;
+$;
 
 create or replace function public.create_chatwoot_account_mapping(
   p_organization_id uuid,
@@ -734,13 +737,15 @@ begin
         from public.chatwoot_account_mappings
        where organization_id = p_organization_id
          and last_request_key = v_request_key;
+      perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
       if found then return v_existing; end if;
       raise;
   end;
 
+  perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
   return v_created;
 end;
-$$;
+$;
 
 create or replace function public.set_chatwoot_account_mapping_state(
   p_organization_id uuid,
@@ -851,9 +856,10 @@ begin
      and id = p_mapping_id
   returning * into v_updated;
 
+  perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
   return v_updated;
 end;
-$$;
+$;
 
 alter table public.communication_channel_bindings enable row level security;
 alter table public.chatwoot_account_mappings enable row level security;
