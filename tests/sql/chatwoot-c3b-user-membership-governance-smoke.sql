@@ -141,7 +141,7 @@ begin
     'c3b-writer-admin-user-create'
   );
 
-  if v_replay.id <> :'admin_user_mapping_id'::uuid
+  if v_replay.id <> (select value::uuid from c3b_writer_state where key='admin_user_mapping_id')
      or v_replay.version <> 1
      or v_replay.status <> 'PROVISIONING'
   then
@@ -167,10 +167,14 @@ select (public.set_chatwoot_user_mapping_state(
   1,'ACTIVE',142,null,'c3b-writer-admin-user-active'
 )).version as admin_user_version \gset
 
+insert into c3b_writer_state(key,value) values
+  ('owner_user_version', :'owner_user_version'),
+  ('admin_user_version', :'admin_user_version');
+
 do $user_activation_verified$
 begin
-  if :'owner_user_version'::integer <> 2
-     or :'admin_user_version'::integer <> 2
+  if (select value::integer from c3b_writer_state where key='owner_user_version') <> 2
+     or (select value::integer from c3b_writer_state where key='admin_user_version') <> 2
   then
     raise exception 'Chatwoot User activation did not advance version to 2';
   end if;
@@ -178,7 +182,7 @@ begin
   if not exists (
     select 1
     from public.chatwoot_user_mappings
-    where id=:'admin_user_mapping_id'::uuid
+    where id=(select value::uuid from c3b_writer_state where key='admin_user_mapping_id')
       and smart_user_id='00000000-0000-0000-0000-00000000e402'
       and chatwoot_user_id=142
       and status='ACTIVE'
@@ -199,7 +203,7 @@ begin
     '00000000-0000-0000-0000-00000000f401',
     '20000000-0000-0000-0000-00000000f401',
     '00000000-0000-0000-0000-00000000e402',
-    :'admin_user_mapping_id'::uuid,
+    (select value::uuid from c3b_writer_state where key='admin_user_mapping_id'),
     1,'ACTIVE',142,null,'c3b-writer-admin-user-active'
   );
 
@@ -219,12 +223,15 @@ select (public.create_chatwoot_account_membership(
   'c3b-writer-owner-membership-create'
 )).id as owner_membership_id \gset
 
+insert into c3b_writer_state(key,value)
+values ('owner_membership_id', :'owner_membership_id');
+
 do $owner_projection_created$
 begin
   if not exists (
     select 1
     from public.chatwoot_account_memberships
-    where id=:'owner_membership_id'::uuid
+    where id=(select value::uuid from c3b_writer_state where key='owner_membership_id')
       and effective_smart_role='OWNER'
       and chatwoot_role='administrator'
       and status='PROVISIONING'
@@ -242,7 +249,7 @@ begin
     perform public.set_chatwoot_account_membership_state(
       '00000000-0000-0000-0000-00000000f401',
       '20000000-0000-0000-0000-00000000f401',
-      :'owner_membership_id'::uuid,
+      (select value::uuid from c3b_writer_state where key='owner_membership_id'),
       1,'ACTIVE',5000000401,'agent',null,
       'c3b-writer-owner-membership-wrong-role'
     );
@@ -273,12 +280,15 @@ select (public.create_chatwoot_account_membership(
   'c3b-writer-admin-membership-create'
 )).id as admin_membership_id \gset
 
+insert into c3b_writer_state(key,value)
+values ('admin_membership_id', :'admin_membership_id');
+
 do $admin_projection_created$
 begin
   if not exists (
     select 1
     from public.chatwoot_account_memberships
-    where id=:'admin_membership_id'::uuid
+    where id=(select value::uuid from c3b_writer_state where key='admin_membership_id')
       and effective_smart_role='ADMIN'
       and chatwoot_role='agent'
       and status='PROVISIONING'
@@ -290,7 +300,7 @@ begin
     perform public.set_chatwoot_account_membership_state(
       '00000000-0000-0000-0000-00000000f401',
       '20000000-0000-0000-0000-00000000f401',
-      :'admin_membership_id'::uuid,
+      (select value::uuid from c3b_writer_state where key='admin_membership_id'),
       1,'ACTIVE',5000000402,'administrator',null,
       'c3b-writer-admin-membership-wrong-role'
     );
@@ -311,10 +321,14 @@ select (public.set_chatwoot_account_membership_state(
   'c3b-writer-admin-membership-active'
 )).version as admin_membership_version \gset
 
+insert into c3b_writer_state(key,value) values
+  ('owner_membership_version', :'owner_membership_version'),
+  ('admin_membership_version', :'admin_membership_version');
+
 do $active_memberships_verified$
 begin
-  if :'owner_membership_version'::integer <> 2
-     or :'admin_membership_version'::integer <> 2
+  if (select value::integer from c3b_writer_state where key='owner_membership_version') <> 2
+     or (select value::integer from c3b_writer_state where key='admin_membership_version') <> 2
   then
     raise exception 'membership activation did not advance version to 2';
   end if;
@@ -322,7 +336,7 @@ begin
   if not exists (
     select 1
     from public.chatwoot_account_memberships
-    where id=:'owner_membership_id'::uuid
+    where id=(select value::uuid from c3b_writer_state where key='owner_membership_id')
       and chatwoot_account_user_id=5000000401
       and chatwoot_role='administrator'
       and status='ACTIVE'
@@ -333,7 +347,7 @@ begin
   if not exists (
     select 1
     from public.chatwoot_account_memberships
-    where id=:'admin_membership_id'::uuid
+    where id=(select value::uuid from c3b_writer_state where key='admin_membership_id')
       and chatwoot_account_user_id=5000000402
       and chatwoot_role='agent'
       and status='ACTIVE'
@@ -352,7 +366,7 @@ begin
   from public.set_chatwoot_account_membership_state(
     '00000000-0000-0000-0000-00000000f401',
     '20000000-0000-0000-0000-00000000f401',
-    :'admin_membership_id'::uuid,
+    (select value::uuid from c3b_writer_state where key='admin_membership_id'),
     1,'ACTIVE',5000000402,'agent',null,
     'c3b-writer-admin-membership-active'
   );
@@ -382,16 +396,19 @@ select (public.set_chatwoot_account_membership_state(
   'c3b-writer-admin-membership-role-refresh'
 )).version as admin_membership_role_version \gset
 
+insert into c3b_writer_state(key,value)
+values ('admin_membership_role_version', :'admin_membership_role_version');
+
 do $canonical_role_recomputed$
 begin
-  if :'admin_membership_role_version'::integer <> 3 then
+  if (select value::integer from c3b_writer_state where key='admin_membership_role_version') <> 3 then
     raise exception 'canonical membership role refresh did not increment version';
   end if;
 
   if not exists (
     select 1
     from public.chatwoot_account_memberships
-    where id=:'admin_membership_id'::uuid
+    where id=(select value::uuid from c3b_writer_state where key='admin_membership_id')
       and effective_smart_role='SALES_AGENT'
       and chatwoot_role='agent'
       and version=3
@@ -410,7 +427,7 @@ begin
       '00000000-0000-0000-0000-00000000f401',
       '20000000-0000-0000-0000-00000000f401',
       '00000000-0000-0000-0000-00000000e402',
-      :'admin_user_mapping_id'::uuid,
+      (select value::uuid from c3b_writer_state where key='admin_user_mapping_id'),
       2,'DEGRADED',142,'UPSTREAM_UNAVAILABLE',
       'c3b-writer-admin-user-degrade'
     );
@@ -430,7 +447,7 @@ begin
     perform public.set_chatwoot_account_membership_state(
       '00000000-0000-0000-0000-00000000f401',
       '20000000-0000-0000-0000-00000000f401',
-      :'admin_membership_id'::uuid,
+      (select value::uuid from c3b_writer_state where key='admin_membership_id'),
       3,'ARCHIVED',5000000402,'agent',null,
       'c3b-writer-admin-membership-archive'
     );
@@ -446,7 +463,7 @@ begin
       '00000000-0000-0000-0000-00000000f401',
       '20000000-0000-0000-0000-00000000f401',
       '00000000-0000-0000-0000-00000000e402',
-      :'admin_user_mapping_id'::uuid,
+      (select value::uuid from c3b_writer_state where key='admin_user_mapping_id'),
       2,'ARCHIVED',142,null,
       'c3b-writer-admin-user-archive'
     );
@@ -500,7 +517,7 @@ begin
   begin
     update public.chatwoot_user_mappings
     set status='DEGRADED'
-    where id=:'admin_user_mapping_id'::uuid;
+    where id=(select value::uuid from c3b_writer_state where key='admin_user_mapping_id');
     raise exception 'service_role direct User mapping mutation unexpectedly succeeded';
   exception when insufficient_privilege then
     null;
@@ -509,7 +526,7 @@ begin
   begin
     update public.chatwoot_account_memberships
     set status='DEGRADED'
-    where id=:'admin_membership_id'::uuid;
+    where id=(select value::uuid from c3b_writer_state where key='admin_membership_id');
     raise exception 'service_role direct Account membership mutation unexpectedly succeeded';
   exception when insufficient_privilege then
     null;
