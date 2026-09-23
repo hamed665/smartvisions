@@ -108,6 +108,25 @@ Repository topology rule:
 
 ### COMM-TENANT-BRIDGE — Tenant/business/user mapping
 
+Status: **GAP AUDIT COMPLETE; IMPLEMENTATION BLOCKED ON COMM-CHATWOOT-SOURCE GREEN**
+
+Detailed decisions: `CHATWOOT_TENANT_BRIDGE_GAP_AUDIT.md`.
+
+Approved first implementation target after the source dependency clears:
+
+`COMM-TENANT-BRIDGE / Slice A — Tenant/channel + Account mapping contract`
+
+The audit also closes these key decisions:
+
+- one Chatwoot Account per canonical `tenant_business`;
+- never map Growth/Hunter `public.businesses` as tenant Businesses;
+- explicit `communication_channel_bindings` are required because current `integration_connections` is Organization-scoped;
+- Smart OWNER/ADMIN -> Chatwoot administrator;
+- Smart SALES_MANAGER/SALES_AGENT -> Chatwoot agent;
+- Smart VIEWER -> no first-version Chatwoot membership because Community has no read-only AccountUser role;
+- Contacts remain projections over canonical identity evidence;
+- historical Organization-scoped conversations are not assigned to a tenant Business without evidence.
+
 Deliver deterministic mapping between:
 
 - Organization;
