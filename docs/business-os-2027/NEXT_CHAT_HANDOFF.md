@@ -70,17 +70,18 @@ Read in this order:
 4. `docs/business-os-2027/README.md`
 5. this file
 6. `docs/business-os-2027/MASTER_ARCHITECTURE.md`
-7. `docs/business-os-2027/IMPLEMENTATION_MAP.md`
-8. `docs/business-os-2027/SERVICE_CONTRACT_STANDARD.md`
-9. `docs/business-os-2027/STATE_EVENT_CATALOG.md`
-10. `docs/business-os-2027/MIGRATION_FROM_GROWTH_OS.md`
-11. `docs/business-os-2027/CONTROL_PLANE_FOUNDATION.md`
-12. `docs/business-os-2027/OMNICHANNEL_ADAPTER_BOUNDARY.md`
-13. `docs/business-os-2027/CUSTOMER_360_CRM_NORMALIZATION.md`
-14. `docs/business-os-2027/CUSTOM_FIELD_GOVERNANCE_GAP_AUDIT.md`
-15. `docs/business-os-2027/SEGMENT_GOVERNANCE_GAP_AUDIT.md`
-16. current Phase 3 branch/PR, if any
-17. current `main` SHA, Production Cloudflare Worker evidence and Production Supabase migration state
+7. `docs/business-os-2027/MASTER_PROGRAM_SECTIONS.md`
+8. `docs/business-os-2027/IMPLEMENTATION_MAP.md`
+9. `docs/business-os-2027/SERVICE_CONTRACT_STANDARD.md`
+10. `docs/business-os-2027/STATE_EVENT_CATALOG.md`
+11. `docs/business-os-2027/MIGRATION_FROM_GROWTH_OS.md`
+12. `docs/business-os-2027/CONTROL_PLANE_FOUNDATION.md`
+13. `docs/business-os-2027/OMNICHANNEL_ADAPTER_BOUNDARY.md`
+14. `docs/business-os-2027/CUSTOMER_360_CRM_NORMALIZATION.md`
+15. `docs/business-os-2027/CUSTOM_FIELD_GOVERNANCE_GAP_AUDIT.md`
+16. `docs/business-os-2027/SEGMENT_GOVERNANCE_GAP_AUDIT.md`
+17. current relevant Section/Work Package branch/PR, if any
+18. current `main` SHA, Production Cloudflare Worker evidence and Production Supabase migration state
 
 Runtime and Production evidence outrank stale documentation or chat memory.
 
@@ -203,6 +204,22 @@ Before merge:
 
 A green CI run is necessary, not a substitute for review of a migration.
 
+## Stable program cursor
+
+Future chats must not continue by guessing a future PR number.
+
+Use the stable roadmap in `MASTER_PROGRAM_SECTIONS.md`:
+
+- current planned Section: `SECTION COMMUNICATION`;
+- current planned Work Package: `COMM-CHATWOOT-SOURCE`;
+- target: source-based Chatwoot Community Edition communication plane;
+- Smart Core remains source of truth for CRM/business/customer/consent/pricing/booking/commerce/payment/billing/Knowledge/Memory/action safety;
+- Chatwoot owns operational communication-plane UX/projections only;
+- outbound actions initiated from Chatwoot must cross Smart Core policy/action/send-gate/reconciliation;
+- Chatwoot proprietary `enterprise/` source is prohibited unless a valid license is intentionally adopted.
+
+A work package can require any number of actual PRs. Record those PR numbers as evidence after creation; never renumber later Sections because a PR was added.
+
 ## Exact next action
 
 1. Start from the **current canonical `main` at the time of the next session** and re-check its SHA, open PRs, CI, Production Supabase and routed Cloudflare evidence before any change. The last runtime-changing implementation checkpoint for Slice 6 is PR #191 at `a34bfd243d2f95e2ccad9895d5a753ef902a4299`; later closeout commits may be documentation-only.
@@ -217,7 +234,7 @@ A green CI run is necessary, not a substitute for review of a migration.
    - zero Email/WhatsApp outbound delta from promotion verification.
 3. Preserve Slice 6 boundaries: LEAD-only, DYNAMIC-only, no Snapshot/current-membership table, no Campaign/Workflow/provider execution, no arbitrary query language, no PII/SENSITIVE ordinary predicates.
 4. Do **not** automatically extend Segment to Deal, Business, Task, Conversation or Person Contact. Require fresh evidence.
-5. Re-audit the remaining Phase 3 implementation-map gaps before coding. In particular, determine whether governed Custom Objects are the next real dependency or should remain deferred; do not manufacture a Custom Object source of truth just because the roadmap names it.
+5. Owner roadmap decision now selects `SECTION COMMUNICATION / COMM-CHATWOOT-SOURCE` as the next planned program target. Before coding, perform a focused Chatwoot source/integration gap audit against current Production and confirm the source-fork/deployment boundary. Do not jump to a guessed future PR number, and do not vendor proprietary Chatwoot Enterprise code.
 6. Keep `businesses` as the existing Growth OS CRM/Hunter Company/Account and `tenant_businesses` as tenant-owned Business hierarchy.
 7. Do not fabricate Person Contact from provider display names.
 8. Keep Shadow Mode and all canonical provider-boundary safety gates unchanged.
