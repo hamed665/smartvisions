@@ -88,6 +88,18 @@ function setup(input: {
         ? { data: { user: null }, error: { message: 'unauthenticated' } }
         : { data: { user: { id: OWNER } }, error: null }),
     },
+    from: vi.fn((table: string) => {
+      if (table !== 'organization_members') throw new Error('unexpected authenticated table');
+      const builder = {
+        select: () => builder,
+        eq: () => builder,
+        single: async () => ({
+          data: { organization_id: ORG, user_id: OWNER, role: input.ownerRole ?? 'OWNER' },
+          error: null,
+        }),
+      };
+      return builder;
+    }),
   } as unknown as SupabaseClient;
 
   return { supabase, reads, assignmentFilters };
@@ -193,7 +205,6 @@ describe('Business-wide Chatwoot membership role read', () => {
     expect(serviceClientFactory).toHaveBeenCalledTimes(1);
     expect(reads).toEqual([
       'organization_members',
-      'organization_members',
       'tenant_businesses',
       'brands',
       'member_scope_assignments',
@@ -208,9 +219,16 @@ describe('Business-wide Chatwoot membership role read', () => {
     expect(serviceClientFactory).not.toHaveBeenCalled();
   });
 
-  it('rejects a non-OWNER reader, archived Brand, or incomplete canonical read', async () => {
+  it('does not create a service client for an authenticated non-OWNER', async () => {
+    serviceClientFactory.mockClear();
+    const { supabase } = setup({ ownerRole: 'ADMIN' });
+    await expect(readBusinessWideChatwootRole({ supabase, ...args }))
+      .rejects.toThrow('unavailable');
+    expect(serviceClientFactory).not.toHaveBeenCalled();
+  });
+
+  it('rejects an archived Brand or incomplete canonical read', async () => {
     for (const options of [
-      { ownerRole: 'ADMIN' },
       { brandStatus: 'ARCHIVED' },
       { assignmentError: true },
     ]) {
