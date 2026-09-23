@@ -68,6 +68,8 @@ describe('COMM-TENANT-BRIDGE Slice C1 Vault boundary', () => {
       'Chatwoot Vault secret name collision requires reconciliation',
     );
     expect(migration).toContain('chatwoot_vault_find_secret_ref');
+    expect(migration.match(/v_existing_secret is distinct from v_secret/g)).toHaveLength(2);
+
   });
 
   it('never stores plaintext secret in Smart Core mapping or audit tables', () => {
