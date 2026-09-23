@@ -90,6 +90,7 @@ describe('COMM-TENANT-BRIDGE Slice B', () => {
   });
 
   it('stores only secret references and does not expose them through the read runtime', () => {
+    expect(migration).toContain("^secretref://[A-Za-z0-9/_:.-]+$");
     expect(migration).toContain('webhook_secret_ref text');
     expect(migration).toContain('hmac_token_ref text');
     expect(migration).not.toMatch(/\bwebhook_secret\s+text\b/i);
@@ -128,6 +129,18 @@ describe('COMM-TENANT-BRIDGE Slice B', () => {
     expect(auditFunction).not.toContain('webhook_secret_ref');
     expect(auditFunction).not.toContain('hmac_token_ref');
     expect(migration).not.toContain('chatwoot_user_mappings_audit');
+  });
+
+  it('enforces forward-only lifecycle transitions and parent-child teardown order', () => {
+    expect(migration).toContain('invalid Chatwoot User mapping transition');
+    expect(migration).toContain('invalid Chatwoot Account membership transition');
+    expect(migration).toContain('invalid Chatwoot Inbox mapping transition');
+    expect(migration).toContain('invalid Chatwoot Team mapping transition');
+    expect(migration).toContain('archive Chatwoot Account memberships before User mapping');
+    expect(migration).toContain('archive Chatwoot child projections before Account mapping');
+    expect(migration).toContain('archive Chatwoot Inbox mapping before communication binding');
+    expect(migration).toContain('Chatwoot Inbox change requires fresh verification evidence');
+    expect(migration).toContain('Chatwoot Team change requires fresh verification evidence');
   });
 
   it('extends hierarchy removal guards rather than leaving active projections orphaned', () => {
