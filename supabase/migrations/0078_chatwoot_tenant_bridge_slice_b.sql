@@ -63,8 +63,8 @@ create table if not exists public.chatwoot_user_mappings (
       and last_error_code ~ '^[A-Z0-9_:.-]+$'
     )
   ),
-  created_by_user_id uuid not null references auth.users(id) on delete restrict,
-  updated_by_user_id uuid not null references auth.users(id) on delete restrict,
+  created_by_user_id uuid references auth.users(id) on delete restrict,
+  updated_by_user_id uuid references auth.users(id) on delete restrict,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -105,8 +105,8 @@ create table if not exists public.chatwoot_account_memberships (
       and last_error_code ~ '^[A-Z0-9_:.-]+$'
     )
   ),
-  created_by_user_id uuid not null references auth.users(id) on delete restrict,
-  updated_by_user_id uuid not null references auth.users(id) on delete restrict,
+  created_by_user_id uuid references auth.users(id) on delete restrict,
+  updated_by_user_id uuid references auth.users(id) on delete restrict,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
 
@@ -172,8 +172,8 @@ create table if not exists public.chatwoot_inbox_mappings (
       and last_error_code ~ '^[A-Z0-9_:.-]+$'
     )
   ),
-  created_by_user_id uuid not null references auth.users(id) on delete restrict,
-  updated_by_user_id uuid not null references auth.users(id) on delete restrict,
+  created_by_user_id uuid references auth.users(id) on delete restrict,
+  updated_by_user_id uuid references auth.users(id) on delete restrict,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
 
@@ -227,8 +227,8 @@ create table if not exists public.chatwoot_team_mappings (
       and last_error_code ~ '^[A-Z0-9_:.-]+$'
     )
   ),
-  created_by_user_id uuid not null references auth.users(id) on delete restrict,
-  updated_by_user_id uuid not null references auth.users(id) on delete restrict,
+  created_by_user_id uuid references auth.users(id) on delete restrict,
+  updated_by_user_id uuid references auth.users(id) on delete restrict,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
 
@@ -609,29 +609,7 @@ declare
   v_org uuid;
   v_business uuid;
 begin
-  if tg_table_name = 'chatwoot_user_mappings' then
-    v_org := null;
-    v_business := null;
-    v_before := case when tg_op='UPDATE' then jsonb_build_object(
-      'status',old.status,
-      'version',old.version,
-      'chatwoot_user_id',old.chatwoot_user_id
-    ) else null end;
-    v_after := jsonb_build_object(
-      'status',new.status,
-      'version',new.version,
-      'chatwoot_user_id',new.chatwoot_user_id,
-      'last_verified_at',new.last_verified_at,
-      'last_error_code',new.last_error_code
-    );
-    v_action := 'CHATWOOT_USER_MAPPING_' || case
-      when tg_op='INSERT' then 'CREATED'
-      when new.status='ACTIVE' and old.status is distinct from new.status then 'ACTIVATED'
-      when new.status='DEGRADED' and old.status is distinct from new.status then 'DEGRADED'
-      when new.status='ARCHIVED' and old.status is distinct from new.status then 'ARCHIVED'
-      else 'UPDATED'
-    end;
-  elsif tg_table_name = 'chatwoot_account_memberships' then
+  if tg_table_name = 'chatwoot_account_memberships' then
     v_org := new.organization_id;
     v_business := new.tenant_business_id;
     v_before := case when tg_op='UPDATE' then jsonb_build_object(
@@ -719,8 +697,8 @@ begin
     correlation_id
   ) values (
     v_org,
-    case when auth.uid() is null then 'SYSTEM' else 'USER' end,
-    coalesce(auth.uid()::text, current_user),
+    case when new.updated_by_user_id is null then 'SYSTEM' else 'USER' end,
+    coalesce(new.updated_by_user_id::text, current_user),
     v_action,
     tg_table_name,
     new.id::text,
@@ -877,12 +855,6 @@ drop trigger if exists chatwoot_user_mappings_contract_guard
 create trigger chatwoot_user_mappings_contract_guard
 before insert or update on public.chatwoot_user_mappings
 for each row execute function public.enforce_chatwoot_user_mapping_contract();
-
-drop trigger if exists chatwoot_user_mappings_audit
-  on public.chatwoot_user_mappings;
-create trigger chatwoot_user_mappings_audit
-after insert or update on public.chatwoot_user_mappings
-for each row execute function public.audit_chatwoot_slice_b_mapping_mutation();
 
 drop trigger if exists chatwoot_account_memberships_contract_guard
   on public.chatwoot_account_memberships;
