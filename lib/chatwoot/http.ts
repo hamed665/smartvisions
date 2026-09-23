@@ -96,7 +96,10 @@ function requestUrl(path: string) {
   return new URL(normalizedPath, baseUrl()).toString();
 }
 
-async function readBoundedResponse(response: Response) {
+async function readBoundedResponse(
+  response: Response,
+  method: ChatwootHttpMethod,
+) {
   const contentLength = response.headers.get('content-length');
   if (contentLength) {
     const bytes = Number.parseInt(contentLength, 10);
@@ -105,6 +108,7 @@ async function readBoundedResponse(response: Response) {
         code: 'RESPONSE_TOO_LARGE',
         message: 'Chatwoot response exceeded the configured size limit',
         status: response.status,
+        ambiguousMutationOutcome: !isChatwootReadMethod(method),
       });
     }
   }
@@ -128,6 +132,7 @@ async function readBoundedResponse(response: Response) {
           code: 'RESPONSE_TOO_LARGE',
           message: 'Chatwoot response exceeded the configured size limit',
           status: response.status,
+          ambiguousMutationOutcome: !isChatwootReadMethod(method),
         });
       }
       chunks.push(value);
@@ -178,6 +183,13 @@ export async function chatwootProvisioningRequest<T>(input: {
     try {
       requestBody = JSON.stringify(input.body);
     } catch {
+      throw new ChatwootHttpError({
+        code: 'CONFIG_INVALID',
+        message: 'Chatwoot request body is not serializable',
+      });
+    }
+
+    if (requestBody === undefined) {
       throw new ChatwootHttpError({
         code: 'CONFIG_INVALID',
         message: 'Chatwoot request body is not serializable',
@@ -243,7 +255,7 @@ export async function chatwootProvisioningRequest<T>(input: {
 
       if (response.status === 204) return null as T;
 
-      const text = await readBoundedResponse(response);
+      const text = await readBoundedResponse(response, method);
       if (!text) return null as T;
 
       try {
@@ -253,6 +265,7 @@ export async function chatwootProvisioningRequest<T>(input: {
           code: 'INVALID_RESPONSE',
           message: 'Chatwoot returned invalid JSON',
           status: response.status,
+          ambiguousMutationOutcome: !isChatwootReadMethod(method),
         });
       }
     } catch (error) {
