@@ -59,6 +59,20 @@ begin
        'CHATWOOT_INBOX_MAPPING',
        'CHATWOOT_TEAM_MAPPING'
      )
+     or v_entity_type <> case v_command_type
+       when 'CREATE_CHANNEL_BINDING' then 'COMMUNICATION_CHANNEL_BINDING'
+       when 'SET_CHANNEL_BINDING_LIFECYCLE' then 'COMMUNICATION_CHANNEL_BINDING'
+       when 'CREATE_ACCOUNT_MAPPING' then 'CHATWOOT_ACCOUNT_MAPPING'
+       when 'SET_ACCOUNT_MAPPING_STATE' then 'CHATWOOT_ACCOUNT_MAPPING'
+       when 'CREATE_USER_MAPPING' then 'CHATWOOT_USER_MAPPING'
+       when 'SET_USER_MAPPING_STATE' then 'CHATWOOT_USER_MAPPING'
+       when 'CREATE_ACCOUNT_MEMBERSHIP' then 'CHATWOOT_ACCOUNT_MEMBERSHIP'
+       when 'SET_ACCOUNT_MEMBERSHIP_STATE' then 'CHATWOOT_ACCOUNT_MEMBERSHIP'
+       when 'CREATE_INBOX_MAPPING' then 'CHATWOOT_INBOX_MAPPING'
+       when 'SET_INBOX_MAPPING_STATE' then 'CHATWOOT_INBOX_MAPPING'
+       when 'CREATE_TEAM_MAPPING' then 'CHATWOOT_TEAM_MAPPING'
+       when 'SET_TEAM_MAPPING_STATE' then 'CHATWOOT_TEAM_MAPPING'
+     end
      or p_applied_version is null
      or p_applied_version < 1
      or v_payload_hash !~ '^[0-9a-f]{64}$'
@@ -104,6 +118,7 @@ begin
       if v_existing.command_type <> v_command_type
          or v_existing.entity_type <> v_entity_type
          or v_existing.payload_hash <> v_payload_hash
+         or v_existing.applied_version <> p_applied_version
          or (p_entity_id is not null and v_existing.entity_id <> p_entity_id)
       then
         raise exception 'request key already used with different Chatwoot bridge payload';
