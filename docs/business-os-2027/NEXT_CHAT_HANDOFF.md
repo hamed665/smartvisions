@@ -307,3 +307,10 @@ PR #205 is stacked on #204. Migration `0080_chatwoot_claim_catalog_alignment.sql
 Before C3B Account orchestration, close the separate concurrency gap: `create_chatwoot_account_mapping` persists a PROVISIONING mapping, but does not reserve exclusive external mutation ownership. Two concurrent requests may both list zero external Accounts and POST duplicates. Do not connect the C3A Account create call until there is a durable single-owner claim/lease and exact-marker reconciliation for crashes. No service-role direct write or SECURITY DEFINER shortcut.
 
 Exact-head runner-backed CI and dependency review remain mandatory. Production still ends at 0076 unless fresh evidence shows otherwise.
+
+
+## C3B Account external attempt — Draft PR #206
+
+PR #206 is stacked on #205. Migration `0081_chatwoot_account_external_claim.sql` extends the same `chatwoot_bridge_command_claims` ledger with one OWNER-authenticated Account external-create attempt per mapping. The dedicated RPC returns `may_attempt_create=true` only for the first committed claim. Same-key replay returns false; another key fails closed for reconciliation. It does not call Chatwoot. The PostgreSQL 17 rollback smoke is chained after 0080.
+
+Next unit: a Candidate-only Account orchestrator may invoke C3A only after it receives `may_attempt_create=true` from the committed owner claim. If it receives false or a timeout, reconcile by exact marker; never POST again automatically. If the process dies after claim and before HTTP, reconciliation/manual recovery is required. Preserve mapping state through existing OWNER-governed RPCs, including expected version and new request key. No real Chatwoot call or Production migration until runner-backed dependency CI and source-plane Candidate evidence pass.
