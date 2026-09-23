@@ -22,7 +22,9 @@
     "communityLicensePath": "LICENSE",
     "enterpriseLicensePath": "enterprise/LICENSE",
     "communityPolicy": "MIT_EXCEPT_ENTERPRISE",
-    "enterpriseProductionUse": "LICENSE_REQUIRED"
+    "enterpriseProductionUse": "LICENSE_REQUIRED",
+    "enterpriseFilesInProductionImage": false,
+    "runtimeDisableEnterprise": true
   },
   "image": {
     "registry": "ghcr.io/hamed665/smartvisions-chatwoot",
