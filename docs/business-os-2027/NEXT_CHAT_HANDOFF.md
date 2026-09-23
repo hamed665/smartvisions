@@ -396,3 +396,22 @@ The PostgreSQL 17 migration smoke runs after 0082 and creates lower-scope eviden
 External User/AccountUser membership remains disabled. The next implementation unit may use this primitive inside SECURITY INVOKER governed logic, but must still enforce the reverse-role invariant from #211: external Chatwoot privilege can never remain stronger than canonical Smart Core authority.
 
 No Production migration, live Chatwoot request, provider/customer send, route/scheduler activation or Shadow Mode change has been made.
+
+
+## C3B governed User / Account membership persistence — Draft PR #214
+
+PR #214 is stacked on #213 and adds migration `0084_chatwoot_user_membership_governance.sql`.
+
+Four authenticated OWNER-governed SECURITY INVOKER RPCs now own Smart Core persistence for Chatwoot User mappings and Account memberships. They reuse the existing 0080 command-claim ledger and the existing bridge command context; no parallel claim/state machine is introduced.
+
+Account membership role is never caller authority. Every live/provisioning Account membership recomputes the exact Business-wide Smart Core role through the 0083 private authority helper. OWNER projects to administrator; ADMIN/SALES_MANAGER/SALES_AGENT project to agent; VIEWER cannot have a live Account membership. The 0078 membership contract trigger is replaced accordingly, removing its former target-member self-RLS failure and declared-role integrity gap.
+
+Because Chatwoot User mapping is global, #214 adds two narrow private read-only helpers: one proves the actor owns an Organization containing the target Smart user; the other detects live Account memberships using a User mapping. A live child prevents weakening an ACTIVE global User mapping. Historical ARCHIVED User mappings do not permanently block a later new live mapping.
+
+Authenticated User/Account membership table access is limited to governed command context plus RLS. Direct service_role INSERT/UPDATE is removed from these two tables; service_role keeps SELECT only for reconciliation. Inbox/Team Slice B privileges are intentionally unchanged for their later governed writer.
+
+External IDs are adopted only on ACTIVE verification. ACTIVE Account membership also requires verified external Chatwoot role equal to the canonical projection. Bigint AccountUser IDs remain PostgreSQL bigint. Request-key replay and expected-version semantics reuse the existing claim ledger.
+
+ARCHIVED is intentionally not accepted by the #214 public state RPCs. The next dependency must add durable external demotion/removal reconciliation evidence and then interlock Smart Core scope reduction against that evidence. Until that exists, external User/AccountUser membership remains disabled.
+
+No Production migration, live Chatwoot request, provider/customer send, route/scheduler activation or Shadow Mode change has been made. Exact-head runner-backed CI remains mandatory.
