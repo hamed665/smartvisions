@@ -87,6 +87,7 @@ export async function readBusinessWideChatwootRole(input: {
       brand.data.status !== 'ACTIVE' || assignments.error ||
       !Array.isArray(assignments.data) || assignments.data.length > 2) return reject();
 
+  const seenScopes = new Set<string>();
   const scoped: MemberScopeAssignment[] = assignments.data.map((row) => {
     if (row.organization_id !== input.organizationId ||
         row.user_id !== input.smartUserId ||
@@ -96,8 +97,12 @@ export async function readBusinessWideChatwootRole(input: {
         Array.isArray(row.attributes)) return reject();
     const id = row.scope_type === 'BRAND' ? row.brand_id : row.tenant_business_id;
     if (!isUuid(id) ||
-        (row.scope_type === 'BRAND' && row.tenant_business_id !== null) ||
-        (row.scope_type === 'BUSINESS' && row.brand_id !== null)) return reject();
+        (row.scope_type === 'BRAND' &&
+          (id !== business.data.brand_id || row.tenant_business_id !== null)) ||
+        (row.scope_type === 'BUSINESS' &&
+          (id !== input.tenantBusinessId || row.brand_id !== null)) ||
+        seenScopes.has(row.scope_type)) return reject();
+    seenScopes.add(row.scope_type);
     return {
       organizationId: row.organization_id,
       userId: row.user_id,
