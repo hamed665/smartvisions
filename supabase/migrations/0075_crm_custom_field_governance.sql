@@ -719,6 +719,10 @@ begin
   new.label := trim(new.label);
   new.last_request_key := trim(new.last_request_key);
 
+  perform pg_advisory_xact_lock(
+    hashtextextended(new.definition_id::text, 0)
+  );
+
   select * into v_definition
   from public.crm_custom_field_definitions d
   where d.organization_id = new.organization_id
@@ -890,6 +894,10 @@ begin
     new.value_currency_code := upper(trim(new.value_currency_code));
   end if;
 
+  if d.data_type <> 'CURRENCY' and new.value_currency_code is not null then
+    raise exception 'value_currency_code only valid for CURRENCY custom fields';
+  end if;
+
   if new.value_option_keys is not null then
     select coalesce(array_agg(distinct lower(trim(x)) order by lower(trim(x))), array[]::text[])
       into new.value_option_keys
@@ -1000,6 +1008,10 @@ begin
   end if;
 
   if d.data_type in ('SINGLE_SELECT','MULTI_SELECT') then
+    perform pg_advisory_xact_lock(
+      hashtextextended(new.definition_id::text, 0)
+    );
+
     if exists (
       select 1
       from unnest(new.value_option_keys) k
@@ -1439,6 +1451,10 @@ begin
 
   if v_currency_code is not null then
     v_currency_code := upper(trim(v_currency_code));
+  end if;
+
+  if (p_value_currency_amount is null) <> (v_currency_code is null) then
+    raise exception 'CURRENCY exact filter requires amount and currency code together';
   end if;
   if v_option_key is not null then
     v_option_key := lower(trim(v_option_key));
