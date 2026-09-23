@@ -193,51 +193,26 @@ A green CI run is necessary, not a substitute for review of a migration.
 
 ## Exact next action
 
-1. Treat Phase 3 Slice 4 Deal/Pipeline Foundation as Production-verified: PR #184, migration `0074_crm_deal_pipeline_foundation`, Cloudflare Worker `47d22421-109e-4c1e-81e6-20bb273078e1`.
-2. Preserve the verified invariants: 0 seeded Pipelines/Stages/Deals, explicit/idempotent Lead conversion only, terminal WON/LOST commercial truth, Growth/Intent Opportunities remain acquisition evidence.
-3. Start the next Phase 3 gap with a fresh Production/repository audit. Current evidence shows no governed Custom Field/Object registry, no Segment domain, no canonical Person Contact, zero identity conflicts and no need to fabricate Contacts.
-4. Prefer Custom Field/Object governance before Segments if the fresh audit confirms that segmentation would otherwise depend on scattered JSON/domain-specific fields.
-5. Do not create Person Contacts from provider display names.
-6. Do not auto-convert Growth/Intent Opportunities into Deals.
-7. Keep Shadow Mode and existing provider safety gates unchanged.
+1. Start from current canonical `main@b771883b1ba2f4787c6a466aea49f95a9052bd5f`, but re-check current main/open PRs/CI/Production before coding.
+2. Treat Phase 3 Slice 5 Custom Field Governance as Production-verified:
+   - PR #187 gap audit;
+   - PR #188 implementation;
+   - migration `0075_crm_custom_field_governance` -> Production version `20260923012557`;
+   - Worker `d42bd9c5-e862-4af6-ae70-787cbf81c5d6`;
+   - latest checked heartbeat `failed=0`, acquisition `SKIPPED`, dispatch `SKIPPED`;
+   - 0 definitions / 0 options / 0 values intentionally seeded;
+   - zero Email/WhatsApp outbound rows after merge.
+3. Begin **Phase 3 / Slice 6 — Segment Governance Gap Audit** as read-only evidence work first.
+4. Audit existing campaign/list/audience/cohort/tag/filter/lead-selection primitives and every current query path that behaves like segmentation.
+5. Classify each primitive as REUSE / EXTEND / NEW / DEFER.
+6. Prove which canonical entities may be segmented first. Lead and Deal are candidates because Slice 5 now provides governed custom fields; do not assume Business/Contact/Task/Conversation support.
+7. Define allowed typed operators by source field type. No arbitrary SQL, JSONPath or user-supplied expression language in the first slice.
+8. Define sensitivity/PII restrictions: SENSITIVE custom fields must not become ordinary segment predicates unless an explicit policy contract allows it.
+9. Define dynamic vs snapshot segment semantics, refresh/version rules, deterministic membership evidence and audit expectations before persistence.
+10. Define how Segment membership interacts with campaigns/workflows, but do not make Segment creation itself send messages or trigger providers.
+11. Do not create Person Contacts from provider display names.
+12. Do not repurpose Growth/Intent Opportunities as Deals or segment truth.
+13. Keep Shadow Mode and current provider safety gates unchanged.
+14. Only after the gap audit proves the design should implementation begin. Prefer a narrow first slice for saved governed Segment definitions + deterministic membership query contract, without campaign execution.
 
 Runtime and Production evidence outrank stale docs or chat memory.
-
-## Next-chat checkpoint
-
-Use this checkpoint before any new Phase 3 code:
-
-- current canonical `main`: `3fc5f884b115b732b675bfadf09ae90db69f15aa`;
-- Phase 3 Slice 1 through Slice 4 are Production-verified;
-- latest Phase 3 migration: `0074_crm_deal_pipeline_foundation` -> Production version `20260922225908`;
-- latest verified Cloudflare Worker after Slice 4: `47d22421-109e-4c1e-81e6-20bb273078e1`;
-- latest checked heartbeat: `failed=0`, acquisition `SKIPPED`, dispatch `SKIPPED`;
-- no Email/WhatsApp outbound rows were created by Slice 4 verification;
-- Production intentionally has 0 Pipelines / 0 Stages / 0 Deals until real commercial commands create them;
-- current remaining-gap evidence shows no Custom Field registry, no Custom Object registry, no Segment domain and no canonical Person Contact;
-- identity conflicts are currently 0 and duplicate normalized identity groups are currently 0;
-- do not fabricate Person Contacts from provider display names;
-- do not auto-convert Growth/Intent Opportunities into Deals;
-- Shadow Mode and existing provider safety gates remain unchanged.
-
-### Exact next implementation target
-
-**Phase 3 / Slice 5 — Custom Field / Custom Object Governance**
-
-Start with a fresh read-only repository + Production audit before writing code.
-
-Required audit:
-
-1. inspect current `main`, open PRs, CI, Production migrations and Worker evidence;
-2. search all existing CRM/domain tables for configurable/custom-field behavior and JSON payloads;
-3. classify every relevant primitive as REUSE / EXTEND / NEW / DEFER;
-4. prove whether custom values are needed first for Business, Lead, Deal, Task, Conversation or another entity;
-5. define data-type, validation, required/optional, default, option-set, sensitivity, indexing/filterability and lifecycle/versioning rules;
-6. define tenant scope and RBAC before persistence;
-7. define audit/PII rules and prohibit silent model-driven mutation;
-8. do not build Segments on ungoverned JSON/custom data;
-9. do not introduce a second CRM, second event store, generic EAV dumping ground or arbitrary JSON-as-schema;
-10. preserve all existing Phase 3 invariants and Shadow Mode.
-
-Only after the gap audit should implementation begin. Prefer a narrow first slice that establishes governed field definitions + typed values + RLS + audit + deterministic query semantics before adding Segments.
-
