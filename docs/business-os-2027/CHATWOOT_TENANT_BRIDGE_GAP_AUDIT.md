@@ -432,21 +432,24 @@ Minimum facts:
 
 Role derivation must use canonical Smart Core scope resolution.
 
-### Approved role projection
+### Approved role projection — superseded by Slice B upstream-policy audit
+
+The deeper Slice B audit verified that Chatwoot Community administrator can mutate Inbox/Team infrastructure, while current Smart Core control-plane mutation is OWNER-only.
+
+The corrected first-version projection is:
 
 - Smart `OWNER` -> Chatwoot `administrator`
-- Smart `ADMIN` -> Chatwoot `administrator`
+- Smart `ADMIN` -> Chatwoot `agent` with broad governed Inbox access
 - Smart `SALES_MANAGER` -> Chatwoot `agent`
 - Smart `SALES_AGENT` -> Chatwoot `agent`
-- Smart `VIEWER` -> **no Chatwoot membership in the first version**
+- Smart `VIEWER` -> **no Chatwoot membership**
 
-Reason:
+This avoids both privilege expansions:
 
-Chatwoot Community has no read-only AccountUser role.
+- ADMIN cannot bypass Smart Core OWNER-only infrastructure governance through Chatwoot settings;
+- VIEWER cannot gain reply capability merely to obtain Chatwoot visibility.
 
-Mapping VIEWER to agent would silently grant reply capability.
-
-That privilege expansion is prohibited.
+See `CHATWOOT_TENANT_BRIDGE_SLICE_B_GAP_AUDIT.md` for the evidence and detailed access projection.
 
 A future read-only communication UX must be implemented intentionally rather than pretending Chatwoot agent is read-only.
 
