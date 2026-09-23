@@ -80,10 +80,10 @@ describe('COMM-TENANT-BRIDGE Slice A', () => {
     expect(normalizeRequestKey('')).toBeNull();
     expect(normalizeChatwootErrorCode(' upstream_timeout ')).toBe('UPSTREAM_TIMEOUT');
     expect(normalizeChatwootErrorCode('not allowed!')).toBeNull();
-    expect(normalizeChatwootAccountId('101')).toBe('101');
-    expect(normalizeChatwootAccountId(101)).toBe('101');
+    expect(normalizeChatwootAccountId('101')).toBe(101);
+    expect(normalizeChatwootAccountId(101)).toBe(101);
     expect(normalizeChatwootAccountId('0')).toBeNull();
-    expect(normalizeChatwootAccountId('9223372036854775808')).toBeNull();
+    expect(normalizeChatwootAccountId('2147483648')).toBeNull();
   });
 
   it('contains no malformed single-dollar PL/pgSQL terminator', () => {
