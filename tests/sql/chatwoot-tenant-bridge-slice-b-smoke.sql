@@ -2,6 +2,11 @@
 
 begin;
 
+create temp table slice_b_state (
+  key text primary key,
+  value text not null
+) on commit drop;
+
 insert into auth.users(id) values
   ('00000000-0000-0000-0000-00000000d101'),
   ('00000000-0000-0000-0000-00000000d102'),
@@ -58,6 +63,9 @@ select (public.create_chatwoot_account_mapping(
   '20000000-0000-0000-0000-00000000e101',
   'slice-b-account-create'
 )).id as account_mapping_id \gset
+
+insert into slice_b_state(key, value)
+values ('account_mapping_id', :'account_mapping_id');
 
 select (public.set_chatwoot_account_mapping_state(
   '00000000-0000-0000-0000-00000000e101',
@@ -151,7 +159,7 @@ begin
       '20000000-0000-0000-0000-00000000e101',
       '00000000-0000-0000-0000-00000000d102',
       '70000000-0000-0000-0000-00000000e102',
-      :'account_mapping_id'::uuid,
+      (select value::uuid from slice_b_state where key='account_mapping_id'),
       'ADMIN',
       'administrator',
       'PROVISIONING',
