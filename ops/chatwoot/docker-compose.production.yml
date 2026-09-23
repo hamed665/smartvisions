@@ -1,0 +1,27 @@
+services:
+  chatwoot-web:
+    image: ${CHATWOOT_IMAGE:?Set CHATWOOT_IMAGE to an immutable GHCR image digest}
+    env_file:
+      - .env.production
+    environment:
+      RAILS_ENV: production
+      NODE_ENV: production
+      INSTALLATION_ENV: docker
+    command: ["bundle", "exec", "rails", "s", "-p", "3000", "-b", "0.0.0.0"]
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+
+  chatwoot-worker:
+    image: ${CHATWOOT_IMAGE:?Set CHATWOOT_IMAGE to an immutable GHCR image digest}
+    env_file:
+      - .env.production
+    environment:
+      RAILS_ENV: production
+      NODE_ENV: production
+      INSTALLATION_ENV: docker
+    command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
+    restart: unless-stopped
+
+# PostgreSQL, Redis and object storage are deliberately external to this compose file.
+# Their lifecycle/backups must remain independent from the Chatwoot web/worker containers.
