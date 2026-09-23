@@ -45,10 +45,10 @@ export async function readBusinessWideChatwootRole(input: {
   if (authError || !auth.user?.id || !isUuid(auth.user.id)) return reject();
 
   const [owner, member, business] = await Promise.all([
-    input.supabase.from('organization_members').select('role')
+    input.supabase.from('organization_members').select('organization_id,user_id,role')
       .eq('organization_id', input.organizationId)
       .eq('user_id', auth.user.id).single(),
-    input.supabase.from('organization_members').select('role')
+    input.supabase.from('organization_members').select('organization_id,user_id,role')
       .eq('organization_id', input.organizationId)
       .eq('user_id', input.smartUserId).single(),
     input.supabase.from('tenant_businesses')
@@ -56,8 +56,12 @@ export async function readBusinessWideChatwootRole(input: {
       .eq('organization_id', input.organizationId)
       .eq('id', input.tenantBusinessId).single(),
   ]);
-  if (owner.error || owner.data?.role !== 'OWNER' || member.error ||
-      !member.data || business.error || !business.data ||
+  if (owner.error || owner.data?.role !== 'OWNER' ||
+      owner.data.organization_id !== input.organizationId ||
+      owner.data.user_id !== auth.user.id || member.error || !member.data ||
+      member.data.organization_id !== input.organizationId ||
+      member.data.user_id !== input.smartUserId ||
+      business.error || !business.data ||
       business.data.id !== input.tenantBusinessId ||
       business.data.organization_id !== input.organizationId ||
       !isUuid(business.data.brand_id) || business.data.status !== 'ACTIVE') return reject();
