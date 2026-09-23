@@ -6,6 +6,8 @@ import {
   isRetryableChatwootReadStatus,
   mutationOutcomeMayBeAmbiguous,
   normalizeChatwootBaseUrl,
+  normalizeChatwootRequestPath,
+  parseRetryAfterMs,
   type ChatwootHttpErrorCode,
   type ChatwootHttpMethod,
 } from '@/lib/chatwoot/http-contract';
@@ -84,13 +86,14 @@ function authToken(auth: ChatwootAuth) {
 }
 
 function requestUrl(path: string) {
-  if (!path.startsWith('/') || path.startsWith('//') || path.includes('..')) {
+  const normalizedPath = normalizeChatwootRequestPath(path);
+  if (!normalizedPath) {
     throw new ChatwootHttpError({
       code: 'CONFIG_INVALID',
       message: 'Chatwoot request path is invalid',
     });
   }
-  return new URL(path, baseUrl()).toString();
+  return new URL(normalizedPath, baseUrl()).toString();
 }
 
 async function readBoundedResponse(response: Response) {
@@ -174,7 +177,11 @@ export async function chatwootProvisioningRequest<T>(input: {
           isRetryableChatwootReadStatus(response.status) &&
           attempt < attempts
         ) {
-          await sleep(150 * 2 ** (attempt - 1));
+          const retryAfterMs =
+            response.status === 429
+              ? parseRetryAfterMs(response.headers.get('retry-after'))
+              : null;
+          await sleep(retryAfterMs ?? 150 * 2 ** (attempt - 1));
           continue;
         }
 
