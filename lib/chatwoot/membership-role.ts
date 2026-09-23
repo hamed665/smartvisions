@@ -48,12 +48,21 @@ export async function readBusinessWideChatwootRole(input: {
   const { data: auth, error: authError } = await input.supabase.auth.getUser();
   if (authError || !auth.user?.id || !isUuid(auth.user.id)) return reject();
 
+  // organization_members is self-readable under the authenticated RLS contract.
+  // Prove current OWNER authority before creating any service client.
+  const owner = await input.supabase.from('organization_members')
+    .select('organization_id,user_id,role')
+    .eq('organization_id', input.organizationId)
+    .eq('user_id', auth.user.id)
+    .single();
+
+  if (owner.error || owner.data?.role !== 'OWNER' ||
+      owner.data.organization_id !== input.organizationId ||
+      owner.data.user_id !== auth.user.id) return reject();
+
   const smartCore = createSupabaseServiceClient();
 
-  const [owner, member, business] = await Promise.all([
-    smartCore.from('organization_members').select('organization_id,user_id,role')
-      .eq('organization_id', input.organizationId)
-      .eq('user_id', auth.user.id).single(),
+  const [member, business] = await Promise.all([
     smartCore.from('organization_members').select('organization_id,user_id,role')
       .eq('organization_id', input.organizationId)
       .eq('user_id', input.smartUserId).single(),
@@ -62,9 +71,7 @@ export async function readBusinessWideChatwootRole(input: {
       .eq('organization_id', input.organizationId)
       .eq('id', input.tenantBusinessId).single(),
   ]);
-  if (owner.error || owner.data?.role !== 'OWNER' ||
-      owner.data.organization_id !== input.organizationId ||
-      owner.data.user_id !== auth.user.id || member.error || !member.data ||
+  if (member.error || !member.data ||
       member.data.organization_id !== input.organizationId ||
       member.data.user_id !== input.smartUserId ||
       business.error || !business.data ||
