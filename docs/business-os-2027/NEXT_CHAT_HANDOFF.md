@@ -47,6 +47,16 @@ Business OS status as of 2026-09-23:
 - Lead->Deal conversion is explicit/idempotent and does not mutate Lead state or auto-convert acquisition Opportunities.
 - Cloudflare runtime after Slice 4 is proven by Worker version `47d22421-109e-4c1e-81e6-20bb273078e1`; latest checked heartbeat had failed=0 with acquisition/dispatch SKIPPED.
 - Zero Email/WhatsApp outbound rows were created after the PR #184 merge in the verification window.
+- Phase 3 Slice 5 Custom Field Governance is Production-verified: PR #188 / migration `0075_crm_custom_field_governance` version `20260923012557`; 0 definitions / 0 options / 0 values remain intentionally seeded.
+- Phase 3 Slice 6 Segment Governance Gap Audit merged in PR #190 at `main@496811c80a550299c3d01d5b23c2ea9b82d491a1`.
+- Phase 3 Slice 6 Dynamic Lead Segment implementation merged in PR #191 at `main@a34bfd243d2f95e2ccad9895d5a753ef902a4299`.
+- Production migration `0076_crm_segment_governance` is live as version `20260923093619`.
+- Segment first slice is LEAD-only + DYNAMIC-only, with immutable semantic versions, typed allowlisted predicates, RLS/RBAC, idempotent/version-checked mutations, deterministic bounded evaluation and minimized canonical audit.
+- Snapshot/current-membership persistence, Deal/Business/Task/Conversation/Person Contact Segment entities, Campaign/Workflow execution, arbitrary SQL/JSONPath/PostgREST/metadata predicates and PII/SENSITIVE ordinary Custom Field predicates remain out of scope.
+- Production 0076 created zero Segment data. Rollback-only Production smoke passed and left zero Segment/version/audit-fixture residue and no outbound delta.
+- Post-0076 Security Advisor is unchanged; no new unindexed-FK finding was introduced.
+- Latest routed Cloudflare Worker heartbeat after Slice 6 is `__SLICE6_WORKER_VERSION__`, with failed=0 and acquisition/evidence/auto-dispatch SKIPPED.
+- Zero Email/WhatsApp outbound rows were created from 0076 promotion through verification.
 
 Runtime and Production evidence outrank stale documentation or chat memory.
 
@@ -67,8 +77,10 @@ Read in this order:
 11. `docs/business-os-2027/CONTROL_PLANE_FOUNDATION.md`
 12. `docs/business-os-2027/OMNICHANNEL_ADAPTER_BOUNDARY.md`
 13. `docs/business-os-2027/CUSTOMER_360_CRM_NORMALIZATION.md`
-14. current Phase 3 activity/task branch or PR, if any
-15. current `main` SHA, Production Cloudflare Worker evidence and Production Supabase migration state
+14. `docs/business-os-2027/CUSTOM_FIELD_GOVERNANCE_GAP_AUDIT.md`
+15. `docs/business-os-2027/SEGMENT_GOVERNANCE_GAP_AUDIT.md`
+16. current Phase 3 branch/PR, if any
+17. current `main` SHA, Production Cloudflare Worker evidence and Production Supabase migration state
 
 Runtime and Production evidence outrank stale documentation or chat memory.
 
@@ -193,26 +205,22 @@ A green CI run is necessary, not a substitute for review of a migration.
 
 ## Exact next action
 
-1. Start from current canonical `main@b771883b1ba2f4787c6a466aea49f95a9052bd5f`, but re-check current main/open PRs/CI/Production before coding.
-2. Treat Phase 3 Slice 5 Custom Field Governance as Production-verified:
-   - PR #187 gap audit;
-   - PR #188 implementation;
-   - migration `0075_crm_custom_field_governance` -> Production version `20260923012557`;
-   - Worker `d42bd9c5-e862-4af6-ae70-787cbf81c5d6`;
-   - latest checked heartbeat `failed=0`, acquisition `SKIPPED`, dispatch `SKIPPED`;
-   - 0 definitions / 0 options / 0 values intentionally seeded;
-   - zero Email/WhatsApp outbound rows after merge.
-3. Begin **Phase 3 / Slice 6 — Segment Governance Gap Audit** as read-only evidence work first.
-4. Audit existing campaign/list/audience/cohort/tag/filter/lead-selection primitives and every current query path that behaves like segmentation.
-5. Classify each primitive as REUSE / EXTEND / NEW / DEFER.
-6. Prove which canonical entities may be segmented first. Lead and Deal are candidates because Slice 5 now provides governed custom fields; do not assume Business/Contact/Task/Conversation support.
-7. Define allowed typed operators by source field type. No arbitrary SQL, JSONPath or user-supplied expression language in the first slice.
-8. Define sensitivity/PII restrictions: SENSITIVE custom fields must not become ordinary segment predicates unless an explicit policy contract allows it.
-9. Define dynamic vs snapshot segment semantics, refresh/version rules, deterministic membership evidence and audit expectations before persistence.
-10. Define how Segment membership interacts with campaigns/workflows, but do not make Segment creation itself send messages or trigger providers.
-11. Do not create Person Contacts from provider display names.
-12. Do not repurpose Growth/Intent Opportunities as Deals or segment truth.
-13. Keep Shadow Mode and current provider safety gates unchanged.
-14. Only after the gap audit proves the design should implementation begin. Prefer a narrow first slice for saved governed Segment definitions + deterministic membership query contract, without campaign execution.
+1. Start from canonical `main@a34bfd243d2f95e2ccad9895d5a753ef902a4299`, but re-check current main, open PRs, CI, Production Supabase and routed Cloudflare evidence before any change.
+2. Treat Phase 3 Slice 6 Dynamic Lead Segments as Production-verified:
+   - gap audit PR #190;
+   - implementation PR #191;
+   - migration `0076_crm_segment_governance` -> Production version `20260923093619`;
+   - routed Worker `__SLICE6_WORKER_VERSION__`;
+   - latest checked heartbeat failed=0 with acquisition/evidence/auto-dispatch SKIPPED;
+   - 0 Segment identities / 0 Segment versions intentionally persisted;
+   - rollback-only Production smoke left zero fixture residue;
+   - zero Email/WhatsApp outbound delta from promotion verification.
+3. Preserve Slice 6 boundaries: LEAD-only, DYNAMIC-only, no Snapshot/current-membership table, no Campaign/Workflow/provider execution, no arbitrary query language, no PII/SENSITIVE ordinary predicates.
+4. Do **not** automatically extend Segment to Deal, Business, Task, Conversation or Person Contact. Require fresh evidence.
+5. Re-audit the remaining Phase 3 implementation-map gaps before coding. In particular, determine whether governed Custom Objects are the next real dependency or should remain deferred; do not manufacture a Custom Object source of truth just because the roadmap names it.
+6. Keep `businesses` as the existing Growth OS CRM/Hunter Company/Account and `tenant_businesses` as tenant-owned Business hierarchy.
+7. Do not fabricate Person Contact from provider display names.
+8. Keep Shadow Mode and all canonical provider-boundary safety gates unchanged.
+9. Any next implementation must repeat exact-head CI, PostgreSQL 17 migration-chain smoke, technical review, zero unresolved threads, controlled Production migration, advisor verification, rollback-only smoke, zero fabricated data, zero architecture-test provider sends and routed Worker heartbeat verification.
 
 Runtime and Production evidence outrank stale docs or chat memory.
