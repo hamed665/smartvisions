@@ -368,3 +368,16 @@ The required invariant is now explicit: external Chatwoot privilege may be equal
 BRAND assignment changes must evaluate every affected ACTIVE tenant Business. Do not perform Chatwoot HTTP inside a DB transaction. Use external claim/reconciliation first for demotions, then permit the canonical mutation only from persisted safe mapping evidence. Ambiguous external outcomes remain reconciliation-only.
 
 Before external User/AccountUser membership activation, add a governed versioned scope-mutation boundary and prove the interlock with PostgreSQL 17 rollback + mock orchestration tests. Direct service-role IAM or Chatwoot mapping writes are not acceptable shortcuts.
+
+
+## C3B governed member scope mutations — Draft PR #212
+
+PR #212 is stacked on #211 and introduces migration `0082_member_scope_assignment_governance.sql`. It closes the direct Smart Core IAM mutation gap without activating external Chatwoot membership.
+
+The canonical `member_scope_assignments` table now gains optimistic `version`, `last_request_key` and `updated_by_user_id` evidence. CREATE/UPDATE/DELETE use dedicated SECURITY INVOKER RPCs with server-computed payload hashes, transaction-local governed command context, durable immutable request-key claims, FOR UPDATE locking, expected-version checks and bounded audit. Assignment identity/scope is immutable after creation.
+
+Direct `service_role` INSERT/UPDATE/DELETE on canonical scope authority is revoked; service_role remains read-only. Authenticated OWNER mutation is permitted only through the governed command context. Delete retains replay evidence in the IAM command ledger even after the assignment row is gone. PostgreSQL 17 rollback smoke covers direct-DML denial, replay, request-key conflicts, stale versions, non-OWNER denial, service-role read-only behavior, delete replay, claim immutability, audit count and parent cascade behavior.
+
+This is deliberately not the reverse-role interlock. Migration 0078 keeps Chatwoot Account membership state service-only, so #212 does not pretend a SECURITY INVOKER IAM RPC can independently verify external projection state. External User/AccountUser membership must remain disabled. The next implementation unit must combine the reviewed private canonical-role authority with persisted Chatwoot reconciliation evidence so external demotion/removal is verified before any BRAND/BUSINESS authority reduction.
+
+Do not promote 0082 to Production while the stacked exact-head GitHub Actions runner still fails before Step 1. No Production migration, live Chatwoot request, provider/customer send, route/scheduler activation or Shadow Mode change has been made.
