@@ -820,7 +820,6 @@ begin
     status,
     version,
     last_request_key,
-    last_verified_at,
     created_by_user_id,
     updated_by_user_id
   ) values (
@@ -833,7 +832,6 @@ begin
     'ACTIVE',
     1,
     v_request_key,
-    now(),
     v_actor,
     v_actor
   )
@@ -941,7 +939,6 @@ begin
          version = version + 1,
          last_request_key = v_request_key,
          updated_by_user_id = v_actor,
-         last_verified_at = case when v_status = 'ACTIVE' then now() else last_verified_at end,
          last_error_code = case when v_status = 'ACTIVE' then null else last_error_code end
    where organization_id = p_organization_id
      and id = p_binding_id
