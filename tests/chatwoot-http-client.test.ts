@@ -250,6 +250,32 @@ describe('Chatwoot provisioning HTTP client', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('returns unsafe upstream bigint IDs without precision loss', async () => {
+    enableProvisioning();
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        '{"id":9223372036854775807,"user_id":2147483647,"role":"agent"}',
+        { status: 200 },
+      ),
+    );
+
+    const result = await chatwootPlatformProvisioningRequest<{
+      id: string;
+      user_id: number;
+      role: string;
+    }>({
+      path: '/platform/api/v1/accounts/7/account_users',
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(result).toEqual({
+      id: '9223372036854775807',
+      user_id: 2147483647,
+      role: 'agent',
+    });
+  });
+
   it('marks successful mutation with invalid JSON as ambiguous', async () => {
     enableProvisioning();
 
