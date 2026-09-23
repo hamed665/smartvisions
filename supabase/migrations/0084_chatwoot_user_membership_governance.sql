@@ -652,6 +652,13 @@ begin
     raise exception 'Chatwoot User ID cannot be replaced in-place';
   end if;
 
+  if v_current.chatwoot_user_id is null
+     and p_chatwoot_user_id is not null
+     and v_status <> 'ACTIVE'
+  then
+    raise exception 'new Chatwoot User ID requires ACTIVE verification';
+  end if;
+
   v_user_id := coalesce(v_current.chatwoot_user_id, p_chatwoot_user_id);
 
   if v_status = 'ACTIVE' and v_user_id is null then
@@ -995,8 +1002,14 @@ begin
     else 'agent'
   end;
 
-  if v_status = 'ACTIVE' and v_verified_role <> v_chatwoot_role then
+  if v_verified_role <> ''
+     and v_verified_role <> v_chatwoot_role
+  then
     raise exception 'verified external Chatwoot role does not match canonical projection';
+  end if;
+
+  if v_status = 'ACTIVE' and v_verified_role = '' then
+    raise exception 'ACTIVE Chatwoot Account membership requires verified external role';
   end if;
 
   if v_current.chatwoot_account_user_id is not null
@@ -1004,6 +1017,13 @@ begin
      and v_current.chatwoot_account_user_id <> p_chatwoot_account_user_id
   then
     raise exception 'Chatwoot AccountUser ID cannot be replaced in-place';
+  end if;
+
+  if v_current.chatwoot_account_user_id is null
+     and p_chatwoot_account_user_id is not null
+     and v_status <> 'ACTIVE'
+  then
+    raise exception 'new Chatwoot AccountUser ID requires ACTIVE verification';
   end if;
 
   v_account_user_id := coalesce(
