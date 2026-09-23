@@ -388,20 +388,15 @@ begin
     into v_existing
     from public.chatwoot_user_mappings
    where smart_user_id = p_smart_user_id
-     and status in ('PROVISIONING','ACTIVE','DEGRADED','ARCHIVED')
+     and status in ('PROVISIONING','ACTIVE','DEGRADED')
    order by case status
      when 'ACTIVE' then 1
      when 'PROVISIONING' then 2
-     when 'DEGRADED' then 3
-     else 4
+     else 3
    end
    limit 1;
 
   if found then
-    if v_existing.status = 'ARCHIVED' then
-      raise exception 'ARCHIVED Chatwoot User mapping is terminal';
-    end if;
-
     select *
       into v_claim
       from public.claim_chatwoot_bridge_command(
