@@ -144,6 +144,35 @@ describe('Chatwoot C3A external provisioning adapter', () => {
     expect(fetchMock.mock.calls[2]?.[1]?.method).toBe('GET');
   });
 
+  it('does not create a duplicate when the target Account marker is incomplete', async () => {
+    enableProvisioning();
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            id: 16,
+            name: 'Partial',
+            custom_attributes: {
+              smartvisions_tenant_business_id: TENANT_BUSINESS_ID,
+            },
+          },
+        ]),
+        { status: 200 },
+      ),
+    );
+
+    await expect(
+      ensureChatwootAccount({
+        tenantBusinessId: TENANT_BUSINESS_ID,
+        name: 'Smart Business',
+        fetchImpl: fetchMock as unknown as typeof fetch,
+      }),
+    ).rejects.toMatchObject({ code: 'IDENTITY_CONFLICT' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('fails closed when multiple Accounts claim the same tenant marker', async () => {
     enableProvisioning();
 
@@ -233,6 +262,36 @@ describe('Chatwoot C3A external provisioning adapter', () => {
     const retryBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
     expect(retryBody.password).toBe(firstBody.password);
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('fails closed on malformed adopted User projection metadata', async () => {
+    enableProvisioning();
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: 41,
+          email: 'owner@example.com',
+          name: 'Owner',
+          custom_attributes: {
+            smartvisions_user_id: 123,
+            smartvisions_projection: true,
+            smartvisions_projection_version: '1',
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await expect(
+      ensureChatwootUser({
+        smartUserId: SMART_USER_ID,
+        email: 'owner@example.com',
+        fetchImpl: fetchMock as unknown as typeof fetch,
+      }),
+    ).rejects.toMatchObject({ code: 'IDENTITY_CONFLICT' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('fails closed if an adopted User is marked for another Smart user', async () => {
