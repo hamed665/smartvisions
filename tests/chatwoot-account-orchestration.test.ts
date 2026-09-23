@@ -147,6 +147,48 @@ describe('C3B Candidate Account orchestration', () => {
     expect(tableReads).not.toContain('businesses');
   });
 
+  it('reconciles an ambiguous Account POST by exact marker without a second POST', async () => {
+    enabled();
+    const { supabase, rpc } = setup({ claimNew: true });
+    const projected = {
+      id: 51, name: 'Canonical Business', custom_attributes: marker(),
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
+      .mockRejectedValueOnce(new TypeError('network response lost'))
+      .mockResolvedValueOnce(new Response(JSON.stringify([projected]), { status: 200 }));
+
+    const mapping = await provisionCandidateChatwootAccount({
+      supabase, organizationId: ORGANIZATION_ID, mappingId: MAPPING_ID,
+      requestKey: REQUEST_KEY, fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+    expect(mapping.chatwoot_account_id).toBe(51);
+    expect(fetchMock.mock.calls.map((call) => call[1]?.method)).toEqual([
+      'GET', 'POST', 'GET',
+    ]);
+    expect(rpc.mock.calls.map((call) => call[0])).toEqual([
+      'claim_chatwoot_account_external_create',
+      'set_chatwoot_account_mapping_state',
+    ]);
+  });
+
+  it('fails closed on duplicate external Account markers before POST or mapping commit', async () => {
+    enabled();
+    const { supabase, rpc } = setup({ claimNew: true });
+    const projected = {
+      id: 51, name: 'Canonical Business', custom_attributes: marker(),
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([projected, { ...projected, id: 52 }]), { status: 200 }),
+    );
+    await expect(provisionCandidateChatwootAccount({
+      supabase, organizationId: ORGANIZATION_ID, mappingId: MAPPING_ID,
+      requestKey: REQUEST_KEY, fetchImpl: fetchMock as unknown as typeof fetch,
+    })).rejects.toThrow('Multiple Chatwoot Accounts');
+    expect(fetchMock.mock.calls.map((call) => call[1]?.method)).toEqual(['GET']);
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
   it('reconciles a replay by GET only and refuses another POST on zero matches', async () => {
     enabled();
     const { supabase, rpc } = setup({ claimNew: false });
