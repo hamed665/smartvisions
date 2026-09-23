@@ -208,35 +208,42 @@ A green CI run is necessary, not a substitute for review of a migration.
 
 ## Current stacked Chatwoot execution checkpoint — 2026-09-23
 
-Dependency order now extends through Slice B:
+Dependency stack:
 
-1. PR #195 — `COMM-CHATWOOT-SOURCE`, Draft.
-2. PR #196 — Tenant Bridge gap audit, Draft.
-3. PR #197 — Tenant Bridge Slice A, Draft.
-4. PR #198 — Tenant Bridge Slice B audit, Draft.
-5. Slice B implementation branch — `feat/comm-tenant-bridge-slice-b`; create/verify its Draft PR before further implementation.
+1. PR #195 — Chatwoot source foundation.
+2. PR #196 — Tenant Bridge audit.
+3. PR #197 — Slice A mapping contract.
+4. PR #198 — Slice B audit.
+5. PR #199 — Slice B mapping contract.
+6. PR #200 — Slice C Candidate/Reconciliation audit.
+7. Slice C1 implementation branch — `feat/comm-tenant-bridge-slice-c1-vault`; create/verify its Draft PR before C2.
 
-Slice B implementation currently includes:
+Slice C1 contains:
 
-- migration `0078_chatwoot_tenant_bridge_slice_b.sql`;
-- `chatwoot_user_mappings`;
-- `chatwoot_account_memberships`;
-- `chatwoot_inbox_mappings`;
-- `chatwoot_team_mappings`;
-- server-only Supabase service client;
-- safe OWNER/ADMIN resource-read API with no secret references;
-- role projection: OWNER -> administrator; ADMIN/SALES_MANAGER/SALES_AGENT -> agent; VIEWER -> no membership;
-- external IDs aligned to Chatwoot v4.18.0: User/Inbox integer; AccountUser/Team bigint;
-- secret-store reference fields only for API Inbox secrets;
-- no authenticated direct Data API access to Slice B mapping tables;
-- reverse hierarchy/member guards;
-- PostgreSQL 17 rollback-only smoke wired into CI;
-- zero Chatwoot HTTP calls;
+- migration `0079_chatwoot_vault_boundary.sql`;
+- service_role-only SECURITY INVOKER Vault wrappers;
+- exact `secretref://supabase-vault/<uuid>` format;
+- server-only create/read/update client;
+- pure reference parser;
+- PostgreSQL 17 synthetic Vault contract bootstrap + rollback smoke;
+- zero live Chatwoot calls;
 - zero provider sends.
 
-Current external blocker remains GitHub-hosted runner allocation. Do not merge around `runner_id=0 / steps=0`.
+Production Vault evidence:
 
-Production remains on migration `0076_crm_segment_governance`, with zero Brand/tenant-Business/Chatwoot mapping rows.
+- `supabase_vault 0.3.1` installed;
+- service_role Vault create/update/read privileges verified;
+- authenticated has no Vault schema/decrypted-secret access.
+
+External blocker remains GitHub-hosted runner allocation (`runner_id=0`, zero steps). Do not merge around it.
+
+Production remains migration `0076_crm_segment_governance`; no Chatwoot mapping/Vault secret fixture was created for these slices.
+
+Next implementation after C1 review is:
+
+`COMM-TENANT-BRIDGE / Slice C2 — Chatwoot HTTP client`
+
+C2 may be implemented with mocks and provisioning disabled by default; no Candidate/Production side effect until dependencies are green.
 
 ## Stable program cursor
 
