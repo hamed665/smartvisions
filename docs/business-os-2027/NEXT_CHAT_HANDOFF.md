@@ -675,7 +675,7 @@ This branch adds:
 
 The verifier requires an immutable Smart Visions GHCR digest, isolated Candidate HTTPS hostname, dedicated PostgreSQL/Redis/S3-compatible storage and no provider/Webhook activation. It does not create hosting resources, DNS, databases, Redis, buckets or secrets.
 
-Actual Candidate runtime remains blocked on a connected long-running container host. Render and Railway are suitable available integrations; neither is confirmed connected at this checkpoint. Do not substitute Smart Core Cloudflare Workers, Smart Core Supabase schema or Vercel for the Rails + Sidekiq runtime.
+Actual Candidate runtime remains blocked on long-running host resources. A fresh read-only Railway audit confirmed the account/workspace is accessible but currently has zero projects and no Candidate runtime. No Railway resources have been created. Do not substitute Smart Core Cloudflare Workers, Smart Core Supabase schema or Vercel for the Rails + Sidekiq runtime.
 
 After exact-head CI/source-image verification, deploy only to isolated Candidate resources. Keep Production customer data, Production provider credentials, API Inbox activation, native Chatwoot Email/WhatsApp and outbound sends disabled.
 
@@ -692,3 +692,15 @@ The exact-main Chatwoot Source Image workflow run #21 completed successfully on 
 - provenance inspection passed; Enterprise source is absent; runtime Enterprise is disabled; provider authority remains Smart Core.
 
 The non-secret Candidate env template now pins that exact immutable image. It remains a template: hostname, secret-store values, dedicated Candidate PostgreSQL, Redis and S3-compatible storage must be resolved before deployment. No Candidate or Production Chatwoot runtime has been created. Keep API Inbox activation, customer data, native provider credentials and outbound sends disabled; keep Shadow Mode ON. The next gate is Candidate hosting-resource provisioning and runtime verification, not another source build.
+
+
+## Current Chatwoot Candidate checkpoint — 2026-09-25
+
+- Current `main`: `4987088dc4ba2e9212e196304ccebd69073ba536`, merge commit for PR #229.
+- Exact-main CI run #1234: SUCCESS.
+- Cloudflare Production deploy run #714: SUCCESS on this SHA. Growth OS Release Candidate and Production Worker deploys, route verification, safe API/webhook checks, and routed smoke all passed. Production Worker version: `eda99066-ed51-4ee7-a0d7-96102152f513`; smoke returned `/login=200`, `/=307`, unknown path `=404`, each through Cloudflare. No provider send was invoked.
+- Production Supabase `pkypexzpyfbikdnkrzvw`: migration head remains `0090_chatwoot_fk_index_hardening`. Fresh read-only verification: Shadow Mode ON; global Kill Switch OFF; email, WhatsApp AI, and Agent pauses OFF. Cost Guard remains $25 monthly ($10 OpenAI, $5 Google Places, $4 Email, $3 WhatsApp, $3 reserve), thresholds 70/85/95/100. Month-to-date recorded usage was $0.219241 (OpenAI $0.039241, Google Places $0.18, Email $0, WhatsApp $0). Outbound outreach and WhatsApp events in the last hour were 0; email events in the last hour were 0.
+- Chatwoot Source Image run #23 succeeded on this main SHA. Image: `ghcr.io/hamed665/smartvisions-chatwoot:v4.18.0-sv-4987088dc4ba2e9212e196304ccebd69073ba536@sha256:c6e759a89867b41eae2230f5afcad75c7a54f421225d2e46c3e865bd401058ff`. Upstream remains Chatwoot `v4.18.0@9f920b549c14491a4e587687a3eed5d21c6ccc7d`; provenance inspection passed, Enterprise source was absent, runtime Enterprise disabled, provider authority Smart Core.
+- The Candidate env template remains pinned to the previously verified immutable image from Source Image run #21. No Candidate or Production Chatwoot runtime exists yet.
+- A fresh Railway read-only audit confirmed account `hamed665` can read its Personal workspace; the workspace currently has 0 projects and no Chatwoot Candidate project, service, or deployment. No Railway resources were created. Keep this as a read-only checkpoint; resource provisioning requires an explicitly authorized next step.
+- Continue at `SECTION COMMUNICATION / COMM-CHATWOOT-SOURCE`: isolated Candidate hosting/resource provisioning and runtime verification. Keep Shadow Mode ON and provider activity disabled.
