@@ -79,9 +79,7 @@ async function readAdminProjection(input: {
     service
       .from('chatwoot_account_memberships')
       .select(
-        'id,organization_id,tenant_business_id,smart_user_id,' +
-          'chatwoot_user_mapping_id,chatwoot_account_mapping_id,' +
-          'chatwoot_account_user_id,effective_smart_role,chatwoot_role,status',
+        'id,organization_id,tenant_business_id,smart_user_id,chatwoot_user_mapping_id,chatwoot_account_mapping_id,chatwoot_account_user_id,effective_smart_role,chatwoot_role,status',
       )
       .eq('organization_id', input.organizationId)
       .eq('tenant_business_id', input.tenantBusinessId)
