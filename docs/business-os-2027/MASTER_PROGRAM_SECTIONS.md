@@ -108,6 +108,11 @@ Repository topology rule:
 
 ### COMM-TENANT-BRIDGE — Tenant/business/user mapping
 
+Slice B status: **IMPLEMENTED ON STACKED DRAFT BRANCH; NOT MERGED / NOT PRODUCTION**
+
+Slice B adds server-only User/AccountUser/API-Inbox/Team projection contracts. It preserves OWNER as the only first-version Chatwoot administrator; ADMIN and sales roles project to agent, and VIEWER receives no Chatwoot membership. Live Chatwoot provisioning remains deferred to the Candidate adapter slice.
+
+
 Status: **SLICE A IMPLEMENTED ON STACKED DRAFT PR #197; VERIFICATION/MERGE BLOCKED ON COMM-CHATWOOT-SOURCE + GITHUB HOSTED RUNNER**
 
 Detailed decisions: `CHATWOOT_TENANT_BRIDGE_GAP_AUDIT.md`.

@@ -1031,3 +1031,33 @@ Key non-negotiable decisions:
 - Inbox/Team access follows least-privilege Smart scope;
 - Slice A command claims are reused, not duplicated;
 - no Production live provisioning before Candidate exists.
+
+
+---
+
+## 38. Implementation checkpoint
+
+Slice B mapping-contract implementation now exists on the stacked implementation branch.
+
+Implemented contract:
+
+- `chatwoot_user_mappings`;
+- `chatwoot_account_memberships`;
+- `chatwoot_inbox_mappings`;
+- `chatwoot_team_mappings`;
+- server-only Supabase access for Slice B mappings;
+- explicit external-ID widths from Chatwoot v4.18.0;
+- OWNER-only Chatwoot administrator projection;
+- ADMIN/SALES roles agent projection;
+- no VIEWER membership;
+- API Inbox `Channel::Api` contract;
+- secret references only, never secret plaintext;
+- no direct authenticated Data API grant on Slice B mapping tables;
+- hierarchy/member removal guards;
+- bounded audit payloads that omit Inbox secret references;
+- PostgreSQL 17 rollback-only smoke wired into CI;
+- safe non-secret read API for OWNER/ADMIN.
+
+The implementation still contains **no live Chatwoot HTTP call**. Actual Platform/User/Inbox/Team provisioning remains Candidate adapter work.
+
+Production remains unchanged until dependency PRs and exact-head CI are green.
