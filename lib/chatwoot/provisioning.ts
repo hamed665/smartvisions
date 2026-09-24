@@ -230,6 +230,54 @@ async function createChatwootUserOnce(input: {
   });
 }
 
+export async function reconcileChatwootUser(input: {
+  userId: number;
+  smartUserId: string;
+  email: string;
+  fetchImpl?: typeof fetch;
+}): Promise<ChatwootUserProjection> {
+  const userId = normalizeChatwootInt32Id(input.userId);
+  const smartUserId = requireUuid(input.smartUserId, 'smartUserId');
+  const email = normalizeCanonicalEmail(input.email);
+
+  if (userId === null || !email) {
+    throw new ChatwootProvisioningError(
+      'INVALID_INPUT',
+      'Chatwoot User reconciliation input is invalid',
+    );
+  }
+
+  const raw = await chatwootPlatformProvisioningRequest<unknown>({
+    path: `/platform/api/v1/users/${userId}`,
+    method: 'GET',
+    fetchImpl: input.fetchImpl,
+  });
+
+  const user = parseChatwootUser(raw);
+  if (user.id !== userId || user.email !== email) {
+    throw new ChatwootProvisioningError(
+      'UPSTREAM_MISMATCH',
+      'Chatwoot User reconciliation does not match canonical identity',
+    );
+  }
+
+  const marker = inspectChatwootUserProjectionMarker(user);
+  if (marker.kind === 'INVALID') {
+    throw new ChatwootProvisioningError(
+      'IDENTITY_CONFLICT',
+      'Chatwoot User reconciliation found malformed Smart projection metadata',
+    );
+  }
+  if (marker.kind !== 'VALID' || marker.smartUserId !== smartUserId) {
+    throw new ChatwootProvisioningError(
+      'RECONCILIATION_REQUIRED',
+      'Chatwoot User reconciliation did not confirm the Smart projection marker',
+    );
+  }
+
+  return user;
+}
+
 export async function ensureChatwootUser(input: {
   smartUserId: string;
   email: string;
@@ -237,7 +285,10 @@ export async function ensureChatwootUser(input: {
   fetchImpl?: typeof fetch;
 }): Promise<{
   user: ChatwootUserProjection;
-  outcome: 'CREATED_OR_ADOPTED' | 'RECOVERED_BY_SAFE_EMAIL_RETRY';
+  outcome:
+    | 'CREATED_OR_ADOPTED'
+    | 'RECOVERED_BY_SAFE_EMAIL_RETRY'
+    | 'RECONCILED_AFTER_AMBIGUOUS_MARKER_UPDATE';
 }> {
   const smartUserId = requireUuid(input.smartUserId, 'smartUserId');
   const presentation = buildChatwootUserPresentation({
@@ -330,10 +381,16 @@ export async function ensureChatwootUser(input: {
       error instanceof ChatwootHttpError &&
       error.ambiguousMutationOutcome
     ) {
-      throw new ChatwootProvisioningError(
-        'RECONCILIATION_REQUIRED',
-        'Chatwoot User marker update has an ambiguous external outcome',
-      );
+      const reconciled = await reconcileChatwootUser({
+        userId: adopted.id,
+        smartUserId,
+        email: presentation.email,
+        fetchImpl: input.fetchImpl,
+      });
+      return {
+        user: reconciled,
+        outcome: 'RECONCILED_AFTER_AMBIGUOUS_MARKER_UPDATE',
+      };
     }
     throw error;
   }
