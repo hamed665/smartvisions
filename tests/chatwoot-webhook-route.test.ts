@@ -105,6 +105,22 @@ describe('Chatwoot webhook route', () => {
     expect(persist).not.toHaveBeenCalled();
   });
 
+  it('stream-caps oversized bodies even without content-length', async () => {
+    const oversized = 'x'.repeat(1024 * 1024 + 1);
+    const response = await POST(
+      request({
+        body: oversized,
+        headers: {
+          'content-type': 'application/json',
+        },
+      }),
+      { params: Promise.resolve({ mappingId: MAPPING_ID }) },
+    );
+
+    expect(response.status).toBe(413);
+    expect(persist).not.toHaveBeenCalled();
+  });
+
   it('maps invalid signed requests to bounded 400/401 responses', async () => {
     for (const [code, expected] of [
       ['INVALID_REQUEST', 400],
