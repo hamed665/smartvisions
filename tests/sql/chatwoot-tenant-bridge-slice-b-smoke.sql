@@ -426,7 +426,7 @@ begin
       end if;
   end;
 end;
-$archive_guards$;
+$$;
 
 reset role;
 select set_config('request.jwt.claim.sub', '', false);
@@ -451,7 +451,7 @@ reset role;
 select set_config('request.jwt.claim.sub', '', false);
 set role service_role;
 
-do $archive_guards$
+do $$
 begin
   begin
     update public.teams set status='ARCHIVED'
