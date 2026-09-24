@@ -37,3 +37,7 @@ create policy integration_connections_owner_update
 
 grant select, insert, update on public.integration_connections to authenticated;
 grant select, insert, update on public.integration_connections to service_role;
+
+-- Match the existing Production Supabase privilege contract used by
+-- SECURITY INVOKER Chatwoot bridge triggers during service reconciliation.
+grant select on public.organization_members to authenticated, service_role;
