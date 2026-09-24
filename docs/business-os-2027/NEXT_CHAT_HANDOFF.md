@@ -500,3 +500,18 @@ Mock tests cover create/adopt/ambiguous reconciliation, duplicate marker denial,
 `CHATWOOT_WEBHOOK_PUBLIC_ORIGIN` is declared as required configuration but is intentionally not activated in Production from this Draft.
 
 No Production migration, live Chatwoot call, provider/customer send, route invocation or Shadow Mode change has been made.
+
+
+## C4 governed Team projection — Draft PR #220
+
+PR #220 is stacked on #219 and closes the governed Smart Team -> Chatwoot Team projection boundary.
+
+Pinned Chatwoot v4.18.0 source confirms Team CRUD is account-scoped, Team IDs are bigint, Team names are normalized/lowercased and unique per Account, and there is no custom-attributes marker field. The projection therefore uses a deterministic collision-safe name from canonical Smart Team name plus the first 8 Smart Team UUID characters, while the exact Smart marker lives in Team description: `smartvisions:team:<team-uuid>;business:<business-uuid>;v=1`.
+
+Migration `0089_chatwoot_team_governance.sql` adds command-context RLS/guarding for `chatwoot_team_mappings`, exact ACTIVE Team->Department->Branch->Business lineage validation, ACTIVE Account mapping requirement, immutable service-only short-lived reconciliation receipts, receipt-backed activation and governed DEGRADED transition. service_role mapping access is SELECT-only. The existing Chatwoot claim ledger supplies request-key/version replay. The only SECURITY DEFINER helper is private, OWNER-authenticated and uses empty search_path.
+
+Server runtime performs GET /teams before every create; exact description marker is adopted, absent marker causes exactly one POST, ambiguous POST is followed by GET-only reconciliation and duplicate markers fail closed. No external Team ID is accepted from caller input. External Team bigint IDs stay lossless decimal strings and unsafe JavaScript numeric IDs fail closed.
+
+Mock tests cover create/adopt/ambiguous reconciliation, one-POST semantics, receipt/activation arguments, duplicate marker denial, bigint safety, ACTIVE replay and scope drift. PostgreSQL 17 rollback smoke covers deterministic projected naming, direct authenticated mutation denial, service-role read-only mapping ACL, service-only receipt ACL, marker/identity conflict, receipt-backed activation, stale receipt denial, direct service mutation denial, degradation and fresh receipt reactivation.
+
+No Production migration, live Chatwoot call, provider/customer send, route activation or Shadow Mode change has been made. Keep #220 Draft until exact-head CI is runner-backed and the stacked dependency chain is proven.
