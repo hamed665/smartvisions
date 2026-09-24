@@ -432,7 +432,7 @@ reset role;
 select set_config('request.jwt.claim.sub', '', false);
 set role service_role;
 
-do $
+do $member_remove$
 begin
   begin
     delete from public.organization_members
@@ -446,7 +446,7 @@ begin
       end if;
   end;
 end;
-$$;
+$member_remove$;
 
 reset role;
 select set_config('request.jwt.claim.sub', '', false);
