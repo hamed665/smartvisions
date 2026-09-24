@@ -352,3 +352,14 @@ PR #208 review established that its read-only role resolver may safely use the e
 The User/AccountUser writer remains blocked because authenticated `SECURITY INVOKER` cannot read another member's `organization_members.role` under the current self-read RLS boundary. Direct `service_role` writes are forbidden, and a broad `SECURITY DEFINER` bypass would reverse prior hardening. PR #209 therefore contains no writer migration or runtime activation; it records the blocker and required reverse-role contract in `CHATWOOT_C3B_USER_MEMBERSHIP_WRITER_BLOCKER.md`.
 
 Before writer implementation resumes, require a reviewed least-privilege transactional authorization design that recomputes canonical Organization/Brand/Business role at the mutation boundary, reuses the existing claim ledger/version/request semantics, and proves safe OWNER demotion and VIEWER membership removal. Keep external User/AccountUser membership disabled.
+
+
+## C3B private canonical-role authority proof — Draft PR #210
+
+PR #210 is stacked on #209 and does not implement the User/AccountUser writer. It records and rollback-tests a source-backed least-privilege authority primitive for the exact blocker found in #208/#209.
+
+The proposed shape keeps the eventual mutation writer SECURITY INVOKER. Only the canonical role read primitive is SECURITY DEFINER, isolated in a non-exposed private schema, with empty search_path, fully qualified relations, exact OWNER/Organization/Business/target checks, and narrow grants. This follows current Supabase guidance for breaking RLS recursion without reverting public.is_org_owner to SECURITY DEFINER or using service_role writes.
+
+The PostgreSQL 17 rollback-only smoke proves the intended contract: direct organization_members target-row access remains self-read under RLS; the private primitive returns only the canonical role for a current Organization OWNER; BUSINESS outranks BRAND; conditional attributes do not grant without trusted context; non-OWNER/cross-tenant/archived lineage calls fail closed; anon/service_role lack helper access; public.is_org_owner remains SECURITY INVOKER.
+
+No migration or runtime activation is included. Do not implement or activate external User/AccountUser membership until #210 exact-head CI executes real steps successfully and the security boundary is reviewed.
