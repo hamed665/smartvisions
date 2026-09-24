@@ -172,12 +172,12 @@ function accountResourcePath(value: string) {
     resourcePath.startsWith('//') ||
     resourcePath === '/' ||
     resourcePath.startsWith('/api/') ||
-    resourcePath.startsWith('/platform/')
+    resourcePath.startsWith('/platform/') ||
+    !normalizeChatwootRequestPath(resourcePath)
   ) {
     return unavailable();
   }
 
-  // Run the final composed path through the canonical traversal/fragment guard.
   return resourcePath;
 }
 
