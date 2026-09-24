@@ -4,7 +4,7 @@
 create schema if not exists private;
 
 revoke all on schema private from public, anon, authenticated, service_role;
-grant usage on schema private to authenticated;
+grant usage on schema private to authenticated, service_role;
 
 create or replace function private.chatwoot_business_wide_role(
   p_organization_id uuid,
