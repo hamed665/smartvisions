@@ -53,7 +53,7 @@ export function normalizeChatwootRequestPath(value: unknown) {
 
   const rawPath = value.split(/[?#]/, 1)[0] ?? '';
   if (
-    /[\\x00-\\x1F\\x7F]/.test(value) ||
+    /[\x00-\x1F\x7F]/.test(value) ||
     /%2e/i.test(rawPath) ||
     /(^|/).{1,2}(?:/|$)/.test(rawPath) ||
     rawPath.includes('\\')
@@ -81,7 +81,7 @@ export function normalizeChatwootAccessToken(value: unknown) {
   if (
     token.length < 1 ||
     token.length > 4096 ||
-    /[\\x00-\\x1F\\x7F]/.test(token)
+    /[\x00-\x1F\x7F]/.test(token)
   ) {
     return null;
   }
