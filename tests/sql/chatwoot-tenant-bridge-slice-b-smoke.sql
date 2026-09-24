@@ -430,7 +430,6 @@ $archive_guards$;
 
 reset role;
 select set_config('request.jwt.claim.sub', '', false);
-set role service_role;
 
 do $member_remove$
 begin
