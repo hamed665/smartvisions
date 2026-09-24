@@ -81,8 +81,9 @@ Read in this order:
 15. `docs/business-os-2027/CUSTOM_FIELD_GOVERNANCE_GAP_AUDIT.md`
 16. `docs/business-os-2027/SEGMENT_GOVERNANCE_GAP_AUDIT.md`
 17. `docs/business-os-2027/CHATWOOT_SOURCE_GAP_AUDIT.md`
-18. current relevant Section/Work Package branch/PR, if any
-19. current `main` SHA, Production Cloudflare Worker evidence and Production Supabase migration state
+18. `docs/business-os-2027/CHATWOOT_TENANT_BRIDGE_GAP_AUDIT.md`
+19. current relevant Section/Work Package branch/PR, if any
+20. current `main` SHA, Production Cloudflare Worker evidence and Production Supabase migration state
 
 Runtime and Production evidence outrank stale documentation or chat memory.
 
@@ -204,6 +205,18 @@ Before merge:
 - no Production provider/send behavior change.
 
 A green CI run is necessary, not a substitute for review of a migration.
+
+## Stacked next dependency
+
+`COMM-TENANT-BRIDGE` gap audit is complete on a stacked documentation branch.
+
+Do not implement or merge Tenant Bridge schema until `COMM-CHATWOOT-SOURCE` PR #195 has real runner-backed exact-head CI and the pinned Chatwoot source Docker build passes.
+
+Once that dependency is green, the approved next implementation is:
+
+`COMM-TENANT-BRIDGE / Slice A — Tenant/channel + Account mapping contract`
+
+Production currently has 0 Brands and 0 tenant Businesses, so no persistent real Chatwoot Account mapping may be fabricated for verification.
 
 ## Stable program cursor
 

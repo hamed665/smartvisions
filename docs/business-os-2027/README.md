@@ -22,7 +22,8 @@ Production changes are promoted only after the repository's safety, CI, migratio
 10. [CUSTOM_FIELD_GOVERNANCE_GAP_AUDIT.md](./CUSTOM_FIELD_GOVERNANCE_GAP_AUDIT.md) — Phase 3 Slice 5 governed Custom Field contract and Production evidence.
 11. [SEGMENT_GOVERNANCE_GAP_AUDIT.md](./SEGMENT_GOVERNANCE_GAP_AUDIT.md) — Phase 3 Slice 6 Segment decisions, implementation boundaries and Production closeout.
 12. [CHATWOOT_SOURCE_GAP_AUDIT.md](./CHATWOOT_SOURCE_GAP_AUDIT.md) — source/license/deployment/provider-ownership audit for the Chatwoot Communication Plane.
-13. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
+13. [CHATWOOT_TENANT_BRIDGE_GAP_AUDIT.md](./CHATWOOT_TENANT_BRIDGE_GAP_AUDIT.md) — deterministic tenant/business/user/account/inbox/team/contact/conversation mapping audit.
+14. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
 
 ## Phase 0 exit criteria
 
@@ -95,3 +96,14 @@ Approved source baseline:
 - `tenant_business -> Chatwoot Account` tenancy projection
 
 Next action remains `COMM-CHATWOOT-SOURCE`, now moving from audit to source-foundation implementation.
+
+
+## Tenant Bridge continuation
+
+The `COMM-TENANT-BRIDGE` gap audit is complete but intentionally stacked behind `COMM-CHATWOOT-SOURCE`.
+
+Production currently has zero Brands and zero tenant Businesses. No Chatwoot Account may be provisioned from Growth/Hunter `public.businesses` as a substitute.
+
+First implementation after the source-build dependency is green:
+
+`COMM-TENANT-BRIDGE / Slice A — Tenant/channel + Account mapping contract`
