@@ -428,10 +428,10 @@ end;
 $$;
 
 reset role;
-select set_config('request.jwt.claim.sub', '', false);
-set role service_role;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000d101', false);
+set role authenticated;
 
-do $$
+do $
 begin
   begin
     delete from public.organization_members
@@ -444,7 +444,15 @@ begin
         raise;
       end if;
   end;
+end;
+$;
 
+reset role;
+select set_config('request.jwt.claim.sub', '', false);
+set role service_role;
+
+do $
+begin
   begin
     update public.teams set status='ARCHIVED'
     where id='50000000-0000-0000-0000-00000000e101';
