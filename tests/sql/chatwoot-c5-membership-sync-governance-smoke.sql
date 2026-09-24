@@ -395,6 +395,55 @@ select public.record_chatwoot_membership_sync_result(
 insert into c5_membership_sync_state(key,value)
 values ('team_result_inserted', :'team_result_inserted');
 
+reset role;
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000ed01',false);
+
+do $terminal_claim_replay$
+declare
+  v_inbox record;
+  v_team record;
+begin
+  select *
+    into v_inbox
+    from public.claim_chatwoot_membership_sync(
+      '00000000-0000-0000-0000-00000000fd01',
+      '20000000-0000-0000-0000-00000000fd01',
+      'INBOX',
+      '70000000-0000-0000-0000-00000000fd01',
+      2,
+      repeat('a',64),
+      2,
+      'c5-sync-inbox-members'
+    );
+
+  select *
+    into v_team
+    from public.claim_chatwoot_membership_sync(
+      '00000000-0000-0000-0000-00000000fd01',
+      '20000000-0000-0000-0000-00000000fd01',
+      'TEAM',
+      '80000000-0000-0000-0000-00000000fd01',
+      2,
+      repeat('c',64),
+      1,
+      'c5-sync-team-members'
+    );
+
+  if v_inbox.is_new is not false
+     or v_inbox.result_recorded is not true
+     or v_team.is_new is not false
+     or v_team.result_recorded is not true
+  then
+    raise exception 'completed membership sync claim replay did not expose terminal result evidence';
+  end if;
+end;
+$terminal_claim_replay$;
+
+reset role;
+select set_config('request.jwt.claim.sub','',false);
+set role service_role;
+
 do $result_audit_verified$
 begin
   if (select value::boolean from c5_membership_sync_state where key='inbox_result_inserted') is not true
@@ -446,6 +495,35 @@ begin
   end if;
 end;
 $result_audit_verified$;
+
+-- Exact request-key result replay must match the original before/after evidence too.
+do $result_replay_evidence_mismatch_denied$
+begin
+  begin
+    perform public.record_chatwoot_membership_sync_result(
+      '00000000-0000-0000-0000-00000000fd01',
+      '20000000-0000-0000-0000-00000000fd01',
+      'INBOX',
+      '70000000-0000-0000-0000-00000000fd01',
+      2,
+      repeat('a',64),
+      2,
+      repeat('d',64),
+      1,
+      repeat('a',64),
+      2,
+      true,
+      'UPDATED_VERIFIED',
+      'c5-sync-inbox-members'
+    );
+    raise exception 'membership result replay unexpectedly accepted changed observation evidence';
+  exception when others then
+    if sqlerrm not like 'Chatwoot membership sync result replay evidence mismatch%' then
+      raise;
+    end if;
+  end;
+end;
+$result_replay_evidence_mismatch_denied$;
 
 -- Result evidence must match the immutable claim payload.
 do $result_claim_mismatch_denied$
