@@ -264,7 +264,9 @@ function makeService(
   return { service, rpc, from };
 }
 
-function makeAuthenticatedClient(input: { ownerRole?: string } = {}) {
+function makeAuthenticatedClient(
+  input: { ownerRole?: string; resultRecorded?: boolean } = {},
+) {
   const rpc = vi.fn(async (name: string, args: Record<string, unknown>) => {
     if (name === 'claim_chatwoot_membership_sync') {
       return {
@@ -272,6 +274,7 @@ function makeAuthenticatedClient(input: { ownerRole?: string } = {}) {
           is_new: true,
           entity_id: args.p_mapping_id,
           applied_version: args.p_expected_mapping_version,
+          result_recorded: input.resultRecorded ?? false,
         },
         error: null,
       };
@@ -610,6 +613,92 @@ describe('C5 Chatwoot membership reconciliation', () => {
       method: 'PATCH',
       body: { user_ids: [101] },
     });
+  });
+
+  it('GET-verifies a 2xx PATCH response mismatch and degrades when drift remains', async () => {
+    makeService(baseTables());
+    const { client, rpc } = makeAuthenticatedClient();
+
+    adminRequest
+      .mockResolvedValueOnce({ payload: [{ id: 101 }] })
+      .mockResolvedValueOnce({ payload: [{ id: 101 }] })
+      .mockResolvedValueOnce({ payload: [{ id: 101 }] });
+
+    await expect(
+      syncChatwootMembershipSet({
+        supabase: client,
+        organizationId: ORG,
+        tenantBusinessId: BUSINESS,
+        resourceKind: 'INBOX',
+        mappingId: INBOX_MAPPING,
+        requestKey: 'c5-inbox-2xx-drift',
+      }),
+    ).rejects.toMatchObject({ code: 'RECONCILIATION_REQUIRED' });
+
+    expect(adminRequest.mock.calls.map((call) => call[0]?.method)).toEqual([
+      'GET',
+      'PATCH',
+      'GET',
+    ]);
+    expect(
+      adminRequest.mock.calls.filter((call) => call[0]?.method === 'PATCH'),
+    ).toHaveLength(1);
+
+    const degraded = rpc.mock.calls.find(
+      (call) => call[0] === 'mark_chatwoot_inbox_mapping_degraded',
+    );
+    expect(degraded?.[1]).toMatchObject({
+      p_last_error_code: 'MEMBERSHIP_DRIFT',
+    });
+  });
+
+  it('does not reuse a completed request key to repair later external drift', async () => {
+    makeService(baseTables());
+    const { client } = makeAuthenticatedClient({ resultRecorded: true });
+
+    adminRequest.mockResolvedValueOnce({ payload: [{ id: 101 }] });
+
+    await expect(
+      syncChatwootMembershipSet({
+        supabase: client,
+        organizationId: ORG,
+        tenantBusinessId: BUSINESS,
+        resourceKind: 'INBOX',
+        mappingId: INBOX_MAPPING,
+        requestKey: 'c5-completed-key',
+      }),
+    ).rejects.toMatchObject({ code: 'RECONCILIATION_REQUIRED' });
+
+    expect(adminRequest).toHaveBeenCalledTimes(1);
+    expect(adminRequest.mock.calls[0]?.[0]?.method).toBe('GET');
+    expect(
+      adminRequest.mock.calls.some((call) => call[0]?.method === 'PATCH'),
+    ).toBe(false);
+  });
+
+  it('returns no-op for an exact replay of a completed request key', async () => {
+    const { rpc: serviceRpc } = makeService(baseTables());
+    const { client } = makeAuthenticatedClient({ resultRecorded: true });
+
+    adminRequest.mockResolvedValueOnce({
+      payload: [{ id: 102 }, { id: 101 }],
+    });
+
+    const result = await syncChatwootMembershipSet({
+      supabase: client,
+      organizationId: ORG,
+      tenantBusinessId: BUSINESS,
+      resourceKind: 'INBOX',
+      mappingId: INBOX_MAPPING,
+      requestKey: 'c5-completed-noop',
+    });
+
+    expect(result.outcome).toBe('ALREADY_MATCHED');
+    expect(adminRequest).toHaveBeenCalledTimes(1);
+    expect(serviceRpc).not.toHaveBeenCalledWith(
+      'record_chatwoot_membership_sync_result',
+      expect.anything(),
+    );
   });
 
   it('fails before service-role reads for a non-OWNER initiating session', async () => {
