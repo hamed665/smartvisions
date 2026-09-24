@@ -5,6 +5,8 @@ begin;
 create temp table account_attempt_test_state(key text primary key, value text not null)
   on commit drop;
 
+grant select, insert, update on account_attempt_test_state to authenticated, service_role;
+
 insert into auth.users(id) values
   ('00000000-0000-0000-0000-00000000d301'),
   ('00000000-0000-0000-0000-00000000d302');
