@@ -52,11 +52,14 @@ function requireText(value: string, field: string) {
 }
 
 function normalizeReceiptRow(value: unknown): ReceiptRow {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+  const single =
+    Array.isArray(value) && value.length === 1 ? value[0] : value;
+
+  if (!single || typeof single !== 'object' || Array.isArray(single)) {
     throw new Error('Chatwoot reconciliation receipt response is invalid');
   }
 
-  const row = value as Record<string, unknown>;
+  const row = single as Record<string, unknown>;
   const observedPresence = row.observed_presence;
   const observedRole = row.observed_role;
 
@@ -109,6 +112,10 @@ async function recordReceipt(input: {
   role: ChatwootAccountRole | null;
   requestKey: string;
 }) {
+  if (!Number.isInteger(input.membershipVersion) || input.membershipVersion < 1) {
+    throw new Error('membershipVersion is invalid');
+  }
+
   const { data, error } = await input.service.rpc(
     'record_chatwoot_account_membership_reconciliation',
     {
