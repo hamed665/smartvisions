@@ -678,3 +678,17 @@ The verifier requires an immutable Smart Visions GHCR digest, isolated Candidate
 Actual Candidate runtime remains blocked on a connected long-running container host. Render and Railway are suitable available integrations; neither is confirmed connected at this checkpoint. Do not substitute Smart Core Cloudflare Workers, Smart Core Supabase schema or Vercel for the Rails + Sidekiq runtime.
 
 After exact-head CI/source-image verification, deploy only to isolated Candidate resources. Keep Production customer data, Production provider credentials, API Inbox activation, native Chatwoot Email/WhatsApp and outbound sends disabled.
+
+
+## Chatwoot Candidate image publication — verified 2026-09-25
+
+The Candidate runtime safety-gate PR #228 is merged at `main@6d86ad068c941be8ecf73c22d14205f9254ada41`.
+
+The exact-main Chatwoot Source Image workflow run #21 completed successfully on that SHA:
+
+- upstream Chatwoot: `v4.18.0@9f920b549c14491a4e587687a3eed5d21c6ccc7d`;
+- Smart Visions image tag: `ghcr.io/hamed665/smartvisions-chatwoot:v4.18.0-sv-6d86ad068c941be8ecf73c22d14205f9254ada41`;
+- immutable digest: `sha256:942f4e4404dac52c83a938ca5f984186d47c4fecf85f65a6064c2db0a3a92e1e`;
+- provenance inspection passed; Enterprise source is absent; runtime Enterprise is disabled; provider authority remains Smart Core.
+
+The non-secret Candidate env template now pins that exact immutable image. It remains a template: hostname, secret-store values, dedicated Candidate PostgreSQL, Redis and S3-compatible storage must be resolved before deployment. No Candidate or Production Chatwoot runtime has been created. Keep API Inbox activation, customer data, native provider credentials and outbound sends disabled; keep Shadow Mode ON. The next gate is Candidate hosting-resource provisioning and runtime verification, not another source build.
