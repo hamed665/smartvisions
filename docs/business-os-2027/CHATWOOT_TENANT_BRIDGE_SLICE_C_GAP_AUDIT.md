@@ -770,3 +770,25 @@ Implemented:
 - mock-only tests for Platform and ephemeral user-token requests.
 
 No live Chatwoot request is executed by PR #202.
+
+
+---
+
+## 32. Slice C3A implementation checkpoint
+
+Stacked Draft PR #203 implements the external Account/User/AccountUser provisioning and reconciliation adapter.
+
+Key properties:
+
+- no direct Smart Core DB writes;
+- no Supabase service-role persistence path;
+- Account create is preceded by opaque-marker reconciliation;
+- ambiguous Account create is reconciled by GET rather than blind POST retry;
+- User create/adopt uses canonical email and one bounded source-proven safe retry;
+- ephemeral create password never leaves the adapter;
+- malformed/conflicting User markers fail closed;
+- AccountUser mutation uses upstream account+user idempotency with one bounded retry;
+- bigint AccountUser IDs are preserved losslessly;
+- outputs omit access tokens and passwords.
+
+The governed persistence layer remains intentionally separate as Slice C3B.
