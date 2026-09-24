@@ -10,10 +10,8 @@ import {
   normalizeChatwootRequestPath,
   type ChatwootHttpMethod,
 } from '@/lib/chatwoot/http-contract';
-import {
-  isUuid,
-  normalizeChatwootInt32Id,
-} from '@/lib/chatwoot/tenant-bridge';
+import { isUuid } from '@/lib/chatwoot/tenant-bridge';
+import { normalizeChatwootInt32Id } from '@/lib/chatwoot/tenant-bridge-slice-b';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
 
 type AdminProjection = {
