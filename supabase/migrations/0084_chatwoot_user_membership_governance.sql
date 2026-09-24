@@ -674,7 +674,10 @@ begin
          status = v_status,
          version = version + 1,
          last_request_key = v_request_key,
-         last_verified_at = case when v_status = 'ACTIVE' then now() else last_verified_at end,
+         last_verified_at = case
+           when v_status = 'ACTIVE' then statement_timestamp()
+           else last_verified_at
+         end,
          last_error_code = case when v_status = 'ACTIVE' then null else v_error_code end,
          updated_by_user_id = v_actor
    where id = p_mapping_id
@@ -1081,7 +1084,10 @@ begin
          status = v_status,
          version = version + 1,
          last_request_key = v_request_key,
-         last_verified_at = case when v_status = 'ACTIVE' then now() else last_verified_at end,
+         last_verified_at = case
+           when v_status = 'ACTIVE' then statement_timestamp()
+           else last_verified_at
+         end,
          last_error_code = case when v_status = 'ACTIVE' then null else v_error_code end,
          updated_by_user_id = v_actor
    where organization_id = p_organization_id
