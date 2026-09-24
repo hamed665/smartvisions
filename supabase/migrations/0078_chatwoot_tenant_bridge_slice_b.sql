@@ -819,20 +819,234 @@ begin
 end;
 $$;
 
+create schema if not exists private;
+
+revoke all on schema private from public, anon;
+grant usage on schema private to authenticated, service_role;
+
+create or replace function private.chatwoot_bridge_dependency_exists(
+  p_kind text,
+  p_organization_id uuid,
+  p_subject_id uuid
+)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $dependency$
+declare
+  v_actor uuid := auth.uid();
+begin
+  if p_kind not in (
+    'USER_MAPPING',
+    'ACCOUNT_MAPPING',
+    'BINDING',
+    'TENANT_BUSINESS',
+    'BRANCH',
+    'DEPARTMENT',
+    'TEAM',
+    'ORG_MEMBER'
+  ) then
+    raise exception 'invalid Chatwoot bridge dependency kind';
+  end if;
+
+  if p_subject_id is null then
+    raise exception 'Chatwoot bridge dependency subject required';
+  end if;
+
+  if p_kind <> 'USER_MAPPING' and p_organization_id is null then
+    raise exception 'Chatwoot bridge dependency Organization required';
+  end if;
+
+  if v_actor is not null
+     and p_organization_id is not null
+     and not exists (
+       select 1
+       from public.organization_members actor
+       where actor.organization_id = p_organization_id
+         and actor.user_id = v_actor
+     )
+  then
+    raise exception 'Chatwoot bridge dependency read not permitted';
+  end if;
+
+  if p_kind = 'USER_MAPPING' then
+    if v_actor is not null
+       and not exists (
+         select 1
+         from public.chatwoot_user_mappings um
+         where um.id = p_subject_id
+           and (
+             um.smart_user_id = v_actor
+             or exists (
+               select 1
+               from public.chatwoot_account_memberships cm
+               join public.organization_members owner_member
+                 on owner_member.organization_id = cm.organization_id
+                and owner_member.user_id = v_actor
+                and owner_member.role = 'OWNER'
+               where cm.chatwoot_user_mapping_id = um.id
+             )
+           )
+       )
+    then
+      raise exception 'Chatwoot User dependency read not permitted';
+    end if;
+
+    return exists (
+      select 1
+      from public.chatwoot_account_memberships cm
+      where cm.chatwoot_user_mapping_id = p_subject_id
+        and cm.status in ('PROVISIONING','ACTIVE','DEGRADED')
+    );
+  end if;
+
+  if p_kind = 'ACCOUNT_MAPPING' then
+    return exists (
+      select 1
+      from public.chatwoot_account_memberships cm
+      where cm.organization_id = p_organization_id
+        and cm.chatwoot_account_mapping_id = p_subject_id
+        and cm.status in ('PROVISIONING','ACTIVE','DEGRADED')
+    ) or exists (
+      select 1
+      from public.chatwoot_inbox_mappings im
+      where im.organization_id = p_organization_id
+        and im.chatwoot_account_mapping_id = p_subject_id
+        and im.status in ('PROVISIONING','ACTIVE','DEGRADED')
+    ) or exists (
+      select 1
+      from public.chatwoot_team_mappings tm
+      where tm.organization_id = p_organization_id
+        and tm.chatwoot_account_mapping_id = p_subject_id
+        and tm.status in ('PROVISIONING','ACTIVE','DEGRADED')
+    );
+  end if;
+
+  if p_kind = 'BINDING' then
+    return exists (
+      select 1
+      from public.chatwoot_inbox_mappings im
+      where im.organization_id = p_organization_id
+        and im.communication_channel_binding_id = p_subject_id
+        and im.status in ('PROVISIONING','ACTIVE','DEGRADED')
+    );
+  end if;
+
+  if p_kind = 'TENANT_BUSINESS' then
+    return exists (
+      select 1
+      from public.communication_channel_bindings cb
+      where cb.organization_id = p_organization_id
+        and cb.tenant_business_id = p_subject_id
+        and cb.status = 'ACTIVE'
+    ) or exists (
+      select 1
+      from public.chatwoot_account_mappings cam
+      where cam.organization_id = p_organization_id
+        and cam.tenant_business_id = p_subject_id
+        and cam.status in ('PROVISIONING','ACTIVE','DEGRADED')
+    ) or exists (
+      select 1
+      from public.chatwoot_account_memberships cm
+      where cm.organization_id = p_organization_id
+        and cm.tenant_business_id = p_subject_id
+        and cm.status in ('PROVISIONING','ACTIVE','DEGRADED')
+    ) or exists (
+      select 1
+      from public.chatwoot_inbox_mappings im
+      where im.organization_id = p_organization_id
+        and im.tenant_business_id = p_subject_id
+        and im.status in ('PROVISIONING','ACTIVE','DEGRADED')
+    ) or exists (
+      select 1
+      from public.chatwoot_team_mappings tm
+      where tm.organization_id = p_organization_id
+        and tm.tenant_business_id = p_subject_id
+        and tm.status in ('PROVISIONING','ACTIVE','DEGRADED')
+    );
+  end if;
+
+  if p_kind = 'BRANCH' then
+    return exists (
+      select 1
+      from public.communication_channel_bindings cb
+      where cb.organization_id = p_organization_id
+        and cb.branch_id = p_subject_id
+        and cb.status = 'ACTIVE'
+    ) or exists (
+      select 1
+      from public.chatwoot_inbox_mappings im
+      where im.organization_id = p_organization_id
+        and im.branch_id = p_subject_id
+        and im.status in ('PROVISIONING','ACTIVE','DEGRADED')
+    ) or exists (
+      select 1
+      from public.chatwoot_team_mappings tm
+      join public.teams t
+        on t.organization_id = tm.organization_id
+       and t.id = tm.smart_team_id
+      join public.departments d
+        on d.organization_id = t.organization_id
+       and d.id = t.department_id
+      where tm.organization_id = p_organization_id
+        and d.branch_id = p_subject_id
+        and tm.status in ('PROVISIONING','ACTIVE','DEGRADED')
+    );
+  end if;
+
+  if p_kind = 'DEPARTMENT' then
+    return exists (
+      select 1
+      from public.chatwoot_team_mappings tm
+      join public.teams t
+        on t.organization_id = tm.organization_id
+       and t.id = tm.smart_team_id
+      where tm.organization_id = p_organization_id
+        and t.department_id = p_subject_id
+        and tm.status in ('PROVISIONING','ACTIVE','DEGRADED')
+    );
+  end if;
+
+  if p_kind = 'TEAM' then
+    return exists (
+      select 1
+      from public.chatwoot_team_mappings tm
+      where tm.organization_id = p_organization_id
+        and tm.smart_team_id = p_subject_id
+        and tm.status in ('PROVISIONING','ACTIVE','DEGRADED')
+    );
+  end if;
+
+  return exists (
+    select 1
+    from public.chatwoot_account_memberships cm
+    where cm.organization_id = p_organization_id
+      and cm.smart_user_id = p_subject_id
+      and cm.status in ('PROVISIONING','ACTIVE','DEGRADED')
+  );
+end;
+$dependency$;
+
+revoke all on function private.chatwoot_bridge_dependency_exists(text,uuid,uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function private.chatwoot_bridge_dependency_exists(text,uuid,uuid)
+  to authenticated, service_role;
+
 create or replace function public.enforce_chatwoot_user_mapping_archive_dependencies()
 returns trigger
 language plpgsql
 security invoker
-set search_path = public, pg_catalog
+set search_path = public, private, pg_catalog
 as $$
 begin
   if old.status <> 'ARCHIVED'
      and new.status = 'ARCHIVED'
-     and exists (
-       select 1
-       from public.chatwoot_account_memberships cm
-       where cm.chatwoot_user_mapping_id = old.id
-         and cm.status in ('PROVISIONING','ACTIVE','DEGRADED')
+     and private.chatwoot_bridge_dependency_exists(
+       'USER_MAPPING',
+       null,
+       old.id
      )
   then
     raise exception 'archive Chatwoot Account memberships before User mapping';
@@ -845,28 +1059,18 @@ create or replace function public.enforce_chatwoot_account_mapping_slice_b_depen
 returns trigger
 language plpgsql
 security invoker
-set search_path = public, pg_catalog
+set search_path = public, private, pg_catalog
 as $$
 begin
-  if old.status <> 'ARCHIVED' and new.status = 'ARCHIVED' then
-    if exists (
-      select 1 from public.chatwoot_account_memberships cm
-      where cm.organization_id=old.organization_id
-        and cm.chatwoot_account_mapping_id=old.id
-        and cm.status in ('PROVISIONING','ACTIVE','DEGRADED')
-    ) or exists (
-      select 1 from public.chatwoot_inbox_mappings im
-      where im.organization_id=old.organization_id
-        and im.chatwoot_account_mapping_id=old.id
-        and im.status in ('PROVISIONING','ACTIVE','DEGRADED')
-    ) or exists (
-      select 1 from public.chatwoot_team_mappings tm
-      where tm.organization_id=old.organization_id
-        and tm.chatwoot_account_mapping_id=old.id
-        and tm.status in ('PROVISIONING','ACTIVE','DEGRADED')
-    ) then
-      raise exception 'archive Chatwoot child projections before Account mapping';
-    end if;
+  if old.status <> 'ARCHIVED'
+     and new.status = 'ARCHIVED'
+     and private.chatwoot_bridge_dependency_exists(
+       'ACCOUNT_MAPPING',
+       old.organization_id,
+       old.id
+     )
+  then
+    raise exception 'archive Chatwoot child projections before Account mapping';
   end if;
   return new;
 end;
@@ -876,16 +1080,15 @@ create or replace function public.enforce_communication_binding_chatwoot_inbox_a
 returns trigger
 language plpgsql
 security invoker
-set search_path = public, pg_catalog
+set search_path = public, private, pg_catalog
 as $$
 begin
   if old.status = 'ACTIVE'
      and new.status = 'ARCHIVED'
-     and exists (
-       select 1 from public.chatwoot_inbox_mappings im
-       where im.organization_id=old.organization_id
-         and im.communication_channel_binding_id=old.id
-         and im.status in ('PROVISIONING','ACTIVE','DEGRADED')
+     and private.chatwoot_bridge_dependency_exists(
+       'BINDING',
+       old.organization_id,
+       old.id
      )
   then
     raise exception 'archive Chatwoot Inbox mapping before communication binding';
@@ -898,38 +1101,18 @@ create or replace function public.enforce_tenant_business_chatwoot_bridge_archiv
 returns trigger
 language plpgsql
 security invoker
-set search_path = public, pg_catalog
+set search_path = public, private, pg_catalog
 as $$
 begin
-  if old.status = 'ACTIVE' and new.status = 'ARCHIVED' then
-    if exists (
-      select 1 from public.communication_channel_bindings cb
-      where cb.organization_id=old.organization_id
-        and cb.tenant_business_id=old.id
-        and cb.status='ACTIVE'
-    ) or exists (
-      select 1 from public.chatwoot_account_mappings cam
-      where cam.organization_id=old.organization_id
-        and cam.tenant_business_id=old.id
-        and cam.status in ('PROVISIONING','ACTIVE','DEGRADED')
-    ) or exists (
-      select 1 from public.chatwoot_account_memberships cm
-      where cm.organization_id=old.organization_id
-        and cm.tenant_business_id=old.id
-        and cm.status in ('PROVISIONING','ACTIVE','DEGRADED')
-    ) or exists (
-      select 1 from public.chatwoot_inbox_mappings im
-      where im.organization_id=old.organization_id
-        and im.tenant_business_id=old.id
-        and im.status in ('PROVISIONING','ACTIVE','DEGRADED')
-    ) or exists (
-      select 1 from public.chatwoot_team_mappings tm
-      where tm.organization_id=old.organization_id
-        and tm.tenant_business_id=old.id
-        and tm.status in ('PROVISIONING','ACTIVE','DEGRADED')
-    ) then
-      raise exception 'archive Chatwoot bridge resources before tenant Business';
-    end if;
+  if old.status = 'ACTIVE'
+     and new.status = 'ARCHIVED'
+     and private.chatwoot_bridge_dependency_exists(
+       'TENANT_BUSINESS',
+       old.organization_id,
+       old.id
+     )
+  then
+    raise exception 'archive Chatwoot bridge resources before tenant Business';
   end if;
   return new;
 end;
@@ -939,31 +1122,18 @@ create or replace function public.enforce_branch_chatwoot_bridge_archive()
 returns trigger
 language plpgsql
 security invoker
-set search_path = public, pg_catalog
+set search_path = public, private, pg_catalog
 as $$
 begin
-  if old.status='ACTIVE' and new.status='ARCHIVED' then
-    if exists (
-      select 1 from public.communication_channel_bindings cb
-      where cb.organization_id=old.organization_id
-        and cb.branch_id=old.id
-        and cb.status='ACTIVE'
-    ) or exists (
-      select 1 from public.chatwoot_inbox_mappings im
-      where im.organization_id=old.organization_id
-        and im.branch_id=old.id
-        and im.status in ('PROVISIONING','ACTIVE','DEGRADED')
-    ) or exists (
-      select 1
-      from public.chatwoot_team_mappings tm
-      join public.teams t on t.id=tm.smart_team_id
-      join public.departments d on d.id=t.department_id
-      where tm.organization_id=old.organization_id
-        and d.branch_id=old.id
-        and tm.status in ('PROVISIONING','ACTIVE','DEGRADED')
-    ) then
-      raise exception 'archive Chatwoot Branch projections before Branch';
-    end if;
+  if old.status = 'ACTIVE'
+     and new.status = 'ARCHIVED'
+     and private.chatwoot_bridge_dependency_exists(
+       'BRANCH',
+       old.organization_id,
+       old.id
+     )
+  then
+    raise exception 'archive Chatwoot Branch projections before Branch';
   end if;
   return new;
 end;
@@ -973,17 +1143,15 @@ create or replace function public.enforce_department_chatwoot_bridge_archive()
 returns trigger
 language plpgsql
 security invoker
-set search_path = public, pg_catalog
+set search_path = public, private, pg_catalog
 as $$
 begin
-  if old.status='ACTIVE' and new.status='ARCHIVED'
-     and exists (
-       select 1
-       from public.chatwoot_team_mappings tm
-       join public.teams t on t.id=tm.smart_team_id
-       where tm.organization_id=old.organization_id
-         and t.department_id=old.id
-         and tm.status in ('PROVISIONING','ACTIVE','DEGRADED')
+  if old.status = 'ACTIVE'
+     and new.status = 'ARCHIVED'
+     and private.chatwoot_bridge_dependency_exists(
+       'DEPARTMENT',
+       old.organization_id,
+       old.id
      )
   then
     raise exception 'archive Chatwoot Team projections before Department';
@@ -996,15 +1164,15 @@ create or replace function public.enforce_team_chatwoot_bridge_archive()
 returns trigger
 language plpgsql
 security invoker
-set search_path = public, pg_catalog
+set search_path = public, private, pg_catalog
 as $$
 begin
-  if old.status='ACTIVE' and new.status='ARCHIVED'
-     and exists (
-       select 1 from public.chatwoot_team_mappings tm
-       where tm.organization_id=old.organization_id
-         and tm.smart_team_id=old.id
-         and tm.status in ('PROVISIONING','ACTIVE','DEGRADED')
+  if old.status = 'ACTIVE'
+     and new.status = 'ARCHIVED'
+     and private.chatwoot_bridge_dependency_exists(
+       'TEAM',
+       old.organization_id,
+       old.id
      )
   then
     raise exception 'archive Chatwoot Team mapping before Smart Team';
@@ -1017,20 +1185,20 @@ create or replace function public.enforce_organization_member_chatwoot_remove()
 returns trigger
 language plpgsql
 security invoker
-set search_path = public, pg_catalog
+set search_path = public, private, pg_catalog
 as $$
 begin
-  if exists (
-    select 1 from public.chatwoot_account_memberships cm
-    where cm.organization_id=old.organization_id
-      and cm.smart_user_id=old.user_id
-      and cm.status in ('PROVISIONING','ACTIVE','DEGRADED')
+  if private.chatwoot_bridge_dependency_exists(
+    'ORG_MEMBER',
+    old.organization_id,
+    old.user_id
   ) then
     raise exception 'archive Chatwoot Account membership before removing Organization member';
   end if;
   return old;
 end;
 $$;
+
 
 drop trigger if exists chatwoot_user_mappings_contract_guard
   on public.chatwoot_user_mappings;
