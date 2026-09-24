@@ -1,0 +1,64 @@
+services:
+  chatwoot-prepare:
+    image: ${CHATWOOT_IMAGE:?Set CHATWOOT_IMAGE to an immutable GHCR image digest}
+    env_file:
+      - ${CHATWOOT_ENV_FILE:-.env.candidate}
+    environment:
+      RAILS_ENV: production
+      NODE_ENV: production
+      INSTALLATION_ENV: docker
+      DISABLE_ENTERPRISE: "true"
+    command:
+      - sh
+      - -lc
+      - >-
+        POSTGRES_STATEMENT_TIMEOUT=600s bundle exec rails db:chatwoot_prepare &&
+        bundle exec rails runner /app/SMARTVISIONS_CONFIGURE.rb
+    restart: "no"
+
+  chatwoot-web:
+    image: ${CHATWOOT_IMAGE:?Set CHATWOOT_IMAGE to an immutable GHCR image digest}
+    env_file:
+      - ${CHATWOOT_ENV_FILE:-.env.candidate}
+    environment:
+      RAILS_ENV: production
+      NODE_ENV: production
+      INSTALLATION_ENV: docker
+      DISABLE_ENTERPRISE: "true"
+    command: ["bundle", "exec", "rails", "s", "-p", "3000", "-b", "0.0.0.0"]
+    depends_on:
+      chatwoot-prepare:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test:
+        - CMD
+        - ruby
+        - -rnet/http
+        - -ruri
+        - -e
+        - "r=Net::HTTP.get_response(URI('http://127.0.0.1:3000')); exit(r.code.to_i < 500 ? 0 : 1)"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+  chatwoot-worker:
+    image: ${CHATWOOT_IMAGE:?Set CHATWOOT_IMAGE to an immutable GHCR image digest}
+    env_file:
+      - ${CHATWOOT_ENV_FILE:-.env.candidate}
+    environment:
+      RAILS_ENV: production
+      NODE_ENV: production
+      INSTALLATION_ENV: docker
+      DISABLE_ENTERPRISE: "true"
+    command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
+    depends_on:
+      chatwoot-prepare:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+# PostgreSQL, Redis and object storage remain external, isolated Candidate dependencies.
+# No Production provider credentials or Production public route belong here.
