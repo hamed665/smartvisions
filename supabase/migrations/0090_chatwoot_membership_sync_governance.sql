@@ -420,7 +420,7 @@ begin
     end if;
   else
     if not p_mutation_attempted then
-      raise exception 'AMBIGUOUS_UNRESOLVED requires mutation attempt evidence';
+      raise exception 'unresolved membership sync result requires mutation attempt evidence';
     end if;
   end if;
 
