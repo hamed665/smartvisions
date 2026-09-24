@@ -7,6 +7,8 @@ create temp table bridge_test_state (
   value text not null
 ) on commit drop;
 
+grant select, insert, update on bridge_test_state to authenticated, service_role;
+
 insert into auth.users(id) values
   ('00000000-0000-0000-0000-00000000b101'),
   ('00000000-0000-0000-0000-00000000b102'),
