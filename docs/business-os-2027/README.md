@@ -104,6 +104,8 @@ The `COMM-TENANT-BRIDGE` gap audit is complete but intentionally stacked behind 
 
 Production currently has zero Brands and zero tenant Businesses. No Chatwoot Account may be provisioned from Growth/Hunter `public.businesses` as a substitute.
 
-First implementation after the source-build dependency is green:
+Slice A is now implemented on stacked Draft PR #197:
 
 `COMM-TENANT-BRIDGE / Slice A — Tenant/channel + Account mapping contract`
+
+It remains **unmerged and unapplied to Production** because PR #195 source-build verification and repository GitHub-hosted runner allocation are still blocked. No persistent Production Brand, tenant Business, bridge row or Chatwoot Account has been fabricated.

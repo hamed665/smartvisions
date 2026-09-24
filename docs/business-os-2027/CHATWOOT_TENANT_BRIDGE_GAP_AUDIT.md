@@ -215,6 +215,8 @@ It has no:
 - `tenant_business_id`;
 - `branch_id`.
 
+It also currently enforces `UNIQUE (organization_id, provider, channel)`. Therefore the present Growth OS connection model can represent only one row for a lane such as Meta/WhatsApp per Organization. Slice A does not silently weaken that invariant. Its binding references `integration_connection_id` so a later governed multi-instance connection model can add multiple provider accounts/numbers without redesigning the Tenant Bridge mapping contract.
+
 Current Production integrations include connected WhatsApp and Email at Organization scope.
 
 That is sufficient for the existing single-organization Growth OS runtime.
@@ -941,6 +943,31 @@ At minimum:
 - current migration chain remains green.
 
 ---
+
+## 24A. Slice A implementation hardening recorded after audit
+
+The stacked Slice A implementation uses a small immutable `chatwoot_bridge_command_claims` table strictly as a command/idempotency primitive, not as a business event store.
+
+The claim contract records:
+
+- Organization + request key;
+- command type;
+- entity type/id;
+- applied semantic row version;
+- SHA-256 canonical payload fingerprint;
+- creating Smart user;
+- timestamp.
+
+Properties:
+
+- request keys remain durable even after target rows later change lifecycle/version;
+- replay of an old create key resolves to the same current entity rather than creating a replacement;
+- reuse of the same key with a different canonical payload fails closed;
+- failed commands roll back their claim atomically;
+- claims are immutable and are not separately audited as business events;
+- provider credentials, message bodies and customer PII are absent from claim payload evidence.
+
+Channel binding `last_verified_at` is not fabricated during create/reactivation because no external provider/Chatwoot verification occurs in Slice A.
 
 ## 25. Exit criteria
 

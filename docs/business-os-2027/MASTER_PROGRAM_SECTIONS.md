@@ -108,13 +108,20 @@ Repository topology rule:
 
 ### COMM-TENANT-BRIDGE — Tenant/business/user mapping
 
-Status: **GAP AUDIT COMPLETE; IMPLEMENTATION BLOCKED ON COMM-CHATWOOT-SOURCE GREEN**
+Status: **SLICE A IMPLEMENTED ON STACKED DRAFT PR #197; VERIFICATION/MERGE BLOCKED ON COMM-CHATWOOT-SOURCE + GITHUB HOSTED RUNNER**
 
 Detailed decisions: `CHATWOOT_TENANT_BRIDGE_GAP_AUDIT.md`.
 
-Approved first implementation target after the source dependency clears:
+Slice A implementation exists on stacked Draft PR #197 and includes the tenant/channel + Account mapping contract, durable SHA-256 command claims, RLS/RBAC, lifecycle/version guards, audit and rollback-only PostgreSQL smoke.
 
-`COMM-TENANT-BRIDGE / Slice A — Tenant/channel + Account mapping contract`
+It is **not canonical main/Production yet**. It must not merge until:
+
+- PR #195 has real runner-backed exact-head CI and pinned Chatwoot source Docker build success;
+- PR #196 audit stack is reconciled/merged in dependency order;
+- PR #197 receives real exact-head CI, including PostgreSQL 17 migration-chain smoke;
+- technical review remains clean with zero unresolved threads.
+
+Current GitHub-hosted runner symptom is account/repository-side allocation failure: jobs complete before step 1 with `runner_id=0`, blank runner name and zero steps.
 
 The audit also closes these key decisions:
 

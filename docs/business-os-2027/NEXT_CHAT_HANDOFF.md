@@ -206,17 +206,56 @@ Before merge:
 
 A green CI run is necessary, not a substitute for review of a migration.
 
-## Stacked next dependency
+## Current stacked Chatwoot execution checkpoint — 2026-09-23
 
-`COMM-TENANT-BRIDGE` gap audit is complete on a stacked documentation branch.
+Dependency order:
 
-Do not implement or merge Tenant Bridge schema until `COMM-CHATWOOT-SOURCE` PR #195 has real runner-backed exact-head CI and the pinned Chatwoot source Docker build passes.
+1. PR #195 — `COMM-CHATWOOT-SOURCE` source foundation, Draft.
+2. PR #196 — `COMM-TENANT-BRIDGE` gap audit, Draft and stacked on #195.
+3. PR #197 — `COMM-TENANT-BRIDGE / Slice A`, Draft and stacked on #196.
 
-Once that dependency is green, the approved next implementation is:
+Slice A is implemented but **not merged and not applied to Production**.
 
-`COMM-TENANT-BRIDGE / Slice A — Tenant/channel + Account mapping contract`
+It currently provides:
 
-Production currently has 0 Brands and 0 tenant Businesses, so no persistent real Chatwoot Account mapping may be fabricated for verification.
+- migration `0077_chatwoot_tenant_bridge_slice_a.sql`;
+- `communication_channel_bindings`;
+- `chatwoot_account_mappings`;
+- immutable `chatwoot_bridge_command_claims` with SHA-256 payload fingerprints;
+- OWNER-only mutation and OWNER/ADMIN infrastructure read;
+- RLS plus explicit Data API grants;
+- optimistic versions and formal lifecycle guards;
+- hierarchy archive protection;
+- PII-minimized canonical audit;
+- authenticated Smart Core API/runtime wrapper;
+- PostgreSQL 17 rollback-only synthetic smoke wired into CI;
+- zero Chatwoot HTTP calls;
+- zero provider sends.
+
+Latest implementation design facts to preserve:
+
+- Chatwoot v4.18.0 Account ID is integer/serial, so `chatwoot_account_id` is PostgreSQL `integer`, not bigint/string.
+- old request-key replay remains durable across later lifecycle/version changes;
+- the same request key with a different canonical payload fails closed;
+- failed commands roll back their command claim atomically;
+- command claims are idempotency infrastructure only, not a second event store;
+- channel binding create/reactivation does not fabricate `last_verified_at` without external verification;
+- current `integration_connections` remains Organization-scoped and unique by `(organization_id, provider, channel)`; Slice A does not silently weaken it.
+
+Current external blocker:
+
+GitHub-hosted Actions jobs are still failing before any step executes with `runner_id=0`, blank runner name and zero steps. This affects #195, #196 and #197. Do not weaken CI or merge around it. First verify/fix account/repository Actions allocation/budget/payment/eligibility, then rerun exact-head checks.
+
+Production currently remains:
+
+- migration `0076_crm_segment_governance`;
+- Shadow Mode ON;
+- 0 Brands;
+- 0 tenant Businesses;
+- 0 Chatwoot bridge tables/rows;
+- no persistent real Chatwoot Account mapping.
+
+Do not fabricate hierarchy or external Chatwoot IDs merely to demonstrate the bridge.
 
 ## Stable program cursor
 
