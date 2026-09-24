@@ -408,3 +408,18 @@ GitHub Actions runner allocation is restored. This reconciliation commit forces 
 
 
 CI refresh note: PR #212 is open directly against current main after PR #211 merge. This documentation-only commit exists solely to force exact-head runner-backed validation on the reconciled base; migration 0082 and runtime behavior are unchanged.
+
+
+## C3B persistent private canonical-role authority — Draft PR #213
+
+PR #213 is stacked on #212 and converts the reviewed #210 proof into migration `0083_private_chatwoot_role_authority.sql`.
+
+The persistent boundary is intentionally narrow: `private.chatwoot_business_wide_role(org,business,target_user)` is the only SECURITY DEFINER primitive. It has empty search_path, fully qualified canonical reads, current OWNER authentication via auth.uid(), exact ACTIVE Brand/Business lineage checks, target Organization-role lookup and deterministic BUSINESS > BRAND precedence. Conditional scope assignments fail closed without trusted attributes. It returns only the effective role and contains no mutation SQL.
+
+The helper is outside the exposed public schema. authenticated receives only private schema USAGE plus exact function EXECUTE; anon and service_role receive neither. public.is_org_owner remains SECURITY INVOKER.
+
+The PostgreSQL 17 migration smoke runs after 0082 and creates lower-scope evidence only through the governed scope-assignment RPCs. It verifies RLS remains self-read, role precedence, conditional fail-closed behavior, owner preservation, non-owner/cross-tenant/archived-lineage denial, grants, empty search_path and absence of mutation SQL.
+
+External User/AccountUser membership remains disabled. The next implementation unit may use this primitive inside SECURITY INVOKER governed logic, but must still enforce the reverse-role invariant from #211: external Chatwoot privilege can never remain stronger than canonical Smart Core authority.
+
+No Production migration, live Chatwoot request, provider/customer send, route/scheduler activation or Shadow Mode change has been made.
