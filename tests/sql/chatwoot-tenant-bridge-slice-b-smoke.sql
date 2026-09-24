@@ -7,6 +7,8 @@ create temp table slice_b_state (
   value text not null
 ) on commit drop;
 
+grant select, insert, update on slice_b_state to authenticated, service_role;
+
 insert into auth.users(id) values
   ('00000000-0000-0000-0000-00000000d101'),
   ('00000000-0000-0000-0000-00000000d102'),
@@ -263,7 +265,7 @@ begin
 end;
 $$;
 
-insert into public.chatwoot_inbox_mappings(insert into public.chatwoot_inbox_mappings(
+insert into public.chatwoot_inbox_mappings(
   id, organization_id, tenant_business_id, branch_id,
   communication_channel_binding_id, chatwoot_account_mapping_id,
   status, version, last_request_key, created_by_user_id, updated_by_user_id
@@ -297,7 +299,6 @@ end;
 $$;
 
 update public.chatwoot_inbox_mappings
-set chatwoot_inbox_id=201,update public.chatwoot_inbox_mappings
 set chatwoot_inbox_id=201,
     chatwoot_channel_identifier='synthetic-channel-identifier',
     webhook_secret_ref='secretref://chatwoot/slice-b/webhook',
@@ -418,7 +419,9 @@ begin
     raise exception 'communication binding with live Inbox mapping unexpectedly archived';
   exception
     when others then
-      if sqlerrm not like 'archive Chatwoot Inbox mapping before communication binding%' then
+      if sqlerrm not like 'archive Chatwoot Inbox mapping before communication binding%'
+         and sqlerrm not like 'archive live Chatwoot Account mapping before last communication binding%'
+      then
         raise;
       end if;
   end;
@@ -427,9 +430,8 @@ $$;
 
 reset role;
 select set_config('request.jwt.claim.sub', '', false);
-set role service_role;
 
-do $$
+do $member_remove$
 begin
   begin
     delete from public.organization_members
@@ -442,7 +444,15 @@ begin
         raise;
       end if;
   end;
+end;
+$member_remove$;
 
+reset role;
+select set_config('request.jwt.claim.sub', '', false);
+set role service_role;
+
+do $$
+begin
   begin
     update public.teams set status='ARCHIVED'
     where id='50000000-0000-0000-0000-00000000e101';
