@@ -73,16 +73,18 @@ function setupService(input?: {
     single: vi.fn(async () => ({ data: mapping, error: null })),
   };
 
-  const rpc = vi.fn(async () => ({
-    data:
-      input?.rpcData ??
-      {
-        is_new: true,
-        event_id: EVENT_ID,
-        event_status: 'RECEIVED',
-      },
-    error: input?.rpcError ?? null,
-  }));
+  const rpc = vi.fn(
+    async (_name: string, _args: Record<string, unknown>) => ({
+      data:
+        input?.rpcData ??
+        {
+          is_new: true,
+          event_id: EVENT_ID,
+          event_status: 'RECEIVED',
+        },
+      error: input?.rpcError ?? null,
+    }),
+  );
 
   const service = {
     from: vi.fn((table: string) => {
