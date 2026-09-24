@@ -265,7 +265,7 @@ begin
 end;
 $$;
 
-insert into public.chatwoot_inbox_mappings(insert into public.chatwoot_inbox_mappings(
+insert into public.chatwoot_inbox_mappings(
   id, organization_id, tenant_business_id, branch_id,
   communication_channel_binding_id, chatwoot_account_mapping_id,
   status, version, last_request_key, created_by_user_id, updated_by_user_id
@@ -299,7 +299,6 @@ end;
 $$;
 
 update public.chatwoot_inbox_mappings
-set chatwoot_inbox_id=201,update public.chatwoot_inbox_mappings
 set chatwoot_inbox_id=201,
     chatwoot_channel_identifier='synthetic-channel-identifier',
     webhook_secret_ref='secretref://chatwoot/slice-b/webhook',
