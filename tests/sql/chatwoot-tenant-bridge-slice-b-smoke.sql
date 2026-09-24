@@ -7,6 +7,8 @@ create temp table slice_b_state (
   value text not null
 ) on commit drop;
 
+grant select, insert, update on slice_b_state to authenticated, service_role;
+
 insert into auth.users(id) values
   ('00000000-0000-0000-0000-00000000d101'),
   ('00000000-0000-0000-0000-00000000d102'),
