@@ -289,3 +289,12 @@ A work package can require any number of actual PRs. Record those PR numbers as 
 9. Any next implementation must repeat exact-head CI, PostgreSQL 17 migration-chain smoke, technical review, zero unresolved threads, controlled Production migration, advisor verification, rollback-only smoke, zero fabricated data, zero architecture-test provider sends and routed Worker heartbeat verification.
 
 Runtime and Production evidence outrank stale docs or chat memory.
+
+
+## Latest Communication Plane checkpoint — 2026-09-23 (C3B audit)
+
+The current stacked Draft order is #195 → #196 → #197 → #198 → #199 → #200 → #201 (C1 Vault) → #202 (C2 HTTP) → #203 (C3A external Account/User/AccountUser adapter) → #204 (C3B governed persistence audit). Verify current heads and Production again at the next turn; old sections above are historical.
+
+C3B audit: `CHATWOOT_TENANT_BRIDGE_C3B_GOVERNED_PERSISTENCE_AUDIT.md`. Slice A Account mapping writes require OWNER-authenticated governed RPCs and command claims. Slice B User/AccountUser/Inbox/Team tables allow service-role INSERT/UPDATE with contract/audit triggers but do not yet have the same command path. Migration 0078 extends claim table CHECK constraints, while the claim function in 0077 still rejects Slice B command types. Do not connect C3A by direct service-role writes or a SECURITY DEFINER shortcut. Implement the narrow governed path with crash/reconciliation evidence first.
+
+The malformed duplicated SQL in the Slice B rollback smoke was fixed on #199 and copied to all dependent Draft branches through #204. CI remains blocked before step 1 on GitHub-hosted jobs (null steps/logs); no PR in this stack was merged and no Chatwoot migration was applied to Production.
