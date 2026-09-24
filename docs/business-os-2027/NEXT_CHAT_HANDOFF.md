@@ -457,3 +457,18 @@ Mock tests cover GET-only reconciliation, one-delete removal, bigint identity, d
 Remaining pre-activation boundaries are explicit: Organization-role mutation is still not opened; agent-to-agent canonical role changes need projection freshness work; global Chatwoot User identity activation requires final hardening; Inbox/Team governed writers and Contact/Conversation projection still remain.
 
 No Production migration, live Chatwoot request, provider/customer send, route/scheduler activation or Shadow Mode change has been made. Keep #215 Draft until the complete dependency stack gets real runner-backed exact-head CI and review.
+
+
+## C3B server-recorded Chatwoot User identity — Draft PR #216
+
+PR #216 is stacked on #215 and adds migration `0086_chatwoot_user_reconciliation_receipt.sql` plus the server-only User reconciliation runtime.
+
+Chatwoot User marker PATCH is now single-attempt. If its outcome is ambiguous, the adapter performs GET on the exact known Chatwoot User ID and requires exact ID + canonical email + Smart projection marker before claiming success. It does not blindly repeat PATCH.
+
+The persistent receipt is immutable, short-lived and bound to exact Organization, ACTIVE tenant Business, global User mapping ID/version, Smart user, observed Chatwoot User ID and observed canonical email. Only service_role can append/read the receipt ledger directly and record evidence. Authenticated clients cannot mint User receipts.
+
+The #214 caller-declared User-state RPC is revoked. ACTIVE User mapping now requires a fresh server-recorded receipt and an OWNER-authenticated SECURITY INVOKER activation command. External User ID remains immutable once adopted and the existing Chatwoot command claim ledger supplies request-key/version replay semantics. A separate governed DEGRADED command remains; live Account memberships continue to block weakening an ACTIVE global User mapping.
+
+Runtime helpers `ensureAndRecordChatwootUser` and `reconcileAndRecordChatwootUser` record receipts only after external identity/marker proof. Mock and PostgreSQL 17 rollback tests cover ambiguous PATCH reconciliation, missing marker denial, identity drift, receipt ACL, stale version receipts, verified activation, degradation and reactivation.
+
+No Production migration, live Chatwoot request, provider/customer send, route/scheduler activation or Shadow Mode change has been made. Keep #216 Draft until runner-backed exact-head CI and the full dependency stack are proven.

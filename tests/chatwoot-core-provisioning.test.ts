@@ -317,7 +317,7 @@ describe('Chatwoot C3A external provisioning adapter', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('marks ambiguous User marker PATCH for reconciliation rather than claiming success', async () => {
+  it('reconciles an ambiguous User marker PATCH by GET of the exact User id', async () => {
     enableProvisioning();
 
     const fetchMock = vi
@@ -325,7 +325,46 @@ describe('Chatwoot C3A external provisioning adapter', () => {
       .mockResolvedValueOnce(
         new Response(JSON.stringify(userResponse({})), { status: 200 }),
       )
-      .mockRejectedValueOnce(new TypeError('patch outcome unknown'));
+      .mockRejectedValueOnce(new TypeError('patch outcome unknown'))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(userResponse({ marker: SMART_USER_ID })),
+          { status: 200 },
+        ),
+      );
+
+    const result = await ensureChatwootUser({
+      smartUserId: SMART_USER_ID,
+      email: 'owner@example.com',
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(result.outcome).toBe(
+      'RECONCILED_AFTER_AMBIGUOUS_MARKER_UPDATE',
+    );
+    expect(result.user.id).toBe(41);
+    expect(fetchMock.mock.calls.map((call) => call[1]?.method)).toEqual([
+      'POST',
+      'PATCH',
+      'GET',
+    ]);
+    expect(fetchMock.mock.calls[2]?.[0]).toContain(
+      '/platform/api/v1/users/41',
+    );
+  });
+
+  it('fails closed when ambiguous User marker PATCH is not proven by GET', async () => {
+    enableProvisioning();
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(userResponse({})), { status: 200 }),
+      )
+      .mockRejectedValueOnce(new TypeError('patch outcome unknown'))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(userResponse({})), { status: 200 }),
+      );
 
     await expect(
       ensureChatwootUser({
@@ -335,7 +374,11 @@ describe('Chatwoot C3A external provisioning adapter', () => {
       }),
     ).rejects.toMatchObject({ code: 'RECONCILIATION_REQUIRED' });
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.map((call) => call[1]?.method)).toEqual([
+      'POST',
+      'PATCH',
+      'GET',
+    ]);
   });
 
   it('reconciles an ambiguous AccountUser mutation by GET without retrying POST', async () => {
