@@ -55,7 +55,7 @@ export function normalizeChatwootRequestPath(value: unknown) {
   if (
     /[\x00-\x1F\x7F]/.test(value) ||
     /%2e/i.test(rawPath) ||
-    /(^|/).{1,2}(?:/|$)/.test(rawPath) ||
+    /(^|\/)\.{1,2}(?:\/|$)/.test(rawPath) ||
     rawPath.includes('\\')
   ) {
     return null;
