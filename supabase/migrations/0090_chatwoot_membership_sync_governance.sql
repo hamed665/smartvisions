@@ -374,7 +374,8 @@ begin
        'ALREADY_MATCHED',
        'UPDATED_VERIFIED',
        'RECONCILED_AFTER_AMBIGUOUS_MUTATION',
-       'AMBIGUOUS_UNRESOLVED'
+       'AMBIGUOUS_UNRESOLVED',
+       'DRIFT_UNRESOLVED'
      )
      or p_mutation_attempted is null
      or length(v_request_key) not between 1 and 200
