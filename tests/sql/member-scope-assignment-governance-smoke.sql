@@ -191,6 +191,9 @@ $update_versioning$;
 do $direct_update_denied$
 declare
   v_id uuid;
+  v_rows bigint := 0;
+  v_role text;
+  v_version integer;
 begin
   select id into v_id
   from public.member_scope_assignments
@@ -205,12 +208,27 @@ begin
         last_request_key='direct-update-must-fail',
         updated_by_user_id='00000000-0000-0000-0000-00000000e201'
     where id=v_id;
-    raise exception 'direct member scope assignment update unexpectedly succeeded';
+
+    get diagnostics v_rows = row_count;
   exception when others then
     if sqlerrm not like '%governed command%' then
       raise;
     end if;
+    v_rows := 0;
   end;
+
+  if v_rows <> 0 then
+    raise exception 'direct member scope assignment update unexpectedly changed % row(s)', v_rows;
+  end if;
+
+  select role, version
+    into v_role, v_version
+    from public.member_scope_assignments
+   where id = v_id;
+
+  if v_role <> 'SALES_AGENT' or v_version <> 2 then
+    raise exception 'direct member scope assignment update changed canonical state';
+  end if;
 end;
 $direct_update_denied$;
 
