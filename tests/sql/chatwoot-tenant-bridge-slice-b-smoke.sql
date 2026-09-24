@@ -425,13 +425,13 @@ begin
       end if;
   end;
 end;
-$$;
+$archive_guards$;
 
 reset role;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000d101', false);
 set role authenticated;
 
-do $
+do $member_remove$
 begin
   begin
     delete from public.organization_members
@@ -445,13 +445,13 @@ begin
       end if;
   end;
 end;
-$;
+$member_remove$;
 
 reset role;
 select set_config('request.jwt.claim.sub', '', false);
 set role service_role;
 
-do $
+do $archive_guards$
 begin
   begin
     update public.teams set status='ARCHIVED'
