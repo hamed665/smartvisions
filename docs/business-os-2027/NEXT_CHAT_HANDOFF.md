@@ -321,3 +321,12 @@ Next unit: a Candidate-only Account orchestrator may invoke C3A only after it re
 PR #205 is merged to `main` at `f8786351d197b85ad0399d2a7b38a540c3da4c2a`. Its exact-head CI, post-merge main CI, and routed Cloudflare Production deployment all passed. Production Supabase migration state remains intentionally unchanged unless separately promoted and verified.
 
 PR #206 is now retargeted directly to current `main` and marked ready for review. GitHub Actions runner allocation is restored. A rerun of the historical failed check reused an obsolete pull-request merge ref, so it is not valid evidence for the current base. This checkpoint commit exists to force a fresh pull-request merge ref and exact-head CI. Do not merge #206 unless that fresh run passes lint, typecheck, tests, PostgreSQL 17 migration smoke, Next build, Vinext build, and scheduled-runtime verification with no unresolved review threads.
+
+
+## 2026-09-24 stack reconciliation — PR #207
+
+PR #206 is merged to `main` at `e4c122a4e4a7bde26ee80a846b74e23dd224d7b2`. Its fresh exact-head CI, post-merge main CI, and routed Cloudflare Production deployment all passed. Production Supabase migration promotion remains a separate explicit step; no Chatwoot migration is assumed live from a Git merge alone.
+
+PR #207 is retargeted directly to current `main` and marked ready for review. It adds a read-only exact-marker reconciler and a server-only Candidate Account orchestrator. `CHATWOOT_PROVISIONING_ENABLED` remains the fail-closed feature gate; no route or scheduler imports this orchestrator. A new one-shot claim may enter the create path, while replay/ambiguous cases reconcile by GET-only exact marker and never blindly POST again. Confirmed Account identity is persisted only through the existing OWNER-governed expected-version RPC.
+
+The Slice B membership role-integrity finding remains a separate blocker for User/AccountUser writes: declared role is not canonical authority. PR #207 does not implement that membership writer. Do not activate Candidate provisioning or make a live Chatwoot call from this PR validation. Fresh exact-head CI and zero unresolved review threads remain mandatory before merge.
