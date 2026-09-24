@@ -78,26 +78,49 @@ insert into c4_inbox_state(key,value) values
   ('inbox_mapping_id', :'inbox_mapping_id');
 
 do $direct_authenticated_write_denied$
+declare
+  v_rows bigint := 0;
 begin
   begin
     update public.chatwoot_inbox_mappings
     set last_request_key='direct-auth-update',
         version=version+1
     where id=(select value::uuid from c4_inbox_state where key='inbox_mapping_id');
-    raise exception 'direct authenticated Inbox mapping mutation unexpectedly succeeded';
+
+    get diagnostics v_rows = row_count;
   exception when others then
     if sqlerrm not like '%governed command%'
        and sqlerrm not like '%row-level security%'
     then
       raise;
     end if;
+    v_rows := 0;
   end;
+
+  if v_rows <> 0 then
+    raise exception 'direct authenticated Inbox mapping mutation unexpectedly changed % row(s)', v_rows;
+  end if;
 end;
 $direct_authenticated_write_denied$;
 
 reset role;
 select set_config('request.jwt.claim.sub','',false);
 set role service_role;
+
+do $direct_authenticated_state_unchanged$
+begin
+  if not exists (
+    select 1
+    from public.chatwoot_inbox_mappings
+    where id=(select value::uuid from c4_inbox_state where key='inbox_mapping_id')
+      and status='PROVISIONING'
+      and version=1
+      and last_request_key='c4-inbox-mapping-create'
+  ) then
+    raise exception 'direct authenticated Inbox mapping mutation changed canonical state';
+  end if;
+end;
+$direct_authenticated_state_unchanged$;
 
 select public.chatwoot_vault_create_secret(
   'c4-inbox-webhook-secret',

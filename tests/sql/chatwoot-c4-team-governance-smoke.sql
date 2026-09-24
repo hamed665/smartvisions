@@ -90,6 +90,8 @@ set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000ec01',false);
 
 do $direct_authenticated_write_denied$
+declare
+  v_rows bigint := 0;
 begin
   begin
     update public.chatwoot_team_mappings
@@ -97,14 +99,20 @@ begin
            version=version+1,
            last_request_key='direct-team-write'
      where id=(select value::uuid from c4_team_state where key='team_mapping_id');
-    raise exception 'direct authenticated Team mapping mutation unexpectedly succeeded';
+
+    get diagnostics v_rows = row_count;
   exception when others then
     if sqlerrm not like '%governed command%'
        and sqlerrm not like '%row-level security%'
     then
       raise;
     end if;
+    v_rows := 0;
   end;
+
+  if v_rows <> 0 then
+    raise exception 'direct authenticated Team mapping mutation unexpectedly changed % row(s)', v_rows;
+  end if;
 end;
 $direct_authenticated_write_denied$;
 
@@ -131,6 +139,22 @@ $authenticated_receipt_denied$;
 reset role;
 select set_config('request.jwt.claim.sub','',false);
 set role service_role;
+
+do $direct_authenticated_state_unchanged$
+begin
+  if not exists (
+    select 1
+    from public.chatwoot_team_mappings
+    where id=(select value::uuid from c4_team_state where key='team_mapping_id')
+      and status='PROVISIONING'
+      and version=1
+      and projected_name='sales team [12345678]'
+      and last_request_key='c4-team-mapping-create'
+  ) then
+    raise exception 'direct authenticated Team mapping mutation changed canonical state';
+  end if;
+end;
+$direct_authenticated_state_unchanged$;
 
 do $service_acl$
 begin
