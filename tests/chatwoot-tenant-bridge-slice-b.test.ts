@@ -160,13 +160,34 @@ describe('COMM-TENANT-BRIDGE Slice B', () => {
     expect(migration).not.toContain('create table if not exists public.chatwoot_bridge_command_claims');
   });
 
-  it('uses SECURITY INVOKER only and keeps SQL smoke rollback-only', () => {
-    const functions =
-      migration.match(/create or replace function public\./gi) ?? [];
-    const invokers = migration.match(/security invoker/gi) ?? [];
+  it('keeps public mutation/trigger functions SECURITY INVOKER and isolates one private read helper', () => {
+    const functionBlocks = migration
+      .split(/(?=create or replace function )/gi)
+      .filter((block) => /^create or replace function /i.test(block));
 
-    expect(migration).not.toMatch(/security\s+definer/i);
-    expect(invokers).toHaveLength(functions.length);
+    const publicFunctions = functionBlocks.filter((block) =>
+      /^create or replace function public\./i.test(block),
+    );
+    const privateDefiners = functionBlocks.filter(
+      (block) =>
+        /^create or replace function private\./i.test(block) &&
+        /security definer/i.test(block),
+    );
+
+    expect(publicFunctions.length).toBeGreaterThan(0);
+    for (const block of publicFunctions) {
+      expect(block).toMatch(/security invoker/i);
+      expect(block).not.toMatch(/security definer/i);
+    }
+
+    expect(privateDefiners).toHaveLength(1);
+    expect(privateDefiners[0]).toContain(
+      'private.chatwoot_bridge_dependency_exists',
+    );
+    expect(privateDefiners[0]).toContain("set search_path = ''");
+    expect(migration).toContain(
+      'grant execute on function private.chatwoot_bridge_dependency_exists(text,uuid,uuid)',
+    );
     expect(sqlSmoke).toMatch(/^begin;/m);
     expect(sqlSmoke).toMatch(/^rollback;/m);
     expect(sqlSmoke).not.toMatch(/\bdo \$\n/);
