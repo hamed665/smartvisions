@@ -449,3 +449,18 @@ The #214 caller-declared User-state RPC is revoked. ACTIVE User mapping now requ
 Runtime helpers `ensureAndRecordChatwootUser` and `reconcileAndRecordChatwootUser` record receipts only after external identity/marker proof. Mock and PostgreSQL 17 rollback tests cover ambiguous PATCH reconciliation, missing marker denial, identity drift, receipt ACL, stale version receipts, verified activation, degradation and reactivation.
 
 No Production migration, live Chatwoot request, provider/customer send, route/scheduler activation or Shadow Mode change has been made. Keep #216 Draft until runner-backed exact-head CI and the full dependency stack are proven.
+
+
+## C4 ephemeral Account-admin token boundary — Draft PR #217
+
+PR #217 is stacked on #216 and implements the first API Inbox/Team provisioning dependency without creating either resource.
+
+Pinned Chatwoot v4.18.0 source was re-verified: Inbox and Team CRUD are account-scoped Application API routes; Platform User token issuance is POST `/platform/api/v1/users/:id/token`; API Inbox uses Channel::Api.
+
+The new server-only `chatwootAdminAccountRequest` verifies the authenticated caller is the current Smart Organization OWNER before any service client exists. It then performs exact read-only service checks for ACTIVE tenant Business, Account mapping, global User mapping and Account membership. The membership must link the exact mappings and remain OWNER -> Chatwoot administrator with an adopted AccountUser identity.
+
+Only then is an ephemeral Chatwoot User access token issued. The token remains inside the call stack, is immediately consumed by the existing account-scoped HTTP client and is never persisted, logged, audited or returned.
+
+Resource paths are suffix-only and are rejected before auth/service/token issuance if they attempt /api, /platform, scheme-relative, traversal or root-only paths. The Chatwoot Account ID always comes from the exact ACTIVE canonical mapping.
+
+No migration, Production mutation, live Chatwoot call, provider/customer send, route/scheduler activation or Shadow Mode change has been made. Next C4 unit is API Inbox provisioning with immediate Vault capture of Channel::Api secret + hmac_token and exact ambiguous-create reconciliation.
