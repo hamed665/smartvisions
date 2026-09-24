@@ -266,7 +266,7 @@ describe('C4 API Inbox provisioning', () => {
       .mockResolvedValueOnce({ payload: [] })
       .mockRejectedValueOnce(
         new ChatwootHttpError({
-          code: 'NETWORK_ERROR',
+          code: 'NETWORK_FAILED',
           message: 'create outcome unknown',
           retryable: true,
           ambiguousMutationOutcome: true,
