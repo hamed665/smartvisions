@@ -251,7 +251,7 @@ declare
   v_payload_hash text;
   v_existing public.chatwoot_inbox_reconciliation_receipts%rowtype;
   v_created public.chatwoot_inbox_reconciliation_receipts%rowtype;
-  v_now timestamptz := now();
+  v_now timestamptz := statement_timestamp();
 begin
   if p_expected_mapping_version is null
      or p_expected_mapping_version < 1
