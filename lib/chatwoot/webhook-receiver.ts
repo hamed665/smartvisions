@@ -217,6 +217,9 @@ export async function persistSignedChatwootWebhook(input: {
     mapping.error ||
     !mapping.data ||
     mapping.data.id !== input.mappingId ||
+    !isUuid(mapping.data.organization_id) ||
+    !isUuid(mapping.data.tenant_business_id) ||
+    !['ACTIVE', 'DEGRADED'].includes(String(mapping.data.status)) ||
     mapping.data.channel_type !== 'Channel::Api' ||
     typeof mapping.data.webhook_secret_ref !== 'string'
   ) {
