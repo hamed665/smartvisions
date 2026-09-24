@@ -116,10 +116,6 @@ declare
   v_created public.chatwoot_account_membership_reconciliation_receipts%rowtype;
   v_now timestamptz := now();
 begin
-  if current_user <> 'service_role' then
-    raise exception 'Chatwoot reconciliation receipt is server-only';
-  end if;
-
   if p_expected_membership_version is null
      or p_expected_membership_version < 1
      or p_chatwoot_account_id is null
