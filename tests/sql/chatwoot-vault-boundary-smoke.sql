@@ -7,6 +7,8 @@ create temp table chatwoot_vault_test_state (
   value text not null
 ) on commit drop;
 
+grant select, insert on chatwoot_vault_test_state to service_role;
+
 set role service_role;
 
 select public.chatwoot_vault_create_secret(
