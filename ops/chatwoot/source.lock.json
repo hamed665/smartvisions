@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "workPackage": "COMM-CHATWOOT-SOURCE",
+  "upstream": {
+    "repository": "chatwoot/chatwoot",
+    "tag": "v4.18.0",
+    "commit": "9f920b549c14491a4e587687a3eed5d21c6ccc7d",
+    "releasePublishedAt": "2026-09-18T00:02:33Z",
+    "defaultBranch": "develop"
+  },
+  "stack": {
+    "ruby": "3.4.4",
+    "rails": "7.2.3.1",
+    "node": "24.13.0",
+    "pnpm": "10.2.0",
+    "postgresMajor": 16,
+    "postgresImage": "pgvector/pgvector:pg16",
+    "redis": "required",
+    "worker": "sidekiq"
+  },
+  "license": {
+    "communityLicensePath": "LICENSE",
+    "enterpriseLicensePath": "enterprise/LICENSE",
+    "communityPolicy": "MIT_EXCEPT_ENTERPRISE",
+    "enterpriseProductionUse": "LICENSE_REQUIRED",
+    "enterpriseFilesInProductionImage": false,
+    "runtimeDisableEnterprise": true
+  },
+  "image": {
+    "registry": "ghcr.io/hamed665/smartvisions-chatwoot",
+    "allowLatestTag": false,
+    "requireImmutableDeploymentDigest": true
+  },
+  "integration": {
+    "providerAuthority": "SMART_CORE",
+    "initialChatwootChannel": "Channel::Api",
+    "tenantProjection": "tenant_business_to_chatwoot_account",
+    "nativeEmailProviderOwnership": false,
+    "nativeWhatsAppProviderOwnership": false
+  }
+}
