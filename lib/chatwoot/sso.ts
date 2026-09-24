@@ -64,8 +64,11 @@ function validateSsoUrl(input: {
     return fail('UPSTREAM_INVALID', 'Chatwoot SSO URL is invalid');
   }
 
-  const token = url.searchParams.get('sso_auth_token') ?? '';
-  const email = (url.searchParams.get('email') ?? '').trim().toLowerCase();
+  const tokens = url.searchParams.getAll('sso_auth_token');
+  const emails = url.searchParams.getAll('email');
+  const keys = Array.from(url.searchParams.keys()).sort();
+  const token = tokens[0] ?? '';
+  const email = (emails[0] ?? '').trim().toLowerCase();
 
   if (
     url.origin !== expectedOrigin ||
@@ -73,6 +76,11 @@ function validateSsoUrl(input: {
     url.username ||
     url.password ||
     url.hash ||
+    tokens.length !== 1 ||
+    emails.length !== 1 ||
+    keys.length !== 2 ||
+    keys[0] !== 'email' ||
+    keys[1] !== 'sso_auth_token' ||
     email !== input.canonicalEmail.trim().toLowerCase() ||
     !/^[0-9a-f]{64}$/i.test(token)
   ) {
