@@ -916,14 +916,21 @@ async function claimSync(input: {
   if (
     !isPlainObject(single) ||
     typeof single.is_new !== 'boolean' ||
+    typeof single.result_recorded !== 'boolean' ||
     single.entity_id !== input.resource.mappingId ||
-    single.applied_version !== input.resource.mappingVersion
+    single.applied_version !== input.resource.mappingVersion ||
+    (single.is_new && single.result_recorded)
   ) {
     return fail(
       'CANONICAL_STATE_INVALID',
       'Chatwoot membership sync claim response is invalid',
     );
   }
+
+  return {
+    isNew: single.is_new,
+    resultRecorded: single.result_recorded,
+  };
 }
 
 async function recordResult(input: {
@@ -1110,7 +1117,7 @@ export async function syncChatwootMembershipSet(input: {
   });
   const beforeHash = await hashMemberSet(beforeIds);
 
-  await claimSync({
+  const claim = await claimSync({
     supabase: input.supabase,
     organizationId,
     tenantBusinessId,
@@ -1119,6 +1126,24 @@ export async function syncChatwootMembershipSet(input: {
     desiredCount: desiredIds.length,
     requestKey: claimRequestKey,
   });
+
+  if (claim.resultRecorded) {
+    if (!sameIds(beforeIds, desiredIds)) {
+      return fail(
+        'RECONCILIATION_REQUIRED',
+        'Completed membership sync request cannot repair later drift; use a new request key',
+      );
+    }
+
+    return {
+      resourceKind: resource.kind,
+      mappingId: resource.mappingId,
+      mappingVersion: resource.mappingVersion,
+      desiredCount: desiredIds.length,
+      observedCount: beforeIds.length,
+      outcome: 'ALREADY_MATCHED' as const,
+    };
+  }
 
   if (sameIds(beforeIds, desiredIds)) {
     await recordResult({
