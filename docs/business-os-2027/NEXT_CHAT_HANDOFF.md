@@ -314,3 +314,10 @@ Exact-head runner-backed CI and dependency review remain mandatory. Production s
 PR #206 is stacked on #205. Migration `0081_chatwoot_account_external_claim.sql` extends the same `chatwoot_bridge_command_claims` ledger with one OWNER-authenticated Account external-create attempt per mapping. The dedicated RPC returns `may_attempt_create=true` only for the first committed claim. Same-key replay returns false; another key fails closed for reconciliation. It does not call Chatwoot. The PostgreSQL 17 rollback smoke is chained after 0080.
 
 Next unit: a Candidate-only Account orchestrator may invoke C3A only after it receives `may_attempt_create=true` from the committed owner claim. If it receives false or a timeout, reconcile by exact marker; never POST again automatically. If the process dies after claim and before HTTP, reconciliation/manual recovery is required. Preserve mapping state through existing OWNER-governed RPCs, including expected version and new request key. No real Chatwoot call or Production migration until runner-backed dependency CI and source-plane Candidate evidence pass.
+
+
+## 2026-09-24 stack reconciliation — PR #206
+
+PR #205 is merged to `main` at `f8786351d197b85ad0399d2a7b38a540c3da4c2a`. Its exact-head CI, post-merge main CI, and routed Cloudflare Production deployment all passed. Production Supabase migration state remains intentionally unchanged unless separately promoted and verified.
+
+PR #206 is now retargeted directly to current `main` and marked ready for review. GitHub Actions runner allocation is restored. A rerun of the historical failed check reused an obsolete pull-request merge ref, so it is not valid evidence for the current base. This checkpoint commit exists to force a fresh pull-request merge ref and exact-head CI. Do not merge #206 unless that fresh run passes lint, typecheck, tests, PostgreSQL 17 migration smoke, Next build, Vinext build, and scheduled-runtime verification with no unresolved review threads.
