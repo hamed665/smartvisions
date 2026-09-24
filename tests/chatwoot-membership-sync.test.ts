@@ -220,7 +220,7 @@ function makeService(
       return { data: rows, error: null, count };
     };
 
-    const builder: Record<string, unknown> & PromiseLike<unknown> = {
+    const builder: any = {
       select: vi.fn((_columns: string, options?: { count?: string }) => {
         countExact = options?.count === 'exact';
         return builder;
@@ -264,7 +264,7 @@ function makeService(
   return { service, rpc, from };
 }
 
-function makeAuthenticatedClient() {
+function makeAuthenticatedClient(input: { ownerRole?: string } = {}) {
   const rpc = vi.fn(async (name: string, args: Record<string, unknown>) => {
     if (name === 'claim_chatwoot_membership_sync') {
       return {
@@ -292,7 +292,7 @@ function makeAuthenticatedClient() {
       data: {
         organization_id: ORG,
         user_id: OWNER,
-        role: 'OWNER',
+        role: input.ownerRole ?? 'OWNER',
       },
       error: null,
     }),
@@ -613,22 +613,7 @@ describe('C5 Chatwoot membership reconciliation', () => {
   });
 
   it('fails before service-role reads for a non-OWNER initiating session', async () => {
-    const { client } = makeAuthenticatedClient();
-    (client.from as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
-      const builder = {
-        select: () => builder,
-        eq: () => builder,
-        single: async () => ({
-          data: {
-            organization_id: ORG,
-            user_id: OWNER,
-            role: 'ADMIN',
-          },
-          error: null,
-        }),
-      };
-      return builder;
-    });
+    const { client } = makeAuthenticatedClient({ ownerRole: 'ADMIN' });
 
     await expect(
       syncChatwootMembershipSet({
