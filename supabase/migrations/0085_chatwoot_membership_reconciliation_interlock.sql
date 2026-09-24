@@ -837,8 +837,15 @@ as $$
 declare
   v_safe boolean;
 begin
+  if tg_op = 'DELETE' and pg_trigger_depth() > 1 then
+    return old;
+  end if;
+
   if old.scope_type not in ('BRAND','BUSINESS') then
-    return case when tg_op = 'DELETE' then old else new end;
+    if tg_op = 'DELETE' then
+      return old;
+    end if;
+    return new;
   end if;
 
   v_safe := private.member_scope_chatwoot_reduction_safe(
@@ -857,9 +864,12 @@ begin
     raise exception 'archive verified Chatwoot Account membership before reducing Business-wide authority to VIEWER';
   end if;
 
-  return case when tg_op = 'DELETE' then old else new end;
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
 end;
-$$;
+$;
 
 drop trigger if exists member_scope_assignments_chatwoot_reduction_interlock
   on public.member_scope_assignments;
