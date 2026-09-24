@@ -415,3 +415,22 @@ External IDs are adopted only on ACTIVE verification. ACTIVE Account membership 
 ARCHIVED is intentionally not accepted by the #214 public state RPCs. The next dependency must add durable external demotion/removal reconciliation evidence and then interlock Smart Core scope reduction against that evidence. Until that exists, external User/AccountUser membership remains disabled.
 
 No Production migration, live Chatwoot request, provider/customer send, route/scheduler activation or Shadow Mode change has been made. Exact-head runner-backed CI remains mandatory.
+
+
+## C3B membership reconciliation + reverse-role interlock — Draft PR #215
+
+PR #215 is stacked on #214 and adds migration `0085_chatwoot_membership_reconciliation_interlock.sql` plus the server-only AccountUser reconciliation runtime.
+
+External AccountUser mutation is now reconciliation-first after ambiguity. The code performs one POST only; an ambiguous mutation is resolved by GET, never a blind second POST. Removal performs exact GET preflight, one DELETE, then GET absence verification. An ambiguous DELETE is not repeated.
+
+Verified external state is persisted as an immutable, short-lived reconciliation receipt bound to the exact Organization, tenant Business, membership ID/version, Smart user/mapping identities, Chatwoot Account/User IDs and prior AccountUser ID. Only service_role may append/read the receipt table directly and execute the receipt-record RPC. Authenticated clients cannot mint receipts.
+
+The #214 generic state RPC that accepted caller-declared verified Chatwoot role has been revoked. ACTIVE membership now requires a fresh server-recorded PRESENT receipt whose observed role matches the canonical 0083 projection. ARCHIVED requires a fresh server-recorded ABSENT receipt bound to the exact prior AccountUser identity. DEGRADED remains a governed non-adoption state.
+
+BRAND/BUSINESS member-scope INSERT, UPDATE and DELETE now run a reverse-role interlock. The helper computes post-mutation Business-wide authority for every affected ACTIVE tenant Business. If any would become VIEWER while a PROVISIONING/ACTIVE/DEGRADED Chatwoot Account membership remains, the Smart Core mutation fails closed. Parent cascades remain preserved. This enforces the external-first removal rule before canonical authority reduction.
+
+Mock tests cover GET-only reconciliation, one-delete removal, bigint identity, drift rejection and server receipt recording. PostgreSQL 17 rollback smoke covers receipt ACLs, receipt-backed activation/archive, stale receipt rejection and INSERT/UPDATE/DELETE authority-reduction blocking.
+
+Remaining pre-activation boundaries are explicit: Organization-role mutation is still not opened; agent-to-agent canonical role changes need projection freshness work; global Chatwoot User identity activation requires final hardening; Inbox/Team governed writers and Contact/Conversation projection still remain.
+
+No Production migration, live Chatwoot request, provider/customer send, route/scheduler activation or Shadow Mode change has been made. Keep #215 Draft until the complete dependency stack gets real runner-backed exact-head CI and review.
