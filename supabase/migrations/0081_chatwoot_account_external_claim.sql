@@ -53,6 +53,7 @@ declare
   v_command_type text := upper(trim(coalesce(p_command_type, '')));
   v_entity_type text := upper(trim(coalesce(p_entity_type, '')));
   v_payload_hash text := lower(trim(coalesce(p_payload_hash, '')));
+  v_expected_entity_type text;
 begin
   if auth.uid() is null or not public.chatwoot_bridge_can_manage(p_organization_id) then
     raise exception 'Chatwoot bridge mutation not permitted';
@@ -61,6 +62,24 @@ begin
   if coalesce(current_setting('smartvisions.chatwoot_bridge_command', true), '') <> '1' then
     raise exception 'Chatwoot bridge command claim requires governed command context';
   end if;
+
+  select case v_command_type
+    when 'CREATE_CHANNEL_BINDING' then 'COMMUNICATION_CHANNEL_BINDING'
+    when 'SET_CHANNEL_BINDING_LIFECYCLE' then 'COMMUNICATION_CHANNEL_BINDING'
+    when 'CREATE_ACCOUNT_MAPPING' then 'CHATWOOT_ACCOUNT_MAPPING'
+    when 'SET_ACCOUNT_MAPPING_STATE' then 'CHATWOOT_ACCOUNT_MAPPING'
+    when 'CREATE_USER_MAPPING' then 'CHATWOOT_USER_MAPPING'
+    when 'SET_USER_MAPPING_STATE' then 'CHATWOOT_USER_MAPPING'
+    when 'CREATE_ACCOUNT_MEMBERSHIP' then 'CHATWOOT_ACCOUNT_MEMBERSHIP'
+    when 'SET_ACCOUNT_MEMBERSHIP_STATE' then 'CHATWOOT_ACCOUNT_MEMBERSHIP'
+    when 'CREATE_INBOX_MAPPING' then 'CHATWOOT_INBOX_MAPPING'
+    when 'SET_INBOX_MAPPING_STATE' then 'CHATWOOT_INBOX_MAPPING'
+    when 'CREATE_TEAM_MAPPING' then 'CHATWOOT_TEAM_MAPPING'
+    when 'SET_TEAM_MAPPING_STATE' then 'CHATWOOT_TEAM_MAPPING'
+    when 'CLAIM_ACCOUNT_EXTERNAL_CREATE' then 'CHATWOOT_ACCOUNT_MAPPING'
+    else null
+  end
+  into v_expected_entity_type;
 
   if length(v_request_key) not between 1 and 200
      or v_command_type not in (
@@ -86,21 +105,8 @@ begin
        'CHATWOOT_INBOX_MAPPING',
        'CHATWOOT_TEAM_MAPPING'
      )
-     or v_entity_type <> case v_command_type
-       when 'CREATE_CHANNEL_BINDING' then 'COMMUNICATION_CHANNEL_BINDING'
-       when 'SET_CHANNEL_BINDING_LIFECYCLE' then 'COMMUNICATION_CHANNEL_BINDING'
-       when 'CREATE_ACCOUNT_MAPPING' then 'CHATWOOT_ACCOUNT_MAPPING'
-       when 'SET_ACCOUNT_MAPPING_STATE' then 'CHATWOOT_ACCOUNT_MAPPING'
-       when 'CREATE_USER_MAPPING' then 'CHATWOOT_USER_MAPPING'
-       when 'SET_USER_MAPPING_STATE' then 'CHATWOOT_USER_MAPPING'
-       when 'CREATE_ACCOUNT_MEMBERSHIP' then 'CHATWOOT_ACCOUNT_MEMBERSHIP'
-       when 'SET_ACCOUNT_MEMBERSHIP_STATE' then 'CHATWOOT_ACCOUNT_MEMBERSHIP'
-       when 'CREATE_INBOX_MAPPING' then 'CHATWOOT_INBOX_MAPPING'
-       when 'SET_INBOX_MAPPING_STATE' then 'CHATWOOT_INBOX_MAPPING'
-       when 'CREATE_TEAM_MAPPING' then 'CHATWOOT_TEAM_MAPPING'
-       when 'SET_TEAM_MAPPING_STATE' then 'CHATWOOT_TEAM_MAPPING'
-       when 'CLAIM_ACCOUNT_EXTERNAL_CREATE' then 'CHATWOOT_ACCOUNT_MAPPING'
-     end
+     or v_expected_entity_type is null
+     or v_entity_type <> v_expected_entity_type
      or p_applied_version is null
      or p_applied_version < 1
      or v_payload_hash !~ '^[0-9a-f]{64}$'
