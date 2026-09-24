@@ -841,24 +841,42 @@ begin
     return old;
   end if;
 
-  if old.scope_type not in ('BRAND','BUSINESS') then
-    if tg_op = 'DELETE' then
-      return old;
+  if tg_op = 'INSERT' then
+    if new.scope_type not in ('BRAND','BUSINESS') then
+      return new;
     end if;
-    return new;
-  end if;
 
-  v_safe := private.member_scope_chatwoot_reduction_safe(
-    old.organization_id,
-    old.id,
-    old.user_id,
-    old.scope_type,
-    old.brand_id,
-    old.tenant_business_id,
-    case when tg_op = 'DELETE' then null else new.role end,
-    case when tg_op = 'DELETE' then null else new.attributes end,
-    tg_op = 'DELETE'
-  );
+    v_safe := private.member_scope_chatwoot_reduction_safe(
+      new.organization_id,
+      new.id,
+      new.user_id,
+      new.scope_type,
+      new.brand_id,
+      new.tenant_business_id,
+      new.role,
+      new.attributes,
+      false
+    );
+  else
+    if old.scope_type not in ('BRAND','BUSINESS') then
+      if tg_op = 'DELETE' then
+        return old;
+      end if;
+      return new;
+    end if;
+
+    v_safe := private.member_scope_chatwoot_reduction_safe(
+      old.organization_id,
+      old.id,
+      old.user_id,
+      old.scope_type,
+      old.brand_id,
+      old.tenant_business_id,
+      case when tg_op = 'DELETE' then null else new.role end,
+      case when tg_op = 'DELETE' then null else new.attributes end,
+      tg_op = 'DELETE'
+    );
+  end if;
 
   if not v_safe then
     raise exception 'archive verified Chatwoot Account membership before reducing Business-wide authority to VIEWER';
@@ -869,12 +887,12 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists member_scope_assignments_chatwoot_reduction_interlock
   on public.member_scope_assignments;
 create trigger member_scope_assignments_chatwoot_reduction_interlock
-before update of role, attributes or delete
+before insert or update of role, attributes or delete
 on public.member_scope_assignments
 for each row execute function public.enforce_member_scope_chatwoot_reduction_interlock();
 
