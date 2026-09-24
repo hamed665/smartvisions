@@ -624,3 +624,14 @@ Next cursor:
 7. keep C5 scoped-only Inbox/Team membership blocked until the source-backed mixed-Inbox access-policy problem has a coherent scope-aware solution.
 
 Do not turn Shadow Mode off as part of runtime deployment.
+
+
+## Chatwoot FK index hardening — Draft after Production 0089
+
+Fresh Production Supabase performance advisor evidence after the 0077-0089 promotion reports 27 unindexed foreign-key paths limited to the new Chatwoot/communication tables.
+
+This unit adds `0090_chatwoot_fk_index_hardening.sql` with only the 27 missing covering indexes reported by Production evidence. It does not alter table data, RLS, grants, provider behavior, runtime routes or Shadow Mode.
+
+The PostgreSQL 17 smoke does not merely count index names. It walks every public foreign key on `chatwoot_%` plus `communication_channel_bindings` and fails unless a valid/ready index covers the FK columns in order.
+
+Do not promote 0090 until exact-head CI and the prior main Production baseline are green.
