@@ -396,9 +396,17 @@ export async function provisionChatwootApiInbox(input: {
 
   const mapping = normalizeMapping(mappingData);
   if (
-    mapping.id.length < 1 ||
+    !isUuid(mapping.id) ||
     mapping.organization_id !== organizationId ||
-    mapping.tenant_business_id !== tenantBusinessId
+    mapping.tenant_business_id !== tenantBusinessId ||
+    mapping.branch_id !== branchId ||
+    mapping.communication_channel_binding_id !== bindingId ||
+    mapping.chatwoot_account_mapping_id !== accountMappingId ||
+    !['PROVISIONING', 'ACTIVE', 'DEGRADED', 'ARCHIVED'].includes(
+      mapping.status,
+    ) ||
+    !Number.isInteger(mapping.version) ||
+    mapping.version < 1
   ) {
     throw new ChatwootProvisioningError(
       'UPSTREAM_MISMATCH',
@@ -407,6 +415,17 @@ export async function provisionChatwootApiInbox(input: {
   }
 
   if (mapping.status === 'ACTIVE') {
+    if (
+      normalizeChatwootInt32Id(mapping.chatwoot_inbox_id) === null ||
+      !mapping.chatwoot_channel_identifier ||
+      !mapping.webhook_secret_ref ||
+      !mapping.hmac_token_ref
+    ) {
+      throw new ChatwootProvisioningError(
+        'UPSTREAM_MISMATCH',
+        'ACTIVE Chatwoot Inbox mapping is incomplete',
+      );
+    }
     return { mapping, outcome: 'ALREADY_ACTIVE' as const };
   }
   if (mapping.status === 'ARCHIVED') {
