@@ -35,17 +35,19 @@ insert into public.departments(id, organization_id, branch_id, name, code) value
 insert into public.teams(id, organization_id, department_id, name, code) values
   ('50000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000a01', '40000000-0000-0000-0000-000000000001', 'Team A', 'A');
 
-insert into public.member_scope_assignments(
-  organization_id, user_id, scope_type, role, team_id, attributes, assigned_by
-) values (
+select (public.create_member_scope_assignment(
   '00000000-0000-0000-0000-000000000a01',
   '00000000-0000-0000-0000-00000000a002',
   'TEAM',
   'SALES_AGENT',
+  null,
+  null,
+  null,
+  null,
   '50000000-0000-0000-0000-000000000001',
   '{"region":"OM","channel":"WHATSAPP"}'::jsonb,
-  '00000000-0000-0000-0000-00000000a001'
-);
+  'control-plane-foundation-scope-create'
+)).id;
 
 insert into public.scope_configuration_overrides(
   organization_id, scope_type, team_id, namespace, config_key, config_value, updated_by
