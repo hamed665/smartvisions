@@ -495,7 +495,7 @@ begin
       'role', v_created.role,
       'version', v_created.version,
       'request_key', v_request_key,
-      'attribute_key_count', jsonb_object_length(v_created.attributes)
+      'attribute_key_count', (select count(*) from jsonb_object_keys(coalesce(v_created.attributes, '{}'::jsonb)))
     ))
   );
 
@@ -637,13 +637,13 @@ begin
       'role', v_current.role,
       'version', v_current.version,
       'request_key', v_current.last_request_key,
-      'attribute_key_count', jsonb_object_length(v_current.attributes)
+      'attribute_key_count', (select count(*) from jsonb_object_keys(coalesce(v_current.attributes, '{}'::jsonb)))
     ),
     jsonb_build_object(
       'role', v_updated.role,
       'version', v_updated.version,
       'request_key', v_updated.last_request_key,
-      'attribute_key_count', jsonb_object_length(v_updated.attributes)
+      'attribute_key_count', (select count(*) from jsonb_object_keys(coalesce(v_updated.attributes, '{}'::jsonb)))
     )
   );
 
@@ -774,7 +774,7 @@ begin
       'team_id', v_current.team_id,
       'role', v_current.role,
       'version', v_current.version,
-      'attribute_key_count', jsonb_object_length(v_current.attributes)
+      'attribute_key_count', (select count(*) from jsonb_object_keys(coalesce(v_current.attributes, '{}'::jsonb)))
     )),
     jsonb_build_object(
       'deleted', true,
