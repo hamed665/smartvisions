@@ -370,6 +370,70 @@ async function createOrUpdateAccountUserOnce(input: {
   });
 }
 
+async function listChatwootAccountUsers(input: {
+  accountId: number;
+  fetchImpl?: typeof fetch;
+}) {
+  const raw = await chatwootPlatformProvisioningRequest<unknown>({
+    path: `/platform/api/v1/accounts/${input.accountId}/account_users`,
+    method: 'GET',
+    fetchImpl: input.fetchImpl,
+  });
+
+  if (!Array.isArray(raw)) {
+    throw new ChatwootProvisioningError(
+      'UPSTREAM_MISMATCH',
+      'Chatwoot AccountUser list response is invalid',
+    );
+  }
+
+  try {
+    return raw.map(parseChatwootAccountUser);
+  } catch {
+    throw new ChatwootProvisioningError(
+      'UPSTREAM_MISMATCH',
+      'Chatwoot AccountUser list contains invalid membership data',
+    );
+  }
+}
+
+export async function reconcileChatwootAccountUser(input: {
+  accountId: number;
+  userId: number;
+  fetchImpl?: typeof fetch;
+}): Promise<ChatwootAccountUserProjection | null> {
+  const accountId = normalizeChatwootInt32Id(input.accountId);
+  const userId = normalizeChatwootInt32Id(input.userId);
+  if (accountId === null || userId === null) {
+    throw new ChatwootProvisioningError(
+      'INVALID_INPUT',
+      'Chatwoot Account/User reconciliation input is invalid',
+    );
+  }
+
+  const rows = await listChatwootAccountUsers({
+    accountId,
+    fetchImpl: input.fetchImpl,
+  });
+
+  if (rows.some((row) => row.accountId !== accountId)) {
+    throw new ChatwootProvisioningError(
+      'UPSTREAM_MISMATCH',
+      'Chatwoot AccountUser list escaped the requested Account scope',
+    );
+  }
+
+  const matches = rows.filter((row) => row.userId === userId);
+  if (matches.length > 1) {
+    throw new ChatwootProvisioningError(
+      'DUPLICATE_MATCH',
+      'Multiple Chatwoot AccountUser rows match the same Account/User pair',
+    );
+  }
+
+  return matches[0] ?? null;
+}
+
 export async function ensureChatwootAccountUser(input: {
   accountId: number;
   userId: number;
@@ -377,7 +441,7 @@ export async function ensureChatwootAccountUser(input: {
   fetchImpl?: typeof fetch;
 }): Promise<{
   accountUser: ChatwootAccountUserProjection;
-  outcome: 'CREATED_OR_UPDATED' | 'RECOVERED_BY_SAFE_MEMBERSHIP_RETRY';
+  outcome: 'CREATED_OR_UPDATED' | 'RECONCILED_AFTER_AMBIGUOUS_MUTATION';
 }> {
   const accountId = normalizeChatwootInt32Id(input.accountId);
   const userId = normalizeChatwootInt32Id(input.userId);
@@ -398,36 +462,37 @@ export async function ensureChatwootAccountUser(input: {
     userId,
   };
 
-  let raw: unknown;
+  let accountUser: ChatwootAccountUserProjection;
   let outcome:
     | 'CREATED_OR_UPDATED'
-    | 'RECOVERED_BY_SAFE_MEMBERSHIP_RETRY' = 'CREATED_OR_UPDATED';
+    | 'RECONCILED_AFTER_AMBIGUOUS_MUTATION' = 'CREATED_OR_UPDATED';
 
   try {
-    raw = await createOrUpdateAccountUserOnce(normalizedInput);
+    accountUser = parseChatwootAccountUser(
+      await createOrUpdateAccountUserOnce(normalizedInput),
+    );
   } catch (error) {
     if (!(error instanceof ChatwootHttpError) || !error.ambiguousMutationOutcome) {
       throw error;
     }
 
-    try {
-      raw = await createOrUpdateAccountUserOnce(normalizedInput);
-      outcome = 'RECOVERED_BY_SAFE_MEMBERSHIP_RETRY';
-    } catch (retryError) {
-      if (
-        retryError instanceof ChatwootHttpError &&
-        retryError.ambiguousMutationOutcome
-      ) {
-        throw new ChatwootProvisioningError(
-          'RECONCILIATION_REQUIRED',
-          'Chatwoot AccountUser mutation remains ambiguous after safe retry',
-        );
-      }
-      throw retryError;
+    const reconciled = await reconcileChatwootAccountUser({
+      accountId,
+      userId,
+      fetchImpl: input.fetchImpl,
+    });
+
+    if (!reconciled || reconciled.role !== input.role) {
+      throw new ChatwootProvisioningError(
+        'RECONCILIATION_REQUIRED',
+        'Ambiguous Chatwoot AccountUser mutation is not confirmed by GET reconciliation',
+      );
     }
+
+    accountUser = reconciled;
+    outcome = 'RECONCILED_AFTER_AMBIGUOUS_MUTATION';
   }
 
-  const accountUser = parseChatwootAccountUser(raw);
   if (
     accountUser.accountId !== accountId ||
     accountUser.userId !== userId ||
@@ -440,4 +505,77 @@ export async function ensureChatwootAccountUser(input: {
   }
 
   return { accountUser, outcome };
+}
+
+export async function removeChatwootAccountUser(input: {
+  accountId: number;
+  userId: number;
+  expectedAccountUserId: string;
+  fetchImpl?: typeof fetch;
+}): Promise<{
+  outcome: 'ALREADY_ABSENT' | 'REMOVED' | 'REMOVED_AFTER_AMBIGUOUS_DELETE';
+}> {
+  const accountId = normalizeChatwootInt32Id(input.accountId);
+  const userId = normalizeChatwootInt32Id(input.userId);
+  const expectedAccountUserId = input.expectedAccountUserId.trim();
+
+  if (
+    accountId === null ||
+    userId === null ||
+    !/^[1-9][0-9]*$/.test(expectedAccountUserId)
+  ) {
+    throw new ChatwootProvisioningError(
+      'INVALID_INPUT',
+      'Chatwoot AccountUser removal input is invalid',
+    );
+  }
+
+  const before = await reconcileChatwootAccountUser({
+    accountId,
+    userId,
+    fetchImpl: input.fetchImpl,
+  });
+
+  if (!before) return { outcome: 'ALREADY_ABSENT' };
+
+  if (before.id !== expectedAccountUserId) {
+    throw new ChatwootProvisioningError(
+      'IDENTITY_CONFLICT',
+      'Chatwoot AccountUser identity drift detected before removal',
+    );
+  }
+
+  let ambiguousDelete = false;
+  try {
+    await chatwootPlatformProvisioningRequest<unknown>({
+      path: `/platform/api/v1/accounts/${accountId}/account_users`,
+      method: 'DELETE',
+      body: { user_id: userId },
+      fetchImpl: input.fetchImpl,
+    });
+  } catch (error) {
+    if (!(error instanceof ChatwootHttpError) || !error.ambiguousMutationOutcome) {
+      throw error;
+    }
+    ambiguousDelete = true;
+  }
+
+  const after = await reconcileChatwootAccountUser({
+    accountId,
+    userId,
+    fetchImpl: input.fetchImpl,
+  });
+
+  if (after) {
+    throw new ChatwootProvisioningError(
+      'RECONCILIATION_REQUIRED',
+      'Chatwoot AccountUser removal is not confirmed by GET reconciliation',
+    );
+  }
+
+  return {
+    outcome: ambiguousDelete
+      ? 'REMOVED_AFTER_AMBIGUOUS_DELETE'
+      : 'REMOVED',
+  };
 }
