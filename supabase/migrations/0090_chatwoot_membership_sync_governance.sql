@@ -173,12 +173,13 @@ create or replace function public.claim_chatwoot_membership_sync(
 returns table(
   is_new boolean,
   entity_id uuid,
-  applied_version integer
+  applied_version integer,
+  result_recorded boolean
 )
 language plpgsql
 security invoker
 set search_path = public, auth, extensions, pg_catalog
-as $$
+as $
 declare
   v_actor uuid := auth.uid();
   v_kind text := upper(trim(coalesce(p_resource_kind, '')));
@@ -189,6 +190,8 @@ declare
   v_payload_hash text;
   v_claim record;
   v_account_mapping_id uuid;
+  v_result_action text;
+  v_result_recorded boolean := false;
 begin
   if v_actor is null or not public.chatwoot_bridge_can_manage(p_organization_id) then
     raise exception 'Chatwoot membership sync not permitted';
@@ -220,6 +223,7 @@ begin
 
     v_command_type := 'SYNC_INBOX_MEMBERS';
     v_entity_type := 'CHATWOOT_INBOX_MAPPING';
+    v_result_action := 'CHATWOOT_INBOX_MEMBERSHIP_RECONCILED';
   else
     select m.chatwoot_account_mapping_id
       into v_account_mapping_id
@@ -233,6 +237,7 @@ begin
 
     v_command_type := 'SYNC_TEAM_MEMBERS';
     v_entity_type := 'CHATWOOT_TEAM_MAPPING';
+    v_result_action := 'CHATWOOT_TEAM_MEMBERSHIP_RECONCILED';
   end if;
 
   if not found then
@@ -309,10 +314,24 @@ begin
     );
   end if;
 
+  select exists (
+    select 1
+      from public.audit_logs a
+     where a.organization_id = p_organization_id
+       and a.action = v_result_action
+       and a.entity_id = p_mapping_id::text
+       and a.after_data->>'request_key' = v_request_key
+  )
+  into v_result_recorded;
+
   perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
 
   return query
-  select v_claim.is_new, v_claim.entity_id, v_claim.applied_version;
+  select
+    v_claim.is_new,
+    v_claim.entity_id,
+    v_claim.applied_version,
+    v_result_recorded;
 exception
   when others then
     perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
@@ -353,7 +372,7 @@ declare
   v_action text;
   v_payload_hash text;
   v_claim public.chatwoot_bridge_command_claims%rowtype;
-  v_exists boolean;
+  v_existing_result public.audit_logs%rowtype;
 begin
   if v_kind not in ('INBOX','TEAM')
      or p_mapping_version is null
@@ -472,17 +491,36 @@ begin
     )
   );
 
-  select exists (
-    select 1
-      from public.audit_logs a
-     where a.organization_id = p_organization_id
-       and a.action = v_action
-       and a.entity_id = p_mapping_id::text
-       and a.after_data->>'request_key' = v_request_key
-  )
-  into v_exists;
+  select *
+    into v_existing_result
+    from public.audit_logs a
+   where a.organization_id = p_organization_id
+     and a.action = v_action
+     and a.entity_id = p_mapping_id::text
+     and a.after_data->>'request_key' = v_request_key
+   order by a.created_at asc
+   limit 1;
 
-  if v_exists then
+  if found then
+    if v_existing_result.before_data is distinct from jsonb_build_object(
+         'observed_count', p_observed_before_count,
+         'observed_set_sha256', v_before_hash
+       )
+       or v_existing_result.after_data is distinct from jsonb_build_object(
+         'tenant_business_id', p_tenant_business_id,
+         'mapping_version', p_mapping_version,
+         'desired_count', p_desired_count,
+         'desired_set_sha256', v_desired_hash,
+         'observed_count', p_observed_after_count,
+         'observed_set_sha256', v_after_hash,
+         'mutation_attempted', p_mutation_attempted,
+         'outcome', v_outcome,
+         'request_key', v_request_key
+       )
+    then
+      raise exception 'Chatwoot membership sync result replay evidence mismatch';
+    end if;
+
     return false;
   end if;
 
