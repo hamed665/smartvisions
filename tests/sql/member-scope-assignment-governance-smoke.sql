@@ -388,21 +388,25 @@ reset role;
 select set_config('request.jwt.claim.sub','',false);
 
 -- Existing ON DELETE CASCADE semantics remain usable for parent cleanup.
-select set_config('smartvisions.member_scope_assignment_command','1',true);
-insert into public.member_scope_assignments(
-  organization_id,user_id,scope_type,role,tenant_business_id,
-  attributes,assigned_by,version,last_request_key,updated_by_user_id
-) values (
+-- Seed the fixture through the same governed command path required in runtime.
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000e201',false);
+
+select id
+from public.create_member_scope_assignment(
   '00000000-0000-0000-0000-00000000f201',
   '00000000-0000-0000-0000-00000000e203',
-  'BUSINESS','VIEWER','20000000-0000-0000-0000-00000000f201',
+  'BUSINESS',
+  'VIEWER',
+  null,
+  '20000000-0000-0000-0000-00000000f201',
+  null,null,null,
   '{}'::jsonb,
-  '00000000-0000-0000-0000-00000000e201',
-  1,'cascade-fixture',
-  '00000000-0000-0000-0000-00000000e201'
+  'cascade-fixture'
 );
 
-select set_config('smartvisions.member_scope_assignment_command','0',true);
+reset role;
+select set_config('request.jwt.claim.sub','',false);
 
 -- Parent delete below should cascade without being mistaken for a top-level app delete.
 delete from public.organization_members
