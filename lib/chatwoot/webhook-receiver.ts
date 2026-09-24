@@ -206,8 +206,7 @@ export async function persistSignedChatwootWebhook(input: {
   const mapping = await service
     .from('chatwoot_inbox_mappings')
     .select(
-      'id,organization_id,tenant_business_id,chatwoot_inbox_id,' +
-        'webhook_secret_ref,status,channel_type',
+      'id,organization_id,tenant_business_id,chatwoot_inbox_id,webhook_secret_ref,status,channel_type',
     )
     .eq('id', input.mappingId)
     .in('status', ['ACTIVE', 'DEGRADED'])
