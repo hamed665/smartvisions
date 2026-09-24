@@ -103,9 +103,9 @@ describe('Chatwoot core provisioning contract', () => {
       email: 'OWNER@EXAMPLE.COM',
       name: 'Owner',
       access_token: 'must-not-escape',
-      custom_attributes: {
-        smartvisions_user_id: '30000000-0000-4000-8000-000000000001',
-      },
+      custom_attributes: buildChatwootUserCustomAttributes(
+        '30000000-0000-4000-8000-000000000001',
+      ),
     });
 
     expect(user.email).toBe('owner@example.com');
