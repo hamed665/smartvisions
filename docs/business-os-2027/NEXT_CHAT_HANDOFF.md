@@ -343,3 +343,12 @@ This remains a read-only Candidate projection, not transactional mutation author
 ## 2026-09-24 stack reconciliation — PR #208
 
 PR #207 is merged and Production-verified at `f7c8cf8df56abba038ac02b79ec2301800ab0b58`. PR #208 is rebuilt directly on that verified `main` with only its read-only role-resolution implementation, focused tests, and handoff evidence. It does not add AccountUser mutation authority, change RLS, invoke Chatwoot externally, or send provider/customer traffic. Fresh exact-head CI and zero unresolved review threads remain mandatory before merge.
+
+
+## C3B User / AccountUser writer blocker — Draft PR #209
+
+PR #208 review established that its read-only role resolver may safely use the existing server-only service client for exact canonical reads only after authenticating the caller and verifying current Organization OWNER authority. That does **not** solve mutation authority.
+
+The User/AccountUser writer remains blocked because authenticated `SECURITY INVOKER` cannot read another member's `organization_members.role` under the current self-read RLS boundary. Direct `service_role` writes are forbidden, and a broad `SECURITY DEFINER` bypass would reverse prior hardening. PR #209 therefore contains no writer migration or runtime activation; it records the blocker and required reverse-role contract in `CHATWOOT_C3B_USER_MEMBERSHIP_WRITER_BLOCKER.md`.
+
+Before writer implementation resumes, require a reviewed least-privilege transactional authorization design that recomputes canonical Organization/Brand/Business role at the mutation boundary, reuses the existing claim ledger/version/request semantics, and proves safe OWNER demotion and VIEWER membership removal. Keep external User/AccountUser membership disabled.
