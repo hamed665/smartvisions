@@ -5,7 +5,7 @@ import {
   validateRuntimeContract,
 } from '../scripts/chatwoot/verify-runtime-contract.mjs';
 
-function validRuntime() {
+function validRuntime(): Record<string, string> {
   return {
     SMARTVISIONS_CHATWOOT_ENV: 'candidate',
     CHATWOOT_IMAGE: 'ghcr.io/hamed665/smartvisions-chatwoot:v4.18.0-sv-1234567890123456789012345678901234567890@sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
