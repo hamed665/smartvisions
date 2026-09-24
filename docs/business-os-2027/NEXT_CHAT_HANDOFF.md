@@ -515,3 +515,20 @@ Server runtime performs GET /teams before every create; exact description marker
 Mock tests cover create/adopt/ambiguous reconciliation, one-POST semantics, receipt/activation arguments, duplicate marker denial, bigint safety, ACTIVE replay and scope drift. PostgreSQL 17 rollback smoke covers deterministic projected naming, direct authenticated mutation denial, service-role read-only mapping ACL, service-only receipt ACL, marker/identity conflict, receipt-backed activation, stale receipt denial, direct service mutation denial, degradation and fresh receipt reactivation.
 
 No Production migration, live Chatwoot call, provider/customer send, route activation or Shadow Mode change has been made. Keep #220 Draft until exact-head CI is runner-backed and the stacked dependency chain is proven.
+
+
+## C5 governed Chatwoot SSO login — Draft PR #221
+
+PR #221 is stacked on #220 and implements the permissioned Chatwoot SSO boundary without adding schema.
+
+Pinned Chatwoot v4.18.0 source confirms GET /platform/api/v1/users/:id/login returns a five-minute SSO URL at FRONTEND_URL/app/login containing canonical email and a 64-hex sso_auth_token.
+
+The server-only adapter requires an authenticated Smart user, exact current Organization membership via self-read RLS, ACTIVE tenant Business, ACTIVE global User mapping, ACTIVE exact Account mapping and ACTIVE AccountUser membership linking those mappings. OWNER must still project to administrator; ADMIN/SALES_MANAGER/SALES_AGENT must project to agent; VIEWER and stale/cross-scope projections fail before the Platform login endpoint.
+
+The returned URL is treated as untrusted and must match the exact configured Chatwoot origin, exact /app/login path, authenticated user's canonical email, exactly one 64-hex token and no extra query parameters/credentials/fragment.
+
+The route GET /api/chatwoot/sso/[organizationId]/[tenantBusinessId] returns a 302 only after validation and sets private no-store/no-cache plus no-referrer. The SSO URL/token is never persisted, audited or logged. Bounded failures map to 400/401/403/503 without leaking internal details.
+
+Mock tests cover session/org authorization ordering, VIEWER/cross-scope/inactive denial, OWNER/admin role projection, exact upstream redirect confinement and no-store redirect behavior.
+
+No Production mutation, live Chatwoot request, provider/customer send, Shadow Mode change or CI bypass has been made. Remaining C5 work is Inbox/Team membership desired-set reconciliation from canonical Smart Core scope semantics.
