@@ -197,6 +197,7 @@ export async function chatwootAdminAccountRequest<T>(input: {
   body?: unknown;
   fetchImpl?: typeof fetch;
 }): Promise<T> {
+  const resourcePath = accountResourcePath(input.resourcePath);
   const projection = await readAdminProjection(input);
   const token = await issueEphemeralAdminToken({
     chatwootUserId: projection.chatwootUserId,
@@ -204,8 +205,7 @@ export async function chatwootAdminAccountRequest<T>(input: {
   });
 
   const path =
-    `/api/v1/accounts/${projection.chatwootAccountId}` +
-    accountResourcePath(input.resourcePath);
+    `/api/v1/accounts/${projection.chatwootAccountId}` + resourcePath;
 
   if (!normalizeChatwootRequestPath(path)) return unavailable();
 
