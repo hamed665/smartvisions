@@ -479,3 +479,24 @@ Migration `0087_chatwoot_webhook_event_journal.sql` adds a service-only Communic
 Unit tests cover HMAC/timestamp/body tampering, Vault lookup, exact Inbox binding, replay, bad signature and persistence errors. Route tests cover fast ACK, 415/413/400/401/503, actual streaming body cap and error non-leakage. PostgreSQL 17 rollback smoke covers ACL, insert/replay mismatch, wrong Inbox rejection and evidence immutability.
 
 No Production migration, live Chatwoot call, route deployment, provider/customer send or Shadow Mode change has been made. Next C4 unit may provision Channel::Api only after generating this exact webhook URL, then capture returned `channel.secret` and `hmac_token` immediately into Vault and persist only source-backed secret references.
+
+
+## C4 governed Channel::Api Inbox provisioning — Draft PR #219
+
+PR #219 is stacked on #218 and implements the actual API Inbox provisioning path while keeping external side effects unactivated.
+
+Pinned Chatwoot v4.18.0 source confirms Channel::Api create accepts webhook_url, hmac_mandatory and additional_attributes, and administrator Inbox responses expose secret, hmac_token, webhook_url, inbox_identifier and additional_attributes.
+
+Provisioning writes an exact Smart projection marker containing the Inbox mapping UUID and tenant Business UUID. Every attempt performs GET marker reconciliation before POST. If absent, only one POST is attempted; ambiguous POST is followed by GET-only reconciliation. Duplicate markers fail closed.
+
+Raw Channel::Api secret and hmac_token are captured immediately into deterministic Supabase Vault entries. They are never stored in mapping/audit/receipt JSON and never returned from the orchestration API. Only source-backed secret references proceed into Smart Core.
+
+Migration `0088_chatwoot_api_inbox_governance.sql` adds the governed Inbox mapping command path, command-context RLS, read-only service-role mapping access, immutable service-only reconciliation receipts, receipt-backed activation and governed DEGRADED state. It reuses the existing Chatwoot command claim ledger and optimistic version/request-key semantics. Its sole SECURITY DEFINER primitive is the private owner-authenticated receipt reader.
+
+Runtime order is: validate explicit HTTPS webhook origin -> claim/replay PROVISIONING mapping -> derive exact #218 webhook URL -> GET reconcile -> one POST if absent -> GET after ambiguous create -> Vault capture -> server receipt -> OWNER receipt-backed activation. An already complete ACTIVE mapping replays without external or Vault work.
+
+Mock tests cover create/adopt/ambiguous reconciliation, duplicate marker denial, Vault capture, no plaintext secret leakage, Vault failure, ACTIVE replay and config failure before DB claim. PostgreSQL 17 rollback smoke covers mapping governance, receipt ACL, authenticated receipt denial, source-backed refs, receipt activation, stale receipt denial, service-role read-only mapping ACL, degradation and fresh reactivation.
+
+`CHATWOOT_WEBHOOK_PUBLIC_ORIGIN` is declared as required configuration but is intentionally not activated in Production from this Draft.
+
+No Production migration, live Chatwoot call, provider/customer send, route invocation or Shadow Mode change has been made.
