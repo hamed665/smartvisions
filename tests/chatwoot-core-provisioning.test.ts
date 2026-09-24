@@ -7,6 +7,8 @@ import {
   ensureChatwootAccount,
   ensureChatwootAccountUser,
   ensureChatwootUser,
+  reconcileChatwootAccountUser,
+  removeChatwootAccountUser,
 } from '@/lib/chatwoot/provisioning';
 
 const TENANT_BUSINESS_ID = '20000000-0000-4000-8000-000000000001';
@@ -336,7 +338,7 @@ describe('Chatwoot C3A external provisioning adapter', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('uses upstream AccountUser idempotency for one bounded safe retry', async () => {
+  it('reconciles an ambiguous AccountUser mutation by GET without retrying POST', async () => {
     enableProvisioning();
 
     const fetchMock = vi
@@ -344,7 +346,14 @@ describe('Chatwoot C3A external provisioning adapter', () => {
       .mockRejectedValueOnce(new TypeError('membership outcome unknown'))
       .mockResolvedValueOnce(
         new Response(
-          '{"id":9223372036854775807,"account_id":12,"user_id":41,"role":"agent"}',
+          JSON.stringify([
+            {
+              id: '9223372036854775807',
+              account_id: 12,
+              user_id: 41,
+              role: 'agent',
+            },
+          ]),
           { status: 200 },
         ),
       );
@@ -356,12 +365,171 @@ describe('Chatwoot C3A external provisioning adapter', () => {
       fetchImpl: fetchMock as unknown as typeof fetch,
     });
 
-    expect(result.outcome).toBe('RECOVERED_BY_SAFE_MEMBERSHIP_RETRY');
+    expect(result.outcome).toBe('RECONCILED_AFTER_AMBIGUOUS_MUTATION');
     expect(result.accountUser.id).toBe('9223372036854775807');
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[1]?.[1]?.body).toBe(
-      fetchMock.mock.calls[0]?.[1]?.body,
+    expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('POST');
+    expect(fetchMock.mock.calls[1]?.[1]?.method).toBe('GET');
+    expect(fetchMock.mock.calls[1]?.[1]?.body).toBeUndefined();
+  });
+
+  it('fails closed when ambiguous AccountUser mutation is not proven by GET', async () => {
+    enableProvisioning();
+
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('membership outcome unknown'))
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
+
+    await expect(
+      ensureChatwootAccountUser({
+        accountId: 12,
+        userId: 41,
+        role: 'agent',
+        fetchImpl: fetchMock as unknown as typeof fetch,
+      }),
+    ).rejects.toMatchObject({ code: 'RECONCILIATION_REQUIRED' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('POST');
+    expect(fetchMock.mock.calls[1]?.[1]?.method).toBe('GET');
+  });
+
+  it('reconciles exact AccountUser identity and preserves bigint ids', async () => {
+    enableProvisioning();
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            id: '9223372036854775807',
+            account_id: 12,
+            user_id: 41,
+            role: 'administrator',
+          },
+          {
+            id: '200',
+            account_id: 12,
+            user_id: 42,
+            role: 'agent',
+          },
+        ]),
+        { status: 200 },
+      ),
     );
+
+    const result = await reconcileChatwootAccountUser({
+      accountId: 12,
+      userId: 41,
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(result).toMatchObject({
+      id: '9223372036854775807',
+      accountId: 12,
+      userId: 41,
+      role: 'administrator',
+    });
+  });
+
+  it('removes AccountUser only after exact preflight and GET absence verification', async () => {
+    enableProvisioning();
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([
+            {
+              id: '9223372036854775807',
+              account_id: 12,
+              user_id: 41,
+              role: 'agent',
+            },
+          ]),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
+
+    const result = await removeChatwootAccountUser({
+      accountId: 12,
+      userId: 41,
+      expectedAccountUserId: '9223372036854775807',
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(result.outcome).toBe('REMOVED');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('GET');
+    expect(fetchMock.mock.calls[1]?.[1]?.method).toBe('DELETE');
+    expect(fetchMock.mock.calls[2]?.[1]?.method).toBe('GET');
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+      user_id: 41,
+    });
+  });
+
+  it('reconciles an ambiguous AccountUser DELETE without blindly deleting twice', async () => {
+    enableProvisioning();
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([
+            {
+              id: '9223372036854775807',
+              account_id: 12,
+              user_id: 41,
+              role: 'agent',
+            },
+          ]),
+          { status: 200 },
+        ),
+      )
+      .mockRejectedValueOnce(new TypeError('delete outcome unknown'))
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
+
+    const result = await removeChatwootAccountUser({
+      accountId: 12,
+      userId: 41,
+      expectedAccountUserId: '9223372036854775807',
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(result.outcome).toBe('REMOVED_AFTER_AMBIGUOUS_DELETE');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls.filter((call) => call[1]?.method === 'DELETE')).toHaveLength(1);
+  });
+
+  it('refuses AccountUser removal when external identity drift is detected', async () => {
+    enableProvisioning();
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            id: '999',
+            account_id: 12,
+            user_id: 41,
+            role: 'agent',
+          },
+        ]),
+        { status: 200 },
+      ),
+    );
+
+    await expect(
+      removeChatwootAccountUser({
+        accountId: 12,
+        userId: 41,
+        expectedAccountUserId: '9223372036854775807',
+        fetchImpl: fetchMock as unknown as typeof fetch,
+      }),
+    ).rejects.toMatchObject({ code: 'IDENTITY_CONFLICT' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('rejects membership response drift and invalid int32 input', async () => {
