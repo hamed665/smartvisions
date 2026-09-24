@@ -635,3 +635,25 @@ This unit adds `0090_chatwoot_fk_index_hardening.sql` with only the 27 missing c
 The PostgreSQL 17 smoke does not merely count index names. It walks every public foreign key on `chatwoot_%` plus `communication_channel_bindings` and fails unless a valid/ready index covers the FK columns in order.
 
 Do not promote 0090 until exact-head CI and the prior main Production baseline are green.
+
+
+## 2026-09-25 Production closeout — 0090 Chatwoot FK index hardening
+
+PR #226 is merged. Canonical main is now `30cfaf481bc44e9aa08bc34ef75ebead2c3360c6`.
+
+Verified gates:
+
+- exact-main CI #1226: SUCCESS;
+- Cloudflare Production deploy #706: SUCCESS, including routed Production and webhook rejection smoke;
+- Production Supabase migration `0090_chatwoot_fk_index_hardening` applied successfully as version `20260924203449`;
+- all 27 Production-advisor-reported Chatwoot/communication FK gaps received targeted covering indexes;
+- generic catalog verification now reports `unindexed_count=0`;
+- Supabase performance advisor filtered to `chatwoot_%` + `communication_channel_bindings` reports no remaining unindexed-FK findings;
+- Shadow Mode=true;
+- global_kill_switch=false;
+- email_paused=false;
+- whatsapp_ai_paused=false;
+- agents_paused=false;
+- no outreach send, WhatsApp event or email event occurred during promotion.
+
+The next semantic cursor remains Chatwoot runtime deployment, not more schema invention. Source image build is verified; real Candidate/Production Chatwoot web + Sidekiq + dedicated PostgreSQL + Redis + durable object storage are still absent. Keep live API Inbox provisioning, customer imports, native Chatwoot provider connectors and provider sends disabled until the runtime release gates are proven. C5 scoped-only shared-Inbox membership remains blocked.

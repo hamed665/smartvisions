@@ -358,3 +358,24 @@ Supabase security advisor reports INFO-only no-policy notices on intentionally s
 Chatwoot runtime is **not yet Production-deployed**. The immutable Community-safe image exists, but `inbox.smartvisionsai.com`, dedicated Chatwoot PostgreSQL, Redis, object storage, Rails/Puma web and Sidekiq worker do not yet have verified Production runtime evidence. Therefore `COMM-CHATWOOT-SOURCE` is source-build verified / deployment pending, not complete.
 
 C5 scoped-only membership remains intentionally blocked: Chatwoot CE v4.18.0 conversation authorization grants access through Inbox OR Team membership, so a Team-only Smart user must never be added to a shared mixed-scope Inbox without a coherent scope-aware access topology/interlock.
+
+
+### Chatwoot FK hardening closeout — 2026-09-25
+
+Production Supabase `pkypexzpyfbikdnkrzvw` is now promoted through `0090_chatwoot_fk_index_hardening` (Production migration version `20260924203449`).
+
+Evidence:
+
+- canonical main at promotion: `30cfaf481bc44e9aa08bc34ef75ebead2c3360c6`;
+- exact-main CI #1226: SUCCESS;
+- routed Cloudflare Production deploy #706: SUCCESS;
+- migration 0090 adds only the 27 Production-advisor-reported covering indexes for new Chatwoot/communication foreign keys;
+- PostgreSQL 17 catalog smoke passes on main;
+- Production catalog verification reports `unindexed_count=0` across all public `chatwoot_%` tables plus `communication_channel_bindings`;
+- Supabase performance advisor reports zero remaining unindexed-FK findings for those Chatwoot/communication tables;
+- Shadow Mode remains ON;
+- Kill Switch remains OFF;
+- Email/WhatsApp/Agent pause controls remain OFF;
+- no outreach send, WhatsApp event or email event occurred during the 0090 promotion window.
+
+This closes the targeted FK-index hardening gap created by the new Communication Plane schema. It does not change Chatwoot runtime deployment status: the immutable Community-safe image is verified, but the long-running Chatwoot web/worker runtime is still deployment-pending.
