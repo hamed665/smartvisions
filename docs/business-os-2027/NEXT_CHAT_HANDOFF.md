@@ -487,3 +487,18 @@ Only then is an ephemeral Chatwoot User access token issued. The token remains i
 Resource paths are suffix-only and are rejected before auth/service/token issuance if they attempt /api, /platform, scheme-relative, traversal or root-only paths. The Chatwoot Account ID always comes from the exact ACTIVE canonical mapping.
 
 No migration, Production mutation, live Chatwoot call, provider/customer send, route/scheduler activation or Shadow Mode change has been made. Next C4 unit is API Inbox provisioning with immediate Vault capture of Channel::Api secret + hmac_token and exact ambiguous-create reconciliation.
+
+
+## C4 signed API Inbox webhook receiver — Draft PR #218
+
+PR #218 is stacked on #217 and establishes the real webhook ingress required before creating any Channel::Api Inbox.
+
+Pinned Chatwoot v4.18.0 source was re-verified: API Inbox webhook signing uses the Channel::Api `secret`, not `hmac_token`; Chatwoot emits `X-Chatwoot-Timestamp`, `X-Chatwoot-Signature: sha256=...` over `timestamp.rawBody`, and UUID `X-Chatwoot-Delivery` evidence.
+
+The new `POST /api/chatwoot/webhook/[mappingId]` route is JSON-only, declared- and streaming-body capped at 1 MiB, and uses Web Crypto HMAC-SHA256. The canonical Inbox mapping must be exact ACTIVE/DEGRADED Channel::Api with valid Organization/tenant Business identity. The signing secret is read only from the existing source-backed Supabase Vault reference. Payload external Inbox ID must match the canonical mapped external Inbox ID. Invalid mapping/signature/scope fails with generic 401; malformed input is 400; Vault/journal unavailability is retryable 503; valid verified evidence is journaled then fast-ACKed 200. No paid AI/provider work occurs synchronously in the webhook request.
+
+Migration `0087_chatwoot_webhook_event_journal.sql` adds a service-only Communication Plane journal keyed by exact Inbox mapping + Chatwoot delivery UUID. It stores event type, SHA-256 of the verified body, verified JSON payload and processing lifecycle. RLS is enabled; anon/authenticated have no direct table access or recorder EXECUTE. service_role gets SELECT/INSERT/UPDATE only. Exact replay is idempotent; same delivery ID with changed hash/payload/event/scope fails closed. Signed evidence columns are immutable.
+
+Unit tests cover HMAC/timestamp/body tampering, Vault lookup, exact Inbox binding, replay, bad signature and persistence errors. Route tests cover fast ACK, 415/413/400/401/503, actual streaming body cap and error non-leakage. PostgreSQL 17 rollback smoke covers ACL, insert/replay mismatch, wrong Inbox rejection and evidence immutability.
+
+No Production migration, live Chatwoot call, route deployment, provider/customer send or Shadow Mode change has been made. Next C4 unit may provision Channel::Api only after generating this exact webhook URL, then capture returned `channel.secret` and `hmac_token` immediately into Vault and persist only source-backed secret references.
