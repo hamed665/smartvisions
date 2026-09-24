@@ -298,3 +298,12 @@ The current stacked Draft order is #195 → #196 → #197 → #198 → #199 → 
 C3B audit: `CHATWOOT_TENANT_BRIDGE_C3B_GOVERNED_PERSISTENCE_AUDIT.md`. Slice A Account mapping writes require OWNER-authenticated governed RPCs and command claims. Slice B User/AccountUser/Inbox/Team tables allow service-role INSERT/UPDATE with contract/audit triggers but do not yet have the same command path. Migration 0078 extends claim table CHECK constraints, while the claim function in 0077 still rejects Slice B command types. Do not connect C3A by direct service-role writes or a SECURITY DEFINER shortcut. Implement the narrow governed path with crash/reconciliation evidence first.
 
 The malformed duplicated SQL in the Slice B rollback smoke was fixed on #199 and copied to all dependent Draft branches through #204. CI remains blocked before step 1 on GitHub-hosted jobs (null steps/logs); no PR in this stack was merged and no Chatwoot migration was applied to Production.
+
+
+## C3B claim catalog alignment — Draft PR #205
+
+PR #205 is stacked on #204. Migration `0080_chatwoot_claim_catalog_alignment.sql` replaces only the existing OWNER-authenticated, SECURITY INVOKER claim function body. It aligns its 12 command and 6 entity types with 0078, enforces the command/entity pair, and rejects replay with a changed applied version. The original claim table, fingerprint, role gate and ACL remain canonical. PostgreSQL 17 rollback smoke is chained after 0079. This does not add any Slice B mapping writer or initiate Chatwoot provisioning.
+
+Before C3B Account orchestration, close the separate concurrency gap: `create_chatwoot_account_mapping` persists a PROVISIONING mapping, but does not reserve exclusive external mutation ownership. Two concurrent requests may both list zero external Accounts and POST duplicates. Do not connect the C3A Account create call until there is a durable single-owner claim/lease and exact-marker reconciliation for crashes. No service-role direct write or SECURITY DEFINER shortcut.
+
+Exact-head runner-backed CI and dependency review remain mandatory. Production still ends at 0076 unless fresh evidence shows otherwise.
