@@ -419,7 +419,9 @@ begin
     raise exception 'communication binding with live Inbox mapping unexpectedly archived';
   exception
     when others then
-      if sqlerrm not like 'archive Chatwoot Inbox mapping before communication binding%' then
+      if sqlerrm not like 'archive Chatwoot Inbox mapping before communication binding%'
+         and sqlerrm not like 'archive live Chatwoot Account mapping before last communication binding%'
+      then
         raise;
       end if;
   end;
