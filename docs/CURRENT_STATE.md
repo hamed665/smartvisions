@@ -321,3 +321,40 @@ For controlled Oman launch behavior, the next runtime behavior change must still
 3. measured pilot evidence showing a specific reply/qualification/handoff/market-allocation weakness.
 
 If a proposal adds another Agent, another CRM/event store, another analytics stack or broader autonomy without a proven dependency, stop rather than adding architecture for decoration.
+
+
+## Chatwoot Production schema closeout — 2026-09-25
+
+Current canonical Git/Cloudflare baseline:
+
+- main: `d1766e6b12b1784359289e0244c777b23fcd0fca`;
+- exact-main CI run #1222: SUCCESS;
+- routed Cloudflare Production deploy #702: SUCCESS;
+- latest pinned Chatwoot Community source-image run #17: SUCCESS on the latest source-changing main commit `d336a03c231bb66de8959510e57ce775dbfb7f52`;
+- upstream Chatwoot remains pinned to v4.18.0 commit `9f920b549c14491a4e587687a3eed5d21c6ccc7d`.
+
+Production Supabase `pkypexzpyfbikdnkrzvw` is now promoted through the complete Chatwoot bridge schema chain:
+
+`0077_chatwoot_tenant_bridge_slice_a` through `0089_chatwoot_team_governance`.
+
+Post-promotion verification proves:
+
+- all canonical Chatwoot mapping/receipt tables are present with RLS enabled;
+- public mutation/activation RPCs remain SECURITY INVOKER;
+- only the reviewed narrow private evidence/role helpers are SECURITY DEFINER;
+- service_role has read-only access to canonical mapping tables;
+- reconciliation receipt tables are service-only with SELECT/INSERT;
+- the verified webhook journal is service-only with SELECT/INSERT/UPDATE;
+- anon/authenticated have no direct privileges on service-only receipt/journal tables;
+- Supabase Vault remains the secret store boundary;
+- Shadow Mode remains ON;
+- Kill Switch remains OFF;
+- Email/WhatsApp/Agent pause controls remain OFF;
+- canonical Cost Guard remains USD 25 total with 10/5/4/3/3 OpenAI/Places/Email/WhatsApp/reserve allocation;
+- no new outreach, WhatsApp or email event was produced by the migration promotion.
+
+Supabase security advisor reports INFO-only no-policy notices on intentionally service-only RLS tables; this is expected and must not be “fixed” with broad policies. The pre-existing leaked-password-protection account warning remains a manual Supabase Auth setting. Performance advisor reports unindexed foreign-key opportunities; these require a targeted measured hardening pass rather than blind index creation.
+
+Chatwoot runtime is **not yet Production-deployed**. The immutable Community-safe image exists, but `inbox.smartvisionsai.com`, dedicated Chatwoot PostgreSQL, Redis, object storage, Rails/Puma web and Sidekiq worker do not yet have verified Production runtime evidence. Therefore `COMM-CHATWOOT-SOURCE` is source-build verified / deployment pending, not complete.
+
+C5 scoped-only membership remains intentionally blocked: Chatwoot CE v4.18.0 conversation authorization grants access through Inbox OR Team membership, so a Team-only Smart user must never be added to a shared mixed-scope Inbox without a coherent scope-aware access topology/interlock.

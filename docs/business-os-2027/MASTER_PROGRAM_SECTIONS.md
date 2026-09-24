@@ -63,7 +63,7 @@ Use Chatwoot Community Edition source code as the operational communication plan
 
 ### COMM-CHATWOOT-SOURCE — Community source foundation
 
-Status: **GAP AUDIT COMPLETE; SOURCE FOUNDATION IMPLEMENTATION NEXT**
+Status: **SOURCE BUILD VERIFIED; PRODUCTION RUNTIME DEPLOYMENT PENDING**
 
 Approved upstream baseline:
 
@@ -73,6 +73,8 @@ Approved upstream baseline:
 Approved first provider projection: Chatwoot `Channel::Api`, with provider send authority retained by Smart Core.
 
 Detailed decisions: `CHATWOOT_SOURCE_GAP_AUDIT.md`.
+
+2026-09-25 evidence: pinned v4.18.0 source build, Community/Enterprise license guard, enterprise-tree removal, immutable provenance inspection and GHCR publish all succeeded in Chatwoot Source Image run #17. This does **not** satisfy Production runtime completion: no verified public Chatwoot origin, dedicated Chatwoot PostgreSQL, Redis, durable object storage, web/worker health or backup/rollback evidence exists yet.
 
 Deliver:
 
@@ -108,30 +110,21 @@ Repository topology rule:
 
 ### COMM-TENANT-BRIDGE — Tenant/business/user mapping
 
-Slice C1 status: **VAULT BOUNDARY IMPLEMENTED ON STACKED DRAFT BRANCH; NOT PRODUCTION**
+Slice C1 status: **MERGED AND PRODUCTION-PROMOTED; VAULT BOUNDARY VERIFIED**
 
 C1 uses the already-installed Supabase Vault through service-role-only SECURITY INVOKER wrappers. Dynamic API Inbox secrets remain encrypted in Vault and mapping rows keep only `secretref://supabase-vault/<uuid>` references. No live Chatwoot call occurs in C1.
 
 
-Slice B status: **IMPLEMENTED ON STACKED DRAFT BRANCH; NOT MERGED / NOT PRODUCTION**
+Slice B status: **MERGED; PRODUCTION SCHEMA PROMOTED THROUGH 0089; LIVE EXTERNAL PROVISIONING NOT ACTIVATED**
 
 Slice B adds server-only User/AccountUser/API-Inbox/Team projection contracts. It preserves OWNER as the only first-version Chatwoot administrator; ADMIN and sales roles project to agent, and VIEWER receives no Chatwoot membership. Live Chatwoot provisioning remains deferred to the Candidate adapter slice.
 
 
-Status: **SLICE A IMPLEMENTED ON STACKED DRAFT PR #197; VERIFICATION/MERGE BLOCKED ON COMM-CHATWOOT-SOURCE + GITHUB HOSTED RUNNER**
+Status: **TENANT BRIDGE FOUNDATION MERGED AND PRODUCTION-PROMOTED; C5 SCOPED-ONLY ACCESS REMAINS BLOCKED BY SOURCE-BACKED POLICY GATE**
 
 Detailed decisions: `CHATWOOT_TENANT_BRIDGE_GAP_AUDIT.md`.
 
-Slice A implementation exists on stacked Draft PR #197 and includes the tenant/channel + Account mapping contract, durable SHA-256 command claims, RLS/RBAC, lifecycle/version guards, audit and rollback-only PostgreSQL smoke.
-
-It is **not canonical main/Production yet**. It must not merge until:
-
-- PR #195 has real runner-backed exact-head CI and pinned Chatwoot source Docker build success;
-- PR #196 audit stack is reconciled/merged in dependency order;
-- PR #197 receives real exact-head CI, including PostgreSQL 17 migration-chain smoke;
-- technical review remains clean with zero unresolved threads.
-
-Current GitHub-hosted runner symptom is account/repository-side allocation failure: jobs complete before step 1 with `runner_id=0`, blank runner name and zero steps.
+Production reconciliation on 2026-09-25 supersedes the historical stacked-Draft blocker text. The source foundation and bridge stack were merged with runner-backed exact-head CI; Production Supabase now carries migrations 0077 through 0089, including Vault boundary, governed User/Account membership, reconciliation receipts/interlocks, signed API Inbox webhook journal, governed API Inbox persistence and governed Team persistence. External Chatwoot provisioning remains unactivated until a real Candidate/Production Chatwoot runtime exists and passes the release gates.
 
 The audit also closes these key decisions:
 
