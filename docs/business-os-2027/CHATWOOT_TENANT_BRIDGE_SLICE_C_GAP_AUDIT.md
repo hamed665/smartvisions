@@ -712,3 +712,35 @@ Next implementation target:
 It can be implemented now as code/schema with no live Chatwoot call.
 
 Actual Candidate provisioning stays disabled until the source/deployment dependency stack is green.
+
+
+---
+
+## 30. Slice C1 implementation checkpoint
+
+Slice C1 Vault boundary is implemented on a stacked Draft branch.
+
+Implemented:
+
+- migration `0079_chatwoot_vault_boundary.sql`;
+- exact `secretref://supabase-vault/<uuid>` parser;
+- `chatwoot_vault_create_secret`;
+- `chatwoot_vault_update_secret`;
+- `chatwoot_vault_read_secret`;
+- all Smart wrappers `SECURITY INVOKER`;
+- service_role-only EXECUTE grants;
+- no anon/authenticated Vault wrapper access;
+- server-only TypeScript Vault client;
+- pure secret-reference parser separated from `server-only` runtime;
+- CI-only synthetic Vault signature bootstrap;
+- PostgreSQL 17 rollback-only create/read/rotate/access smoke;
+- no Chatwoot/provider HTTP side effect.
+
+Fresh Production evidence used before implementation:
+
+- `supabase_vault 0.3.1` installed;
+- service_role can execute official Vault create/update functions;
+- service_role can read encrypted/decrypted Vault surfaces required by the wrappers;
+- authenticated has no Vault schema usage or decrypted-secret access.
+
+No secret was created in Production while implementing C1.
