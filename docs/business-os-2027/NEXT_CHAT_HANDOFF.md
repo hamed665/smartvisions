@@ -378,3 +378,10 @@ The required invariant is now explicit: external Chatwoot privilege may be equal
 BRAND assignment changes must evaluate every affected ACTIVE tenant Business. Do not perform Chatwoot HTTP inside a DB transaction. Use external claim/reconciliation first for demotions, then permit the canonical mutation only from persisted safe mapping evidence. Ambiguous external outcomes remain reconciliation-only.
 
 Before external User/AccountUser membership activation, add a governed versioned scope-mutation boundary and prove the interlock with PostgreSQL 17 rollback + mock orchestration tests. Direct service-role IAM or Chatwoot mapping writes are not acceptable shortcuts.
+
+
+## 2026-09-24 stack reconciliation — PR #211
+
+PR #210 is merged to `main` at `563539d77a63629271c42e5d783f8a32c7de137d` after exact-head CI and routed Cloudflare Production verification of its dependency baseline. PR #211 is now retargeted directly to current `main` and contains only its reverse-role audit plus this handoff evidence.
+
+GitHub Actions runner allocation is restored. This reconciliation commit intentionally forces a fresh pull-request CI signal against the new base. Do not merge #211 unless that exact head passes lint, typecheck, tests, PostgreSQL 17 migration smoke, Next build, Vinext build and scheduled-runtime verification with zero unresolved review threads.
