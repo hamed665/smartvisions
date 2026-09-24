@@ -889,10 +889,24 @@ begin
 end;
 $$;
 
-drop trigger if exists member_scope_assignments_chatwoot_reduction_interlock
+drop trigger if exists member_scope_assignments_chatwoot_reduction_insert_interlock
   on public.member_scope_assignments;
-create trigger member_scope_assignments_chatwoot_reduction_interlock
-before insert or update of role, attributes or delete
+create trigger member_scope_assignments_chatwoot_reduction_insert_interlock
+before insert
+on public.member_scope_assignments
+for each row execute function public.enforce_member_scope_chatwoot_reduction_interlock();
+
+drop trigger if exists member_scope_assignments_chatwoot_reduction_update_interlock
+  on public.member_scope_assignments;
+create trigger member_scope_assignments_chatwoot_reduction_update_interlock
+before update of role, attributes
+on public.member_scope_assignments
+for each row execute function public.enforce_member_scope_chatwoot_reduction_interlock();
+
+drop trigger if exists member_scope_assignments_chatwoot_reduction_delete_interlock
+  on public.member_scope_assignments;
+create trigger member_scope_assignments_chatwoot_reduction_delete_interlock
+before delete
 on public.member_scope_assignments
 for each row execute function public.enforce_member_scope_chatwoot_reduction_interlock();
 
