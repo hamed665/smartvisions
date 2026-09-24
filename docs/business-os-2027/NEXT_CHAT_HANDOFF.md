@@ -423,3 +423,18 @@ The PostgreSQL 17 migration smoke runs after 0082 and creates lower-scope eviden
 External User/AccountUser membership remains disabled. The next implementation unit may use this primitive inside SECURITY INVOKER governed logic, but must still enforce the reverse-role invariant from #211: external Chatwoot privilege can never remain stronger than canonical Smart Core authority.
 
 No Production migration, live Chatwoot request, provider/customer send, route/scheduler activation or Shadow Mode change has been made.
+
+
+## C3B governed User / Account membership persistence — Draft PR #214
+
+PR #214 is stacked on #213 and introduces migration `0084_chatwoot_user_membership_governance.sql`. It adds governed Smart Core persistence for Chatwoot User and Account membership projections without activating external provisioning.
+
+The mutation boundary remains SECURITY INVOKER and uses the reviewed private canonical-role authority from 0083. User and Account membership mappings use stable request keys, expected versions, bounded audit, canonical tenant lineage and fail-closed role checks. Direct service-role mapping writes are not treated as normal mutation authority.
+
+Canonical Smart Core role remains authoritative. Chatwoot administrator is permitted only from canonical Organization OWNER; agent projection is constrained to supported non-VIEWER roles; VIEWER does not gain Account membership. This PR does not make a live Chatwoot request and does not authorize a caller-declared effective role.
+
+The PostgreSQL 17 smoke verifies governed create/update/replay/version behavior, cross-tenant denial, role projection constraints, direct-DML restrictions and audit evidence.
+
+Reverse-role safety remains a separate required boundary: an external Chatwoot administrator/member must be demoted or removed and reconciled before canonical authority can be reduced. External User/AccountUser membership therefore remains disabled until the subsequent reconciliation interlock is verified.
+
+No Production migration, live Chatwoot request, provider/customer send, route/scheduler activation or Shadow Mode change has been made.
