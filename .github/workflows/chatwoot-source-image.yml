@@ -50,6 +50,20 @@ jobs:
           node smartvisions/scripts/chatwoot/verify-source-lock.mjs \
             smartvisions/ops/chatwoot/source.lock.json
 
+      - name: Verify Candidate runtime contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node smartvisions/scripts/chatwoot/verify-runtime-contract.mjs \
+            smartvisions/ops/chatwoot/.env.candidate.example \
+            --tier candidate \
+            --template
+          CHATWOOT_ENV_FILE=.env.candidate.example \
+            docker compose \
+            --env-file smartvisions/ops/chatwoot/.env.candidate.example \
+            -f smartvisions/ops/chatwoot/docker-compose.candidate.yml \
+            config >/dev/null
+
       - name: Checkout pinned Chatwoot Community source
         uses: actions/checkout@v4
         with:
