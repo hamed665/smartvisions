@@ -1,6 +1,5 @@
 import 'server-only';
 
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
 import { readChatwootVaultSecret } from '@/lib/chatwoot/vault';
 import { isUuid } from '@/lib/chatwoot/tenant-bridge';
@@ -36,17 +35,26 @@ function genericUnauthorized(): never {
   );
 }
 
-function safeHexEqual(expectedHex: string, receivedHex: string) {
-  if (!/^[0-9a-f]{64}$/i.test(receivedHex)) return false;
-  const expected = Buffer.from(expectedHex, 'hex');
-  const received = Buffer.from(receivedHex, 'hex');
-  return (
-    expected.length === received.length &&
-    timingSafeEqual(expected, received)
-  );
+function hexToBytes(value: string) {
+  if (!/^[0-9a-f]{64}$/i.test(value)) return null;
+  const bytes = new Uint8Array(32);
+  for (let index = 0; index < bytes.length; index += 1) {
+    bytes[index] = Number.parseInt(value.slice(index * 2, index * 2 + 2), 16);
+  }
+  return bytes;
 }
 
-export function verifyChatwootWebhookSignature(input: {
+async function sha256Hex(value: string) {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(value),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
+}
+
+export async function verifyChatwootWebhookSignature(input: {
   rawBody: string;
   timestamp: string | null;
   signature: string | null;
@@ -76,11 +84,23 @@ export function verifyChatwootWebhookSignature(input: {
   const [scheme, receivedHex, ...extra] = input.signature.split('=');
   if (scheme !== 'sha256' || !receivedHex || extra.length > 0) return false;
 
-  const expectedHex = createHmac('sha256', input.secret)
-    .update(`${input.timestamp}.${input.rawBody}`, 'utf8')
-    .digest('hex');
+  const signatureBytes = hexToBytes(receivedHex);
+  if (!signatureBytes) return false;
 
-  return safeHexEqual(expectedHex, receivedHex);
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(input.secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['verify'],
+  );
+
+  return crypto.subtle.verify(
+    'HMAC',
+    key,
+    signatureBytes,
+    new TextEncoder().encode(`${input.timestamp}.${input.rawBody}`),
+  );
 }
 
 function payloadRecord(value: unknown): Record<string, unknown> {
@@ -174,7 +194,7 @@ export async function persistSignedChatwootWebhook(input: {
     return genericUnauthorized();
   }
 
-  const bodyBytes = Buffer.byteLength(input.rawBody, 'utf8');
+  const bodyBytes = new TextEncoder().encode(input.rawBody).byteLength;
   if (bodyBytes < 2 || bodyBytes > MAX_WEBHOOK_BYTES) {
     throw new ChatwootWebhookError(
       'INVALID_REQUEST',
@@ -219,13 +239,13 @@ export async function persistSignedChatwootWebhook(input: {
   }
 
   if (
-    !verifyChatwootWebhookSignature({
+    !(await verifyChatwootWebhookSignature({
       rawBody: input.rawBody,
       timestamp: input.timestamp,
       signature: input.signature,
       secret,
       nowMs: input.nowMs,
-    })
+    }))
   ) {
     return genericUnauthorized();
   }
@@ -247,9 +267,7 @@ export async function persistSignedChatwootWebhook(input: {
   }
 
   const normalizedEventType = eventType(root);
-  const rawBodySha256 = createHash('sha256')
-    .update(input.rawBody, 'utf8')
-    .digest('hex');
+  const rawBodySha256 = await sha256Hex(input.rawBody);
 
   const { data, error } = await service.rpc('record_chatwoot_webhook_event', {
     p_organization_id: mapping.data.organization_id,
