@@ -415,9 +415,9 @@ begin
 
   if not has_schema_privilege('authenticated','private','USAGE')
      or has_schema_privilege('anon','private','USAGE')
-     or has_schema_privilege('service_role','private','USAGE')
+     or not has_schema_privilege('service_role','private','USAGE')
   then
-    raise exception 'private schema grants are broader than intended';
+    raise exception 'private schema grants do not preserve required runtime usage';
   end if;
 
   if not has_function_privilege(
