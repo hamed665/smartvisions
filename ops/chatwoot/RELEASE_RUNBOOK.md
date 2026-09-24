@@ -62,6 +62,31 @@ Verify:
 - `/app/SMARTVISIONS_SOURCE_PROVENANCE.json` exists;
 - `/app/SMARTVISIONS_CONFIGURE.rb` exists.
 
+## Candidate machine gate
+
+Before creating or updating any Candidate service, validate the resolved environment:
+
+```bash
+node scripts/chatwoot/verify-runtime-contract.mjs \
+  /secure/path/.env.candidate \
+  --tier candidate
+```
+
+The gate fails closed unless:
+
+- the image is the Smart Visions GHCR image pinned by an immutable `sha256` digest;
+- Candidate uses an isolated HTTPS hostname, never `inbox.smartvisionsai.com`;
+- Candidate PostgreSQL is not the Smart Core Supabase project;
+- Redis and S3-compatible storage are configured;
+- account signup and Enterprise runtime remain disabled;
+- deployment secrets are resolved and Active Record encryption values are distinct;
+- native WhatsApp/Meta/Twilio/SendGrid/Mailgun and SMTP credentials are absent;
+- `CHATWOOT_WEBHOOK_PUBLIC_ORIGIN` remains empty before controlled bridge activation.
+
+Candidate Compose uses one immutable image for a one-shot `chatwoot-prepare`, Rails web and Sidekiq worker. The one-shot service runs `db:chatwoot_prepare` followed by `SMARTVISIONS_CONFIGURE.rb`; web/worker do not start unless it succeeds. The web service has a local process healthcheck. External PostgreSQL, Redis and object storage remain independently managed.
+
+The committed `.env.candidate.example` is a non-secret contract template only. Never deploy its placeholder values.
+
 ## Candidate database gate
 
 Before candidate startup:

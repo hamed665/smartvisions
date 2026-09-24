@@ -657,3 +657,24 @@ Verified gates:
 - no outreach send, WhatsApp event or email event occurred during promotion.
 
 The next semantic cursor remains Chatwoot runtime deployment, not more schema invention. Source image build is verified; real Candidate/Production Chatwoot web + Sidekiq + dedicated PostgreSQL + Redis + durable object storage are still absent. Keep live API Inbox provisioning, customer imports, native Chatwoot provider connectors and provider sends disabled until the runtime release gates are proven. C5 scoped-only shared-Inbox membership remains blocked.
+
+
+## Chatwoot Candidate runtime safety gate — implementation branch
+
+The next runtime dependency is now machine-checkable before any hosting mutation.
+
+This branch adds:
+
+- a fail-closed Candidate environment verifier;
+- an isolated non-secret Candidate env template;
+- Candidate Compose with one-shot `db:chatwoot_prepare` + `SMARTVISIONS_CONFIGURE.rb`;
+- web/worker startup dependency on successful prepare;
+- local Rails web healthcheck;
+- unit tests for Production-hostname reuse, Smart Core database reuse, floating/fake images, unresolved secrets and native provider/SMTP credentials;
+- source-image workflow validation of the env template and Compose model.
+
+The verifier requires an immutable Smart Visions GHCR digest, isolated Candidate HTTPS hostname, dedicated PostgreSQL/Redis/S3-compatible storage and no provider/Webhook activation. It does not create hosting resources, DNS, databases, Redis, buckets or secrets.
+
+Actual Candidate runtime remains blocked on a connected long-running container host. Render and Railway are suitable available integrations; neither is confirmed connected at this checkpoint. Do not substitute Smart Core Cloudflare Workers, Smart Core Supabase schema or Vercel for the Rails + Sidekiq runtime.
+
+After exact-head CI/source-image verification, deploy only to isolated Candidate resources. Keep Production customer data, Production provider credentials, API Inbox activation, native Chatwoot Email/WhatsApp and outbound sends disabled.
