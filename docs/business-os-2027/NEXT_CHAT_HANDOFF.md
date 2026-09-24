@@ -555,3 +555,72 @@ The route GET /api/chatwoot/sso/[organizationId]/[tenantBusinessId] returns a 30
 Mock tests cover session/org authorization ordering, VIEWER/cross-scope/inactive denial, OWNER/admin role projection, exact upstream redirect confinement and no-store redirect behavior.
 
 No Production mutation, live Chatwoot request, provider/customer send, Shadow Mode change or CI bypass has been made. Remaining C5 work is Inbox/Team membership desired-set reconciliation from canonical Smart Core scope semantics.
+
+
+## 2026-09-25 Production closeout — Chatwoot bridge through 0089
+
+Fresh runtime evidence now supersedes the older “not Production” notes above.
+
+Git/runtime baseline:
+
+- main: `d1766e6b12b1784359289e0244c777b23fcd0fca`;
+- main CI #1222: SUCCESS;
+- Cloudflare Production deploy #702: SUCCESS, including routed Production smoke and safe webhook rejection smoke;
+- Chatwoot Source Image run #17: SUCCESS on source-changing main `d336a03c231bb66de8959510e57ce775dbfb7f52`;
+- pinned upstream remains Chatwoot CE v4.18.0 @ `9f920b549c14491a4e587687a3eed5d21c6ccc7d`;
+- PRs #215 through #223 are merged; only stale unrelated PR #158 remains open.
+
+Production Supabase `pkypexzpyfbikdnkrzvw` was promoted sequentially from 0076 through:
+
+- 0077 Chatwoot Tenant Bridge Slice A;
+- 0078 Tenant Bridge Slice B;
+- 0079 Vault boundary;
+- 0080 claim catalog alignment;
+- 0081 Account external claim;
+- 0082 governed member-scope assignments;
+- 0083 private canonical Chatwoot role authority;
+- 0084 governed User/Account membership persistence;
+- 0085 membership reconciliation + reverse-role interlock;
+- 0086 User reconciliation receipts;
+- 0087 signed webhook event journal;
+- 0088 governed API Inbox persistence;
+- 0089 governed Team persistence.
+
+Post-promotion verification:
+
+- relevant mapping, receipt and webhook tables have RLS enabled;
+- mapping tables keep service_role read-only;
+- reconciliation receipts are service-only SELECT/INSERT;
+- webhook journal is service-only SELECT/INSERT/UPDATE;
+- anon/authenticated have no direct service-only table privileges;
+- private role/receipt evidence helpers are the narrow SECURITY DEFINER boundary;
+- public mutation/activation commands remain SECURITY INVOKER;
+- Shadow Mode=true;
+- global_kill_switch=false;
+- email_paused=false;
+- whatsapp_ai_paused=false;
+- agents_paused=false;
+- Cost Guard remains USD 25 total (OpenAI 10 / Places 5 / Email 4 / WhatsApp 3 / reserve 3; 70/85/95/100 thresholds);
+- no outreach send, WhatsApp event or email event occurred during the promotion window.
+
+Supabase advisor interpretation:
+
+- RLS-enabled/no-policy INFO findings on Chatwoot receipt/webhook tables are intentional service-only isolation, not a request to add broad client policies;
+- leaked-password protection remains a pre-existing manual Auth setting warning;
+- unindexed-FK INFO findings require targeted performance hardening, not automatic blanket index creation.
+
+Critical runtime truth:
+
+The Chatwoot Community-safe immutable image is built/published, but Chatwoot itself is **not yet deployed as a Production communication plane**. There is no verified `inbox.smartvisionsai.com` runtime, dedicated Chatwoot PostgreSQL, Redis, object storage, Rails/Puma web, Sidekiq worker, backup/restore evidence or running-image provenance evidence.
+
+Next cursor:
+
+1. close this documentation reconciliation through exact-head CI;
+2. provision an isolated Candidate Chatwoot runtime from the immutable source image with dedicated PostgreSQL, Redis and S3-compatible storage;
+3. run `db:chatwoot_prepare` and `SMARTVISIONS_CONFIGURE.rb`;
+4. prove web/login, Sidekiq/Redis, object storage and source provenance;
+5. only then plan controlled Production Chatwoot runtime promotion;
+6. keep provider credentials, live customer data, API Inbox provisioning and live sends disabled until the bridge/runtime release gates are explicitly satisfied;
+7. keep C5 scoped-only Inbox/Team membership blocked until the source-backed mixed-Inbox access-policy problem has a coherent scope-aware solution.
+
+Do not turn Shadow Mode off as part of runtime deployment.
