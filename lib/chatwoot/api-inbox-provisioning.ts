@@ -370,6 +370,7 @@ export async function provisionChatwootApiInbox(input: {
     'chatwootAccountMappingId',
   );
   const projectedName = requireText(input.projectedName, 'projectedName', 120);
+  const webhookOrigin = publicWebhookOrigin();
   const createRequestKey = childKey(input.requestKey, 'create');
   const receiptRequestKey = childKey(input.requestKey, 'receipt');
   const activateRequestKey = childKey(input.requestKey, 'activate');
@@ -416,7 +417,7 @@ export async function provisionChatwootApiInbox(input: {
   }
 
   const webhookUrl =
-    `${publicWebhookOrigin()}/api/chatwoot/webhook/${mapping.id}`;
+    `${webhookOrigin}/api/chatwoot/webhook/${mapping.id}`;
 
   const external = await createOrReconcileApiInbox({
     supabase: input.supabase,
