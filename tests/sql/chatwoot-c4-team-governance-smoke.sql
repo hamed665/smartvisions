@@ -33,8 +33,25 @@ insert into public.departments(id,organization_id,branch_id,name,code) values
 insert into public.teams(id,organization_id,department_id,name,code,status) values
   ('12345678-0000-4000-8000-00000000fc01','00000000-0000-0000-0000-00000000fc01','40000000-0000-0000-0000-00000000fc01','Sales Team','TEAM-SALES','ACTIVE');
 
+insert into public.integration_connections(
+  id,organization_id,provider,channel,enabled,status
+) values (
+  '60000000-0000-0000-0000-00000000fc01',
+  '00000000-0000-0000-0000-00000000fc01',
+  'META','WHATSAPP',true,'CONNECTED'
+);
+
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000ec01',false);
+
+select (public.create_communication_channel_binding(
+  '00000000-0000-0000-0000-00000000fc01',
+  '20000000-0000-0000-0000-00000000fc01',
+  '30000000-0000-0000-0000-00000000fc01',
+  '60000000-0000-0000-0000-00000000fc01',
+  'WHATSAPP',
+  'c4-team-binding-create'
+)).id as binding_id \gset
 
 select (public.create_chatwoot_account_mapping(
   '00000000-0000-0000-0000-00000000fc01',
@@ -61,6 +78,7 @@ select (public.create_chatwoot_team_mapping(
 )).id as team_mapping_id \gset
 
 insert into c4_team_state(key,value) values
+  ('binding_id', :'binding_id'),
   ('account_mapping_id', :'account_mapping_id'),
   ('team_mapping_id', :'team_mapping_id');
 
