@@ -1,5 +1,26 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+
+## Superseding continuation checkpoint — 2026-09-26
+
+Use this checkpoint before older historical notes in this file.
+
+- Current canonical repository main: `3c3443389a5d7edfdf3230387cf16b1ec75a3a1e` after PR #236.
+- Exact-main CI #1253 and Cloudflare Production Deploy #733 are green.
+- Chatwoot Production source plane is live on the dedicated OVH VPS at `57.131.156.171`.
+- Public communication-plane URL: `https://inbox.smartvisionsai.com`; Caddy/Let's Encrypt TLS, `/health=200` and `/app/login=200` are verified.
+- Dedicated Chatwoot PostgreSQL + authenticated Redis are local to the VPS and separate from Smart Core Supabase.
+- Attachments: OVH S3 `smartvisions-chatwoot-prod`, Frankfurt 1-AZ, Versioning enabled, Rails S3 roundtrip verified.
+- Off-host database backup: OVH S3 `smartvisions-chatwoot-backups`, Paris 3-AZ, Versioning enabled, daily 02:17 UTC, upload/download checksum and isolated restore verified.
+- First owner was provisioned privately. Account signup is disabled and public installation onboarding is blocked.
+- PR #236 fixes the broken mobile onboarding layout. The successful PR-head immutable image is already live while exact-main Chatwoot Source Image #37 rebuilds the canonical main-provenance image; canonicalize to that exact-main digest when run #37 succeeds.
+- Production runtime contains no Railway hostname/dependency. Railway `smartvisions-chatwoot-candidate` is temporary rollback evidence only and must not be destroyed without explicit destructive approval.
+- Keep native Chatwoot provider channels, API Inbox, real customer/contact projection and provider sends OFF.
+- Smart Core remains canonical for tenant/business/customer/CRM/provider credentials/provider send authority/safety.
+- Continue at: `SECTION COMMUNICATION / COMM-TENANT-BRIDGE`.
+- Never fabricate a tenant Business or Chatwoot Account merely to populate the UI. External provisioning requires evidence-backed real tenant scope.
+
+
 ## Repository truth
 
 Repository: `hamed665/smartvisions`
