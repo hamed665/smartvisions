@@ -135,3 +135,14 @@ node scripts/chatwoot/verify-source-lock.mjs \
 ```
 
 The dedicated GitHub Actions workflow performs the same checks and builds the image from the exact upstream source.
+
+
+## Smart Visions Branding Overlay
+
+Customer-visible authentication surfaces use a deterministic Community-safe branding overlay.
+
+Canonical assets live in `ops/chatwoot/branding/`. During the pinned source build, `scripts/chatwoot/apply-branding-overlay.mjs` copies those assets into Chatwoot, installs the shared auth stylesheet, and makes narrow fail-closed edits to login, forgot-password and password-reset views.
+
+The runtime baseline points `LOGO`, `LOGO_DARK`, `LOGO_THUMBNAIL`, `BRAND_NAME`, `BRAND_URL` and `INSTALLATION_NAME` to Smart Visions. The overlay does not change provider ownership, API-Inbox activation, Smart Core authority or the Enterprise boundary.
+
+Upgrade/reapply rules and touched upstream paths are documented in `ops/chatwoot/branding/README.md`.

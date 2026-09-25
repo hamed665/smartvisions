@@ -68,6 +68,8 @@ describe('Chatwoot source foundation invariants', () => {
     expect(workflow).toContain('test ! -e chatwoot/enterprise');
     expect(workflow).toContain('test ! -e /app/enterprise');
     expect(workflow).toContain('providerAuthority');
+    expect(workflow).toContain('apply-branding-overlay.mjs chatwoot');
+    expect(workflow).toContain('SMARTVISIONS_COMMIT');
     expect(workflow).not.toContain('chatwoot/chatwoot:latest');
   });
 
@@ -75,7 +77,25 @@ describe('Chatwoot source foundation invariants', () => {
     const config = read('ops/chatwoot/configure-smartvisions.rb');
 
     expect(config).toContain("'INSTALLATION_NAME' => 'Smart Visions Inbox'");
+    expect(config).toContain("'LOGO' => '/brand-assets/smartvisions-logo.svg'");
+    expect(config).toContain("'LOGO_DARK' => '/brand-assets/smartvisions-logo-dark.svg'");
+    expect(config).toContain("'LOGO_THUMBNAIL' => '/brand-assets/smartvisions-logo-thumbnail.svg'");
+    expect(config).toContain("'BRAND_URL' => 'https://smartvisionsai.com'");
     expect(config).toContain("'ENABLE_ACCOUNT_SIGNUP' => false");
     expect(config).not.toMatch(/WHATSAPP|META|RESEND|ENTERPRISE|INSTALLATION_PRICING_PLAN/);
+  });
+  it('keeps the branding overlay explicit and Community-safe', () => {
+    const overlay = read('scripts/chatwoot/apply-branding-overlay.mjs');
+    const brandingReadme = read('ops/chatwoot/branding/README.md');
+
+    expect(read('ops/chatwoot/branding/logo.svg')).toContain('SMART VISIONS');
+    expect(read('ops/chatwoot/branding/logo_dark.svg')).toContain('SMART VISIONS');
+    expect(read('ops/chatwoot/branding/logo_thumbnail.svg')).toContain('Smart Visions');
+    expect(read('ops/chatwoot/branding/smartvisions-auth.css')).toContain('.sv-auth-shell');
+    expect(overlay).toContain('app/javascript/v3/views/login/Index.vue');
+    expect(overlay).toContain('app/javascript/v3/views/auth/reset/password/Index.vue');
+    expect(overlay).toContain('app/javascript/v3/views/auth/password/Edit.vue');
+    expect(overlay).not.toContain("path.join(dir,'enterprise");
+    expect(brandingReadme).toContain('Chatwoot remains');
   });
 });
