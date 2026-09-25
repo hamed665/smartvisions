@@ -23,7 +23,8 @@ Production changes are promoted only after the repository's safety, CI, migratio
 11. [SEGMENT_GOVERNANCE_GAP_AUDIT.md](./SEGMENT_GOVERNANCE_GAP_AUDIT.md) — Phase 3 Slice 6 Segment decisions, implementation boundaries and Production closeout.
 12. [CHATWOOT_SOURCE_GAP_AUDIT.md](./CHATWOOT_SOURCE_GAP_AUDIT.md) — source/license/deployment/provider-ownership audit for the Chatwoot Communication Plane.
 13. [CHATWOOT_TENANT_BRIDGE_GAP_AUDIT.md](./CHATWOOT_TENANT_BRIDGE_GAP_AUDIT.md) — deterministic tenant/business/user/account/inbox/team/contact/conversation mapping audit.
-14. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
+14. [CHATWOOT_PRODUCTION_PROMOTION_READINESS_AUDIT.md](./CHATWOOT_PRODUCTION_PROMOTION_READINESS_AUDIT.md) — evidence-backed gate between the verified isolated Candidate and any future Production Chatwoot provisioning.
+15. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
 
 ## Phase 0 exit criteria
 
@@ -84,28 +85,33 @@ Chatwoot is explicitly planned as a **source-based Community Edition communicati
 
 ## Communication Plane continuation
 
-`COMM-CHATWOOT-SOURCE` gap audit is complete.
+`COMM-CHATWOOT-SOURCE` now has a verified isolated Candidate runtime.
 
-Approved source baseline:
+Approved and verified baseline:
 
-- Chatwoot Community `v4.18.0`
-- exact upstream commit `9f920b549c14491a4e587687a3eed5d21c6ccc7d`
-- separate Chatwoot runtime/database/Redis/storage boundary
-- existing Smart Core WhatsApp/Email providers remain canonical
-- first bridge uses Chatwoot API Inbox projections, not duplicated native provider ownership
-- `tenant_business -> Chatwoot Account` tenancy projection
+- Chatwoot Community `v4.18.0`;
+- exact upstream commit `9f920b549c14491a4e587687a3eed5d21c6ccc7d`;
+- immutable Community-safe GHCR image;
+- separate Candidate PostgreSQL / Redis / S3-compatible storage;
+- successful prepare, Puma, Sidekiq, Redis, object-storage, HTTPS health/login and backup/isolated-restore evidence;
+- Smart Core remains canonical for provider credentials, provider send authority and business/customer truth;
+- native Chatwoot provider channels and API Inbox activation remain off.
 
-Next action remains `COMM-CHATWOOT-SOURCE`, now moving from audit to source-foundation implementation.
+Current state is **Candidate runtime verified / Production promotion gated**. See `CHATWOOT_PRODUCTION_PROMOTION_READINESS_AUDIT.md`.
 
+No Production Chatwoot runtime or `inbox.smartvisionsai.com` route exists yet. A separate explicit Production-promotion gate is required before any such provisioning.
 
 ## Tenant Bridge continuation
 
-The `COMM-TENANT-BRIDGE` gap audit is complete but intentionally stacked behind `COMM-CHATWOOT-SOURCE`.
+The `COMM-TENANT-BRIDGE` foundation is merged and Production-promoted through migrations `0077`–`0089`; migration `0090_chatwoot_fk_index_hardening` is the current Production head.
 
-Production currently has zero Brands and zero tenant Businesses. No Chatwoot Account may be provisioned from Growth/Hunter `public.businesses` as a substitute.
+Fresh Production evidence still shows:
 
-Slice A is now implemented on stacked Draft PR #197:
+- 0 Brands;
+- 0 tenant Businesses;
+- 0 Chatwoot Account/User/Membership/Inbox/Team mappings;
+- 0 communication channel bindings;
+- 0 Chatwoot webhook events and reconciliation receipts.
 
-`COMM-TENANT-BRIDGE / Slice A — Tenant/channel + Account mapping contract`
+Therefore external provisioning remains intentionally inactive. No Chatwoot Account may be fabricated from Growth/Hunter `public.businesses`, and API Inbox/provider/customer activation remains behind the separate governed bridge gate after Production source-plane provisioning.
 
-It remains **unmerged and unapplied to Production** because PR #195 source-build verification and repository GitHub-hosted runner allocation are still blocked. No persistent Production Brand, tenant Business, bridge row or Chatwoot Account has been fabricated.
