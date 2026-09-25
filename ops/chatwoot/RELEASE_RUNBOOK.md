@@ -201,3 +201,69 @@ No floating-tag auto-upgrade is permitted.
 - healthy web/worker evidence.
 
 If hosting credentials/runtime are not yet provisioned, record the work package as **source-build verified / deployment pending**, not complete.
+
+## Railway Candidate implementation notes
+
+These notes were proven during the isolated 2026-09-25 Railway Candidate rollout. They do not relax any release gate above.
+
+### Persistent PostgreSQL
+
+When a Railway volume is mounted at `/var/lib/postgresql/data`, do not point `PGDATA` at the mount root. Filesystem metadata such as `lost+found` can make PostgreSQL reject the directory as non-empty.
+
+Use a child directory, for example:
+
+```text
+PGDATA=/var/lib/postgresql/data/pgdata
+```
+
+### Password-protected Redis
+
+When the Redis password comes from an environment variable, ensure the start command performs shell expansion. A literal `"$REDIS_PASSWORD"` passed without a shell can leave Redis configured with the wrong password while appearing otherwise healthy.
+
+Candidate-proven form:
+
+```bash
+sh -lc 'exec redis-server --appendonly yes --requirepass "$REDIS_PASSWORD"'
+```
+
+Keep Redis private and persistent. Do not expose a public TCP endpoint.
+
+### FORCE_SSL and Railway health checks
+
+`FORCE_SSL=true` remains mandatory.
+
+Railway's HTTP deploy healthcheck requires a direct 200 response and does not follow redirects. An internal HTTP request to Chatwoot `/health` can therefore fail when Rails correctly redirects HTTP to HTTPS.
+
+Do not solve this by setting `FORCE_SSL=false`.
+
+For this Candidate, the Railway-local HTTP healthcheck is omitted and the release gate requires an explicit external HTTPS smoke against the isolated Candidate origin:
+
+- `GET /health` -> HTTP 200 with `{"status":"woot"}`;
+- `GET /app/login` -> HTTP 200 Chatwoot sign-in shell;
+- TLS certificate verification must succeed.
+
+Do not attach a Production route until those HTTPS checks pass.
+
+### Candidate backup/restore on Railway Hobby
+
+Railway Hobby does not provide the native volume-backup evidence required for a Production promotion.
+
+For a synthetic/non-customer Candidate, the proven recovery check is:
+
+1. create a logical PostgreSQL dump;
+2. upload it to the private Candidate S3-compatible bucket;
+3. record/verify its SHA-256 checksum;
+4. restore into a separate disposable Candidate verification database;
+5. verify migration/table state;
+6. drop the verification database;
+7. retain only the intended backup object according to the Candidate retention rule.
+
+A dump produced by a newer PostgreSQL client may include settings unknown to the target server. The 2026-09-25 Candidate restore encountered `SET transaction_timeout = 0` when restoring into PostgreSQL 16. The corrected verification removed only that unsupported session-setting line from the plain SQL dump before restore; it did not edit schema/data statements.
+
+This Candidate backup proof is not a substitute for a reviewed Production backup/retention policy.
+
+### Railway environment naming
+
+A Railway project's default environment may be named `production`. Environment labels do not establish Smart Visions release tier.
+
+The Candidate tier is established by the isolated project/resources, verifier contract, hostname, secrets and absence of Production routes/provider credentials. Never infer Production authority from Railway's default environment label.
