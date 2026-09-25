@@ -745,3 +745,26 @@ Remaining work for this checkpoint:
 3. do not create or activate Production Chatwoot without a separate explicit promotion gate.
 
 Production provider/customer traffic remains out of scope. Shadow Mode stays ON.
+
+## 2026-09-25 Production-promotion readiness checkpoint
+
+Current canonical main before this documentation branch:
+
+`9805c7dc6453d8179b4d2efcae9e5e0c2bdd3f6d`
+
+Verified current evidence:
+
+- exact-main CI is green;
+- Cloudflare Production Deploy #727 succeeded on that exact SHA with release-candidate smoke, exact-bundle promotion, route verification, routed Production smoke and safe API/webhook rejection smoke;
+- Production Supabase migration head remains `0090_chatwoot_fk_index_hardening`;
+- Shadow Mode remains ON and the latest checked one-hour Email/WhatsApp/Outreach outbound counts are zero;
+- Railway contains only the isolated `smartvisions-chatwoot-candidate` project; no separate Production Chatwoot project exists;
+- the Candidate's five intended services remain SUCCESS;
+- Production still contains zero Brands, zero tenant Businesses, zero Chatwoot mappings, zero channel bindings and zero Chatwoot webhook/reconciliation evidence.
+
+The isolated Candidate runtime gate is complete. The next mutating action is **not** API Inbox activation or provider wiring. It is a separately authorized Production source-plane promotion governed by `CHATWOOT_PRODUCTION_PROMOTION_READINESS_AUDIT.md`.
+
+Do not provision Production Chatwoot, attach `inbox.smartvisionsai.com`, create a real Chatwoot Account/API Inbox, move provider credentials, create customer data or weaken Shadow Mode without that separate explicit promotion authorization.
+
+When the Production-promotion gate is authorized, first re-check current main/PRs/CI/Cloudflare/Supabase/Railway and then follow the audit sequence. Never reuse Candidate PostgreSQL/Redis/storage for Production.
+
