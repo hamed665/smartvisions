@@ -1,0 +1,11 @@
+.sv-auth-shell{position:relative;isolation:isolate;overflow:hidden;background:radial-gradient(circle at 12% 12%,rgb(37 99 235/.14),transparent 34%),radial-gradient(circle at 88% 8%,rgb(14 165 233/.16),transparent 30%),linear-gradient(180deg,#f8fbff 0%,#fff 54%,#f4f8ff 100%)}
+.sv-auth-shell::before,.sv-auth-shell::after{position:absolute;z-index:-1;width:72vw;height:25rem;content:"";pointer-events:none;border:1px solid rgb(59 130 246/.08);border-radius:50%;background:linear-gradient(135deg,rgb(219 234 254/.62),rgb(224 242 254/.08))}
+.sv-auth-shell::before{top:-9rem;left:-23vw;transform:rotate(14deg)}.sv-auth-shell::after{top:-7rem;right:-25vw;transform:rotate(-16deg)}
+.sv-auth-header,.sv-auth-card{position:relative;z-index:1}.sv-auth-header{width:100%;padding-inline:1.5rem}
+.sv-auth-logo{width:min(27rem,78vw);height:auto;max-height:10.75rem;object-fit:contain}.sv-auth-title{margin-top:1.25rem;font-weight:650;letter-spacing:-.035em}
+.sv-auth-card{border:1px solid rgb(148 163 184/.25);border-radius:1.25rem;background:rgb(255 255 255/.82);box-shadow:0 24px 70px rgb(15 23 42/.11);backdrop-filter:blur(22px)}
+.sv-auth-submit{border-color:transparent!important;color:#fff!important;background:linear-gradient(115deg,#1d4ed8 0%,#2563eb 48%,#0ea5e9 100%)!important;box-shadow:0 14px 32px rgb(37 99 235/.24)!important}
+.sv-auth-submit:hover{filter:brightness(1.04)}
+.dark .sv-auth-shell{background:radial-gradient(circle at 12% 12%,rgb(37 99 235/.22),transparent 34%),radial-gradient(circle at 88% 8%,rgb(14 165 233/.17),transparent 30%),linear-gradient(180deg,#071126 0%,#0a1020 58%,#080d18 100%)}
+.dark .sv-auth-card{border-color:rgb(96 165 250/.18);background:rgb(15 23 42/.78);box-shadow:0 24px 72px rgb(0 0 0/.32)}
+@media(max-width:639px){.sv-auth-shell{padding-top:2.25rem!important;padding-bottom:2.25rem!important}.sv-auth-logo{width:min(23rem,84vw);max-height:9.5rem}.sv-auth-title{margin-top:.9rem;font-size:2rem;line-height:1.14}.sv-auth-card{width:100%;margin-top:1.5rem!important;padding:1.5rem!important;border-color:transparent;border-radius:0;background:transparent;box-shadow:none;backdrop-filter:none}.dark .sv-auth-card{border-color:transparent;background:transparent;box-shadow:none}}
