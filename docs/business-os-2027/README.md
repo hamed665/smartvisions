@@ -78,7 +78,7 @@ Use:
 
 `SECTION -> WORK PACKAGE ID -> actual PR evidence`
 
-The current planned continuation cursor is `SECTION COMMUNICATION / COMM-CHATWOOT-SOURCE`, subject to fresh Production verification before implementation.
+The current planned continuation cursor is `SECTION COMMUNICATION / COMM-TENANT-BRIDGE`, subject to fresh Production verification before implementation.
 
 Chatwoot is explicitly planned as a **source-based Community Edition communication plane**, with Smart Core retaining canonical business truth and provider-action safety. See `MASTER_ARCHITECTURE.md` and `MASTER_PROGRAM_SECTIONS.md`.
 
@@ -97,9 +97,9 @@ Approved and verified baseline:
 - Smart Core remains canonical for provider credentials, provider send authority and business/customer truth;
 - native Chatwoot provider channels and API Inbox activation remain off.
 
-Current state is **Candidate runtime verified / Production promotion gated**. See `CHATWOOT_PRODUCTION_PROMOTION_READINESS_AUDIT.md`.
+Current state is **Production source plane deployed and release-verified / governed bridge activation pending**. The historical promotion gates and evidence are preserved in `CHATWOOT_PRODUCTION_PROMOTION_READINESS_AUDIT.md`.
 
-No Production Chatwoot runtime or `inbox.smartvisionsai.com` route exists yet. A separate explicit Production-promotion gate is required before any such provisioning.
+Production Chatwoot now runs on a dedicated OVH VPS with dedicated PostgreSQL/Redis, OVH S3 attachment storage, Paris off-host database backups with restore verification, and public TLS at `https://inbox.smartvisionsai.com`. Railway is no longer a Production dependency; the old Candidate is retained only until explicit destructive decommission approval. API Inbox/provider/customer activation remains off until `COMM-TENANT-BRIDGE` has real tenant evidence and passes its governed activation gate.
 
 ## Tenant Bridge continuation
 
