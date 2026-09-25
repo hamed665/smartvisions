@@ -704,3 +704,44 @@ The non-secret Candidate env template now pins that exact immutable image. It re
 - The Candidate env template remains pinned to the previously verified immutable image from Source Image run #21. No Candidate or Production Chatwoot runtime exists yet.
 - A fresh Railway read-only audit confirmed account `hamed665` can read its Personal workspace; the workspace currently has 0 projects and no Chatwoot Candidate project, service, or deployment. No Railway resources were created. Keep this as a read-only checkpoint; resource provisioning requires an explicitly authorized next step.
 - Continue at `SECTION COMMUNICATION / COMM-CHATWOOT-SOURCE`: isolated Candidate hosting/resource provisioning and runtime verification. Keep Shadow Mode ON and provider activity disabled.
+
+## 2026-09-25 Chatwoot Candidate runtime handoff — superseding Railway-zero-resource notes
+
+Semantic cursor remains:
+
+`SECTION COMMUNICATION / COMM-CHATWOOT-SOURCE`
+
+Current main before this docs branch is `a90961e8b329b425bf5935174432f21029e11fd6`. The older notes in this file that say Railway has no project/Candidate runtime are superseded by the runtime evidence below.
+
+Candidate project `smartvisions-chatwoot-candidate` now contains exactly five intended services/resources lanes: dedicated PostgreSQL, dedicated Redis, one-shot prepare, Rails web and Sidekiq worker, plus one private S3-compatible Candidate bucket. The accidental duplicate prepare service created during provisioning was deleted through Railway's required 2FA gate.
+
+All Chatwoot app services use the same immutable image digest:
+
+`ghcr.io/hamed665/smartvisions-chatwoot:v4.18.0-sv-4987088dc4ba2e9212e196304ccebd69073ba536@sha256:c6e759a89867b41eae2230f5afcad75c7a54f421225d2e46c3e865bd401058ff`
+
+Verified evidence now includes:
+
+- `db:chatwoot_prepare` + `SMARTVISIONS_CONFIGURE.rb` success;
+- Puma production boot on port 3000;
+- Sidekiq/Redis authenticated runtime and SidekiqAlive registration;
+- Candidate S3 write/read success;
+- logical DB backup to Candidate S3 and successful isolated restore verification;
+- rollback-capable immutable deployment snapshots;
+- no native provider credentials, API Inbox activation, customer import or outbound send.
+
+Operational findings to preserve:
+
+- Candidate PostgreSQL `PGDATA` must be below the volume root;
+- Redis password-bearing command requires explicit shell expansion;
+- do not disable `FORCE_SSL` to satisfy Railway's internal HTTP healthcheck; Railway's healthcheck was removed because it does not follow the SSL redirect;
+- The current Railway Candidate account tier is not Production-sized and has no native volume backup. The verified Candidate recovery path is logical PostgreSQL backup in private S3-compatible storage.
+
+Candidate release-gate closeout evidence now also includes a real post-deploy HTTPS smoke with TLS peer verification: `GET /health` returned 200/`{"status":"woot"}` and `GET /app/login` returned 200; Railway HTTP logs independently recorded both responses. The canonical `chatwoot-prepare` command was restored after the one-shot check.
+
+Remaining work for this checkpoint:
+
+1. reconcile this runtime checkpoint through exact-head CI/review/merge;
+2. after merge, re-verify exact-main CI, Cloudflare Production and Production Supabase/safety controls;
+3. do not create or activate Production Chatwoot without a separate explicit promotion gate.
+
+Production provider/customer traffic remains out of scope. Shadow Mode stays ON.
