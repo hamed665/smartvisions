@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 670" role="img" aria-label="Smart Visions">
+<defs>
+<linearGradient id="s" x1="90" y1="120" x2="500" y2="430" gradientUnits="userSpaceOnUse"><stop stop-color="#082B86"/><stop offset=".48" stop-color="#155DEB"/><stop offset="1" stop-color="#08B8F5"/></linearGradient>
+<linearGradient id="v" x1="410" y1="145" x2="790" y2="465" gradientUnits="userSpaceOnUse"><stop stop-color="#0A2F9C"/><stop offset=".55" stop-color="#1732B8"/><stop offset="1" stop-color="#0098EE"/></linearGradient>
+<linearGradient id="a" x1="720" y1="95" x2="845" y2="215" gradientUnits="userSpaceOnUse"><stop stop-color="#0068FF"/><stop offset="1" stop-color="#00C4F4"/></linearGradient>
+</defs>
+<path d="M115 120H500L452 190H230C196 190 174 207 174 235C174 264 196 279 232 279H355C455 279 505 326 505 404C505 489 443 530 346 530H92L143 458H348C397 458 425 440 425 407C425 374 397 355 348 355H226C143 355 94 311 94 239C94 168 146 120 230 120Z" fill="url(#s)"/>
+<path d="M448 159L577 454L742 181H690L792 117H892L823 231H780V180L579 530L394 200Z" fill="url(#v)"/>
+<path d="M744 111H885L819 219L819 164L744 111Z" fill="url(#a)"/>
+<text x="600" y="592" text-anchor="middle" fill="#F3F7FF" font-family="Inter,Arial,sans-serif" font-size="64" font-weight="700" letter-spacing="16">SMART VISIONS</text>
+<text x="600" y="642" text-anchor="middle" fill="#D7E5FF" font-family="Inter,Arial,sans-serif" font-size="22" font-weight="600" letter-spacing="3.5">AI • DIGITAL GROWTH • TECHNOLOGY</text>
+</svg>

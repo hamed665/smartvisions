@@ -6,6 +6,9 @@
 
 values = {
   'INSTALLATION_NAME' => 'Smart Visions Inbox',
+  'LOGO' => '/brand-assets/smartvisions-logo.svg',
+  'LOGO_DARK' => '/brand-assets/smartvisions-logo-dark.svg',
+  'LOGO_THUMBNAIL' => '/brand-assets/smartvisions-logo-thumbnail.svg',
   'BRAND_NAME' => 'Smart Visions',
   'BRAND_URL' => 'https://smartvisionsai.com',
   'WIDGET_BRAND_URL' => 'https://smartvisionsai.com',

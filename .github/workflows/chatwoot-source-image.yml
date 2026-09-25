@@ -28,6 +28,7 @@ env:
   CHATWOOT_UPSTREAM_TAG: v4.18.0
   CHATWOOT_UPSTREAM_COMMIT: 9f920b549c14491a4e587687a3eed5d21c6ccc7d
   CHATWOOT_IMAGE_REPOSITORY: ghcr.io/hamed665/smartvisions-chatwoot
+  SMARTVISIONS_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   source-build:
@@ -35,9 +36,10 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - name: Checkout Smart Visions source
+      - name: Checkout exact Smart Visions source
         uses: actions/checkout@v4
         with:
+          ref: ${{ env.SMARTVISIONS_COMMIT }}
           path: smartvisions
 
       - name: Set up Node 24
@@ -91,6 +93,8 @@ jobs:
             git -C chatwoot apply "$GITHUB_WORKSPACE/$patch"
           done
 
+          node smartvisions/scripts/chatwoot/apply-branding-overlay.mjs chatwoot
+
           enterprise_changes="$(git -C chatwoot diff --name-only "$CHATWOOT_UPSTREAM_COMMIT" -- enterprise/)"
           if [[ -n "$enterprise_changes" ]]; then
             echo "Smart Visions patch stack modified proprietary enterprise/ source:"
@@ -122,7 +126,7 @@ jobs:
             "upstreamRepository": "${CHATWOOT_UPSTREAM_REPOSITORY}",
             "upstreamTag": "${CHATWOOT_UPSTREAM_TAG}",
             "upstreamCommit": "${CHATWOOT_UPSTREAM_COMMIT}",
-            "smartvisionsCommit": "${GITHUB_SHA}",
+            "smartvisionsCommit": "${SMARTVISIONS_COMMIT}",
             "enterpriseSourceIncluded": false,
             "runtimeDisableEnterprise": true,
             "providerAuthority": "SMART_CORE",
@@ -134,13 +138,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          image="${CHATWOOT_IMAGE_REPOSITORY}:${CHATWOOT_UPSTREAM_TAG}-sv-${GITHUB_SHA}"
+          image="${CHATWOOT_IMAGE_REPOSITORY}:${CHATWOOT_UPSTREAM_TAG}-sv-${SMARTVISIONS_COMMIT}"
           echo "CHATWOOT_IMAGE=$image" >> "$GITHUB_ENV"
 
           docker build \
             --file chatwoot/docker/Dockerfile \
             --label "org.opencontainers.image.source=https://github.com/hamed665/smartvisions" \
-            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --label "org.opencontainers.image.revision=${SMARTVISIONS_COMMIT}" \
             --label "io.smartvisions.chatwoot.upstream=${CHATWOOT_UPSTREAM_COMMIT}" \
             --tag "$image" \
             chatwoot
@@ -153,7 +157,7 @@ jobs:
           docker run --rm \
             --entrypoint sh \
             -e EXPECTED_UPSTREAM="${CHATWOOT_UPSTREAM_COMMIT}" \
-            -e EXPECTED_SMARTVISIONS="${GITHUB_SHA}" \
+            -e EXPECTED_SMARTVISIONS="${SMARTVISIONS_COMMIT}" \
             "${CHATWOOT_IMAGE}" \
             -lc '
               test "$(cat /app/.git_sha)" = "$EXPECTED_UPSTREAM"
@@ -169,13 +173,13 @@ jobs:
             '
 
       - name: Log in to GHCR
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
         shell: bash
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
 
       - name: Publish immutable source image
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
         shell: bash
         run: |
           set -euo pipefail
@@ -185,7 +189,7 @@ jobs:
             echo "### Chatwoot source image"
             echo ""
             echo "- Upstream: \`${CHATWOOT_UPSTREAM_TAG}@${CHATWOOT_UPSTREAM_COMMIT}\`"
-            echo "- Smart Visions: \`${GITHUB_SHA}\`"
+            echo "- Smart Visions: \`${SMARTVISIONS_COMMIT}\`"
             echo "- Image: \`${CHATWOOT_IMAGE}\`"
             if [[ -n "$digest" ]]; then
               echo "- Digest: \`$digest\`"
