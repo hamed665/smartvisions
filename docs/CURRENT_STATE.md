@@ -391,3 +391,67 @@ This closes the targeted FK-index hardening gap created by the new Communication
 - The Candidate env template remains pinned to the previously verified immutable image from Source Image run #21. No Candidate or Production Chatwoot runtime exists yet.
 - A fresh Railway read-only audit confirmed account `hamed665` can read its Personal workspace; the workspace currently has 0 projects and no Chatwoot Candidate project, service, or deployment. No Railway resources were created. Keep this as a read-only checkpoint; resource provisioning requires an explicitly authorized next step.
 - Continue at `SECTION COMMUNICATION / COMM-CHATWOOT-SOURCE`: isolated Candidate hosting/resource provisioning and runtime verification. Keep Shadow Mode ON and provider activity disabled.
+
+## Chatwoot isolated Candidate runtime — verified checkpoint 2026-09-25
+
+This checkpoint supersedes the earlier same-day notes that said Railway had zero projects and no Candidate runtime.
+
+Current repository/runtime baseline before this documentation branch:
+
+- canonical main: `a90961e8b329b425bf5935174432f21029e11fd6` (PR #230);
+- main validation: green;
+- Cloudflare Production deploy #717: successful on that exact main, including route verification, safe API/webhook smoke and routed Production smoke;
+- Production Supabase migration head: `0090_chatwoot_fk_index_hardening`;
+- Production safety state remained Shadow Mode ON, global Kill Switch OFF, Email/WhatsApp-AI/Agents pauses OFF, with zero outbound activity in the checked verification window.
+
+An isolated Railway project named `smartvisions-chatwoot-candidate` now exists. Railway's default environment is unfortunately named `production`, but the entire Railway project is Candidate-only and is not the Smart Visions Production communication plane.
+
+Verified Candidate resources:
+
+- dedicated `chatwoot-postgres` using `pgvector/pgvector:pg16`, private networking and a persistent Candidate-only volume;
+- dedicated `chatwoot-redis` using `redis:8.2.1`, private networking, password authentication and AOF on a persistent Candidate-only volume;
+- private S3-compatible bucket `chatwoot-candidate-storage`;
+- one-shot `chatwoot-prepare`;
+- Rails/Puma `chatwoot-web`;
+- Sidekiq `chatwoot-worker`;
+- isolated Railway origin `https://chatwoot-web-production-1a44.up.railway.app`.
+
+All Chatwoot application services use the immutable Community-safe image:
+
+`ghcr.io/hamed665/smartvisions-chatwoot:v4.18.0-sv-4987088dc4ba2e9212e196304ccebd69073ba536@sha256:c6e759a89867b41eae2230f5afcad75c7a54f421225d2e46c3e865bd401058ff`
+
+The source remains upstream Chatwoot Community `v4.18.0@9f920b549c14491a4e587687a3eed5d21c6ccc7d`. Enterprise source is absent from the built tree and `DISABLE_ENTERPRISE=true` remains required at runtime.
+
+Runtime evidence:
+
+- Candidate database preparation and `SMARTVISIONS_CONFIGURE.rb` completed successfully after correcting Redis password expansion;
+- Rails/Puma boots in production mode and listens on `0.0.0.0:3000`;
+- Sidekiq 7.3.10 boots successfully, authenticates to the dedicated Redis and registers SidekiqAlive;
+- Candidate object-storage write/read verification succeeded;
+- logical PostgreSQL backup -> Candidate S3 upload -> checksum verification -> isolated restore -> table-state verification succeeded; the verified restore contained 180 schema migrations and 113 installation-config rows;
+- deployment history retains rollback-capable immutable snapshots for the Candidate application services.
+
+Railway-specific corrections proven during this deployment:
+
+- PostgreSQL volume root cannot be used directly as `PGDATA` because the mounted filesystem contains `lost+found`; use a subdirectory such as `/var/lib/postgresql/data/pgdata`;
+- Redis password expansion must run through a shell, for example `sh -lc 'exec redis-server --appendonly yes --requirepass "$REDIS_PASSWORD"'`;
+- Railway HTTP health checks require a direct 200 and do not follow SSL redirects. With mandatory `FORCE_SSL=true`, the platform-local HTTP `/health` check can fail despite Puma being healthy. The Railway healthcheck was therefore removed rather than weakening SSL.
+
+Safety remained closed throughout Candidate work:
+
+- no Production provider credential was copied into Chatwoot;
+- no native Chatwoot WhatsApp/Email provider channel was enabled;
+- no API Inbox was activated;
+- no Production customer/contact/message data was imported;
+- no customer/provider message was sent;
+- `CHATWOOT_WEBHOOK_PUBLIC_ORIGIN` remains empty;
+- account signup remains disabled;
+- Production Chatwoot remains unprovisioned and `inbox.smartvisionsai.com` was not created or attached.
+
+The final external HTTPS response check for Candidate `/health` and `/app/login` is still pending because the available verification runners cannot resolve the Railway public hostname from their egress environment. Do not record public web/login as verified until an actual post-deploy HTTPS response is captured.
+
+Railway Hobby is Candidate-only evidence, not Production sizing evidence: Candidate database/Redis volumes are 500 MB and the plan does not provide native volume backups. Production promotion remains a separate gate with durable backup, capacity and public-origin requirements.
+
+Work Package status:
+
+`SECTION COMMUNICATION / COMM-CHATWOOT-SOURCE` = **isolated Candidate runtime provisioned; core runtime/storage/backup evidence verified; final public HTTPS/login smoke pending; Production deployment not authorized**.
