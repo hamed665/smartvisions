@@ -63,7 +63,9 @@ Use Chatwoot Community Edition source code as the operational communication plan
 
 ### COMM-CHATWOOT-SOURCE — Community source foundation
 
-Status: **SOURCE BUILD VERIFIED; PRODUCTION RUNTIME DEPLOYMENT PENDING**
+Status: **CANDIDATE RUNTIME VERIFIED; PRODUCTION PROMOTION GATE PENDING**
+
+Production-promotion readiness and stop conditions: `CHATWOOT_PRODUCTION_PROMOTION_READINESS_AUDIT.md`.
 
 Approved upstream baseline:
 
