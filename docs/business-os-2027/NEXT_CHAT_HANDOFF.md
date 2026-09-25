@@ -704,3 +704,26 @@ The non-secret Candidate env template now pins that exact immutable image. It re
 - The Candidate env template remains pinned to the previously verified immutable image from Source Image run #21. No Candidate or Production Chatwoot runtime exists yet.
 - A fresh Railway read-only audit confirmed account `hamed665` can read its Personal workspace; the workspace currently has 0 projects and no Chatwoot Candidate project, service, or deployment. No Railway resources were created. Keep this as a read-only checkpoint; resource provisioning requires an explicitly authorized next step.
 - Continue at `SECTION COMMUNICATION / COMM-CHATWOOT-SOURCE`: isolated Candidate hosting/resource provisioning and runtime verification. Keep Shadow Mode ON and provider activity disabled.
+
+
+## Latest COMM-CHATWOOT-SOURCE runtime checkpoint — 2026-09-25
+
+This section supersedes older handoff text that says the Railway Candidate has zero projects/resources.
+
+- Baseline before this reconciliation: `main@a90961e8b329b425bf5935174432f21029e11fd6`; only stale unrelated PR #158 was observed open.
+- Isolated Railway Candidate is real and contains the intended five-service runtime: PostgreSQL, Redis, one-shot prepare, Rails/Puma web and Sidekiq worker, plus private S3-compatible object storage.
+- Candidate uses immutable Community image `ghcr.io/hamed665/smartvisions-chatwoot:v4.18.0-sv-4987088dc4ba2e9212e196304ccebd69073ba536@sha256:c6e759a89867b41eae2230f5afcad75c7a54f421225d2e46c3e865bd401058ff`, sourced from Chatwoot `v4.18.0@9f920b549c14491a4e587687a3eed5d21c6ccc7d` with Enterprise source excluded.
+- Dedicated Candidate PostgreSQL and Redis have persistent isolated volumes; Redis AOF/password auth is live; neither dependency uses Smart Core Supabase.
+- `db:chatwoot_prepare` and `SMARTVISIONS_CONFIGURE.rb` pass.
+- Sidekiq is live and connected to Candidate Redis.
+- S3-compatible storage passed real put/get/compare/delete verification.
+- Public Candidate TLS/route verification passed: `/health=200` with `status=woot`; `/app/login=200`; TLS peer verification succeeded.
+- Logical backup/restore is restore-proven, not merely dump-proven. Latest verified object: `backups/verified/chatwoot-20260925T085620Z.sql`; SHA-256 `cee7d9cb609b83ac10133895945ebbff3e100f60fc018680e7bc3b29447e4dbb`; restored counts matched 180 migrations and 113 installation-config rows; the temporary restore DB was removed.
+- Current deployment snapshots report rollback capability; destructive rollback was intentionally not executed. Preserve immutable-image rollback plus the reviewed DB restore plan.
+- Candidate remains on Hobby-scale resources and is not Production sizing evidence.
+- Production Smart Core remains at migration head `0090_chatwoot_fk_index_hardening`, Shadow Mode ON, Kill Switch OFF, channel/Agent pauses OFF, Cost Guard unchanged and the latest verification window has zero Email/WhatsApp/Outreach outbound activity.
+- No Production provider credential, API Inbox activation, native Chatwoot provider channel, Production customer import or live send was introduced.
+
+### Exact continuation cursor
+
+Continue at **SECTION COMMUNICATION / COMM-CHATWOOT-SOURCE — Production promotion gate**, but do not promote automatically. First re-check current main/CI/Cloudflare/Supabase and current Candidate health, then produce a separate Production sizing + DNS + retention/backup + rollback + release plan. Production Chatwoot must remain a Communication Plane; Smart Core remains authoritative for CRM/business truth and provider-action safety. Keep Shadow Mode ON and provider activity disabled until a separately approved release gate exists.
