@@ -49,7 +49,7 @@ The following foundations are already Production-verified and are not recreated 
 
 The current planned continuation cursor is:
 
-`SECTION COMMUNICATION / COMM-CHATWOOT-SOURCE`
+`SECTION COMMUNICATION / COMM-TENANT-BRIDGE`
 
 This cursor is a planned dependency target, not permission to skip fresh main/Production verification before coding.
 
@@ -63,7 +63,7 @@ Use Chatwoot Community Edition source code as the operational communication plan
 
 ### COMM-CHATWOOT-SOURCE — Community source foundation
 
-Status: **CANDIDATE RUNTIME VERIFIED; PRODUCTION PROMOTION GATE PENDING**
+Status: **PRODUCTION SOURCE PLANE DEPLOYED AND RELEASE-VERIFIED; BRIDGE ACTIVATION REMAINS SEPARATELY GATED**
 
 Production-promotion readiness and stop conditions: `CHATWOOT_PRODUCTION_PROMOTION_READINESS_AUDIT.md`.
 
@@ -79,6 +79,9 @@ Detailed decisions: `CHATWOOT_SOURCE_GAP_AUDIT.md`.
 2026-09-25 evidence: pinned v4.18.0 source build, Community/Enterprise license guard, enterprise-tree removal, immutable provenance inspection and GHCR publish all succeeded in Chatwoot Source Image run #17. This does **not** satisfy Production runtime completion: no verified public Chatwoot origin, dedicated Chatwoot PostgreSQL, Redis, durable object storage, web/worker health or backup/rollback evidence exists yet.
 
 2026-09-25 Candidate runtime update: an isolated Railway Candidate now has dedicated Chatwoot PostgreSQL/Redis/private S3-compatible storage plus prepare/web/Sidekiq services on the immutable Community-safe digest. Database prepare/configure, Puma boot, Sidekiq/Redis, storage write/read, logical backup/isolated-restore, TLS-verified public `/health=200` with `{"status":"woot"}`, and public `/app/login=200` evidence are verified. This is Candidate evidence only, not Production completion; Production sizing/backup/public-route promotion remains separately gated.
+
+
+2026-09-26 Production closeout: a separate Chatwoot Production source plane is live on the OVH VPS at `57.131.156.171` with dedicated PostgreSQL/Redis, OVH S3 attachment storage, Paris 3-AZ off-host DB backup with verified restore, Caddy/Let's Encrypt TLS, and public `https://inbox.smartvisionsai.com` health/login. PR #236 corrected the mobile onboarding layout and exact-head CI/source-image verification passed. The live runtime remains Community-only and provider authority remains Smart Core. Railway is no longer a Production dependency and remains only a temporary Candidate rollback asset pending explicit decommission approval. API Inbox/provider/customer activation remains off and continues under `COMM-TENANT-BRIDGE`.
 
 Deliver:
 

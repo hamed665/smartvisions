@@ -1,8 +1,29 @@
 # Smart Visions Growth OS — Current Production State
 
-**Reconciled:** 2026-09-25 (Oman, UTC+4)
+**Reconciled:** 2026-09-26 (Oman, UTC+4)
 
 This is the current operational handoff for Growth OS. Current `main`, routed Cloudflare Production and Production Supabase evidence override older planning documents, stale issue text and chat history.
+
+
+## Chatwoot Production source-plane closeout — 2026-09-26
+
+This checkpoint supersedes older same-day Candidate-only and "Production Chatwoot does not exist" notes below.
+
+- Canonical repository main after mobile-onboarding fix: `3c3443389a5d7edfdf3230387cf16b1ec75a3a1e` (PR #236).
+- Exact-main CI #1253: SUCCESS.
+- Cloudflare Production Deploy #733: SUCCESS. This is the separate Growth OS Worker deployment and does not host Chatwoot.
+- Chatwoot Production is live on the dedicated OVH VPS at `57.131.156.171` in Frankfurt.
+- Public communication-plane origin: `https://inbox.smartvisionsai.com`; direct Caddy/Let's Encrypt TLS is active and public `/health` and `/app/login` return HTTP 200.
+- Dedicated Chatwoot PostgreSQL and authenticated Redis run locally on the VPS; they are not Smart Core/Supabase resources.
+- Attachments use OVH S3-compatible bucket `smartvisions-chatwoot-prod` in Frankfurt 1-AZ with Versioning enabled. Rails Active Storage upload/download/purge verification passed and the old local attachment volume was removed.
+- PostgreSQL off-host backups use `smartvisions-chatwoot-backups` in Paris 3-AZ with Versioning enabled. Daily upload is scheduled for 02:17 UTC; upload/download SHA-256 verification and an isolated restore test both passed, including 100/100 public tables.
+- Rollback/DR evidence is stored on the VPS in `/srv/smartvisions/chatwoot/ROLLBACK_DR.md`; operational runtime evidence is in `/srv/smartvisions/chatwoot/ORIGIN_STATE.md`.
+- First owner provisioning completed privately. Public installation onboarding is blocked and account signup remains disabled.
+- PR #236 is merged at `main@3c3443389a5d7edfdf3230387cf16b1ec75a3a1e`; exact-main CI #1253 and Chatwoot Source Image #37 are SUCCESS. Production now runs the canonical immutable image `ghcr.io/hamed665/smartvisions-chatwoot:v4.18.0-sv-3c3443389a5d7edfdf3230387cf16b1ec75a3a1e@sha256:22cb4663d0369b6d7954b32beb1f124e1699eaa5405239899ddd617be31942d6`. Runtime verification confirms the responsive mobile onboarding row/select source, public health/login and brand assets, Community-only provenance, S3 Active Storage, healthy Puma/Sidekiq/PostgreSQL/Redis, and no `enterprise/` tree.
+- Production runtime has no `railway.app` or `railway.internal` dependency. The Railway project `smartvisions-chatwoot-candidate` is retained only as a temporary Candidate rollback asset pending explicit destructive decommission approval.
+- API Inbox/provider/customer activation remains OFF. Smart Core continues to own tenant/business/customer/CRM/provider credentials/send authority/safety.
+- Next semantic continuation is `SECTION COMMUNICATION / COMM-TENANT-BRIDGE`, using real tenant evidence only. Do not fabricate a tenant Business merely to populate Chatwoot.
+
 
 ## Production identity
 

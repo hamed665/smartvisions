@@ -1,9 +1,17 @@
 # Chatwoot Production Promotion Readiness Audit
 
+
+> **Status update — 2026-09-26:** the promotion gate described by this audit has now been crossed and independently verified on a dedicated OVH VPS. The detailed pre-promotion matrix below is retained as historical gate evidence, not as the current runtime state.
+>
+> Production evidence now includes dedicated PostgreSQL/Redis, OVH S3 attachment storage with Versioning, off-host Paris 3-AZ database backups with checksum + isolated restore verification, immutable Community-only Chatwoot source, Caddy/Let's Encrypt TLS, public `https://inbox.smartvisionsai.com` health/login, private first-owner provisioning, account signup disabled, and no Smart Core provider credential copied into Chatwoot.
+>
+> Provider/API-Inbox/customer activation is **still not authorized by this infrastructure closeout**. Smart Core remains provider/action authority and the next governed continuation is `COMM-TENANT-BRIDGE`.
+
+
 Date: 2026-09-25  
 Section: `COMMUNICATION`  
 Work Package: `COMM-CHATWOOT-SOURCE`  
-Mode: **read-only promotion audit; no Production Chatwoot provisioning is authorized by this document**
+Mode: **historical pre-promotion audit; Production infrastructure is now release-verified, while bridge/provider/customer activation remains separately gated**
 
 ## 1. Purpose
 
