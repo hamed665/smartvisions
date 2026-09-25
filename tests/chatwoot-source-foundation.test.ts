@@ -95,6 +95,18 @@ describe('Chatwoot source foundation invariants', () => {
     expect(overlay).toContain('app/javascript/v3/views/login/Index.vue');
     expect(overlay).toContain('app/javascript/v3/views/auth/reset/password/Index.vue');
     expect(overlay).toContain('app/javascript/v3/views/auth/password/Edit.vue');
+    expect(overlay).toContain(
+      'app/javascript/dashboard/routes/dashboard/onboarding/account-details/OnboardingFormRow.vue'
+    );
+    expect(overlay).toContain(
+      'app/javascript/dashboard/routes/dashboard/onboarding/account-details/OnboardingFormSelect.vue'
+    );
+    expect(overlay).toContain(
+      'grid grid-cols-1 gap-2 px-3 py-3 border-t border-n-weak sm:grid-cols-2 sm:items-center'
+    );
+    expect(overlay).toContain(
+      'relative flex w-full min-w-0 items-center justify-start sm:justify-end'
+    );
     expect(overlay).not.toContain("path.join(dir,'enterprise");
     expect(brandingReadme).toContain('Chatwoot remains');
   });

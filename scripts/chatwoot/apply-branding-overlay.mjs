@@ -59,6 +59,27 @@ export function applyBrandingOverlay(upstream){
     ['reset card','class="bg-white shadow sm:mx-auto sm:w-full sm:max-w-lg dark:bg-n-solid-2 p-11 sm:shadow-lg sm:rounded-lg"','class="sv-auth-card sm:mx-auto sm:w-full sm:max-w-lg p-11"'],
     ['reset button','class="w-full"\n          :label="$t(\'SET_NEW_PASSWORD.SUBMIT\')"','class="w-full sv-auth-submit"\n          :label="$t(\'SET_NEW_PASSWORD.SUBMIT\')"']
   ]);
+
+  patch(path.join(dir,'app/javascript/dashboard/routes/dashboard/onboarding/account-details/OnboardingFormRow.vue'),[
+    ['onboarding row mobile grid',
+      'class="grid grid-cols-2 items-center px-3 py-3 border-t border-n-weak"',
+      'class="grid grid-cols-1 gap-2 px-3 py-3 border-t border-n-weak sm:grid-cols-2 sm:items-center"'],
+    ['onboarding row label wrapper',
+      'class="flex items-center gap-2"',
+      'class="flex min-w-0 items-center gap-2"'],
+    ['onboarding row label text',
+      'class="text-n-slate-11"',
+      'class="min-w-0 break-words text-n-slate-11"']
+  ]);
+
+  patch(path.join(dir,'app/javascript/dashboard/routes/dashboard/onboarding/account-details/OnboardingFormSelect.vue'),[
+    ['onboarding select wrapper',
+      'class="relative flex items-center justify-end"',
+      'class="relative flex w-full min-w-0 items-center justify-start sm:justify-end"'],
+    ['onboarding select responsive width',
+      'class="!h-auto !w-auto !py-0 !ps-0 !pe-[17px] !m-0 !rounded-none !bg-transparent !bg-none !outline-none text-sm text-end border-0 cursor-pointer appearance-none focus:outline-none focus:ring-0"',
+      'class="!h-auto !w-full sm:!w-auto !max-w-full !py-0 !ps-0 !pe-[17px] !m-0 !rounded-none !bg-transparent !bg-none !outline-none text-sm text-start sm:text-end border-0 cursor-pointer appearance-none focus:outline-none focus:ring-0"']
+  ]);
   console.log(JSON.stringify({ok:true,overlay:'smartvisions-branding-v1'}));
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href){
