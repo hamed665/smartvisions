@@ -391,3 +391,34 @@ This closes the targeted FK-index hardening gap created by the new Communication
 - The Candidate env template remains pinned to the previously verified immutable image from Source Image run #21. No Candidate or Production Chatwoot runtime exists yet.
 - A fresh Railway read-only audit confirmed account `hamed665` can read its Personal workspace; the workspace currently has 0 projects and no Chatwoot Candidate project, service, or deployment. No Railway resources were created. Keep this as a read-only checkpoint; resource provisioning requires an explicitly authorized next step.
 - Continue at `SECTION COMMUNICATION / COMM-CHATWOOT-SOURCE`: isolated Candidate hosting/resource provisioning and runtime verification. Keep Shadow Mode ON and provider activity disabled.
+
+
+## Chatwoot Candidate runtime — verified 2026-09-25
+
+This checkpoint supersedes the older statements above that the Railway Candidate did not yet exist.
+
+Authoritative runtime evidence:
+
+- GitHub baseline before this reconciliation: `main@a90961e8b329b425bf5935174432f21029e11fd6`; the only observed open PR remains stale/unrelated PR #158.
+- Railway project `smartvisions-chatwoot-candidate` now contains exactly five intended services: dedicated PostgreSQL, dedicated Redis, one-shot prepare, Rails/Puma web and Sidekiq worker, plus a private S3-compatible Candidate bucket. The Railway default environment is named `production`, but the project is exclusively the isolated Candidate and is not the Smart Visions Production Communication Plane.
+- The running Chatwoot application services use the immutable image `ghcr.io/hamed665/smartvisions-chatwoot:v4.18.0-sv-4987088dc4ba2e9212e196304ccebd69073ba536@sha256:c6e759a89867b41eae2230f5afcad75c7a54f421225d2e46c3e865bd401058ff`, built from Chatwoot Community `v4.18.0@9f920b549c14491a4e587687a3eed5d21c6ccc7d`. Enterprise source remains excluded and `DISABLE_ENTERPRISE=true` remains required.
+- Candidate PostgreSQL is `pgvector/pgvector:pg16` with an isolated persistent 500 MB volume. Candidate Redis is `redis:8.2.1` with an isolated persistent 500 MB volume, AOF persistence and password authentication. Neither is shared with Smart Core Supabase.
+- Candidate object storage is a private Railway S3-compatible bucket; runtime put/get/byte-compare/delete verification passed with `STORAGE_VERIFY_OK`.
+- `db:chatwoot_prepare` plus `SMARTVISIONS_CONFIGURE.rb` completed successfully using the Candidate dependencies.
+- Sidekiq booted in Rails production mode, connected to the Candidate Redis and registered SidekiqAlive; no native provider/customer lane was configured.
+- Public Candidate HTTPS smoke passed from the Candidate runtime itself: TLS peer verification succeeded, `/health` returned HTTP 200 with `status=woot`, and `/app/login` returned HTTP 200. Railway HTTP evidence independently records HTTP 200 for both paths on the current Candidate origin.
+- A real logical PostgreSQL backup/restore test passed. The latest verified backup object is `backups/verified/chatwoot-20260925T085620Z.sql`, SHA-256 `cee7d9cb609b83ac10133895945ebbff3e100f60fc018680e7bc3b29447e4dbb`; restore into an isolated temporary DB matched 180 schema migrations and 113 installation-config rows before the temporary DB was removed.
+- Railway reports rollback-capable deployment snapshots for the current Candidate components. No destructive rollback was executed; application rollback remains the previous immutable image plus the reviewed DB restore path when schema compatibility does not permit image-only rollback.
+- Railway Hobby Candidate capacity is intentionally small: 1 GB memory per replica, 500 MB persistent volumes and no native volume-backup guarantee. This is Candidate evidence only, not approved Production sizing.
+
+Safety remained unchanged throughout Candidate provisioning and verification:
+
+- Production Supabase migration head remains `0090_chatwoot_fk_index_hardening`;
+- Shadow Mode remains ON;
+- global Kill Switch remains OFF;
+- Email, WhatsApp AI and Agent pauses remain OFF;
+- Cost Guard remains USD 25 total with 70/85/95/100 thresholds;
+- the latest read-only check showed zero Outreach, WhatsApp and Email outbound activity in the preceding hour;
+- no Production provider credential, native Chatwoot Email/WhatsApp connector, API Inbox activation, customer import or live message send was used for Candidate verification.
+
+Status of `SECTION COMMUNICATION / COMM-CHATWOOT-SOURCE`: **source build + isolated Candidate runtime verified; Production promotion remains gated and unapproved**. Do not create or activate Production Chatwoot merely because Candidate is green. Production requires a separate sizing, DNS, backup/retention, rollback and release decision while Smart Core remains authoritative for CRM and provider-action safety.
