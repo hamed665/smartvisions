@@ -734,7 +734,7 @@ Operational findings to preserve:
 - Candidate PostgreSQL `PGDATA` must be below the volume root;
 - Redis password-bearing command requires explicit shell expansion;
 - do not disable `FORCE_SSL` to satisfy Railway's internal HTTP healthcheck; Railway's healthcheck was removed because it does not follow the SSL redirect;
-- Railway Hobby is not Production-sized and has no native volume backup. The verified Candidate recovery path is logical PostgreSQL backup in private S3-compatible storage.
+- The current Railway Candidate account tier is not Production-sized and has no native volume backup. The verified Candidate recovery path is logical PostgreSQL backup in private S3-compatible storage.
 
 Candidate release-gate closeout evidence now also includes a real post-deploy HTTPS smoke with TLS peer verification: `GET /health` returned 200/`{"status":"woot"}` and `GET /app/login` returned 200; Railway HTTP logs independently recorded both responses. The canonical `chatwoot-prepare` command was restored after the one-shot check.
 
