@@ -244,9 +244,9 @@ For this Candidate, the Railway-local HTTP healthcheck is omitted and the releas
 
 Do not attach a Production route until those HTTPS checks pass.
 
-### Candidate backup/restore on Railway Hobby
+### Candidate backup/restore on the current Railway Candidate tier
 
-Railway Hobby does not provide the native volume-backup evidence required for a Production promotion.
+The current Railway Candidate account tier does not provide the native volume-backup evidence required for a Production promotion.
 
 For a synthetic/non-customer Candidate, the proven recovery check is:
 
