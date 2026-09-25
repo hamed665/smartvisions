@@ -736,13 +736,12 @@ Operational findings to preserve:
 - do not disable `FORCE_SSL` to satisfy Railway's internal HTTP healthcheck; Railway's healthcheck was removed because it does not follow the SSL redirect;
 - Railway Hobby is not Production-sized and has no native volume backup. The verified Candidate recovery path is logical PostgreSQL backup in private S3-compatible storage.
 
-Still open before Candidate release-gate closeout:
+Candidate release-gate closeout evidence now also includes a real post-deploy HTTPS smoke with TLS peer verification: `GET /health` returned 200/`{"status":"woot"}` and `GET /app/login` returned 200; Railway HTTP logs independently recorded both responses. The canonical `chatwoot-prepare` command was restored after the one-shot check.
 
-1. capture a real post-deploy HTTPS `GET /health` returning 200/`{"status":"woot"}`;
-2. capture a real HTTPS Chatwoot login-page response without creating an account;
-3. keep the canonical `chatwoot-prepare` command restored after one-shot verification;
-4. reconcile this runtime checkpoint through exact-head CI/review/merge;
-5. after merge, re-verify exact-main CI, Cloudflare Production and Production Supabase/safety controls;
-6. do not create or activate Production Chatwoot without a separate explicit promotion gate.
+Remaining work for this checkpoint:
+
+1. reconcile this runtime checkpoint through exact-head CI/review/merge;
+2. after merge, re-verify exact-main CI, Cloudflare Production and Production Supabase/safety controls;
+3. do not create or activate Production Chatwoot without a separate explicit promotion gate.
 
 Production provider/customer traffic remains out of scope. Shadow Mode stays ON.
