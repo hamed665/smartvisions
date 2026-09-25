@@ -33,6 +33,8 @@ jobs:
       EMAIL_PROVIDER: RESEND
       GLOBAL_KILL_SWITCH: false
       SHADOW_MODE: true
+      CHATWOOT_BASE_URL: https://inbox.smartvisionsai.com
+      CHATWOOT_WEBHOOK_PUBLIC_ORIGIN: https://app.smartvisionsai.com
 
     steps:
       - name: Checkout exact green main commit
@@ -126,15 +128,18 @@ jobs:
             APP_BASE_URL:process.env.CANDIDATE_URL,
             EMAIL_PROVIDER:'RESEND',
             GLOBAL_KILL_SWITCH:'false',
-            SHADOW_MODE:'true'
+            SHADOW_MODE:'true',
+            CHATWOOT_PROVISIONING_ENABLED:'false'
           };
+          delete c.vars.CHATWOOT_BASE_URL;
+          delete c.vars.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN;
           c.limits={...(c.limits||{}),cpu_ms:100};
           delete c.routes;
           delete c.route;
           delete c.triggers;
           fs.writeFileSync(file,JSON.stringify(c,null,2)+'\n');
-          if(c.name!=='smartvisions-growth-os-release-candidate'||c.vars?.DEPLOYMENT_ENV!=='candidate'||c.limits?.cpu_ms!==100||c.routes||c.route||c.triggers)throw new Error('Release candidate isolation validation failed');
-          console.log('Release candidate validated: candidate env, no production route, no scheduled triggers, CPU guard=100ms.');
+          if(c.name!=='smartvisions-growth-os-release-candidate'||c.vars?.DEPLOYMENT_ENV!=='candidate'||c.vars?.CHATWOOT_PROVISIONING_ENABLED!=='false'||c.vars?.CHATWOOT_BASE_URL||c.vars?.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN||c.limits?.cpu_ms!==100||c.routes||c.route||c.triggers)throw new Error('Release candidate isolation validation failed');
+          console.log('Release candidate validated: candidate env, Chatwoot provisioning disabled/unbound, no production route, no scheduled triggers, CPU guard=100ms.');
           NODE
 
       - name: Deploy exact release candidate while preserving provider secrets
@@ -184,13 +189,19 @@ jobs:
           c.vars={
             ...(c.vars||{}),
             DEPLOYMENT_ENV:'production',
-            APP_BASE_URL:process.env.PRODUCTION_URL
+            APP_BASE_URL:process.env.PRODUCTION_URL,
+            CHATWOOT_BASE_URL:process.env.CHATWOOT_BASE_URL,
+            CHATWOOT_WEBHOOK_PUBLIC_ORIGIN:process.env.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN,
+            CHATWOOT_PROVISIONING_ENABLED:'false'
           };
           c.triggers={crons:['*/2 * * * *']};
           if(c.limits?.cpu_ms!==100)throw new Error('CPU guard drifted before promotion');
           if(c.routes||c.route)throw new Error('Production deploy must not mutate Worker Routes');
           if(c.workers_dev!==false)throw new Error('Production workers.dev must be disabled');
           if(c.vars?.DEPLOYMENT_ENV!=='production')throw new Error('Production deployment env is not production');
+          if(c.vars?.CHATWOOT_BASE_URL!==process.env.CHATWOOT_BASE_URL)throw new Error('Production Chatwoot base URL invariant failed');
+          if(c.vars?.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN!==process.env.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN)throw new Error('Production Chatwoot webhook origin invariant failed');
+          if(c.vars?.CHATWOOT_PROVISIONING_ENABLED!=='false')throw new Error('Production Chatwoot provisioning must remain disabled');
           if(JSON.stringify(c.triggers?.crons)!==JSON.stringify(['*/2 * * * *']))throw new Error('Production cron invariant failed');
           fs.writeFileSync(file,JSON.stringify(c,null,2)+'\n');
           NODE
@@ -262,3 +273,6 @@ jobs:
           echo "DNS/Worker Route mutation by normal deploy: none"
           echo "Vercel dependency after cutover: none"
           echo "Outbound provider sends invoked by smoke: none"
+          echo "Chatwoot Production base URL: inbox.smartvisionsai.com"
+          echo "Chatwoot webhook public origin: app.smartvisionsai.com"
+          echo "Chatwoot provisioning: disabled"
