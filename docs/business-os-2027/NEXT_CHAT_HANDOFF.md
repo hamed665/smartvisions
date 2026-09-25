@@ -13,7 +13,7 @@ Use this checkpoint before older historical notes in this file.
 - Attachments: OVH S3 `smartvisions-chatwoot-prod`, Frankfurt 1-AZ, Versioning enabled, Rails S3 roundtrip verified.
 - Off-host database backup: OVH S3 `smartvisions-chatwoot-backups`, Paris 3-AZ, Versioning enabled, daily 02:17 UTC, upload/download checksum and isolated restore verified.
 - First owner was provisioned privately. Account signup is disabled and public installation onboarding is blocked.
-- PR #236 fixes the broken mobile onboarding layout. The successful PR-head immutable image is already live while exact-main Chatwoot Source Image #37 rebuilds the canonical main-provenance image; canonicalize to that exact-main digest when run #37 succeeds.
+- PR #236 fixes the mobile onboarding layout and is merged at `main@3c3443389a5d7edfdf3230387cf16b1ec75a3a1e`. Exact-main CI #1253 and Chatwoot Source Image #37 are SUCCESS. Production is canonicalized to `ghcr.io/hamed665/smartvisions-chatwoot:v4.18.0-sv-3c3443389a5d7edfdf3230387cf16b1ec75a3a1e@sha256:22cb4663d0369b6d7954b32beb1f124e1699eaa5405239899ddd617be31942d6`; prepare exited 0 and public health/login, Community-only provenance, responsive onboarding source, S3 Active Storage, Puma/Sidekiq/PostgreSQL/Redis all re-verified.
 - Production runtime contains no Railway hostname/dependency. Railway `smartvisions-chatwoot-candidate` is temporary rollback evidence only and must not be destroyed without explicit destructive approval.
 - Keep native Chatwoot provider channels, API Inbox, real customer/contact projection and provider sends OFF.
 - Smart Core remains canonical for tenant/business/customer/CRM/provider credentials/provider send authority/safety.
