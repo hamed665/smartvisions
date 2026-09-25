@@ -448,10 +448,10 @@ Safety remained closed throughout Candidate work:
 - account signup remains disabled;
 - Production Chatwoot remains unprovisioned and `inbox.smartvisionsai.com` was not created or attached.
 
-The final external HTTPS response check for Candidate `/health` and `/app/login` is still pending because the available verification runners cannot resolve the Railway public hostname from their egress environment. Do not record public web/login as verified until an actual post-deploy HTTPS response is captured.
+Post-deploy public HTTPS smoke is now verified from a Candidate one-shot runtime with normal TLS peer verification: `GET /health` returned HTTP 200 with `{"status":"woot"}`, and `GET /app/login` returned HTTP 200. Independent Railway HTTP logs recorded the same two 200 responses against the Candidate public hostname. The one-shot prepare service was then restored to its canonical `db:chatwoot_prepare && SMARTVISIONS_CONFIGURE.rb` command.
 
 Railway Hobby is Candidate-only evidence, not Production sizing evidence: Candidate database/Redis volumes are 500 MB and the plan does not provide native volume backups. Production promotion remains a separate gate with durable backup, capacity and public-origin requirements.
 
 Work Package status:
 
-`SECTION COMMUNICATION / COMM-CHATWOOT-SOURCE` = **isolated Candidate runtime provisioned; core runtime/storage/backup evidence verified; final public HTTPS/login smoke pending; Production deployment not authorized**.
+`SECTION COMMUNICATION / COMM-CHATWOOT-SOURCE` = **isolated Candidate runtime release gate verified; Production deployment/promotion is still separate and not authorized**.
