@@ -201,3 +201,25 @@ No floating-tag auto-upgrade is permitted.
 - healthy web/worker evidence.
 
 If hosting credentials/runtime are not yet provisioned, record the work package as **source-build verified / deployment pending**, not complete.
+
+
+## Railway Candidate runtime lessons — verified 2026-09-25
+
+The isolated Railway Candidate proved several deployment details that are now part of the release discipline:
+
+- treat the Railway project as Candidate even if Railway names its default environment `production`; this does not authorize or identify the Smart Visions Production Communication Plane;
+- verify the deployment snapshot actually contains the current command/environment after every service-config mutation. A service-level configuration change and an older green deployment are not equivalent evidence;
+- for Redis commands that reference `$REDIS_PASSWORD`, ensure the runtime command is executed by a shell that expands the variable (or use an equivalent host-native secret mechanism). Never rely on a literal unexpanded `$REDIS_PASSWORD` argument;
+- require runtime startup evidence for both Puma and Sidekiq, not only a green hosting card;
+- require an external HTTPS request to `/health` returning HTTP 200 with `{"status":"woot"}` and a successful `/app/login` request after the exact current deployment;
+- object storage verification must perform a real put -> get -> byte-compare -> delete against the Candidate bucket;
+- backup evidence must include an actual restore into an isolated temporary database and post-restore comparison, not only successful dump creation;
+- when PostgreSQL client/server majors differ, do not assume a dump is portable. The Candidate exercise exposed a newer-client `transaction_timeout` directive that PostgreSQL 16 rejected. Production backup tooling must use a server-compatible client or a reviewed compatibility procedure;
+- Railway Hobby has no native volume-backup guarantee for this Candidate. The verified fallback is a logical PostgreSQL backup stored in isolated Candidate object storage and restore-tested before relying on it;
+- a hosting platform's rollback-capable deployment record is useful evidence, but it is not proof that a destructive rollback has been executed. Preserve the immutable image digest and reviewed database restore plan.
+
+The 2026-09-25 Candidate verification used the immutable Community image built from Chatwoot `v4.18.0@9f920b549c14491a4e587687a3eed5d21c6ccc7d`:
+
+`ghcr.io/hamed665/smartvisions-chatwoot:v4.18.0-sv-4987088dc4ba2e9212e196304ccebd69073ba536@sha256:c6e759a89867b41eae2230f5afcad75c7a54f421225d2e46c3e865bd401058ff`
+
+Candidate runtime verification does **not** authorize Production Chatwoot promotion, provider credentials, native Email/WhatsApp connectors, API Inbox activation, customer imports or live sends. Those remain separate explicit release gates.
