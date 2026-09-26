@@ -45,7 +45,7 @@ const RECEIPT = '00000000-0000-4000-8000-000000002013';
 type Row = Record<string, unknown>;
 
 function genericService(rows: Record<string, Row[]>) {
-  const rpc = vi.fn(async () => ({ data: null, error: null }));
+  const rpc: any = vi.fn(async () => ({ data: null, error: null }));
   return {
     from: vi.fn((table: string) => {
       let selected = '*';
@@ -231,7 +231,7 @@ function serviceRows(input?: {
 
 function authenticatedOwner() {
   const auditInsert = vi.fn(async () => ({ error: null }));
-  const rpc = vi.fn(async () => ({ data: null, error: null }));
+  const rpc: any = vi.fn(async () => ({ data: null, error: null }));
   const from = vi.fn((table: string) => {
     if (table === 'organization_members') {
       const builder: Record<string, unknown> = {};
@@ -457,7 +457,7 @@ describe('Chatwoot external-first scoped demotion', () => {
   it('removes external Inbox access, GET-verifies absence, records a receipt, then commits canonical reduction', async () => {
     const { supabase, rpc, auditInsert } = authenticatedOwner();
     const service = genericService(serviceRows({ branchAgent: true }));
-    const serviceRpc = (service as unknown as { rpc: ReturnType<typeof vi.fn> }).rpc;
+    const serviceRpc = (service as unknown as { rpc: any }).rpc;
 
     serviceRpc.mockImplementation(async (name: string) => {
       if (name === 'record_chatwoot_scoped_access_reduction') {
@@ -568,7 +568,7 @@ describe('Chatwoot external-first scoped demotion', () => {
   it('does not blindly repeat an ambiguous PATCH and proceeds only after GET proves absence', async () => {
     const { supabase, rpc } = authenticatedOwner();
     const service = genericService(serviceRows({ branchAgent: true }));
-    const serviceRpc = (service as unknown as { rpc: ReturnType<typeof vi.fn> }).rpc;
+    const serviceRpc = (service as unknown as { rpc: any }).rpc;
 
     serviceRpc.mockResolvedValue({
       data: { id: RECEIPT },
