@@ -5,6 +5,29 @@
 This is the current operational handoff for Growth OS. Current `main`, routed Cloudflare Production and Production Supabase evidence override older planning documents, stale issue text and chat history.
 
 
+## Superseding Tenant Bridge runtime checkpoint — 2026-09-26
+
+This checkpoint supersedes older same-day Chatwoot/Bridge checkpoints below. Historical sections remain for provenance only.
+
+- Current canonical repository main: `ca5067ae817b9cc07f49be5bc12ded11cc879cb8` after PR #239.
+- PR #238 (`ec6ce6f9358af92c479135a2b1575342b405c49f`) closed the Cloudflare Chatwoot runtime boundary. Production binds `CHATWOOT_BASE_URL=https://inbox.smartvisionsai.com`, `CHATWOOT_WEBHOOK_PUBLIC_ORIGIN=https://app.smartvisionsai.com`, and `CHATWOOT_PROVISIONING_ENABLED=false`. The isolated release candidate remains Chatwoot-unbound and provisioning-disabled.
+- The Chatwoot Platform token is **not** provisioned into the Cloudflare runtime. Do not create, transfer, log, persist in browser/DB, or activate it until a secure server-only secret transport and exact activation gate are verified.
+- PR #239 added the missing governed Smart Core bootstrap path at `/api/business-os/control-plane/bootstrap`. It is authenticated, explicitly OWNER-gated, reuses existing RLS and Control Plane audit triggers, and is race-safe/idempotent on canonical natural keys:
+  - Brand: `(organization_id, slug)`
+  - tenant Business: `(brand_id, slug)`
+- The bootstrap path does not import/call Chatwoot, Meta, WhatsApp, Email or another provider. It does not use service-role bypass and does not create a parallel tenant/claim/queue model.
+- Exact-head PR #239 CI #1260 passed lint, typecheck, Vitest, PostgreSQL 17 migration-chain verification, Next build, Vinext build and scheduled-runtime verification.
+- Post-merge main CI run `36204798135` succeeded on exact `main@ca5067ae817b9cc07f49be5bc12ded11cc879cb8`.
+- Cloudflare Production Deploy run `36204923459` succeeded on that exact main. Release-candidate smoke, controlled load, Production promotion, route verification, routed Production smoke and safe API/webhook rejection smoke all passed. Deployment smoke invoked zero provider sends.
+- Runtime build evidence includes `/api/business-os/control-plane/bootstrap`. Unauthenticated POST is intercepted by the existing auth middleware with HTTP 307 to `/login`; no mutation occurs.
+- Production Supabase migration head remains `0090_chatwoot_fk_index_hardening`.
+- Post-deploy Production evidence remains intentionally empty for the new tenant projection path: `brands=0`, `tenant_businesses=0`, all Chatwoot Account/User/Membership/Inbox/Team mappings = 0, webhook journal = 0, bridge command claims = 0, and Brand/Business audit rows created since PR #239 merge = 0.
+- No outbound delta was created by the deployment window: new outreach = 0, WhatsApp events = 0, Email events = 0.
+- Safety state remains: Shadow Mode ON; Global Kill Switch OFF; Email pause OFF; WhatsApp AI pause OFF; Agents pause OFF.
+- Chatwoot Production remains on the OVH VPS and `https://inbox.smartvisionsai.com/health` remains HTTP 200. The canonical Chatwoot image is unchanged from PR #236.
+- Railway `smartvisions-chatwoot-candidate` remains read-only temporary rollback evidence. It is not a Production runtime dependency and must not be deleted without explicit destructive approval.
+- **Next unresolved gates:** no evidence-backed real Brand/tenant Business has been bootstrapped; `CHATWOOT_PLATFORM_TOKEN` is not provisioned; External Chatwoot provisioning remains OFF. Do not fabricate tenant data merely to exercise the Bridge.
+
 ## Chatwoot Production source-plane closeout — 2026-09-26
 
 This checkpoint supersedes older same-day Candidate-only and "Production Chatwoot does not exist" notes below.
