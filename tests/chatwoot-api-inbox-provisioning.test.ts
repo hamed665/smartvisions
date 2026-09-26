@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 vi.mock('server-only', () => ({}));
@@ -147,6 +147,13 @@ function input(supabase: SupabaseClient) {
     requestKey: 'inbox-flow',
   };
 }
+
+beforeEach(() => {
+  vi.stubEnv('DEPLOYMENT_ENV', 'production');
+  vi.stubEnv('CHATWOOT_PROVISIONING_ENABLED', 'true');
+  vi.stubEnv('CHATWOOT_BASE_URL', 'https://inbox.example.com');
+  vi.stubEnv('CHATWOOT_PLATFORM_TOKEN', 'platform-secret-token');
+});
 
 afterEach(() => {
   vi.unstubAllEnvs();
