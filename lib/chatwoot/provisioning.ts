@@ -30,7 +30,8 @@ export type ChatwootProvisioningErrorCode =
   | 'DUPLICATE_MATCH'
   | 'IDENTITY_CONFLICT'
   | 'UPSTREAM_MISMATCH'
-  | 'RECONCILIATION_REQUIRED';
+  | 'RECONCILIATION_REQUIRED'
+  | 'ACTIVATION_BLOCKED';
 
 export class ChatwootProvisioningError extends Error {
   code: ChatwootProvisioningErrorCode;
