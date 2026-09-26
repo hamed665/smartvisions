@@ -54,6 +54,27 @@ export type UnifiedInboxConversationActionInput = {
   action: UnifiedInboxConversationAction;
 };
 
+export type UnifiedInboxConversationActionOptions = {
+  statuses: Array<'open' | 'resolved' | 'pending' | 'snoozed'>;
+  current: {
+    status: string | null;
+    snoozedUntil: number | null;
+    labels: string[];
+    smartUserId: string | null;
+    teamId: string | null;
+  };
+  labels: string[];
+  assignees: Array<{
+    smartUserId: string;
+    name: string;
+    availabilityStatus: string | null;
+  }>;
+  teams: Array<{
+    teamId: string;
+    name: string;
+  }>;
+};
+
 export type UnifiedInboxActionErrorCode =
   | 'INVALID_INPUT'
   | 'FORBIDDEN'
@@ -151,6 +172,38 @@ function canonicalLabels(value: unknown) {
   }
 
   return [...new Set(labels)].sort((a, b) => a.localeCompare(b));
+}
+
+function chatwootRows(value: unknown) {
+  if (Array.isArray(value)) return value.filter(isObject);
+  if (!isObject(value)) return [];
+  if (Array.isArray(value.payload)) return value.payload.filter(isObject);
+  return [];
+}
+
+function labelCatalog(value: unknown) {
+  return [...new Set(
+    chatwootRows(value)
+      .map((row) => typeof row.title === 'string' ? row.title.trim() : '')
+      .filter((label) => label.length > 0 && label.length <= MAX_LABEL_LENGTH),
+  )].sort((a, b) => a.localeCompare(b));
+}
+
+function agentCatalog(value: unknown) {
+  return chatwootRows(value)
+    .map((row) => {
+      const id = normalizeChatwootInt32Id(row.id);
+      const name = typeof row.name === 'string' && row.name.trim()
+        ? row.name.trim()
+        : typeof row.available_name === 'string' && row.available_name.trim()
+          ? row.available_name.trim()
+          : null;
+      const availabilityStatus = typeof row.availability_status === 'string'
+        ? row.availability_status.trim()
+        : null;
+      return id === null || !name ? null : { id, name, availabilityStatus };
+    })
+    .filter((row): row is { id: number; name: string; availabilityStatus: string | null } => Boolean(row));
 }
 
 export function parseUnifiedInboxConversationActionBody(
@@ -780,6 +833,201 @@ async function readExternalConversation(input: {
     fetchImpl: input.fetchImpl,
   });
   return parseExternalConversation(raw);
+}
+
+
+export async function getUnifiedInboxConversationActionOptions(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  conversationId: string;
+  service?: SupabaseClient;
+  fetchImpl?: typeof fetch;
+}): Promise<UnifiedInboxConversationActionOptions> {
+  activationReady();
+
+  const projection = await loadManageableProjection({
+    supabase: input.supabase,
+    organizationId: input.organizationId,
+    conversationId: input.conversationId,
+  });
+  const service = input.service ?? createSupabaseServiceClient();
+  const proxy = await issueAdminProxy({
+    service,
+    organizationId: input.organizationId,
+    tenantBusinessId: projection.tenant_business_id,
+    fetchImpl: input.fetchImpl,
+  });
+
+  const [external, rawLabels, rawAgents, memberships, teamMappings] = await Promise.all([
+    readExternalConversation({
+      proxy,
+      displayId: projection.chatwoot_conversation_display_id,
+      fetchImpl: input.fetchImpl,
+    }),
+    accountRequest<unknown>({
+      proxy,
+      resourcePath: '/labels',
+      fetchImpl: input.fetchImpl,
+    }),
+    accountRequest<unknown>({
+      proxy,
+      resourcePath: '/agents',
+      fetchImpl: input.fetchImpl,
+    }),
+    service
+      .from('chatwoot_account_memberships')
+      .select('smart_user_id,chatwoot_user_mapping_id,chatwoot_account_mapping_id,effective_smart_role,status')
+      .eq('organization_id', input.organizationId)
+      .eq('tenant_business_id', projection.tenant_business_id)
+      .eq('chatwoot_account_mapping_id', proxy.accountMappingId)
+      .eq('status', 'ACTIVE'),
+    service
+      .from('chatwoot_team_mappings')
+      .select('smart_team_id,chatwoot_account_mapping_id,chatwoot_team_id,status')
+      .eq('organization_id', input.organizationId)
+      .eq('tenant_business_id', projection.tenant_business_id)
+      .eq('chatwoot_account_mapping_id', proxy.accountMappingId)
+      .eq('status', 'ACTIVE'),
+  ]);
+
+  if (memberships.error || teamMappings.error) {
+    fail('UPSTREAM_FAILED', 'Unified Inbox action option lookup failed');
+  }
+
+  const eligibleMemberships = (memberships.data ?? []).filter((row) => (
+    typeof row.smart_user_id === 'string'
+    && typeof row.chatwoot_user_mapping_id === 'string'
+    && ASSIGNEE_ROLES.has(String(row.effective_smart_role ?? ''))
+  ));
+  const mappingIds = [...new Set(
+    eligibleMemberships.map((row) => String(row.chatwoot_user_mapping_id)),
+  )];
+  const userMappings = mappingIds.length > 0
+    ? await service
+      .from('chatwoot_user_mappings')
+      .select('id,smart_user_id,chatwoot_user_id,status')
+      .in('id', mappingIds)
+      .eq('status', 'ACTIVE')
+    : { data: [], error: null };
+
+  if (userMappings.error) {
+    fail('UPSTREAM_FAILED', 'Unified Inbox assignee mapping lookup failed');
+  }
+
+  const externalAgents = new Map(
+    agentCatalog(rawAgents).map((agent) => [agent.id, agent]),
+  );
+  const membershipByMapping = new Map(
+    eligibleMemberships.map((membership) => [
+      String(membership.chatwoot_user_mapping_id),
+      membership,
+    ]),
+  );
+
+  const assignees = (userMappings.data ?? [])
+    .map((mapping) => {
+      const chatwootUserId = normalizeChatwootInt32Id(mapping.chatwoot_user_id);
+      const membership = membershipByMapping.get(String(mapping.id));
+      const agent = chatwootUserId === null ? null : externalAgents.get(chatwootUserId);
+      if (
+        !membership
+        || !agent
+        || String(mapping.smart_user_id) !== String(membership.smart_user_id)
+      ) {
+        return null;
+      }
+      return {
+        smartUserId: String(mapping.smart_user_id),
+        name: agent.name,
+        availabilityStatus: agent.availabilityStatus,
+      };
+    })
+    .filter((row): row is {
+      smartUserId: string;
+      name: string;
+      availabilityStatus: string | null;
+    } => Boolean(row))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const externalAssigneeMapping = (userMappings.data ?? []).find((mapping) => (
+    normalizeChatwootInt32Id(mapping.chatwoot_user_id) === external.assigneeId
+  ));
+
+  const validTeamMappings = (teamMappings.data ?? [])
+    .map((row) => ({
+      smartTeamId: canonicalUuid(row.smart_team_id),
+      chatwootTeamId: normalizeChatwootInt64Id(row.chatwoot_team_id),
+    }))
+    .filter((row): row is { smartTeamId: string; chatwootTeamId: string } => (
+      Boolean(row.smartTeamId) && row.chatwootTeamId !== null
+    ));
+  const smartTeamIds = validTeamMappings.map((row) => row.smartTeamId);
+  const canonicalTeams = smartTeamIds.length > 0
+    ? await service
+      .from('teams')
+      .select('id,name,department_id,status')
+      .eq('organization_id', input.organizationId)
+      .in('id', smartTeamIds)
+      .eq('status', 'ACTIVE')
+    : { data: [], error: null };
+
+  if (canonicalTeams.error) {
+    fail('UPSTREAM_FAILED', 'Unified Inbox team catalog lookup failed');
+  }
+
+  const departmentIds = [...new Set(
+    (canonicalTeams.data ?? [])
+      .map((team) => canonicalUuid(team.department_id))
+      .filter((id): id is string => Boolean(id)),
+  )];
+  const allowedDepartments = departmentIds.length > 0
+    ? await service
+      .from('departments')
+      .select('id')
+      .eq('organization_id', input.organizationId)
+      .eq('branch_id', projection.branch_id)
+      .in('id', departmentIds)
+      .eq('status', 'ACTIVE')
+    : { data: [], error: null };
+
+  if (allowedDepartments.error) {
+    fail('UPSTREAM_FAILED', 'Unified Inbox team scope lookup failed');
+  }
+
+  const allowedDepartmentIds = new Set(
+    (allowedDepartments.data ?? []).map((department) => String(department.id)),
+  );
+  const validTeamIds = new Set(validTeamMappings.map((mapping) => mapping.smartTeamId));
+  const teams = (canonicalTeams.data ?? [])
+    .filter((team) => (
+      validTeamIds.has(String(team.id))
+      && allowedDepartmentIds.has(String(team.department_id))
+    ))
+    .map((team) => ({
+      teamId: String(team.id),
+      name: String(team.name),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const externalTeamMapping = validTeamMappings.find(
+    (mapping) => mapping.chatwootTeamId === external.teamId,
+  );
+
+  return {
+    statuses: ['open', 'pending', 'resolved', 'snoozed'],
+    current: {
+      status: external.status,
+      snoozedUntil: external.snoozedUntil,
+      labels: external.labels,
+      smartUserId: externalAssigneeMapping
+        ? String(externalAssigneeMapping.smart_user_id)
+        : null,
+      teamId: externalTeamMapping?.smartTeamId ?? null,
+    },
+    labels: labelCatalog(rawLabels),
+    assignees,
+    teams,
+  };
 }
 
 async function claimAction(input: {
