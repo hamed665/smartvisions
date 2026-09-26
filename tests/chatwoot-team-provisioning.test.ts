@@ -3,13 +3,15 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 vi.mock('server-only', () => ({}));
 
-const { adminRequest, serviceFactory } = vi.hoisted(() => ({
+const { adminRequest, adminPreflight, serviceFactory } = vi.hoisted(() => ({
   adminRequest: vi.fn(),
+  adminPreflight: vi.fn(),
   serviceFactory: vi.fn(),
 }));
 
 vi.mock('@/lib/chatwoot/account-admin-request', () => ({
   chatwootAdminAccountRequest: adminRequest,
+  requireChatwootAdminProjection: adminPreflight,
 }));
 
 vi.mock('@/lib/supabase/service', () => ({
@@ -119,10 +121,29 @@ function input(supabase: SupabaseClient) {
 afterEach(() => {
   vi.restoreAllMocks();
   adminRequest.mockReset();
+  adminPreflight.mockReset();
+  adminPreflight.mockResolvedValue({
+    smartUserId: '00000000-0000-4000-8000-000000001307',
+    chatwootUserId: 151,
+    chatwootAccountId: 501,
+  });
   serviceFactory.mockReset();
 });
 
 describe('C4 Chatwoot Team provisioning', () => {
+  it('fails before mapping claim when ACTIVE OWNER administrator projection is absent', async () => {
+    const { supabase, rpc } = setupSupabase();
+    adminPreflight.mockRejectedValueOnce(new Error('admin projection unavailable'));
+
+    await expect(
+      provisionChatwootTeam(input(supabase)),
+    ).rejects.toThrow('admin projection unavailable');
+
+    expect(rpc).not.toHaveBeenCalled();
+    expect(adminRequest).not.toHaveBeenCalled();
+    expect(serviceFactory).not.toHaveBeenCalled();
+  });
+
   it('GET-reconciles first, creates once, receipts server evidence, then activates', async () => {
     const { supabase, rpc } = setupSupabase();
     const serviceRpc = setupService();
