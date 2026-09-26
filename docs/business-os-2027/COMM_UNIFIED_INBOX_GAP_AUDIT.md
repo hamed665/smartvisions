@@ -1,0 +1,146 @@
+# COMM-UNIFIED-INBOX — verified gap audit and security split
+
+Status: SECURITY BOUNDARY PACKAGE IN IMPLEMENTATION
+
+Verified on: 2026-09-26
+
+## Authority order used
+
+Runtime / Production evidence > current GitHub > current docs > handoff/chat memory.
+
+This document records only facts verified for the COMM-UNIFIED-INBOX cursor. It does not reactivate COMM-TENANT-BRIDGE and does not authorize Production Chatwoot provisioning.
+
+## Fresh reality checkpoint
+
+- GitHub main before this work: `f5c9abe43443aa0595b1af75baee421b7923c4ee`.
+- Open PRs before branch creation: 0.
+- Exact-main CI: green.
+- Exact-main Cloudflare Production Deploy: green.
+- Production Worker version observed from the exact deploy: `0c0f8cf1-fca6-43d5-9fc6-7beca438ae6e`.
+- Production deploy log states `CHATWOOT_PLATFORM_TOKEN` is not configured.
+- `CHATWOOT_PROVISIONING_ENABLED=false`.
+- Production Supabase migration head before this package: `20260926105514 / 0092_chatwoot_external_first_scoped_demotion`.
+- Production hierarchy and Chatwoot projection row counts remain zero; no synthetic tenant data was created.
+- Shadow Mode remains ON.
+- Since the previous merged main checkpoint there was no new outbound delta in Email, WhatsApp or Outreach.
+- Production Chatwoot `/health`: HTTP 200 with `{"status":"woot"}`.
+- Production Chatwoot login: HTTP 200.
+- Smart Core login: HTTP 200.
+- OVH remains Production Chatwoot. Railway remains Candidate/rollback evidence only.
+
+## Existing conversation surface
+
+The existing Smart Core conversation surface is reused, not replaced:
+
+- `app/conversations/page.tsx`
+- `app/conversations/[id]/page.tsx`
+- `app/conversations/[id]/live-conversation.tsx`
+- `app/api/conversations/[id]/live/route.ts`
+- `app/api/conversations/[id]/control/route.ts`
+- `app/api/conversations/[id]/owner-reply/route.ts`
+- `lib/conversations/memory-read-model.ts`
+
+Current list/detail/live reads come from Smart Core `sales_conversations`, `conversation_messages`, `operator_briefs`, `agent_runs` and related CRM rows. They are not a Chatwoot-native inbox proxy.
+
+The current owner manual reply route already sends through Smart Core authority and safety checks. It does not make the browser or Chatwoot the provider send authority. That path must remain intact.
+
+## Verified security gap
+
+Production RLS before this package uses Organization-member-wide `ALL` policies for:
+
+- `sales_conversations`
+- `conversation_messages`
+- `operator_briefs`
+- `agent_runs`
+- `leads`
+- `businesses`
+
+CRM identity reads are also Organization-member-wide.
+
+The existing `sales_conversations` row has no canonical tenant Business / Branch / Department / Team lineage and no Chatwoot Conversation mapping. Therefore a scoped-only operator cannot be secured by filtering React output or by a route-only predicate. Direct Data API access would remain broader than the intended scope.
+
+That is an authorization/RLS/tenant-isolation critical change, so the delivery packaging standard requires it to be reviewed independently from the larger UI/API package.
+
+## Security package boundary
+
+Migration `0093_comm_unified_inbox_scope_boundary.sql` adds one Communication Plane projection:
+
+`unified_inbox_conversation_projections`
+
+It binds an existing Smart Core `sales_conversations.id` to:
+
+- canonical Brand / tenant Business / Branch / optional Department / optional Team;
+- existing communication channel binding;
+- existing Chatwoot API Inbox mapping;
+- optional existing Chatwoot Team mapping;
+- Chatwoot Conversation display ID and UUID;
+- non-canonical communication snapshots such as Chatwoot status, labels, assignee and last activity.
+
+This is not a second Conversation source of truth and not a CRM table. It contains no provider credential and no provider send authority.
+
+The projection identity/scope is immutable and direct mutation is dormant behind `smartvisions.unified_inbox_projection_command`. This package grants no INSERT/UPDATE/DELETE path to authenticated or service_role. The idempotent runtime reconciler is intentionally deferred to the next coherent package.
+
+## Scope semantics
+
+The database scope resolver mirrors the existing `effectiveRoleForScope` semantics:
+
+TEAM > DEPARTMENT > BRANCH > BUSINESS > BRAND > Organization fallback.
+
+OWNER remains OWNER.
+
+For non-owner users, the deepest applicable assignment wins. `VIEWER` therefore remains a real reduction and cannot accidentally inherit a broader agent role.
+
+ABAC assignment attributes fail closed in this database boundary unless the assignment has an empty attribute contract. Trusted policy-attribute contexts remain a server concern; SQL does not invent them.
+
+Conversation visibility requires an ACTIVE/DEGRADED projection and an effective role in:
+
+- OWNER
+- ADMIN
+- SALES_MANAGER
+- SALES_AGENT
+
+A fallback VIEWER receives no conversation scope.
+
+Legacy/unprojected conversation rows remain visible to OWNER for backward compatibility but fail closed for non-owner users.
+
+## Contact truth
+
+The package does not create Chatwoot Contacts as canonical customers.
+
+Scoped CRM visibility is derived through the already-authoritative Smart Core chain:
+
+accessible projected conversation
+→ existing Smart Core lead
+→ existing Smart Core business/customer record
+→ existing CRM identity links/identities.
+
+This prevents the Unified Inbox from becoming a second CRM while avoiding broader direct Data API contact visibility for scoped-only staff.
+
+## Test gate
+
+CI must run the migration and a PostgreSQL 17 smoke test that proves:
+
+- OWNER retains intended current conversation visibility;
+- scoped-only Branch staff see only the projected Branch conversation and its messages/contact truth;
+- a different Branch does not leak;
+- TEAM VIEWER overrides a broader BRANCH SALES_AGENT assignment;
+- scoped staff cannot mutate the conversation;
+- Business-wide ADMIN sees intended projected Business scope;
+- no authenticated/service-role projection writer is opened by this security package.
+
+## Deliberately not implemented in this security package
+
+The following remain in the next COMM-UNIFIED-INBOX vertical package:
+
+- signed webhook/API reconciliation into the projection;
+- durable idempotent projection mutation claims;
+- bounded Chatwoot read adapter for scoped users;
+- deterministic cursor pagination/search/filter counters;
+- per-user read/unread state;
+- status/labels/assignment/team transfer reconciliation;
+- internal notes;
+- attachment read bounds;
+- audit hooks for operator read/write actions;
+- existing UI extension and mobile/accessibility/i18n-ready contracts.
+
+No Production Chatwoot token, provisioning flag, Shadow Mode, provider credential or outbound safety control is changed here.
