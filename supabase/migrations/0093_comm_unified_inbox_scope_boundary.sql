@@ -350,11 +350,11 @@ language sql
 stable
 security invoker
 set search_path = public, auth, pg_catalog
-as $
+as $unified_inbox_business_wide_member$
   select
     public.is_org_member(p_organization_id)
     and not public.is_unified_inbox_scoped_only_member(p_organization_id);
-$;
+$unified_inbox_business_wide_member$;
 
 create or replace function public.unified_inbox_effective_role(
   p_organization_id uuid,
@@ -627,12 +627,6 @@ drop policy if exists agent_runs_member_read on public.agent_runs;
 drop policy if exists org_member_leads on public.leads;
 drop policy if exists leads_member_read on public.leads;
 drop policy if exists org_member_businesses on public.businesses;
-drop policy if exists businesses_member_read on public.businesses;
-drop policy if exists sales_conversations_member_read on public.sales_conversations;
-drop policy if exists conversation_messages_member_read on public.conversation_messages;
-drop policy if exists operator_briefs_member_read on public.operator_briefs;
-drop policy if exists agent_runs_member_read on public.agent_runs;
-drop policy if exists leads_member_read on public.leads;
 drop policy if exists businesses_member_read on public.businesses;
 drop policy if exists crm_identities_member_read on public.crm_identities;
 drop policy if exists crm_identity_links_member_read on public.crm_identity_links;
