@@ -2,6 +2,7 @@
 
 Owner-requested preservation baseline: 2026-09-26 (Asia/Muscat).
 Code audit baseline: `542ef8bf33b394918404990fdb97b9b7df1e7f8e`.
+Scope-lock refresh baseline: `bae105697bdb68cb8b25494cf8303e6efe1a6d81` after PR #261; Production Supabase is verified through `0099_comm_unified_inbox_action_claim_policy_consolidation`.
 Document type: requirements and acceptance companion, not a new architecture, runtime completion claim, or activation authorization.
 
 ## خلاصه برای مالک
@@ -9,6 +10,28 @@ Document type: requirements and acceptance companion, not a new architecture, ru
 هدف، محصول کامل Smart Visions AI Business OS 2027 برای مشتری، کارکنان، مدیر کسب‌وکار و مدیر کل Smart Visions است. هیچ قابلیت مصوب برای سریع‌تر تمام‌شدن یا کم‌شدن تعداد PR حذف نمی‌شود. مسیر ساده اتصال مشتری باید با ورود رسمی و اعطای دسترسی باشد؛ مشتری نباید رمز یا توکن را در چت ارسال کند. مهم‌ترین شکاف تأییدشده، تبدیل اتصال فعلی واتساپ از یک اتصال به مسیریابی امن چند کسب‌وکار است. اتصال هم‌زمان اپ اصلی و AI، رزرو، پرداخت، اپ موبایل و صورتحساب کامل فقط بعد از آزمون واقعی آماده اعلام می‌شوند.
 
 این سند جزئیات و معیارهای پذیرش را حفظ می‌کند. نقشه اصلی همچنان MASTER_PROGRAM_SECTIONS است؛ وضعیت جاری از runtime و NEXT_CHAT_HANDOFF خوانده می‌شود. عدد ۱۵٪ در تصاویر قدیمی و تعداد PR معیار پیشرفت نیستند. «بهترین اپ ۲۰۲۷» هدف کیفیت است و باید با اتصال آسان، نتیجه تجاری، امنیت، سرعت و قابلیت اعتماد سنجیده شود.
+
+## 0. Owner phase-map scope lock — 2026-09-27
+
+The owner-supplied Phase 0–12 screenshots are preserved here as canonical text so the full target cannot disappear when chats, screenshots or historical planning notes age out.
+
+1. **Phase 0 — Architecture Contracts**
+2. **Phase 1 — SaaS Control Plane**
+3. **Phase 2 — Omnichannel Adapter Boundary**
+4. **Phase 3 — Customer 360 + CRM**
+5. **Phase 4 — Business Twin + Industry Packs**
+6. **Phase 5 — AI Control Plane**
+7. **Phase 6 — Memory v2**
+8. **Phase 7 — Workflow + Operational Modules**
+9. **Phase 8 — Billing & Commercial Platform**
+10. **Phase 9 — Analytics / BI / Google Sheets**
+11. **Phase 10 — Hunter as a paid customer module**
+12. **Phase 11 — Enterprise + Marketplace + Partner + Developer Platform**
+13. **Phase 12 — Mobile Apps + Customer-facing Surfaces**
+
+Scope lock: completion means all applicable Phase 0–12 outcomes, every Work Package in `MASTER_PROGRAM_SECTIONS.md` (106 at this checkpoint), and every applicable acceptance item in this document have evidence-backed disposition. Historical percentages, screenshots saying a path is partly complete, PR counts, or a working provider credential never reduce this scope.
+
+The historical phase map is a dependency/history view; `MASTER_PROGRAM_SECTIONS.md` remains the stable execution taxonomy. Neither may be used to delete requirements from the other.
 
 ## 1. Authority, scope and maintenance
 
@@ -46,6 +69,8 @@ No blanket completion percentage until all applicable acceptance items have evid
 
 - Main at this audit: `542ef8bf33b394918404990fdb97b9b7df1e7f8e`, documentation closeout PR #258; exact-main CI and Cloudflare deploy were successful.
 - PR #257 integrated Unified Inbox read model, scoped counters, deterministic pagination and per-operator read state into the existing conversation UI.
+- PR #260 implemented the governed Unified Inbox backend action bridge for Chatwoot status, labels, assignee and Team changes with Smart Core authorization, idempotent claims, exact upstream reconciliation and audit evidence; Production migration `0098_comm_unified_inbox_actions` is live.
+- PR #261 consolidated the action-claim RLS policies without changing authorization semantics; exact-main CI #1341 and Cloudflare Production Deploy #821 passed on `bae105697bdb68cb8b25494cf8303e6efe1a6d81`, and Production migration `0099_comm_unified_inbox_action_claim_policy_consolidation` is live.
 - CURRENT_STATE records Production migrations through 0097, source-plane Chatwoot on OVH, and existing owner reply/takeover preserved.
 - Earlier same-session read-only Production query found zero brands, tenant businesses, Chatwoot account mappings and inbox projections, with Shadow Mode ON. This is timestamped earlier evidence, not a newly refreshed database claim in this documentation package.
 - Historical foundation evidence includes Control Plane, Email/WhatsApp semantic adapters, CRM identity, Customer 360, Tasks, Deals/Pipelines, Custom Fields and Dynamic Lead Segments. Foundations are not the whole target product.
@@ -62,7 +87,9 @@ No blanket completion percentage until all applicable acceptance items have evid
 | GAP-05 | lib/omnichannel/adapters.ts ACTIVE_CHANNEL_ADAPTERS includes EMAIL and WHATSAPP only | Other customer channels require implementation and acceptance | OMNI-META-SOCIAL; OMNI-TELEGRAM; OMNI-WEBCHAT; OMNI-TIKTOK; OMNI-SMS-RCS |
 | GAP-06 | Email/WhatsApp descriptors mark nativeProviderActivity UNPROVEN | Native-app coexistence must not be advertised as proven | COMM-HUMAN-AI; COMM-RECONCILIATION |
 | GAP-07 | WhatsApp extraction maps audio media in the reviewed path | Full image/document/video/media support is not established | OMNI-VOICE; AI-VOICE-VISION; COMM-UNIFIED-INBOX |
-| GAP-08 | Latest NEXT_CHAT_HANDOFF | Status/labels/assignee/team actions, internal notes and attachment authorization remain next inbox work | COMM-UNIFIED-INBOX |
+| GAP-08A | PR #260 + Production migration 0098 | Governed status/labels/assignee/Team backend actions are implemented and deployed; operator UI controls and real-tenant activation acceptance remain pending | COMM-UNIFIED-INBOX |
+| GAP-08B | Current source/runtime review | Internal-note behavior is not yet complete | COMM-UNIFIED-INBOX |
+| GAP-08C | Current source + OVH S3 evidence | Attachment storage is proven, but scoped attachment authorization/read/download bounds remain incomplete | COMM-UNIFIED-INBOX |
 | GAP-09 | Activation gate + earlier empty tenant/projection evidence | A real first tenant and end-to-end production acceptance remain gated | COMM-TENANT-BRIDGE; FINAL-E2E |
 
 Revalidate each gap before changing code. A later fix supersedes the finding through evidence, not deletion.
@@ -138,6 +165,27 @@ Acceptance: two isolated test businesses, distinct numbers, same buyer, repeated
 - Restrict decrypt access, redact logs, audit changes without values, rotate secrets and disable sends on revocation.
 - Disconnect must stop new automated actions, reconcile accepted actions and apply documented retention/export/deletion policy.
 - Public API keys, customer OAuth grants and Chatwoot Platform token are separate authorities.
+
+### CONN-05 — Provider/API readiness while credentials are pending
+
+A missing external API credential, merchant approval or provider activation must not block implementation of the internal product contract. Before a provider gives Smart Visions the final API credential, the product should already have the applicable:
+
+- typed provider adapter and capability matrix;
+- exact tenant Business / Branch / channel or merchant binding;
+- server-only secret-reference contract with no raw credential in browser, chat, logs or ordinary database columns;
+- OAuth/hosted authorization path where the provider supports it, or a governed secure credential setup path where it does not;
+- webhook endpoint, signature/authenticity validation, replay/idempotency and event journal semantics;
+- outbound/request idempotency, ambiguous-result handling and reconciliation;
+- readiness/health diagnostics that distinguish configured, authenticated, inbound healthy, outbound healthy and externally blocked;
+- least-privilege permissions, credential rotation/revocation and audit trail;
+- Cost Guard/budget/quota handling for paid APIs;
+- disconnect behavior that stops new side effects safely without inventing completion for already accepted external work.
+
+For multi-tenant providers, a global environment credential must never silently become another customer's authority. Runtime selects the exact tenant-bound credential or fails closed.
+
+For payment gateways, provider credentials are not payment truth. `PAYMENT-CORE` owns intent/ledger/reconciliation; a verified provider webhook or explicit reconciliation proves paid/refunded state. The UI must never mark payment successful merely because an API request was sent.
+
+If the external party has not supplied credentials/approval yet, the requirement disposition is `BLOCKED_EXTERNAL` only for activation/e2e evidence. Internal implementation, tests, UI states, security boundaries and documentation continue to completion.
 
 ## 5. Provider strategy and prerequisites
 
@@ -323,7 +371,7 @@ Every metric needs definition, source, window, dimensions, freshness and owner u
 Do not replace the current cursor. At this baseline it remains COMMUNICATION / COMM-UNIFIED-INBOX governed operations.
 
 Then sequence related work by verified dependencies:
-1. complete inbox status/assignment/transfer/notes/attachment boundaries;
+1. finish operator UI for the already-implemented governed status/labels/assignee/Team actions, then complete internal notes and attachment authorization/read bounds;
 2. close multi-business provider routing and per-business credential selection before a second customer is connected;
 3. investigate platform approval readiness alongside implementation; never assume external approval;
 4. deliver official self-service connection and recoverable onboarding under existing DEV-INTEGRATIONS and UX-BUSINESS-WEB;

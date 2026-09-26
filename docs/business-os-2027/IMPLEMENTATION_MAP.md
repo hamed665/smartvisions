@@ -1,5 +1,9 @@
 # Business OS 2027 — Dependency-Ordered Implementation Map
 
+## Owner phase-map preservation lock
+
+The owner reconfirmed on 2026-09-27 that the full historical Phase 0–12 map remains in scope together with the stable Work Packages and `PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE.md`. Historical percentages and PR counts are not completion metrics. A provider/API credential that has not arrived may block activation evidence, but does not remove the corresponding internal implementation requirement.
+
 ## Current execution and completeness authority
 
 This file preserves historical Phase 0–12 dependencies. Read [NEXT_CHAT_HANDOFF.md](NEXT_CHAT_HANDOFF.md) for the latest cursor and [PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE.md](PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE.md) for owner-requested product detail, official customer onboarding, verified integration gaps and acceptance criteria. Historical phase counts/percentages do not measure current completion.

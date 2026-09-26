@@ -5,6 +5,22 @@
 Read [PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE.md](PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE.md) before selecting or closing a Business OS delivery package. It preserves the owner-requested full-product scope, simple official customer connection journey, verified multi-business WhatsApp gaps, detailed acceptance gates and the complete Work Package coverage index. It extends acceptance under this roadmap; it does not replace architecture, renumber Work Packages or authorize provider activation. Keep its requirement dispositions and this handoff traceable to implementation and Production evidence.
 
 
+## 24-hour full-product scope lock — 2026-09-27
+
+Owner reconfirmed that the target is the complete Business OS 2027. Preserve the union of Phase 0–12, all current `MASTER_PROGRAM_SECTIONS` Work Packages and all applicable `PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE` requirements. Do not reduce scope because a provider/API/payment credential is pending.
+
+Verified implementation baseline before this documentation synchronization:
+
+- `main@bae105697bdb68cb8b25494cf8303e6efe1a6d81`;
+- PR #260 governed Unified Inbox status/labels/assignee/Team backend action bridge is merged;
+- Production migration `0098_comm_unified_inbox_actions` is live;
+- PR #261 action-claim policy consolidation is merged; exact-main CI #1341 and Cloudflare Production Deploy #821 succeeded;
+- Production migration `0099_comm_unified_inbox_action_claim_policy_consolidation` is live;
+- fresh Production evidence still shows 0 Brand, tenant Business, Chatwoot Account/User/Membership/Inbox/Team mappings and 0 Unified Inbox projections; Shadow Mode remains ON;
+- therefore live-tenant Chatwoot action acceptance remains blocked by the explicit real-tenant/API activation gate, not by missing internal action code.
+
+Immediate bounded continuation inside `COMM-UNIFIED-INBOX`: wire the governed actions into operator UI, complete internal notes, then complete scoped attachment authorization/read bounds. In parallel, continue code-ready provider/API connection work so receipt of a real credential is activation/configuration, not the start of architecture.
+
 ## Delivery model checkpoint — compact vertical slices, full scope
 
 This program does **not** plan or report future work by PR count.
