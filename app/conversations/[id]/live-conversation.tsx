@@ -73,6 +73,27 @@ export type InboxConversationItem = {
   last_message_at: string | null;
 };
 
+type OperatorActionOptions = {
+  statuses: Array<'open' | 'resolved' | 'pending' | 'snoozed'>;
+  current: {
+    status: string | null;
+    snoozedUntil: number | null;
+    labels: string[];
+    smartUserId: string | null;
+    teamId: string | null;
+  };
+  labels: string[];
+  assignees: Array<{
+    smartUserId: string;
+    name: string;
+    availabilityStatus: string | null;
+  }>;
+  teams: Array<{
+    teamId: string;
+    name: string;
+  }>;
+};
+
 function sourceOf(message: LiveMessage) {
   const metadata = message.metadata && typeof message.metadata === 'object' ? message.metadata : {};
   return typeof metadata.source === 'string' ? metadata.source : '';
@@ -96,6 +117,14 @@ function statusClass(value: string) {
   return `liveState liveState-${value.toLowerCase().replaceAll('_', '-')}`;
 }
 
+function localDateTimeInput(epochSeconds: number | null) {
+  if (!epochSeconds) return '';
+  const date = new Date(epochSeconds * 1000);
+  if (Number.isNaN(date.getTime())) return '';
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
 export function LiveConversationConsole({
   initialSnapshot,
   inbox,
@@ -111,6 +140,14 @@ export function LiveConversationConsole({
   const [liveError, setLiveError] = useState<string | null>(null);
   const [readStateError, setReadStateError] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState(() => Date.now());
+  const [operatorOptions, setOperatorOptions] = useState<OperatorActionOptions | null>(null);
+  const [operatorError, setOperatorError] = useState<string | null>(null);
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
+  const [statusDraft, setStatusDraft] = useState('open');
+  const [snoozeDraft, setSnoozeDraft] = useState('');
+  const [labelDraft, setLabelDraft] = useState<string[]>([]);
+  const [assigneeDraft, setAssigneeDraft] = useState('');
+  const [teamDraft, setTeamDraft] = useState('');
   const endRef = useRef<HTMLDivElement | null>(null);
   const initialScrollDone = useRef(false);
   const requestInFlight = useRef(false);
@@ -158,6 +195,65 @@ export function LiveConversationConsole({
       requestInFlight.current = false;
     }
   }, [conversation.id]);
+
+
+  const loadOperatorOptions = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/conversations/${conversation.id}/actions`, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+      });
+      const body = await response.json() as OperatorActionOptions & { error?: string };
+      if (!response.ok) throw new Error(body.error ?? 'Operator actions are not ready');
+      setOperatorOptions(body);
+      setStatusDraft(body.current.status ?? 'open');
+      setSnoozeDraft(localDateTimeInput(body.current.snoozedUntil));
+      setLabelDraft(body.current.labels);
+      setAssigneeDraft(body.current.smartUserId ?? '');
+      setTeamDraft(body.current.teamId ?? '');
+      setOperatorError(null);
+    } catch (error) {
+      setOperatorOptions(null);
+      setOperatorError(error instanceof Error ? error.message : 'Operator actions are not ready');
+    }
+  }, [conversation.id]);
+
+  useEffect(() => {
+    void loadOperatorOptions();
+  }, [loadOperatorOptions]);
+
+  async function applyOperatorAction(
+    actionName: 'STATUS' | 'LABELS' | 'ASSIGNEE' | 'TEAM',
+    payload: Record<string, unknown>,
+  ) {
+    if (actionBusy) return;
+    setActionBusy(actionName);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/conversations/${conversation.id}/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestId: crypto.randomUUID(),
+          action: actionName,
+          ...payload,
+        }),
+      });
+      const body = await response.json() as { ok?: boolean; error?: string; warning?: string };
+      if (!response.ok || !body.ok) {
+        throw new Error(body.error ?? 'Operator action failed');
+      }
+      setNotice(body.warning
+        ? `Action verified in Chatwoot. ${body.warning}`
+        : 'Action verified in Chatwoot. Projection reconciliation will follow the signed webhook.');
+      await Promise.all([loadOperatorOptions(), refresh()]);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Operator action failed');
+    } finally {
+      setActionBusy(null);
+    }
+  }
 
   useEffect(() => {
     const tick = () => {
@@ -358,6 +454,133 @@ export function LiveConversationConsole({
         {notice ? <div className="liveNotice" role="status">{notice}</div> : null}
         {liveError ? <div className="liveNotice liveNoticeError">Live refresh issue: {liveError}. The page will keep retrying.</div> : null}
         {readStateError ? <div className="liveNotice liveNoticeError">Unread state sync delayed: {readStateError}.</div> : null}
+
+        <details className="liveOperatorActions">
+          <summary>
+            <span>Operator actions</span>
+            <small>{operatorOptions ? 'Governed by Smart Core' : 'Activation / scope gated'}</small>
+          </summary>
+          {operatorError ? (
+            <div className="liveOperatorUnavailable" role="status">
+              {operatorError}. Messaging remains available through its existing governed path.
+            </div>
+          ) : operatorOptions ? (
+            <div className="liveOperatorGrid">
+              <div className="liveOperatorField">
+                <label htmlFor="chatwoot-status">Conversation status</label>
+                <select
+                  id="chatwoot-status"
+                  value={statusDraft}
+                  onChange={(event) => setStatusDraft(event.target.value)}
+                  disabled={Boolean(actionBusy)}
+                >
+                  {operatorOptions.statuses.map((status) => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+                {statusDraft === 'snoozed' ? (
+                  <input
+                    type="datetime-local"
+                    value={snoozeDraft}
+                    onChange={(event) => setSnoozeDraft(event.target.value)}
+                    disabled={Boolean(actionBusy)}
+                    aria-label="Snooze until"
+                  />
+                ) : null}
+                <button
+                  type="button"
+                  disabled={Boolean(actionBusy) || (statusDraft === 'snoozed' && !snoozeDraft)}
+                  onClick={() => {
+                    const snoozedUntil = statusDraft === 'snoozed'
+                      ? Math.floor(new Date(snoozeDraft).getTime() / 1000)
+                      : null;
+                    void applyOperatorAction('STATUS', {
+                      status: statusDraft,
+                      snoozedUntil,
+                    });
+                  }}
+                >
+                  {actionBusy === 'STATUS' ? 'Applying…' : 'Apply status'}
+                </button>
+              </div>
+
+              <div className="liveOperatorField">
+                <label htmlFor="chatwoot-labels">Operational labels</label>
+                <select
+                  id="chatwoot-labels"
+                  multiple
+                  value={labelDraft}
+                  onChange={(event) => setLabelDraft(
+                    Array.from(event.currentTarget.selectedOptions, (option) => option.value),
+                  )}
+                  disabled={Boolean(actionBusy)}
+                  size={Math.min(Math.max(operatorOptions.labels.length, 2), 5)}
+                >
+                  {operatorOptions.labels.map((label) => (
+                    <option key={label} value={label}>{label}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={Boolean(actionBusy)}
+                  onClick={() => void applyOperatorAction('LABELS', { labels: labelDraft })}
+                >
+                  {actionBusy === 'LABELS' ? 'Applying…' : 'Apply labels'}
+                </button>
+              </div>
+
+              <div className="liveOperatorField">
+                <label htmlFor="chatwoot-assignee">Assignee</label>
+                <select
+                  id="chatwoot-assignee"
+                  value={assigneeDraft}
+                  onChange={(event) => setAssigneeDraft(event.target.value)}
+                  disabled={Boolean(actionBusy)}
+                >
+                  <option value="">Unassigned</option>
+                  {operatorOptions.assignees.map((assignee) => (
+                    <option key={assignee.smartUserId} value={assignee.smartUserId}>
+                      {assignee.name}{assignee.availabilityStatus ? ` · ${assignee.availabilityStatus}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={Boolean(actionBusy)}
+                  onClick={() => void applyOperatorAction('ASSIGNEE', {
+                    smartUserId: assigneeDraft || null,
+                  })}
+                >
+                  {actionBusy === 'ASSIGNEE' ? 'Applying…' : 'Apply assignee'}
+                </button>
+              </div>
+
+              <div className="liveOperatorField">
+                <label htmlFor="chatwoot-team">Team transfer</label>
+                <select
+                  id="chatwoot-team"
+                  value={teamDraft}
+                  onChange={(event) => setTeamDraft(event.target.value)}
+                  disabled={Boolean(actionBusy)}
+                >
+                  <option value="">No team</option>
+                  {operatorOptions.teams.map((team) => (
+                    <option key={team.teamId} value={team.teamId}>{team.name}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={Boolean(actionBusy)}
+                  onClick={() => void applyOperatorAction('TEAM', {
+                    teamId: teamDraft || null,
+                  })}
+                >
+                  {actionBusy === 'TEAM' ? 'Applying…' : 'Transfer team'}
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </details>
 
         <div className="liveMessageStream" aria-live="polite">
           {snapshot.messages.length === 0 ? (
