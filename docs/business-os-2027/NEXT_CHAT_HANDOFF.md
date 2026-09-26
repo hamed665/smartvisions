@@ -21,25 +21,24 @@ Owner preference is compact, high-throughput delivery, but there is no hard PR c
 This delivery-policy change was prepared from verified `main@4d1da421c9c0242398926f637bc343285cbe6f7a`; always re-read current main before the next mutation.
 
 
-## Current continuation checkpoint — 2026-09-26 after PR #239
+## Current continuation checkpoint — 2026-09-26
 
-Use this checkpoint before every older section below.
+Use this checkpoint before every older section below, but always re-read runtime/current main first.
 
-- Current canonical repository main: `ca5067ae817b9cc07f49be5bc12ded11cc879cb8`.
-- PR #238 closed the fail-closed Cloudflare Chatwoot runtime boundary. Production has the correct Chatwoot base URL and webhook public origin, but `CHATWOOT_PROVISIONING_ENABLED=false`; the release candidate remains Chatwoot-unbound.
-- `CHATWOOT_PLATFORM_TOKEN` is not provisioned. Do not create or transfer a Platform token through chat, GitHub files, logs, browser state or database mappings. Secure server-only secret transport plus an exact activation contract must be verified first.
-- PR #239 added an authenticated OWNER-only governed bootstrap endpoint at `/api/business-os/control-plane/bootstrap` for canonical Brand and tenant Business creation.
-- Bootstrap idempotency reuses existing canonical uniqueness instead of inventing a new claim subsystem: Brand `(organization_id, slug)`; Business `(brand_id, slug)`. Exact replay is safe; conflicting data on the same natural key fails closed.
-- The endpoint reuses existing RLS and Control Plane audit triggers. It has no service-role bypass, Chatwoot HTTP call, provider send, new queue, new CRM or new tenant model.
-- PR #239 exact-head CI #1260 was green. Post-merge main CI run `36204798135` and Cloudflare Production Deploy run `36204923459` were both SUCCESS on exact `main@ca5067ae817b9cc07f49be5bc12ded11cc879cb8`.
-- Runtime build evidence contains the bootstrap route. Unauthenticated POST is blocked by existing auth middleware with HTTP 307 -> `/login`.
+- Verified baseline before the current hierarchy/Inbox/Team package: `main@7a1a64d8c658ec8328956d0dd6be8eafb596ab2a` after PR #247.
+- PR #247 added the first receipt-backed OWNER Chatwoot User + administrator AccountUser projection. Exact-main CI and Cloudflare Production Deploy are SUCCESS.
+- Production Chatwoot remains healthy at `https://inbox.smartvisionsai.com` on the dedicated OVH VPS. Railway remains Candidate/rollback evidence only, not a Production dependency.
+- Production Smart Core remains Cloudflare Workers + Supabase. Chatwoot remains only the Communication Plane.
 - Production migration head remains `0090_chatwoot_fk_index_hardening`.
-- Post-deploy Production still has `brands=0`, `tenant_businesses=0`, zero Chatwoot mappings/journal/command claims and zero new Brand/Business audit rows. Deployment-window outreach/WhatsApp/Email deltas are all zero.
-- Safety remains unchanged: Shadow Mode ON; Global Kill Switch OFF; Email pause OFF; WhatsApp AI pause OFF; Agents pause OFF.
-- Chatwoot Production remains healthy on OVH at `https://inbox.smartvisionsai.com`; canonical Chatwoot image is unchanged from PR #236.
-- Railway `smartvisions-chatwoot-candidate` remains read-only rollback evidence and must not be deleted without explicit destructive approval.
-- **Do not bootstrap synthetic data.** The governed path now exists, but the first real Brand/tenant Business still requires evidence-backed canonical values and an explicit Production decision.
-- **Do not start External Provisioning yet.** The Platform token secret boundary is the next infrastructure blocker; provisioning must remain false until that boundary and the real tenant scope are both proven.
+- Production still contains zero canonical Brand, tenant Business, Branch, Department, Team and zero Chatwoot mapping/claim rows. Do not fabricate any of these to make the UI look populated.
+- Connected canonical EMAIL and WHATSAPP integration connections exist, but no Communication Plane binding has been created because no real tenant Business exists yet.
+- `CHATWOOT_PLATFORM_TOKEN` is still absent and `CHATWOOT_PROVISIONING_ENABLED=false`. Keep it false. Do not paste the token into chat, Git, Supabase rows, logs or browser state.
+- Shadow Mode remains ON. The latest verified deployment window created zero new outreach, WhatsApp or Email events.
+- Governed runtime paths now exist for Brand/Business bootstrap, communication projection preparation, Chatwoot Account projection, OWNER User/AccountUser projection, API Inbox projection and Chatwoot Team projection.
+- The current hierarchy/Inbox/Team delivery package adds OWNER-only canonical Branch -> Department -> Team bootstrap, explicit activation and ACTIVE-admin preflights before Inbox/Team mapping claims, and operator controls. It does not activate Production provisioning or create Production tenant data.
+- Readiness inventory is OWNER-only and uses privileged server reads only after current OWNER authentication; global User mappings are scoped through tenant memberships rather than a nonexistent organization_id column.
+- Continue at `SECTION COMMUNICATION / COMM-TENANT-BRIDGE`.
+- Remaining real activation order is: evidence-backed Brand/Business -> real Branch/Department/Team -> projection preparation -> Platform token staging -> explicit activation -> Account -> OWNER User/Membership -> API Inbox/Team -> C5 scoped access closeout -> COMM-UNIFIED-INBOX.
 
 ## Superseding continuation checkpoint — 2026-09-26
 
