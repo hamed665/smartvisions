@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   externalConversationMatchesTarget,
+  isSafeChatwootAttachmentUrl,
   mutationRequestForUnifiedInboxAction,
   parseUnifiedInboxConversationActionBody,
   parseUnifiedInboxInternalNoteBody,
@@ -121,6 +122,27 @@ describe('Chatwoot Unified Inbox conversation actions', () => {
       requestId: 'req-note-other',
       content: 'Private follow-up',
     })).toBeNull();
+  });
+
+  it('accepts only same-origin Chatwoot Active Storage attachment URLs', () => {
+    const previous = process.env.CHATWOOT_BASE_URL;
+    process.env.CHATWOOT_BASE_URL = 'https://inbox.smartvisionsai.com';
+    try {
+      expect(isSafeChatwootAttachmentUrl(
+        'https://inbox.smartvisionsai.com/rails/active_storage/blobs/redirect/signed/file.pdf',
+      )).toBe(true);
+      expect(isSafeChatwootAttachmentUrl(
+        '/rails/active_storage/representations/redirect/signed/thumb',
+      )).toBe(true);
+      expect(isSafeChatwootAttachmentUrl(
+        'https://evil.example/rails/active_storage/blobs/redirect/signed/file.pdf',
+      )).toBe(false);
+      expect(isSafeChatwootAttachmentUrl('https://inbox.smartvisionsai.com/api/v1/accounts/1')).toBe(false);
+      expect(isSafeChatwootAttachmentUrl('https://169.254.169.254/latest/meta-data')).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.CHATWOOT_BASE_URL;
+      else process.env.CHATWOOT_BASE_URL = previous;
+    }
   });
 
   it('maps mutations to pinned Chatwoot v4.18 account endpoints', () => {
