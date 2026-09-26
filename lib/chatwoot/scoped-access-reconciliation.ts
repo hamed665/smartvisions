@@ -91,6 +91,34 @@ function requireExternalProvisioningActivation() {
   }
 }
 
+async function requireCurrentOwnerActor(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+}) {
+  const { data: auth, error: authError } = await input.supabase.auth.getUser();
+  if (authError || !auth.user?.id || !isUuid(auth.user.id)) {
+    return fail('Authenticated Organization OWNER is required');
+  }
+
+  const { data, error } = await input.supabase
+    .from('organization_members')
+    .select('organization_id,user_id,role')
+    .eq('organization_id', input.organizationId)
+    .eq('user_id', auth.user.id)
+    .single();
+
+  if (
+    error ||
+    data?.organization_id !== input.organizationId ||
+    data?.user_id !== auth.user.id ||
+    data?.role !== 'OWNER'
+  ) {
+    return fail('Authenticated Organization OWNER is required');
+  }
+
+  return auth.user.id;
+}
+
 function normalizeOrganizationRole(value: unknown): OrganizationRole {
   if (
     typeof value !== 'string' ||
@@ -764,30 +792,41 @@ export async function reconcileChatwootScopedAccess(input: {
     );
   }
 
-  const adminProjection = await requireChatwootAdminProjection({
+  const actorUserId = await requireCurrentOwnerActor({
     supabase: input.supabase,
     organizationId: input.organizationId,
-    tenantBusinessId: await (async () => {
-      const service = createSupabaseServiceClient();
-      const table =
-        input.kind === 'INBOX'
-          ? 'chatwoot_inbox_mappings'
-          : 'chatwoot_team_mappings';
-      const { data, error } = await service
-        .from(table)
-        .select('tenant_business_id')
-        .eq('organization_id', input.organizationId)
-        .eq('id', input.mappingId)
-        .eq('status', 'ACTIVE')
-        .single();
-      if (error || !data || !isUuid(data.tenant_business_id)) {
-        return fail('ACTIVE scoped Chatwoot mapping is required');
-      }
-      return data.tenant_business_id;
-    })(),
   });
 
   const service = createSupabaseServiceClient();
+  const table =
+    input.kind === 'INBOX'
+      ? 'chatwoot_inbox_mappings'
+      : 'chatwoot_team_mappings';
+  const { data: scopeRow, error: scopeError } = await service
+    .from(table)
+    .select('tenant_business_id')
+    .eq('organization_id', input.organizationId)
+    .eq('id', input.mappingId)
+    .eq('status', 'ACTIVE')
+    .single();
+
+  if (
+    scopeError ||
+    !scopeRow ||
+    !isUuid(scopeRow.tenant_business_id)
+  ) {
+    return fail('ACTIVE scoped Chatwoot mapping is required');
+  }
+
+  const adminProjection = await requireChatwootAdminProjection({
+    supabase: input.supabase,
+    organizationId: input.organizationId,
+    tenantBusinessId: scopeRow.tenant_business_id,
+  });
+
+  if (adminProjection.smartUserId !== actorUserId) {
+    return fail('Chatwoot administrator projection does not match current OWNER');
+  }
   const target = await loadAccessTarget({
     service,
     organizationId: input.organizationId,
