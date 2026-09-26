@@ -170,6 +170,7 @@ describe('Business OS omnichannel semantic boundary', () => {
       text: 'Hi',
       metadata: {
         providerType: 'text',
+        destination: { phoneNumberId: 'phone-1', wabaId: 'waba-1' },
         contactName: 'Customer',
         referral: {
           sourceType: 'ad',
