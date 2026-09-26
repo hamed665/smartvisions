@@ -46,7 +46,7 @@ export class ChatwootHttpError extends Error {
   }
 }
 
-function provisioningEnabled() {
+function assertProvisioningActivated() {
   const activation = evaluateChatwootProvisioningActivation({
     deploymentEnvironment: process.env.DEPLOYMENT_ENV,
     provisioningEnabled: process.env.CHATWOOT_PROVISIONING_ENABLED,
@@ -54,9 +54,22 @@ function provisioningEnabled() {
     platformToken: process.env.CHATWOOT_PLATFORM_TOKEN,
   });
 
-  return (
-    activation.deploymentEnvironment === 'production' && activation.requested
-  );
+  if (
+    activation.deploymentEnvironment !== 'production' ||
+    !activation.requested
+  ) {
+    throw new ChatwootHttpError({
+      code: 'PROVISIONING_DISABLED',
+      message: 'Chatwoot provisioning is disabled',
+    });
+  }
+
+  if (!activation.platformTokenConfigured) {
+    throw new ChatwootHttpError({
+      code: 'CONFIG_INVALID',
+      message: 'Chatwoot Platform token is not configured',
+    });
+  }
 }
 
 function baseUrl() {
@@ -221,12 +234,7 @@ export async function chatwootProvisioningRequest<T>(input: {
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
 }): Promise<T> {
-  if (!provisioningEnabled()) {
-    throw new ChatwootHttpError({
-      code: 'PROVISIONING_DISABLED',
-      message: 'Chatwoot provisioning is disabled',
-    });
-  }
+  assertProvisioningActivated();
 
   const method = input.method ?? 'GET';
 
