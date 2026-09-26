@@ -450,6 +450,27 @@ export default async function SettingsPage() {
               const accountMapping = liveAccountMappings.find(
                 (mapping) => mapping.tenant_business_id === business.id,
               );
+              const businessBranches = canonicalBranches.filter(
+                (branch) =>
+                  branch.tenant_business_id === business.id &&
+                  branch.status === 'ACTIVE',
+              );
+              const branchIds = new Set(businessBranches.map((branch) => branch.id));
+              const businessDepartments = canonicalDepartments.filter(
+                (department) =>
+                  branchIds.has(department.branch_id) &&
+                  department.status === 'ACTIVE',
+              );
+              const departmentIds = new Set(
+                businessDepartments.map((department) => department.id),
+              );
+              const businessTeams = canonicalTeams.filter(
+                (team) =>
+                  departmentIds.has(team.department_id) &&
+                  team.status === 'ACTIVE',
+              );
+              const ownerAccessPrepared =
+                (chatwootReadiness?.projectionCounts.memberships ?? 0) > 0;
 
               return (
                 <div className="settingsRow" key={business.id}>
@@ -516,6 +537,76 @@ export default async function SettingsPage() {
                             Provision / verify my Chatwoot access
                           </button>
                         </form>
+
+                        {businessBranches.flatMap((branch) =>
+                          bindings
+                            .filter(
+                              (binding) =>
+                                binding.status === 'ACTIVE' &&
+                                (binding.branch_id === null ||
+                                  binding.branch_id === branch.id),
+                            )
+                            .map((binding) => (
+                              <form
+                                action={provisionCommunicationPlaneApiInbox}
+                                key={`inbox-${branch.id}-${binding.id}`}
+                              >
+                                <input
+                                  type="hidden"
+                                  name="tenant_business_id"
+                                  value={business.id}
+                                />
+                                <input type="hidden" name="branch_id" value={branch.id} />
+                                <input
+                                  type="hidden"
+                                  name="communication_channel_binding_id"
+                                  value={binding.id}
+                                />
+                                <input
+                                  type="hidden"
+                                  name="chatwoot_account_mapping_id"
+                                  value={accountMapping.id}
+                                />
+                                <button
+                                  disabled={
+                                    !editable ||
+                                    !chatwootReadiness?.liveProvisioningReady ||
+                                    !ownerAccessPrepared
+                                  }
+                                >
+                                  Provision / verify {binding.channel} API Inbox · {branch.name}
+                                </button>
+                              </form>
+                            )),
+                        )}
+
+                        {businessTeams.map((team) => (
+                          <form
+                            action={provisionCommunicationPlaneTeam}
+                            key={`team-${team.id}`}
+                          >
+                            <input
+                              type="hidden"
+                              name="tenant_business_id"
+                              value={business.id}
+                            />
+                            <input type="hidden" name="smart_team_id" value={team.id} />
+                            <input
+                              type="hidden"
+                              name="chatwoot_account_mapping_id"
+                              value={accountMapping.id}
+                            />
+                            <button
+                              disabled={
+                                !editable ||
+                                !chatwootReadiness?.liveProvisioningReady ||
+                                !ownerAccessPrepared
+                              }
+                            >
+                              Provision / verify Chatwoot Team · {team.name}
+                            </button>
+                          </form>
+                        ))}
                       </>
                     ) : null}
                   </div>
@@ -526,7 +617,9 @@ export default async function SettingsPage() {
         )}
         <p className="muted smallText">
           External Chatwoot provisioning remains separately gated by Production health,
-          Platform-token presence and the explicit provisioning activation flag.
+          Platform-token presence and the explicit provisioning activation flag. API Inbox and
+          Chatwoot Team creation also require an ACTIVE OWNER administrator projection before any
+          mapping claim is written.
           {editable && chatwootReadiness
             ? ` Current blockers: ${chatwootReadiness.blockers.length > 0
                 ? chatwootReadiness.blockers.join(' · ')
