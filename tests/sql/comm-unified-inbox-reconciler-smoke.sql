@@ -99,30 +99,41 @@ select * from public.reconcile_unified_inbox_projection_event(
   '72000000-0000-4000-8000-000000009410',
   9701,9801,null,null,'open',array['vip','sales','vip'],
   '2026-09-26T10:00:00Z','2026-09-26T10:00:01Z'
-) \gset first_
+);
 
 do $created$
 begin
-  if :'first_outcome' <> 'CREATED'
-     or :'first_projection_version'::integer <> 1
-     or :'first_event_status' <> 'PROCESSED'
-  then raise exception 'first event did not create projection version 1'; end if;
+  if not exists (
+    select 1
+      from public.unified_inbox_conversation_projections
+     where conversation_id='72000000-0000-4000-8000-000000009410'
+       and version=1
+       and chatwoot_status='open'
+       and labels=array['sales','vip']
+  )
+     or (select status from public.chatwoot_webhook_events where id='80000000-0000-4000-8000-000000009411') <> 'PROCESSED'
+     or (select count(*) from public.unified_inbox_projection_reconciliation_receipts where source_event_id='80000000-0000-4000-8000-000000009411') <> 1
+  then
+    raise exception 'first event did not create projection version 1';
+  end if;
 end;
 $created$;
 
+-- Exact replay returns the durable receipt without incrementing projection state.
 select * from public.reconcile_unified_inbox_projection_event(
   '80000000-0000-4000-8000-000000009411',
   '72000000-0000-4000-8000-000000009410',
   9701,9801,null,null,'open',array['sales','vip'],
   '2026-09-26T10:00:00Z','2026-09-26T10:00:01Z'
-) \gset replay_
+);
 
 do $replay$
 begin
-  if :'replay_outcome' <> 'CREATED'
-     or :'replay_projection_version'::integer <> 1
-     or (select count(*) from public.unified_inbox_projection_reconciliation_receipts) <> 1
-  then raise exception 'event replay was not idempotent'; end if;
+  if (select version from public.unified_inbox_conversation_projections where conversation_id='72000000-0000-4000-8000-000000009410') <> 1
+     or (select count(*) from public.unified_inbox_projection_reconciliation_receipts where source_event_id='80000000-0000-4000-8000-000000009411') <> 1
+  then
+    raise exception 'event replay was not idempotent';
+  end if;
 end;
 $replay$;
 
@@ -131,24 +142,27 @@ select * from public.reconcile_unified_inbox_projection_event(
   '72000000-0000-4000-8000-000000009410',
   9701,9801,9901,9601,'pending',array['vip','priority'],
   '2026-09-26T10:05:00Z','2026-09-26T10:05:01Z'
-) \gset second_
+);
 
 do $updated$
 begin
-  if :'second_outcome' <> 'UPDATED' or :'second_projection_version'::integer <> 2
-  then raise exception 'newer event did not advance projection version'; end if;
-
   if not exists (
-    select 1 from public.unified_inbox_conversation_projections p
+    select 1
+      from public.unified_inbox_conversation_projections p
+      join public.chatwoot_team_mappings tm on tm.id=p.chatwoot_team_mapping_id
      where p.conversation_id='72000000-0000-4000-8000-000000009410'
        and p.version=2
        and p.department_id='40000000-0000-4000-8000-000000009410'
        and p.team_id='50000000-0000-4000-8000-000000009410'
-       and p.chatwoot_team_mapping_id=:'team_mapping_id'::uuid
+       and tm.chatwoot_team_id=9601
        and p.chatwoot_assignee_user_id=9901
        and p.chatwoot_status='pending'
        and p.chatwoot_updated_at='2026-09-26T10:05:01Z'::timestamptz
-  ) then raise exception 'Team/assignment snapshot did not reconcile'; end if;
+  )
+     or (select status from public.chatwoot_webhook_events where id='80000000-0000-4000-8000-000000009412') <> 'PROCESSED'
+  then
+    raise exception 'newer event did not reconcile Team/assignment state';
+  end if;
 end;
 $updated$;
 
@@ -157,29 +171,37 @@ select * from public.reconcile_unified_inbox_projection_event(
   '72000000-0000-4000-8000-000000009410',
   9701,9801,null,null,'resolved',array['old'],
   '2026-09-26T10:01:00Z','2026-09-26T10:01:01Z'
-) \gset stale_
+);
 
 do $stale$
 begin
-  if :'stale_outcome' <> 'STALE_IGNORED'
-     or :'stale_projection_version'::integer <> 2
-     or :'stale_event_status' <> 'IGNORED'
+  if (select status from public.chatwoot_webhook_events where id='80000000-0000-4000-8000-000000009413') <> 'IGNORED'
+     or (select error_code from public.chatwoot_webhook_events where id='80000000-0000-4000-8000-000000009413') <> 'STALE_EVENT'
+     or (select version from public.unified_inbox_conversation_projections where conversation_id='72000000-0000-4000-8000-000000009410') <> 2
      or (select chatwoot_status from public.unified_inbox_conversation_projections where conversation_id='72000000-0000-4000-8000-000000009410') <> 'pending'
-  then raise exception 'stale event regressed current projection'; end if;
+  then
+    raise exception 'stale event regressed current projection';
+  end if;
 end;
 $stale$;
 
 select (public.finalize_chatwoot_webhook_event(
-  '80000000-0000-4000-8000-000000009414','IGNORED','UNSUPPORTED_EVENT'
-)).status as ignored_status \gset
+  '80000000-0000-4000-8000-000000009414',
+  'IGNORED',
+  'UNSUPPORTED_EVENT'
+)).status;
 
 do $finalizer$
 begin
-  if :'ignored_status' <> 'IGNORED'
-  then raise exception 'unsupported event did not finalize IGNORED'; end if;
+  if (select status from public.chatwoot_webhook_events where id='80000000-0000-4000-8000-000000009414') <> 'IGNORED'
+     or (select error_code from public.chatwoot_webhook_events where id='80000000-0000-4000-8000-000000009414') <> 'UNSUPPORTED_EVENT'
+  then
+    raise exception 'unsupported event did not finalize IGNORED';
+  end if;
 end;
 $finalizer$;
 
+-- An unknown Chatwoot Team must fail closed before projection mutation.
 do $unknown_team$
 begin
   begin
@@ -192,13 +214,18 @@ begin
     raise exception 'unknown Chatwoot Team unexpectedly reconciled';
   exception
     when others then
-      if sqlerrm not like '%not governed by an active Smart Team mapping%' then raise; end if;
+      if sqlerrm not like '%not governed by an active Smart Team mapping%' then
+        raise;
+      end if;
   end;
-  if (select version from public.unified_inbox_conversation_projections where conversation_id='72000000-0000-4000-8000-000000009410') <> 2
-  then raise exception 'failed Team mapping attempt mutated projection'; end if;
+
+  if (select version from public.unified_inbox_conversation_projections where conversation_id='72000000-0000-4000-8000-000000009410') <> 2 then
+    raise exception 'failed Team mapping attempt mutated projection';
+  end if;
 end;
 $unknown_team$;
 
+-- service_role can execute the governed RPC, but raw table writes still fail.
 do $direct_write_blocked$
 begin
   begin
@@ -208,7 +235,9 @@ begin
     raise exception 'direct service_role projection update unexpectedly succeeded';
   exception
     when others then
-      if sqlerrm not like '%requires reconciler command path%' then raise; end if;
+      if sqlerrm not like '%requires reconciler command path%' then
+        raise;
+      end if;
   end;
 end;
 $direct_write_blocked$;
@@ -223,7 +252,9 @@ begin
      or not has_table_privilege('service_role','public.unified_inbox_conversation_projections','INSERT')
      or not has_table_privilege('service_role','public.unified_inbox_conversation_projections','UPDATE')
      or has_table_privilege('service_role','public.unified_inbox_projection_reconciliation_receipts','UPDATE')
-  then raise exception 'Unified Inbox reconciler ACL drifted'; end if;
+  then
+    raise exception 'Unified Inbox reconciler ACL drifted';
+  end if;
 end;
 $acl$;
 
