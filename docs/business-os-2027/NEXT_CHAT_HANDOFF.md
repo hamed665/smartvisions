@@ -21,6 +21,40 @@ Owner preference is compact, high-throughput delivery, but there is no hard PR c
 This delivery-policy change was prepared from verified `main@4d1da421c9c0242398926f637bc343285cbe6f7a`; always re-read current main before the next mutation.
 
 
+## Latest continuation checkpoint — COMM-UNIFIED-INBOX — 2026-09-26
+
+Always re-read runtime/current main before mutation. At this checkpoint the verified baseline is:
+
+- canonical repository main: `a9e5a7387d6d4602e5ed363361761f187868d757` after PR #257;
+- exact-main CI #1332: SUCCESS;
+- Cloudflare Production Deploy #812: SUCCESS on the same SHA, including release-candidate smoke, controlled SSR load, Production promotion, route verification, routed Production smoke and safe rejection smoke;
+- Production Supabase is live through `0097_comm_unified_inbox_read_state_rls_initplan`;
+- `0093`: scoped Unified Inbox security boundary;
+- `0094`: signed Chatwoot webhook journal -> idempotent projection reconciler;
+- `0095`: Unified Inbox FK index hardening;
+- `0096`: bounded read model + deterministic cursor pagination + scoped counters + per-user read/open state;
+- `0097`: read-state RLS initPlan hardening with authorization semantics unchanged;
+- the real `/conversations` page and recent-chat rail now consume the bounded Unified Inbox read model rather than issuing their old direct list query against `sales_conversations`;
+- opening a conversation uses the governed mark-read RPC, so unread state is per operator rather than globally shared;
+- search/filter support in the real UI includes primary stage/human/unread filters plus bounded customer/summary/intent search, channel, Chatwoot status and exact label; Branch/Team remain supported by the read-model contract for scoped/hierarchy-aware callers;
+- owner-reply and Take Over / Resume AI paths remain the existing canonical implementations and were not replaced by this work;
+- Smart Core remains authority for tenant/business/CRM/identity/permissions/provider credentials/provider send authority/safety; Chatwoot remains Communication Plane only;
+- Chatwoot Production is on the OVH VPS at `https://inbox.smartvisionsai.com`. Do not move Production work back to Railway;
+- no new Chatwoot Platform token or provisioning activation was introduced;
+- no parallel CRM, Conversation store, queue/outbox, tenant model, IAM or Chatwoot integration was created.
+
+Next safe Work Package inside `SECTION COMMUNICATION / COMM-UNIFIED-INBOX`:
+
+1. verify current projection/API/runtime state again;
+2. add governed reconciliation/actions for Chatwoot status, labels, assignee and Team transfer using the existing projection and canonical Smart Core scope;
+3. add internal-note behavior without turning Chatwoot into CRM authority;
+4. enforce attachment read bounds and scoped access;
+5. extend the existing UI only after those action/read boundaries are proven;
+6. preserve existing owner manual reply, DNC/suppression, WhatsApp 24-hour rule, Cost Guard and human-takeover controls;
+7. keep Railway out of the Production path.
+
+Do not activate Chatwoot provisioning or Platform-token runtime merely to exercise these features. Do not fabricate tenant/customer evidence.
+
 ## Current continuation checkpoint — 2026-09-26
 
 Use this checkpoint before every older section below, but always re-read runtime/current main first.
