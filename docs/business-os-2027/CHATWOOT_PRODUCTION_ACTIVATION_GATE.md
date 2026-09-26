@@ -75,6 +75,23 @@ Before first activation there must be evidence-backed canonical Smart Core scope
 
 The first real tenant projection remains governed by `COMM-TENANT-BRIDGE`.
 
+## Platform App creation evidence
+
+The live Production route `https://inbox.smartvisionsai.com/super_admin` currently redirects to the protected Super Admin sign-in route, confirming that the Super Admin surface exists without exposing it anonymously.
+
+The pinned Chatwoot Community v4.18.0 source also confirms that `PlatformApp` includes `AccessTokenable` and automatically creates one access token when a Platform App is created.
+
+Create the Production integration only from the protected Super Admin surface:
+
+1. sign in to `/super_admin` with the private Production super-admin account;
+2. create one Platform App named `Smart Visions Core`;
+3. copy its generated access token directly into the GitHub Actions repository secret named `CHATWOOT_PLATFORM_TOKEN`;
+4. do not paste the token into chat, source files, Supabase, issue/PR text, logs, or ordinary Worker variables;
+5. run the normal exact-main deploy so the workflow stages the value only as a Production Worker secret;
+6. verify the readiness surface reports `Platform token: Staged on Production` while provisioning remains disabled.
+
+If token rotation is required, replace the GitHub Actions secret and redeploy before revoking the prior Platform App/token.
+
 ## First activation sequence
 
 1. verify current main, Production deploy, Supabase migration head and safety controls;
