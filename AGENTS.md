@@ -169,6 +169,16 @@ Current durable Production state is maintained in `docs/CURRENT_STATE.md`. As of
 - Historical failure rows are evidence. Do not delete them just to make dashboards visually clean.
 - Do not run paid smoke tests simply to refresh a badge when durable evidence already proves the provider.
 
+## Full-product scope lock
+
+The owner-approved target is the complete AI Business OS 2027, not only the currently active Communication slice. Preserve all of the following simultaneously:
+
+- the historical Phase 0–12 target captured in `IMPLEMENTATION_MAP.md`;
+- every Work Package in `MASTER_PROGRAM_SECTIONS.md`;
+- every applicable acceptance requirement in `PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE.md`.
+
+No phase, Work Package, channel, CRM/AI/automation/booking/commerce/payment/reporting/SaaS/agency/developer/mobile/enterprise capability may be dropped merely to finish faster, reduce PR count, wait for an external API, or make a completion percentage look better. External credentials/approvals may block activation evidence only. Build the safe internal adapter, tenant binding, UI/error states, tests and audit contract first, then activate when the real credential arrives.
+
 ## Definition of done
 
 A change is complete only when applicable items are true:

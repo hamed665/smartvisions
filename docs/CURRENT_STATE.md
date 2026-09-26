@@ -10,6 +10,22 @@ The owner-requested [product completeness and customer connection acceptance](bu
 This is the current operational handoff for Growth OS. Current `main`, routed Cloudflare Production and Production Supabase evidence override older planning documents, stale issue text and chat history.
 
 
+## Superseding Unified Inbox action checkpoint — 2026-09-27
+
+This checkpoint supersedes the older PR #257-only Unified Inbox continuation below for current action-layer status.
+
+- Runtime implementation baseline before this documentation-only scope synchronization: `main@bae105697bdb68cb8b25494cf8303e6efe1a6d81`.
+- PR #260 added the governed Chatwoot conversation action bridge for status, labels, assignee and Team changes over the existing Unified Inbox projection and Smart Core scope authority.
+- Production migration `0098_comm_unified_inbox_actions` is live.
+- PR #261 consolidated action-claim SELECT/INSERT RLS policies without changing authorization semantics.
+- Exact-main CI #1341 and Cloudflare Production Deploy #821 succeeded on `bae105697bdb68cb8b25494cf8303e6efe1a6d81`.
+- Production migration `0099_comm_unified_inbox_action_claim_policy_consolidation` is live as version `20260926205020`.
+- Post-0099 Performance Advisor no longer reports the action-claim multiple-permissive-policy findings on `chatwoot_bridge_command_claims`; older unrelated advisor findings remain separate work.
+- Fresh Production evidence: Brand=0, tenant Business=0, Chatwoot Account/User/Membership/Inbox/Team mappings=0 and Unified Inbox projections=0.
+- Safety remains: Shadow Mode ON; Global Kill Switch OFF; Email pause OFF; WhatsApp AI pause OFF; Agents pause OFF.
+- The action bridge is therefore implementation/deployment complete but real-tenant action acceptance remains activation-gated. Do not fabricate tenant mappings or enable provisioning merely to produce demo evidence.
+- Next bounded `COMM-UNIFIED-INBOX` work: operator UI for governed actions, internal notes, and scoped attachment authorization/read bounds.
+
 ## Superseding Unified Inbox Production checkpoint — 2026-09-26
 
 This checkpoint supersedes older same-day Communication/Unified Inbox notes below. Historical sections remain for provenance only.

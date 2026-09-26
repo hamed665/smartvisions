@@ -13,6 +13,16 @@ This program **extends existing canonical Growth OS primitives**. It does not du
 
 Production changes are promoted only after the repository's safety, CI, migration, review, and production-verification gates pass. Phase 1 has now passed those gates and is live; later phases must repeat the same discipline.
 
+## Owner-approved full-product scope lock
+
+The complete target is the union of:
+
+- historical **Phase 0–12** in `IMPLEMENTATION_MAP.md`;
+- all stable Work Packages in `MASTER_PROGRAM_SECTIONS.md`;
+- all applicable acceptance requirements in `PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE.md`.
+
+These views complement each other. None may be used to shrink the others. External provider/API/payment credentials can block activation or live E2E evidence, but they do not justify leaving internal adapters, tenant isolation, error states, security, tests, audit, UI or reconciliation unfinished.
+
 ## Documents
 
 1. [MASTER_ARCHITECTURE.md](./MASTER_ARCHITECTURE.md) — target product/domain architecture.
@@ -32,6 +42,7 @@ Production changes are promoted only after the repository's safety, CI, migratio
 15. [CHATWOOT_PRODUCTION_PROMOTION_READINESS_AUDIT.md](./CHATWOOT_PRODUCTION_PROMOTION_READINESS_AUDIT.md) — evidence-backed gate between the verified isolated Candidate and any future Production Chatwoot provisioning.
 16. [CHATWOOT_PRODUCTION_ACTIVATION_GATE.md](./CHATWOOT_PRODUCTION_ACTIVATION_GATE.md) — server-only Platform-token transport, fail-closed runtime activation contract and first real-tenant activation sequence.
 17. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
+18. [PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE.md](./PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE.md) — owner-approved full-product scope lock, official customer/API connection requirements and evidence-backed acceptance gates.
 
 ## Phase 0 exit criteria
 
