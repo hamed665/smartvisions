@@ -26,14 +26,17 @@ describe('COMM-UNIFIED-INBOX scoped security boundary', () => {
     expect(migration).not.toMatch(/graph\.facebook|resend\.com|send_whatsapp|send_email/i);
   });
 
-  it('preserves canonical scope precedence and fails non-empty ABAC attributes closed', () => {
-    expect(migration).toContain("a.attributes = '{}'::jsonb");
+  it('preserves scope precedence, scoped-only fail-closed behavior and VIEWER read semantics', () => {
+    expect(migration).toContain('is_unified_inbox_scoped_only_member');
+    expect(migration).toContain("coalesce(v_scope_attributes, '{}'::jsonb) <> '{}'::jsonb");
     expect(migration).toContain("when 'TEAM' then 5");
     expect(migration).toContain("when 'DEPARTMENT' then 4");
     expect(migration).toContain("when 'BRANCH' then 3");
     expect(migration).toContain("when 'BUSINESS' then 2");
     expect(migration).toContain("when 'BRAND' then 1");
     expect(migration).toContain("if v_org_role = 'OWNER'");
+    expect(migration).toContain("v_org_role = 'VIEWER'");
+    expect(migration).toContain("in ('OWNER','ADMIN','SALES_MANAGER','SALES_AGENT','VIEWER')");
   });
 
   it('replaces legacy Organization-wide conversation/contact RLS with scoped reads', () => {
@@ -73,5 +76,8 @@ describe('COMM-UNIFIED-INBOX scoped security boundary', () => {
     expect(smoke).toContain('TEAM VIEWER did not override broader BRANCH SALES_AGENT');
     expect(smoke).toContain('scoped user leaked unrelated Smart Core contact truth');
     expect(smoke).toContain('scoped user unexpectedly mutated a conversation');
+    expect(smoke).toContain('scoped-only VIEWER fell back outside assigned Branch scope');
+    expect(smoke).toContain('Business-wide VIEWER lost intended read visibility');
+    expect(smoke).toContain('Business-wide ADMIN lost existing Organization-wide conversation visibility');
   });
 });
