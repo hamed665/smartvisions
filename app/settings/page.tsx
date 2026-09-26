@@ -1,8 +1,11 @@
 import {
+  bootstrapCanonicalOperatingHierarchy,
   bootstrapCanonicalTenant,
   prepareCommunicationPlaneProjection,
   provisionCommunicationPlaneAccount,
+  provisionCommunicationPlaneApiInbox,
   provisionCommunicationPlaneOwnerAccess,
+  provisionCommunicationPlaneTeam,
 } from '@/app/business-os-actions';
 import { updateOrganizationSettings } from '@/app/management-actions';
 import { loadChatwootReadiness } from '@/lib/chatwoot/readiness';
@@ -28,6 +31,9 @@ export default async function SettingsPage() {
     { data: omanMarket },
     { data: communicationBindings },
     { data: accountMappings },
+    { data: branches },
+    { data: departments },
+    { data: teams },
   ] = await Promise.all([
       supabase
         .from('organization_settings')
@@ -63,6 +69,21 @@ export default async function SettingsPage() {
         .eq('organization_id', organizationId)
         .neq('status', 'ARCHIVED')
         .order('created_at'),
+      supabase
+        .from('branches')
+        .select('id,tenant_business_id,name,code,country_code,timezone,status')
+        .eq('organization_id', organizationId)
+        .order('created_at'),
+      supabase
+        .from('departments')
+        .select('id,branch_id,name,code,status')
+        .eq('organization_id', organizationId)
+        .order('created_at'),
+      supabase
+        .from('teams')
+        .select('id,department_id,name,code,status')
+        .eq('organization_id', organizationId)
+        .order('created_at'),
     ]);
 
   const editable = role === 'OWNER';
@@ -71,6 +92,9 @@ export default async function SettingsPage() {
   const canonicalBusinesses = businesses ?? [];
   const activeBindings = communicationBindings ?? [];
   const liveAccountMappings = accountMappings ?? [];
+  const canonicalBranches = branches ?? [];
+  const canonicalDepartments = departments ?? [];
+  const canonicalTeams = teams ?? [];
   const bootstrapNeeded =
     canonicalBrands.length === 0 || canonicalBusinesses.length === 0;
   const chatwootReadiness = editable
