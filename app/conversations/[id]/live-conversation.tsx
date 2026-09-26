@@ -92,6 +92,12 @@ type OperatorActionOptions = {
     teamId: string;
     name: string;
   }>;
+  notes: Array<{
+    id: number;
+    content: string;
+    createdAt: number;
+    senderName: string | null;
+  }>;
 };
 
 function sourceOf(message: LiveMessage) {
@@ -148,6 +154,7 @@ export function LiveConversationConsole({
   const [labelDraft, setLabelDraft] = useState<string[]>([]);
   const [assigneeDraft, setAssigneeDraft] = useState('');
   const [teamDraft, setTeamDraft] = useState('');
+  const [noteDraft, setNoteDraft] = useState('');
   const endRef = useRef<HTMLDivElement | null>(null);
   const initialScrollDone = useRef(false);
   const requestInFlight = useRef(false);
@@ -224,7 +231,7 @@ export function LiveConversationConsole({
   }, [loadOperatorOptions]);
 
   async function applyOperatorAction(
-    actionName: 'STATUS' | 'LABELS' | 'ASSIGNEE' | 'TEAM',
+    actionName: 'STATUS' | 'LABELS' | 'ASSIGNEE' | 'TEAM' | 'INTERNAL_NOTE',
     payload: Record<string, unknown>,
   ) {
     if (actionBusy) return;
@@ -246,7 +253,10 @@ export function LiveConversationConsole({
       }
       setNotice(body.warning
         ? `Action verified in Chatwoot. ${body.warning}`
-        : 'Action verified in Chatwoot. Projection reconciliation will follow the signed webhook.');
+        : actionName === 'INTERNAL_NOTE'
+          ? 'Private internal note verified in Chatwoot. It was not sent to the customer.'
+          : 'Action verified in Chatwoot. Projection reconciliation will follow the signed webhook.');
+      if (actionName === 'INTERNAL_NOTE') setNoteDraft('');
       await Promise.all([loadOperatorOptions(), refresh()]);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Operator action failed');
@@ -577,7 +587,46 @@ export function LiveConversationConsole({
                 >
                   {actionBusy === 'TEAM' ? 'Applying…' : 'Transfer team'}
                 </button>
+                <div className="liveOperatorField liveOperatorNote">
+                <label htmlFor="chatwoot-note">Internal note</label>
+                <textarea
+                  id="chatwoot-note"
+                  value={noteDraft}
+                  onChange={(event) => setNoteDraft(event.target.value)}
+                  disabled={Boolean(actionBusy)}
+                  maxLength={10000}
+                  rows={3}
+                  placeholder="Private note for operators. Never sent to the customer."
+                />
+                <div className="liveOperatorNoteFoot">
+                  <span>{noteDraft.length}/10000</span>
+                  <button
+                    type="button"
+                    disabled={Boolean(actionBusy) || !noteDraft.trim()}
+                    onClick={() => void applyOperatorAction('INTERNAL_NOTE', {
+                      content: noteDraft.trim(),
+                    })}
+                  >
+                    {actionBusy === 'INTERNAL_NOTE' ? 'Saving…' : 'Add private note'}
+                  </button>
+                </div>
+                {operatorOptions.notes.length > 0 ? (
+                  <div className="liveInternalNotes" aria-label="Recent internal notes">
+                    {operatorOptions.notes.slice(0, 5).map((note) => (
+                      <article key={note.id}>
+                        <div>
+                          <strong>{note.senderName || 'Operator'}</strong>
+                          <span>{formatShortDate(new Date(note.createdAt * 1000).toISOString())}</span>
+                        </div>
+                        <p>{note.content}</p>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <small className="muted">No recent private notes.</small>
+                )}
               </div>
+            </div>
             </div>
           ) : null}
         </details>
