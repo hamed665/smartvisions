@@ -622,6 +622,12 @@ drop policy if exists org_member_operator_briefs on public.operator_briefs;
 drop policy if exists org_member_agent_runs on public.agent_runs;
 drop policy if exists org_member_leads on public.leads;
 drop policy if exists org_member_businesses on public.businesses;
+drop policy if exists sales_conversations_member_read on public.sales_conversations;
+drop policy if exists conversation_messages_member_read on public.conversation_messages;
+drop policy if exists operator_briefs_member_read on public.operator_briefs;
+drop policy if exists agent_runs_member_read on public.agent_runs;
+drop policy if exists leads_member_read on public.leads;
+drop policy if exists businesses_member_read on public.businesses;
 drop policy if exists crm_identities_member_read on public.crm_identities;
 drop policy if exists crm_identity_links_member_read on public.crm_identity_links;
 
