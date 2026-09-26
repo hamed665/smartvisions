@@ -10,6 +10,8 @@ describe('Cloudflare scheduled pilot invocation', () => {
     expect(source).toContain("controlledAutoDispatchPost(internalJsonRequest(env, '/api/operations/controlled-auto-dispatch', {}))");
     expect(source).toContain("pilotAcquisitionPost(internalJsonRequest(env, '/api/operations/pilot-acquisition', {}))");
     expect(source).not.toContain("internalPost(env, '/api/operations/pilot-acquisition', {})");
+    expect(source).toContain("import { POST as chatwootInboxReconcilePost } from '../app/api/operations/chatwoot-inbox-reconcile/route'");
+    expect(source).toContain("internalJsonRequest(env, '/api/operations/chatwoot-inbox-reconcile', { limit: 10 })");
   });
 
   it('keeps normal Worker fetch routing and gates scheduled work only by production environment', () => {

@@ -3,6 +3,7 @@ import { POST as dailyAcquisitionPost } from '../app/api/operations/daily-acquis
 import { POST as evidencePipelinePost } from '../app/api/operations/daily-evidence/route';
 import { POST as controlledAutoDispatchPost } from '../app/api/operations/controlled-auto-dispatch/route';
 import { POST as pilotAcquisitionPost } from '../app/api/operations/pilot-acquisition/route';
+import { POST as chatwootInboxReconcilePost } from '../app/api/operations/chatwoot-inbox-reconcile/route';
 import { shouldRunScheduledOperations } from './schedule-policy';
 
 type WorkerVersionMetadata = { id?: string; tag?: string; timestamp?: string };
@@ -49,6 +50,10 @@ type ScheduledMetrics = {
   telegramDigestStatus?: number;
   telegramDigestAction?: string;
   telegramDigestReason?: string;
+  chatwootReconcileStatus?: number;
+  chatwootReconciled?: number;
+  chatwootIgnored?: number;
+  chatwootReconcileFailed?: number;
 };
 
 function organizationIdFromTask(task: AgentTask) {
@@ -127,6 +132,26 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
     reconciliationAttention: 0,
     tickStatus: tickResponse.status,
   };
+  try {
+    const reconcileResponse = await chatwootInboxReconcilePost(
+      internalJsonRequest(env, '/api/operations/chatwoot-inbox-reconcile', { limit: 10 }),
+    );
+    metrics.chatwootReconcileStatus = reconcileResponse.status;
+    const reconcile = await reconcileResponse.json().catch(() => null) as {
+      processed?: number;
+      ignored?: number;
+      failed?: number;
+    } | null;
+    metrics.chatwootReconciled = Number(reconcile?.processed ?? 0);
+    metrics.chatwootIgnored = Number(reconcile?.ignored ?? 0);
+    metrics.chatwootReconcileFailed = Number(reconcile?.failed ?? 0);
+    if (!reconcileResponse.ok) metrics.failed += 1;
+    else metrics.failed += metrics.chatwootReconcileFailed;
+  } catch {
+    metrics.chatwootReconcileFailed = 1;
+    metrics.failed += 1;
+  }
+
   if (!tickResponse.ok) {
     metrics.failed += 1;
     await recordScheduledHeartbeat(env, controller, 'RESULT', metrics);
