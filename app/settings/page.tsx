@@ -2,6 +2,7 @@ import {
   bootstrapCanonicalTenant,
   prepareCommunicationPlaneProjection,
   provisionCommunicationPlaneAccount,
+  provisionCommunicationPlaneOwnerAccess,
 } from '@/app/business-os-actions';
 import { updateOrganizationSettings } from '@/app/management-actions';
 import { loadChatwootReadiness } from '@/lib/chatwoot/readiness';
@@ -320,9 +321,32 @@ export default async function SettingsPage() {
                       </form>
                     ) : null}
                     {accountMapping?.status === 'ACTIVE' ? (
-                      <span className="muted smallText">
-                        External Account {accountMapping.chatwoot_account_id ?? 'verified'}
-                      </span>
+                      <>
+                        <span className="muted smallText">
+                          External Account {accountMapping.chatwoot_account_id ?? 'verified'}
+                        </span>
+                        <form action={provisionCommunicationPlaneOwnerAccess}>
+                          <input
+                            type="hidden"
+                            name="tenant_business_id"
+                            value={business.id}
+                          />
+                          <button
+                            disabled={
+                              !editable ||
+                              !chatwootReadiness?.liveProvisioningReady
+                            }
+                          >
+                            Provision / verify my Chatwoot access
+                          </button>
+                        </form>
+                        <a
+                          href={`/api/chatwoot/sso/${organizationId}/${business.id}`}
+                          className="muted smallText"
+                        >
+                          Open Communication Inbox
+                        </a>
+                      </>
                     ) : null}
                   </div>
                 </div>
