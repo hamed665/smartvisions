@@ -170,6 +170,19 @@ afterEach(() => {
 });
 
 describe('C4 API Inbox provisioning', () => {
+  it('fails before mapping claim while Production provisioning is disabled', async () => {
+    vi.stubEnv('CHATWOOT_PROVISIONING_ENABLED', 'false');
+    const { supabase, rpc } = setupSupabase();
+
+    await expect(
+      provisionChatwootApiInbox(input(supabase)),
+    ).rejects.toMatchObject({ code: 'ACTIVATION_BLOCKED' });
+
+    expect(rpc).not.toHaveBeenCalled();
+    expect(adminPreflight).not.toHaveBeenCalled();
+    expect(adminRequest).not.toHaveBeenCalled();
+  });
+
   it('fails before mapping claim when ACTIVE OWNER administrator projection is absent', async () => {
     vi.stubEnv('CHATWOOT_WEBHOOK_PUBLIC_ORIGIN', 'https://app.example.com');
     const { supabase, rpc } = setupSupabase();
