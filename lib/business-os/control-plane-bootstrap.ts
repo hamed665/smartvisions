@@ -114,7 +114,7 @@ function normalizeMetadata(value: unknown) {
     invalid('metadata must be JSON serializable');
   }
 
-  if (Buffer.byteLength(encoded, 'utf8') > MAX_METADATA_BYTES) {
+  if (new TextEncoder().encode(encoded).length > MAX_METADATA_BYTES) {
     invalid('metadata exceeds the bootstrap size limit');
   }
 
