@@ -59,7 +59,7 @@ export default async function SettingsPage() {
         .maybeSingle(),
       supabase
         .from('communication_channel_bindings')
-        .select('id,tenant_business_id,integration_connection_id,channel,status')
+        .select('id,tenant_business_id,branch_id,integration_connection_id,channel,status')
         .eq('organization_id', organizationId)
         .neq('status', 'ARCHIVED')
         .order('created_at'),
