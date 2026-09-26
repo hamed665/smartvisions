@@ -11,7 +11,10 @@ vi.mock('@/lib/supabase/service', () => ({
   createSupabaseServiceClient: serviceClientFactory,
 }));
 
-import { readBusinessWideChatwootRole } from '@/lib/chatwoot/membership-role';
+import {
+  readBusinessWideChatwootRole,
+  readSelfBusinessWideChatwootRole,
+} from '@/lib/chatwoot/membership-role';
 
 const ORG = '00000000-0000-4000-8000-000000000101';
 const BRAND = '00000000-0000-4000-8000-000000000102';
@@ -42,6 +45,7 @@ function setup(input: {
   assignmentError?: boolean;
   memberOrganizationId?: string;
   authError?: boolean;
+  authUserId?: string;
 }) {
   const reads: string[] = [];
   const assignmentFilters: string[] = [];
@@ -86,17 +90,27 @@ function setup(input: {
     auth: {
       getUser: vi.fn(async () => input.authError
         ? { data: { user: null }, error: { message: 'unauthenticated' } }
-        : { data: { user: { id: OWNER } }, error: null }),
+        : { data: { user: { id: input.authUserId ?? OWNER } }, error: null }),
     },
     from: vi.fn((table: string) => {
       if (table !== 'organization_members') throw new Error('unexpected authenticated table');
       const builder = {
         select: () => builder,
         eq: () => builder,
-        single: async () => ({
-          data: { organization_id: ORG, user_id: OWNER, role: input.ownerRole ?? 'OWNER' },
-          error: null,
-        }),
+        single: async () => {
+          const authUserId = input.authUserId ?? OWNER;
+          return {
+            data: {
+              organization_id: ORG,
+              user_id: authUserId,
+              role:
+                authUserId === OWNER
+                  ? input.ownerRole ?? 'OWNER'
+                  : input.memberRole ?? 'ADMIN',
+            },
+            error: null,
+          };
+        },
       };
       return builder;
     }),
@@ -106,6 +120,68 @@ function setup(input: {
 }
 
 const args = { organizationId: ORG, tenantBusinessId: BUSINESS, smartUserId: MEMBER };
+
+describe('Self Business-wide Chatwoot eligibility read', () => {
+  it('allows a Business-wide ADMIN self session to project as agent', async () => {
+    const { supabase } = setup({
+      authUserId: MEMBER,
+      memberRole: 'ADMIN',
+    });
+
+    await expect(
+      readSelfBusinessWideChatwootRole({
+        supabase,
+        organizationId: ORG,
+        tenantBusinessId: BUSINESS,
+      }),
+    ).resolves.toEqual({
+      effectiveSmartRole: 'ADMIN',
+      chatwootRole: 'agent',
+    });
+  });
+
+  it('keeps an Organization VIEWER without Brand/Business authority out of native Chatwoot', async () => {
+    const { supabase, assignmentFilters } = setup({
+      authUserId: MEMBER,
+      memberRole: 'VIEWER',
+      assignments: [],
+    });
+
+    await expect(
+      readSelfBusinessWideChatwootRole({
+        supabase,
+        organizationId: ORG,
+        tenantBusinessId: BUSINESS,
+      }),
+    ).resolves.toEqual({
+      effectiveSmartRole: 'VIEWER',
+      chatwootRole: null,
+    });
+
+    expect(assignmentFilters).toEqual([
+      `and(scope_type.eq.BRAND,brand_id.eq.${BRAND}),and(scope_type.eq.BUSINESS,tenant_business_id.eq.${BUSINESS})`,
+    ]);
+  });
+
+  it('does not elevate conditional Business authority for native Chatwoot SSO', async () => {
+    const { supabase } = setup({
+      authUserId: MEMBER,
+      memberRole: 'VIEWER',
+      assignments: [scoped('BUSINESS', 'SALES_AGENT', { certified: true })],
+    });
+
+    await expect(
+      readSelfBusinessWideChatwootRole({
+        supabase,
+        organizationId: ORG,
+        tenantBusinessId: BUSINESS,
+      }),
+    ).resolves.toEqual({
+      effectiveSmartRole: 'VIEWER',
+      chatwootRole: null,
+    });
+  });
+});
 
 describe('Business-wide Chatwoot membership role read', () => {
   it('maps only a canonical Organization OWNER to administrator', async () => {
