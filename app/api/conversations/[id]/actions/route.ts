@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import {
+  getUnifiedInboxConversationActionOptions,
   parseUnifiedInboxConversationActionBody,
   performUnifiedInboxConversationAction,
   UnifiedInboxActionError,
@@ -26,6 +27,40 @@ function statusFor(error: unknown) {
     return 502;
   }
   return 500;
+}
+
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    const { supabase, organizationId } = await getCurrentOrganization();
+    const options = await getUnifiedInboxConversationActionOptions({
+      supabase,
+      organizationId,
+      conversationId: id,
+    });
+    return NextResponse.json(options, {
+      headers: { 'Cache-Control': 'private, no-store' },
+    });
+  } catch (error) {
+    const status = statusFor(error);
+    const message = error instanceof UnifiedInboxActionError
+      ? error.message
+      : error instanceof ChatwootHttpError
+        ? 'Chatwoot action options could not be loaded safely'
+        : 'Unified Inbox action options failed';
+
+    return NextResponse.json(
+      {
+        error: message,
+        ...(error instanceof UnifiedInboxActionError ? { code: error.code } : {}),
+      },
+      { status },
+    );
+  }
 }
 
 export async function POST(
