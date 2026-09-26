@@ -150,7 +150,10 @@ Current durable Production state is maintained in `docs/CURRENT_STATE.md`. As of
 
 ## Engineering rules
 
-- Work through isolated branches and minimal coherent PRs.
+- Work through isolated branches and coherent vertical delivery packages.
+- Treat Sections/Work Package IDs as the roadmap and PRs only as implementation evidence. Follow `docs/business-os-2027/DELIVERY_PACKAGING_STANDARD.md`.
+- Consolidate compatible audit/schema/API/runtime/auth/tests/UI/docs work into one bounded delivery package when ownership, failure model, rollout and rollback remain clear; do not fragment work into separate PRs by habit.
+- Never reduce approved scope, safety, test coverage, observability, rollback evidence or architectural quality merely to minimize PR volume.
 - Never modify the Website repo or frozen legacy Website paths while working on Growth OS.
 - Never merge with failing install/lint/typecheck/tests/build.
 - Runtime-changing Cloudflare work must also pass Vinext build/compatibility and scheduled-bundle invariants where applicable.
