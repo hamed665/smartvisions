@@ -36,30 +36,11 @@ function memberRole(value: unknown): OrganizationRole {
  * This bypass is read-only and is not an authorization ticket for mutation;
  * the governed writer must independently solve transactional authorization.
  */
-export async function readBusinessWideChatwootRole(input: {
-  supabase: SupabaseClient;
+async function readCanonicalBusinessWideRole(input: {
   organizationId: string;
   tenantBusinessId: string;
   smartUserId: string;
-}): Promise<{ effectiveSmartRole: OrganizationRole; chatwootRole: BusinessWideChatwootRole }> {
-  if (!isUuid(input.organizationId) || !isUuid(input.tenantBusinessId) ||
-      !isUuid(input.smartUserId)) return reject();
-
-  const { data: auth, error: authError } = await input.supabase.auth.getUser();
-  if (authError || !auth.user?.id || !isUuid(auth.user.id)) return reject();
-
-  // organization_members is self-readable under the authenticated RLS contract.
-  // Prove current OWNER authority before creating any service client.
-  const owner = await input.supabase.from('organization_members')
-    .select('organization_id,user_id,role')
-    .eq('organization_id', input.organizationId)
-    .eq('user_id', auth.user.id)
-    .single();
-
-  if (owner.error || owner.data?.role !== 'OWNER' ||
-      owner.data.organization_id !== input.organizationId ||
-      owner.data.user_id !== auth.user.id) return reject();
-
+}) {
   const smartCore = createSupabaseServiceClient();
 
   const [member, business] = await Promise.all([
@@ -143,13 +124,71 @@ export async function readBusinessWideChatwootRole(input: {
       },
     },
     assignments: scoped,
-    // No caller-provided policy attributes: conditional grants cannot be
-    // upgraded into a Business-wide Account membership without trusted context.
   });
 
   return {
     effectiveSmartRole,
     chatwootRole: effectiveSmartRole === 'OWNER' ? 'administrator'
       : effectiveSmartRole === 'VIEWER' ? null : 'agent',
-  };
+  } as const;
+}
+
+export async function readSelfBusinessWideChatwootRole(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  tenantBusinessId: string;
+}) {
+  if (!isUuid(input.organizationId) || !isUuid(input.tenantBusinessId)) {
+    return reject();
+  }
+
+  const { data: auth, error: authError } = await input.supabase.auth.getUser();
+  if (authError || !auth.user?.id || !isUuid(auth.user.id)) return reject();
+
+  const member = await input.supabase.from('organization_members')
+    .select('organization_id,user_id,role')
+    .eq('organization_id', input.organizationId)
+    .eq('user_id', auth.user.id)
+    .single();
+
+  if (member.error || !member.data ||
+      member.data.organization_id !== input.organizationId ||
+      member.data.user_id !== auth.user.id) return reject();
+
+  return readCanonicalBusinessWideRole({
+    organizationId: input.organizationId,
+    tenantBusinessId: input.tenantBusinessId,
+    smartUserId: auth.user.id,
+  });
+}
+
+export async function readBusinessWideChatwootRole(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  tenantBusinessId: string;
+  smartUserId: string;
+}): Promise<{ effectiveSmartRole: OrganizationRole; chatwootRole: BusinessWideChatwootRole }> {
+  if (!isUuid(input.organizationId) || !isUuid(input.tenantBusinessId) ||
+      !isUuid(input.smartUserId)) return reject();
+
+  const { data: auth, error: authError } = await input.supabase.auth.getUser();
+  if (authError || !auth.user?.id || !isUuid(auth.user.id)) return reject();
+
+  // organization_members is self-readable under the authenticated RLS contract.
+  // Prove current OWNER authority before creating any service client.
+  const owner = await input.supabase.from('organization_members')
+    .select('organization_id,user_id,role')
+    .eq('organization_id', input.organizationId)
+    .eq('user_id', auth.user.id)
+    .single();
+
+  if (owner.error || owner.data?.role !== 'OWNER' ||
+      owner.data.organization_id !== input.organizationId ||
+      owner.data.user_id !== auth.user.id) return reject();
+
+  return readCanonicalBusinessWideRole({
+    organizationId: input.organizationId,
+    tenantBusinessId: input.tenantBusinessId,
+    smartUserId: input.smartUserId,
+  });
 }
