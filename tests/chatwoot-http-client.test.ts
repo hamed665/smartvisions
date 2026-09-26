@@ -14,6 +14,7 @@ afterEach(() => {
 });
 
 function enableProvisioning() {
+  vi.stubEnv('DEPLOYMENT_ENV', 'production');
   vi.stubEnv('CHATWOOT_PROVISIONING_ENABLED', 'true');
   vi.stubEnv('CHATWOOT_BASE_URL', 'https://inbox.example.com');
   vi.stubEnv('CHATWOOT_PLATFORM_TOKEN', 'platform-secret-token');
@@ -37,6 +38,46 @@ describe('Chatwoot provisioning HTTP client', () => {
       code: 'PROVISIONING_DISABLED',
       ambiguousMutationOutcome: false,
     });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('fails closed before fetch outside the Production deployment environment', async () => {
+    vi.stubEnv('DEPLOYMENT_ENV', 'candidate');
+    vi.stubEnv('CHATWOOT_PROVISIONING_ENABLED', 'true');
+    vi.stubEnv('CHATWOOT_BASE_URL', 'https://inbox.example.com');
+    vi.stubEnv('CHATWOOT_PLATFORM_TOKEN', 'platform-secret-token');
+
+    const fetchMock = vi.fn();
+
+    await expect(
+      chatwootPlatformProvisioningRequest({
+        path: '/platform/api/v1/accounts',
+        fetchImpl: fetchMock as unknown as typeof fetch,
+      }),
+    ).rejects.toMatchObject({
+      code: 'PROVISIONING_DISABLED',
+      ambiguousMutationOutcome: false,
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('requires the server-only Platform token before any account-scoped provisioning request', async () => {
+    vi.stubEnv('DEPLOYMENT_ENV', 'production');
+    vi.stubEnv('CHATWOOT_PROVISIONING_ENABLED', 'true');
+    vi.stubEnv('CHATWOOT_BASE_URL', 'https://inbox.example.com');
+    vi.stubEnv('CHATWOOT_PLATFORM_TOKEN', '');
+
+    const fetchMock = vi.fn();
+
+    await expect(
+      chatwootAccountProvisioningRequest({
+        path: '/api/v1/accounts/7/inboxes',
+        accessToken: 'ephemeral-user-token',
+        fetchImpl: fetchMock as unknown as typeof fetch,
+      }),
+    ).rejects.toMatchObject({ code: 'CONFIG_INVALID' });
 
     expect(fetchMock).not.toHaveBeenCalled();
   });

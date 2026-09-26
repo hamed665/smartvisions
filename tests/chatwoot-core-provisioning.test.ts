@@ -21,6 +21,7 @@ afterEach(() => {
 });
 
 function enableProvisioning() {
+  vi.stubEnv('DEPLOYMENT_ENV', 'production');
   vi.stubEnv('CHATWOOT_PROVISIONING_ENABLED', 'true');
   vi.stubEnv('CHATWOOT_BASE_URL', 'https://inbox.example.com');
   vi.stubEnv('CHATWOOT_PLATFORM_TOKEN', 'platform-secret-token');

@@ -25,7 +25,8 @@ Production changes are promoted only after the repository's safety, CI, migratio
 13. [CHATWOOT_SOURCE_GAP_AUDIT.md](./CHATWOOT_SOURCE_GAP_AUDIT.md) — source/license/deployment/provider-ownership audit for the Chatwoot Communication Plane.
 14. [CHATWOOT_TENANT_BRIDGE_GAP_AUDIT.md](./CHATWOOT_TENANT_BRIDGE_GAP_AUDIT.md) — deterministic tenant/business/user/account/inbox/team/contact/conversation mapping audit.
 15. [CHATWOOT_PRODUCTION_PROMOTION_READINESS_AUDIT.md](./CHATWOOT_PRODUCTION_PROMOTION_READINESS_AUDIT.md) — evidence-backed gate between the verified isolated Candidate and any future Production Chatwoot provisioning.
-16. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
+16. [CHATWOOT_PRODUCTION_ACTIVATION_GATE.md](./CHATWOOT_PRODUCTION_ACTIVATION_GATE.md) — server-only Platform-token transport, fail-closed runtime activation contract and first real-tenant activation sequence.
+17. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
 
 ## Phase 0 exit criteria
 

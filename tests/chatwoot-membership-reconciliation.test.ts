@@ -13,6 +13,7 @@ const BUSINESS_ID = '00000000-0000-4000-8000-000000000602';
 const MEMBERSHIP_ID = '00000000-0000-4000-8000-000000000603';
 
 function enabled() {
+  vi.stubEnv('DEPLOYMENT_ENV', 'production');
   vi.stubEnv('CHATWOOT_PROVISIONING_ENABLED', 'true');
   vi.stubEnv('CHATWOOT_BASE_URL', 'https://inbox.example.com');
   vi.stubEnv('CHATWOOT_PLATFORM_TOKEN', 'platform-secret-token');

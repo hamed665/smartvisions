@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { evaluateChatwootProvisioningActivation } from '@/lib/chatwoot/activation-contract';
 import {
   classifyChatwootHttpStatus,
   isChatwootReadMethod,
@@ -45,8 +46,30 @@ export class ChatwootHttpError extends Error {
   }
 }
 
-function provisioningEnabled() {
-  return process.env.CHATWOOT_PROVISIONING_ENABLED === 'true';
+function assertProvisioningActivated() {
+  const activation = evaluateChatwootProvisioningActivation({
+    deploymentEnvironment: process.env.DEPLOYMENT_ENV,
+    provisioningEnabled: process.env.CHATWOOT_PROVISIONING_ENABLED,
+    baseUrl: process.env.CHATWOOT_BASE_URL,
+    platformToken: process.env.CHATWOOT_PLATFORM_TOKEN,
+  });
+
+  if (
+    activation.deploymentEnvironment !== 'production' ||
+    !activation.requested
+  ) {
+    throw new ChatwootHttpError({
+      code: 'PROVISIONING_DISABLED',
+      message: 'Chatwoot provisioning is disabled',
+    });
+  }
+
+  if (!activation.platformTokenConfigured) {
+    throw new ChatwootHttpError({
+      code: 'CONFIG_INVALID',
+      message: 'Chatwoot Platform token is not configured',
+    });
+  }
 }
 
 function baseUrl() {
@@ -211,12 +234,7 @@ export async function chatwootProvisioningRequest<T>(input: {
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
 }): Promise<T> {
-  if (!provisioningEnabled()) {
-    throw new ChatwootHttpError({
-      code: 'PROVISIONING_DISABLED',
-      message: 'Chatwoot provisioning is disabled',
-    });
-  }
+  assertProvisioningActivated();
 
   const method = input.method ?? 'GET';
 

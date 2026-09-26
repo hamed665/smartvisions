@@ -102,6 +102,7 @@ jobs:
             'TELEGRAM_OWNER_USER_ID','TELEGRAM_OWNER_CHAT_ID','TELEGRAM_ORGANIZATION_ID'
           ];
           const missing=required.filter(k=>!names.has(k));
+          if(worker==='smartvisions-growth-os-release-candidate'&&names.has('CHATWOOT_PLATFORM_TOKEN'))throw new Error('Release candidate must never bind CHATWOOT_PLATFORM_TOKEN');
           if(!['META_WHATSAPP_ACCESS_TOKEN','META_WHATSAPP_TOKEN','WHATSAPP_ACCESS_TOKEN'].some(k=>names.has(k)))missing.push('WhatsApp access token alias');
           if(!['META_WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_PHONE_NUMBER_ID'].some(k=>names.has(k)))missing.push('WhatsApp phone-number ID alias');
           if(missing.length)throw new Error(`${worker} is missing required secret binding name(s): ${missing.join(', ')}`);
@@ -133,12 +134,13 @@ jobs:
           };
           delete c.vars.CHATWOOT_BASE_URL;
           delete c.vars.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN;
+          delete c.vars.CHATWOOT_PLATFORM_TOKEN;
           c.limits={...(c.limits||{}),cpu_ms:100};
           delete c.routes;
           delete c.route;
           delete c.triggers;
           fs.writeFileSync(file,JSON.stringify(c,null,2)+'\n');
-          if(c.name!=='smartvisions-growth-os-release-candidate'||c.vars?.DEPLOYMENT_ENV!=='candidate'||c.vars?.CHATWOOT_PROVISIONING_ENABLED!=='false'||c.vars?.CHATWOOT_BASE_URL||c.vars?.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN||c.limits?.cpu_ms!==100||c.routes||c.route||c.triggers)throw new Error('Release candidate isolation validation failed');
+          if(c.name!=='smartvisions-growth-os-release-candidate'||c.vars?.DEPLOYMENT_ENV!=='candidate'||c.vars?.CHATWOOT_PROVISIONING_ENABLED!=='false'||c.vars?.CHATWOOT_BASE_URL||c.vars?.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN||c.vars?.CHATWOOT_PLATFORM_TOKEN||c.limits?.cpu_ms!==100||c.routes||c.route||c.triggers)throw new Error('Release candidate isolation validation failed');
           console.log('Release candidate validated: candidate env, Chatwoot provisioning disabled/unbound, no production route, no scheduled triggers, CPU guard=100ms.');
           NODE
 
@@ -202,10 +204,33 @@ jobs:
           if(c.vars?.CHATWOOT_BASE_URL!==process.env.CHATWOOT_BASE_URL)throw new Error('Production Chatwoot base URL invariant failed');
           if(c.vars?.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN!==process.env.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN)throw new Error('Production Chatwoot webhook origin invariant failed');
           if(c.vars?.CHATWOOT_PROVISIONING_ENABLED!=='false')throw new Error('Production Chatwoot provisioning must remain disabled');
+          if(Object.prototype.hasOwnProperty.call(c.vars||{},'CHATWOOT_PLATFORM_TOKEN'))throw new Error('Chatwoot Platform token must never be stored in plaintext Worker vars');
           if(JSON.stringify(c.triggers?.crons)!==JSON.stringify(['*/2 * * * *']))throw new Error('Production cron invariant failed');
           fs.writeFileSync(file,JSON.stringify(c,null,2)+'\n');
           NODE
           npx wrangler deploy --config dist/server/wrangler.json
+
+      - name: Stage Chatwoot Platform token on Production only when configured
+        env:
+          CHATWOOT_PLATFORM_TOKEN: ${{ secrets.CHATWOOT_PLATFORM_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${CHATWOOT_PLATFORM_TOKEN:-}" ]; then
+            echo "Chatwoot Platform token GitHub secret is not configured; Production provisioning remains disabled."
+            exit 0
+          fi
+          printf '%s' "$CHATWOOT_PLATFORM_TOKEN" | npx wrangler secret put CHATWOOT_PLATFORM_TOKEN --config dist/server/wrangler.json >/dev/null
+          npx wrangler secret list --name smartvisions-growth-os-production --format json > .chatwoot-production-secret-names.json
+          node <<'NODE'
+          const fs=require('node:fs');
+          const rows=JSON.parse(fs.readFileSync('.chatwoot-production-secret-names.json','utf8'));
+          const names=new Set((Array.isArray(rows)?rows:[]).map(x=>x.name));
+          if(!names.has('CHATWOOT_PLATFORM_TOKEN'))throw new Error('Production Chatwoot Platform token binding name was not created');
+          console.log('Production Chatwoot Platform token binding name verified; value was not read or printed.');
+          NODE
+          rm -f .chatwoot-production-secret-names.json
+          echo "Chatwoot Platform token staged only on the Production Worker; provisioning remains disabled."
 
       - name: Re-assert Growth Supabase bindings on production Worker
         shell: bash
@@ -276,3 +301,4 @@ jobs:
           echo "Chatwoot Production base URL: inbox.smartvisionsai.com"
           echo "Chatwoot webhook public origin: app.smartvisionsai.com"
           echo "Chatwoot provisioning: disabled"
+          echo "Chatwoot Platform token transport: Production Worker secret only when configured; never release candidate"
