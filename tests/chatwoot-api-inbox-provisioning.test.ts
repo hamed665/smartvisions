@@ -3,14 +3,16 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 vi.mock('server-only', () => ({}));
 
-const { adminRequest, vaultCreate, serviceFactory } = vi.hoisted(() => ({
+const { adminRequest, adminPreflight, vaultCreate, serviceFactory } = vi.hoisted(() => ({
   adminRequest: vi.fn(),
+  adminPreflight: vi.fn(),
   vaultCreate: vi.fn(),
   serviceFactory: vi.fn(),
 }));
 
 vi.mock('@/lib/chatwoot/account-admin-request', () => ({
   chatwootAdminAccountRequest: adminRequest,
+  requireChatwootAdminProjection: adminPreflight,
 }));
 
 vi.mock('@/lib/chatwoot/vault', () => ({
@@ -150,11 +152,31 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
   adminRequest.mockReset();
+  adminPreflight.mockReset();
+  adminPreflight.mockResolvedValue({
+    smartUserId: '00000000-0000-4000-8000-000000001210',
+    chatwootUserId: 151,
+    chatwootAccountId: 501,
+  });
   vaultCreate.mockReset();
   serviceFactory.mockReset();
 });
 
 describe('C4 API Inbox provisioning', () => {
+  it('fails before mapping claim when ACTIVE OWNER administrator projection is absent', async () => {
+    vi.stubEnv('CHATWOOT_WEBHOOK_PUBLIC_ORIGIN', 'https://app.example.com');
+    const { supabase, rpc } = setupSupabase();
+    adminPreflight.mockRejectedValueOnce(new Error('admin projection unavailable'));
+
+    await expect(
+      provisionChatwootApiInbox(input(supabase)),
+    ).rejects.toThrow('admin projection unavailable');
+
+    expect(rpc).not.toHaveBeenCalled();
+    expect(adminRequest).not.toHaveBeenCalled();
+    expect(vaultCreate).not.toHaveBeenCalled();
+  });
+
   it('GET-reconciles first, creates once, Vault-captures secrets, receipts, then activates', async () => {
     vi.stubEnv('CHATWOOT_WEBHOOK_PUBLIC_ORIGIN', 'https://app.example.com');
     const { supabase, rpc } = setupSupabase();
