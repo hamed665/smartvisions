@@ -55,6 +55,7 @@ describe('COMM-UNIFIED-INBOX scoped security boundary', () => {
   });
 
   it('keeps projection writes dormant until the governed reconciler package exists', () => {
+    expect(migration).toContain("coalesce(current_setting('smartvisions.unified_inbox_projection_command', true), '') <> '1'");
     expect(migration).toContain('Unified Inbox projection mutation requires reconciler command path');
     expect(migration).toContain('revoke all on table public.unified_inbox_conversation_projections');
     expect(migration).toContain('grant select on table public.unified_inbox_conversation_projections');
