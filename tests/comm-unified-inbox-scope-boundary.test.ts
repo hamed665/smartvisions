@@ -93,6 +93,11 @@ describe('COMM-UNIFIED-INBOX scoped security boundary', () => {
       .toBe((migration.match(/create or replace function public\./gi) ?? []).length);
   });
 
+  it('contains no malformed single-dollar PL/pgSQL or SQL function delimiter', () => {
+    expect(migration).not.toMatch(/\nas \$\n/);
+    expect(migration).not.toMatch(/\n\$;\n/);
+  });
+
   it('contains executable PostgreSQL 17 scope assertions in CI smoke coverage', () => {
     expect(smoke).toContain('scoped user leaked out-of-branch conversations');
     expect(smoke).toContain('TEAM VIEWER did not override broader BRANCH SALES_AGENT');
