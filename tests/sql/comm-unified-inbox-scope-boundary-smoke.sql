@@ -175,10 +175,10 @@ insert into public.sales_conversations(
   ('72000000-0000-4000-8000-000000009313','00000000-0000-4000-8000-000000009310',null,'EMAIL',statement_timestamp());
 
 insert into public.conversation_messages(
-  id,organization_id,conversation_id,lead_id,channel,direction,original_text
+  id,organization_id,conversation_id,lead_id,channel,direction,original_text,status
 ) values
-  ('72100000-0000-4000-8000-000000009311','00000000-0000-4000-8000-000000009310','72000000-0000-4000-8000-000000009311','71000000-0000-4000-8000-000000009311','WHATSAPP','INBOUND','branch a'),
-  ('72100000-0000-4000-8000-000000009312','00000000-0000-4000-8000-000000009310','72000000-0000-4000-8000-000000009312','71000000-0000-4000-8000-000000009312','EMAIL','INBOUND','branch b');
+  ('72100000-0000-4000-8000-000000009311','00000000-0000-4000-8000-000000009310','72000000-0000-4000-8000-000000009311','71000000-0000-4000-8000-000000009311','WHATSAPP','INBOUND','branch a','RECEIVED'),
+  ('72100000-0000-4000-8000-000000009312','00000000-0000-4000-8000-000000009310','72000000-0000-4000-8000-000000009312','71000000-0000-4000-8000-000000009312','EMAIL','INBOUND','branch b','RECEIVED');
 
 insert into public.whatsapp_events(
   id,organization_id,lead_id,conversation_id,provider_message_id,direction,event_type,payload
