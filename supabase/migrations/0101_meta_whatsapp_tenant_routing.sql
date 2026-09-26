@@ -48,6 +48,112 @@ create index communication_channel_bindings_provider_account_idx
   where status = 'ACTIVE'
     and provider_account_id is not null;
 
+create or replace function public.configure_meta_whatsapp_binding(
+  p_organization_id uuid,
+  p_binding_id uuid,
+  p_expected_version integer,
+  p_waba_id text,
+  p_phone_number_id text,
+  p_display_phone_number text,
+  p_access_token text,
+  p_request_key text
+)
+returns public.communication_channel_bindings
+language plpgsql
+security invoker
+set search_path = public, auth, vault, pg_catalog
+as $
+declare
+  v_current public.communication_channel_bindings%rowtype;
+  v_updated public.communication_channel_bindings%rowtype;
+  v_actor uuid := auth.uid();
+  v_waba text := trim(coalesce(p_waba_id, ''));
+  v_phone text := trim(coalesce(p_phone_number_id, ''));
+  v_display text := nullif(trim(coalesce(p_display_phone_number, '')), '');
+  v_token text := trim(coalesce(p_access_token, ''));
+  v_request_key text := trim(coalesce(p_request_key, ''));
+  v_secret_id uuid;
+begin
+  if v_actor is null or not public.chatwoot_bridge_can_manage(p_organization_id) then
+    raise exception 'Meta WhatsApp binding configuration not permitted';
+  end if;
+  if p_expected_version is null or p_expected_version < 1
+     or length(v_waba) not between 1 and 200
+     or length(v_phone) not between 1 and 200
+     or length(v_token) < 20
+     or length(v_request_key) not between 1 and 200
+     or (v_display is not null and length(v_display) > 200)
+  then
+    raise exception 'invalid Meta WhatsApp binding configuration';
+  end if;
+
+  select *
+    into v_current
+    from public.communication_channel_bindings b
+   where b.organization_id = p_organization_id
+     and b.id = p_binding_id
+   for update;
+
+  if not found
+     or v_current.channel <> 'WHATSAPP'
+     or v_current.status <> 'ACTIVE'
+     or v_current.version <> p_expected_version
+  then
+    raise exception 'Meta WhatsApp binding is not eligible for configuration';
+  end if;
+
+  if exists (
+    select 1
+      from public.communication_channel_bindings sibling
+     where sibling.status = 'ACTIVE'
+       and sibling.channel = 'WHATSAPP'
+       and sibling.provider = 'META'
+       and sibling.provider_destination_id = v_phone
+       and sibling.id <> v_current.id
+  ) then
+    raise exception 'Meta WhatsApp destination is already bound';
+  end if;
+
+  if v_current.provider_secret_ref is null then
+    v_secret_id := vault.create_secret(
+      v_token,
+      'meta_whatsapp_binding_' || replace(v_current.id::text, '-', ''),
+      'Smart Visions tenant-bound Meta WhatsApp access token',
+      null
+    );
+  else
+    perform vault.update_secret(
+      v_current.provider_secret_ref,
+      v_token,
+      null,
+      'Smart Visions tenant-bound Meta WhatsApp access token',
+      null
+    );
+    v_secret_id := v_current.provider_secret_ref;
+  end if;
+
+  update public.communication_channel_bindings
+     set provider = 'META',
+         provider_account_id = v_waba,
+         provider_destination_id = v_phone,
+         provider_destination_label = v_display,
+         provider_secret_ref = v_secret_id,
+         version = version + 1,
+         last_request_key = v_request_key,
+         updated_by_user_id = v_actor
+   where organization_id = p_organization_id
+     and id = p_binding_id
+     and version = p_expected_version
+  returning * into v_updated;
+
+  if not found then
+    raise exception 'Meta WhatsApp binding configuration lost optimistic lock';
+  end if;
+
+  return v_updated;
+end;
+$;
+
 create or replace function public.resolve_meta_whatsapp_destination(
   p_phone_number_id text,
   p_waba_id text default null
@@ -205,3 +311,10 @@ revoke all on function public.resolve_meta_whatsapp_credential(uuid,uuid,uuid)
   from public, anon, authenticated, service_role;
 grant execute on function public.resolve_meta_whatsapp_credential(uuid,uuid,uuid)
   to service_role;
+
+revoke all on function public.configure_meta_whatsapp_binding(
+  uuid,uuid,integer,text,text,text,text,text
+) from public, anon, authenticated, service_role;
+grant execute on function public.configure_meta_whatsapp_binding(
+  uuid,uuid,integer,text,text,text,text,text
+) to authenticated;
