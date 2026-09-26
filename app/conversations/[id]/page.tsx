@@ -6,6 +6,7 @@ import {
   type LiveConversationSnapshot,
 } from './live-conversation';
 import { getCurrentOrganization } from '@/lib/supabase/org';
+import { loadUnifiedInboxPage } from '@/lib/conversations/unified-inbox-query';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +16,7 @@ export default async function ConversationDetailPage({ params }: { params: Promi
   const { id } = await params;
   const { supabase, organizationId, role } = await getCurrentOrganization();
 
-  const [conversationResult, messagesResult, briefsResult, runsResult, inboxResult] = await Promise.all([
+  const [conversationResult, messagesResult, briefsResult, runsResult, inboxPage] = await Promise.all([
     supabase
       .from('sales_conversations')
       .select('id,lead_id,channel,stage,priority,unread_count,awaiting_party,requires_human,last_inbound_at,last_outbound_at,last_message_at,detected_language,detected_dialect,persian_summary,intent_label,sentiment_label,stage_reason,agent_mode,updated_at')
@@ -43,19 +44,29 @@ export default async function ConversationDetailPage({ params }: { params: Promi
       .eq('conversation_id', id)
       .order('started_at', { ascending: false })
       .limit(10),
-    supabase
-      .from('sales_conversations')
-      .select('id,channel,stage,unread_count,requires_human,agent_mode,persian_summary,last_message_at')
-      .eq('organization_id', organizationId)
-      .order('updated_at', { ascending: false })
-      .limit(40),
+    loadUnifiedInboxPage({
+      supabase,
+      organizationId,
+      query: {
+        limit: 40,
+        stage: null,
+        channel: null,
+        humanOnly: false,
+        unreadOnly: false,
+        query: null,
+        branchId: null,
+        teamId: null,
+        label: null,
+        chatwootStatus: null,
+        cursor: null,
+      },
+    }),
   ]);
 
   const conversation = conversationResult.data;
   if (conversationResult.error) throw conversationResult.error;
   if (!conversation) notFound();
   if (messagesResult.error) throw messagesResult.error;
-  if (inboxResult.error) throw inboxResult.error;
 
   const leadResult = conversation.lead_id
     ? await supabase
@@ -74,7 +85,18 @@ export default async function ConversationDetailPage({ params }: { params: Promi
     editable: role === 'OWNER',
     serverTime: new Date().toISOString(),
   };
-  const inbox = (inboxResult.data ?? []) as InboxConversationItem[];
+
+  const inbox: InboxConversationItem[] = inboxPage.items.map((item) => ({
+    id: item.conversation_id,
+    customer_name: item.customer_name,
+    channel: item.channel,
+    stage: item.stage,
+    unread_count: item.unread_count,
+    requires_human: item.requires_human,
+    agent_mode: item.agent_mode,
+    persian_summary: item.persian_summary,
+    last_message_at: item.activity_at,
+  }));
   const editable = role === 'OWNER';
 
   return (
