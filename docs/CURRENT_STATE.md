@@ -1,5 +1,10 @@
 # Smart Visions Growth OS — Current Production State
 
+## Requirements preservation note — 2026-09-26
+
+The owner-requested [product completeness and customer connection acceptance](business-os-2027/PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE.md) companion records full scope and audited integration gaps at `542ef8bf33b394918404990fdb97b9b7df1e7f8e`. It adds requirements/traceability only. It does not change runtime readiness, Production migration state, provider permissions, tenant activation or the current Unified Inbox continuation below.
+
+
 **Reconciled:** 2026-09-26 (Oman, UTC+4)
 
 This is the current operational handoff for Growth OS. Current `main`, routed Cloudflare Production and Production Supabase evidence override older planning documents, stale issue text and chat history.

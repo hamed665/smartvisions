@@ -1,5 +1,10 @@
 # Smart Visions AI Business OS 2027 — Master Program Sections
 
+## Product completeness and customer connection requirements
+
+Read [PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE.md](PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE.md) before selecting or closing a Business OS delivery package. It preserves the owner-requested full-product scope, simple official customer connection journey, verified multi-business WhatsApp gaps, detailed acceptance gates and the complete Work Package coverage index. It extends acceptance under this roadmap; it does not replace architecture, renumber Work Packages or authorize provider activation. Keep its requirement dispositions and the canonical handoff traceable to implementation and Production evidence.
+
+
 ## Purpose
 
 This document is the stable execution map for completing Smart Visions AI Business OS 2027.

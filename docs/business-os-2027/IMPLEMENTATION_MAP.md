@@ -1,5 +1,10 @@
 # Business OS 2027 — Dependency-Ordered Implementation Map
 
+## Current execution and completeness authority
+
+This file preserves historical Phase 0–12 dependencies. Read [NEXT_CHAT_HANDOFF.md](NEXT_CHAT_HANDOFF.md) for the latest cursor and [PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE.md](PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE.md) for owner-requested product detail, official customer onboarding, verified integration gaps and acceptance criteria. Historical phase counts/percentages do not measure current completion.
+
+
 This is not a feature wishlist. It is the dependency history required to avoid rebuilding the same primitive twice.
 
 For future execution, **do not assign or infer projected GitHub PR numbers**. The stable program roadmap is `MASTER_PROGRAM_SECTIONS.md`, which uses semantic Section and Work Package IDs. Historical PR numbers in this file remain implementation evidence only.

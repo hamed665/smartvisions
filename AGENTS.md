@@ -13,7 +13,8 @@ Continue from repository and Production state, never from chat memory alone. Rea
 5. this file for non-negotiable engineering/operational rules;
 6. `docs/business-os-2027/MASTER_PROGRAM_SECTIONS.md` for stable future program Sections/Work Package IDs;
 7. `docs/business-os-2027/NEXT_CHAT_HANDOFF.md` for the current continuation cursor;
-8. older plans/Issue #18 only as historical planning context.
+8. `docs/business-os-2027/PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE.md` for full-product requirements, customer connection acceptance and scope-preservation checks;
+9. older plans/Issue #18 only as historical planning context.
 
 If any document conflicts with runtime/Production evidence, runtime and Production win. Reconcile the document after the change is proven.
 
