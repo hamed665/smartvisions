@@ -1,0 +1,69 @@
+import { NextResponse } from 'next/server';
+
+import {
+  parseUnifiedInboxConversationActionBody,
+  performUnifiedInboxConversationAction,
+  UnifiedInboxActionError,
+} from '@/lib/chatwoot/conversation-actions';
+import { ChatwootHttpError } from '@/lib/chatwoot/http';
+import { getCurrentOrganization } from '@/lib/supabase/org';
+
+function statusFor(error: unknown) {
+  if (error instanceof SyntaxError) return 400;
+  if (error instanceof UnifiedInboxActionError) {
+    if (error.code === 'INVALID_INPUT') return 400;
+    if (error.code === 'FORBIDDEN') return 403;
+    if (error.code === 'NOT_READY') return 409;
+    if (error.code === 'ACTIVATION_BLOCKED') return 503;
+    if (error.code === 'RECONCILIATION_REQUIRED') return 409;
+    return 502;
+  }
+  if (error instanceof ChatwootHttpError) {
+    if (error.code === 'PROVISIONING_DISABLED' || error.code === 'CONFIG_INVALID') return 503;
+    if (error.code === 'AUTH_FAILED') return 502;
+    if (error.code === 'NOT_FOUND') return 409;
+    if (error.code === 'VALIDATION_FAILED') return 409;
+    return 502;
+  }
+  return 500;
+}
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    const body = await request.json();
+    const parsed = parseUnifiedInboxConversationActionBody(id, body);
+    const { supabase, organizationId, userId } = await getCurrentOrganization();
+
+    const result = await performUnifiedInboxConversationAction({
+      supabase,
+      organizationId,
+      userId,
+      request: parsed,
+    });
+
+    return NextResponse.json(result, {
+      headers: { 'Cache-Control': 'private, no-store' },
+    });
+  } catch (error) {
+    const status = statusFor(error);
+    const message = error instanceof UnifiedInboxActionError
+      ? error.message
+      : error instanceof ChatwootHttpError
+        ? 'Chatwoot action could not be completed safely'
+        : error instanceof SyntaxError
+          ? 'Invalid JSON body'
+          : 'Unified Inbox action failed';
+
+    return NextResponse.json(
+      {
+        error: message,
+        ...(error instanceof UnifiedInboxActionError ? { code: error.code } : {}),
+      },
+      { status },
+    );
+  }
+}
