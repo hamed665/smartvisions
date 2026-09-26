@@ -95,6 +95,8 @@ jobs:
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/tests/sql/chatwoot-c5-external-first-demotion-smoke.sql
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/supabase/migrations/0093_comm_unified_inbox_scope_boundary.sql
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/tests/sql/comm-unified-inbox-scope-boundary-smoke.sql
+          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/supabase/migrations/0094_comm_unified_inbox_reconciler.sql
+          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/tests/sql/comm-unified-inbox-reconciler-smoke.sql
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/tests/sql/control-plane-foundation-smoke.sql
       - run: npm run build
       - run: npm run build:vinext
