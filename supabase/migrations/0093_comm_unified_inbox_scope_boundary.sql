@@ -312,6 +312,39 @@ for each row execute function public.enforce_unified_inbox_projection_contract()
 -- SQL equivalent of lib/business-os/control-plane.ts effectiveRoleForScope for
 -- an empty trusted policy-attributes context. Non-empty assignment attributes
 -- intentionally fail closed until a trusted server policy context is provided.
+create or replace function public.is_unified_inbox_scoped_only_member(
+  p_organization_id uuid
+)
+returns boolean
+language sql
+stable
+security invoker
+set search_path = public, auth, pg_catalog
+as $$
+  select
+    exists (
+      select 1
+        from public.organization_members m
+       where m.organization_id = p_organization_id
+         and m.user_id = (select auth.uid())
+         and m.role = 'VIEWER'
+    )
+    and exists (
+      select 1
+        from public.member_scope_assignments a
+       where a.organization_id = p_organization_id
+         and a.user_id = (select auth.uid())
+    );
+$$;
+
+-- SQL equivalent of lib/business-os/control-plane.ts scope precedence for the
+-- Unified Inbox read boundary. When an applicable assignment carries policy
+-- attributes, the database cannot invent the trusted runtime attribute context,
+-- so that target fails closed instead of falling back to the broader role.
+--
+-- C5 scoped-only representation is preserved: Organization VIEWER plus one or
+-- more lower-scope assignments. Outside those explicit assignments the role is
+-- NULL, not Organization VIEWER.
 create or replace function public.unified_inbox_effective_role(
   p_organization_id uuid,
   p_brand_id uuid,
@@ -330,6 +363,7 @@ declare
   v_user_id uuid := auth.uid();
   v_org_role text;
   v_scope_role text;
+  v_scope_attributes jsonb;
 begin
   if v_user_id is null then
     return null;
@@ -349,12 +383,11 @@ begin
     return 'OWNER';
   end if;
 
-  select a.role
-    into v_scope_role
+  select a.role, a.attributes
+    into v_scope_role, v_scope_attributes
     from public.member_scope_assignments a
    where a.organization_id = p_organization_id
      and a.user_id = v_user_id
-     and a.attributes = '{}'::jsonb
      and (
        (a.scope_type = 'TEAM' and a.team_id = p_team_id)
        or (a.scope_type = 'DEPARTMENT' and a.department_id = p_department_id)
@@ -372,7 +405,20 @@ begin
    end desc
    limit 1;
 
-  return coalesce(v_scope_role, v_org_role);
+  if v_scope_role is not null then
+    if coalesce(v_scope_attributes, '{}'::jsonb) <> '{}'::jsonb then
+      return null;
+    end if;
+    return v_scope_role;
+  end if;
+
+  if v_org_role = 'VIEWER'
+     and public.is_unified_inbox_scoped_only_member(p_organization_id)
+  then
+    return null;
+  end if;
+
+  return v_org_role;
 end;
 $$;
 
@@ -398,7 +444,7 @@ as $$
       p_branch_id,
       p_department_id,
       p_team_id
-    ) in ('OWNER','ADMIN','SALES_MANAGER','SALES_AGENT'),
+    ) in ('OWNER','ADMIN','SALES_MANAGER','SALES_AGENT','VIEWER'),
     false
   );
 $$;
@@ -433,6 +479,10 @@ set search_path = public, auth, pg_catalog
 as $$
   select
     public.is_org_owner(p_organization_id)
+    or (
+      public.is_org_member(p_organization_id)
+      and not public.is_unified_inbox_scoped_only_member(p_organization_id)
+    )
     or exists (
       select 1
         from public.unified_inbox_conversation_projections p
@@ -462,6 +512,10 @@ set search_path = public, auth, pg_catalog
 as $$
   select
     public.is_org_owner(p_organization_id)
+    or (
+      public.is_org_member(p_organization_id)
+      and not public.is_unified_inbox_scoped_only_member(p_organization_id)
+    )
     or exists (
       select 1
         from public.sales_conversations sc
@@ -483,6 +537,10 @@ set search_path = public, auth, pg_catalog
 as $$
   select
     public.is_org_owner(p_organization_id)
+    or (
+      public.is_org_member(p_organization_id)
+      and not public.is_unified_inbox_scoped_only_member(p_organization_id)
+    )
     or exists (
       select 1
         from public.leads l
@@ -644,6 +702,8 @@ grant select on table public.unified_inbox_conversation_projections
 
 revoke all on function public.enforce_unified_inbox_projection_contract()
   from public, anon, authenticated, service_role;
+revoke all on function public.is_unified_inbox_scoped_only_member(uuid)
+  from public, anon;
 revoke all on function public.unified_inbox_effective_role(
   uuid, uuid, uuid, uuid, uuid, uuid
 ) from public, anon;
@@ -657,6 +717,8 @@ revoke all on function public.can_read_unified_inbox_lead(uuid, uuid)
 revoke all on function public.can_read_unified_inbox_business(uuid, uuid)
   from public, anon;
 
+grant execute on function public.is_unified_inbox_scoped_only_member(uuid)
+  to authenticated, service_role;
 grant execute on function public.unified_inbox_effective_role(
   uuid, uuid, uuid, uuid, uuid, uuid
 ) to authenticated, service_role;
