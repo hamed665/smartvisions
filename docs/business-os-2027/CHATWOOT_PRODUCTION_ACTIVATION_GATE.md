@@ -188,6 +188,25 @@ For already-verified Business-wide AccountUsers, scoped reconciliation follows:
 
 Scoped-only users remain blocked because first-version AccountUser activation still requires Business-wide non-VIEWER authority. A lower-scope authority reduction that would remove projected access is also blocked by migration 0091 until an external-first demotion workflow can remove and verify Chatwoot access before canonical authority is reduced.
 
+## External-first scoped authority reduction
+
+For BRANCH / DEPARTMENT / TEAM reductions that would change effective projected access from non-VIEWER to VIEWER, canonical IAM mutation must occur last.
+
+The required order is:
+
+1. authenticate current Organization OWNER and re-prove the Production activation contract;
+2. load the exact current scope assignment version and canonical lineage;
+3. compute before/after effective role against every bounded ACTIVE projected Inbox/Team target;
+4. for only the targets losing access, GET current Chatwoot members;
+5. issue at most one replace-set PATCH removing the target Chatwoot User when present;
+6. GET again and require verified absence;
+7. after ambiguous PATCH, reconcile by GET only and never repeat the mutation blindly;
+8. persist one short-lived immutable service-recorded reduction receipt bound to the exact assignment/version/operation/post-role/post-attributes hash and verified mapping IDs;
+9. authenticated OWNER consumes that receipt through the governed scope-assignment update/delete path;
+10. the existing reduction interlock remains fail-closed for direct or mismatched mutations.
+
+The service role writes verification evidence only. It does not mutate canonical IAM. If canonical commit fails after external removal, the system is temporarily under-privileged, which is the safe direction, and the same exact canonical command can be retried through its idempotent request key.
+
 ## Stop conditions
 
 Do not activate provisioning when any of these are true:
