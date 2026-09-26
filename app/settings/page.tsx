@@ -6,9 +6,11 @@ import {
   provisionCommunicationPlaneApiInbox,
   provisionCommunicationPlaneOwnerAccess,
   provisionCommunicationPlaneTeam,
+  reconcileCommunicationPlaneScopedAccess,
 } from '@/app/business-os-actions';
 import { updateOrganizationSettings } from '@/app/management-actions';
 import { loadChatwootReadiness } from '@/lib/chatwoot/readiness';
+import { loadChatwootScopedAccessInventory } from '@/lib/chatwoot/scoped-access-reconciliation';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 
 export const dynamic = 'force-dynamic';
@@ -100,6 +102,9 @@ export default async function SettingsPage() {
   const chatwootReadiness = editable
     ? await loadChatwootReadiness({ supabase, organizationId })
     : null;
+  const scopedAccessInventory = editable
+    ? await loadChatwootScopedAccessInventory({ supabase, organizationId })
+    : { inboxes: [], teams: [] };
 
   return (
     <div>
@@ -627,6 +632,110 @@ export default async function SettingsPage() {
                   ? 'none'
                   : 'PROVISIONING_DISABLED'}.`
             : ''}
+        </p>
+      </section>
+
+      <section className="panel">
+        <div className="headerRow">
+          <div>
+            <h2>Scoped Communication access</h2>
+            <p className="muted">
+              Reconcile Chatwoot Inbox and Team member sets from canonical Smart Core scope.
+              The flow is GET → one replace-set PATCH when needed → GET exact verification.
+            </p>
+          </div>
+          <span className="status">
+            {scopedAccessInventory.inboxes.length + scopedAccessInventory.teams.length} active projection
+          </span>
+        </div>
+
+        {scopedAccessInventory.inboxes.length === 0 &&
+        scopedAccessInventory.teams.length === 0 ? (
+          <p className="muted smallText">
+            Scoped access becomes available only after a real API Inbox or Chatwoot Team mapping is ACTIVE.
+          </p>
+        ) : (
+          <div className="settingsList">
+            {scopedAccessInventory.inboxes.map((item) => {
+              const branch = canonicalBranches.find(
+                (row) => row.id === item.branchId,
+              );
+              const business = canonicalBusinesses.find(
+                (row) => row.id === item.tenantBusinessId,
+              );
+
+              return (
+                <form
+                  action={reconcileCommunicationPlaneScopedAccess}
+                  className="settingsRow"
+                  key={`scoped-inbox-${item.mappingId}`}
+                >
+                  <input type="hidden" name="resource_kind" value="INBOX" />
+                  <input type="hidden" name="mapping_id" value={item.mappingId} />
+                  <div>
+                    <strong>
+                      Inbox · {business?.name ?? 'Business'} · {branch?.name ?? 'Business-wide'}
+                    </strong>
+                    <span className="muted smallText">
+                      External {item.externalId ?? 'unverified'} · mapping v{item.version}
+                    </span>
+                  </div>
+                  <button
+                    disabled={
+                      !editable ||
+                      !chatwootReadiness?.liveProvisioningReady ||
+                      item.externalId === null
+                    }
+                  >
+                    Reconcile scoped access
+                  </button>
+                </form>
+              );
+            })}
+
+            {scopedAccessInventory.teams.map((item) => {
+              const team = canonicalTeams.find(
+                (row) => row.id === item.smartTeamId,
+              );
+              const business = canonicalBusinesses.find(
+                (row) => row.id === item.tenantBusinessId,
+              );
+
+              return (
+                <form
+                  action={reconcileCommunicationPlaneScopedAccess}
+                  className="settingsRow"
+                  key={`scoped-team-${item.mappingId}`}
+                >
+                  <input type="hidden" name="resource_kind" value="TEAM" />
+                  <input type="hidden" name="mapping_id" value={item.mappingId} />
+                  <div>
+                    <strong>
+                      Team · {business?.name ?? 'Business'} · {team?.name ?? 'Team'}
+                    </strong>
+                    <span className="muted smallText">
+                      External {item.externalId ?? 'unverified'} · mapping v{item.version}
+                    </span>
+                  </div>
+                  <button
+                    disabled={
+                      !editable ||
+                      !chatwootReadiness?.liveProvisioningReady ||
+                      item.externalId === null
+                    }
+                  >
+                    Reconcile scoped access
+                  </button>
+                </form>
+              );
+            })}
+          </div>
+        )}
+
+        <p className="muted smallText">
+          Scoped-only users without a verified Business-wide Chatwoot AccountUser remain fail-closed.
+          Authority reductions to VIEWER are blocked once projected resources exist until the
+          separate external-first demotion path is completed.
         </p>
       </section>
     </div>
