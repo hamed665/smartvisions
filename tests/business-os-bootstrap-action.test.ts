@@ -98,12 +98,7 @@ describe('Business OS canonical tenant bootstrap action', () => {
     });
     expect(revalidatePath).toHaveBeenCalledWith('/settings');
     expect(revalidatePath).toHaveBeenCalledWith('/system');
-    expect(result).toEqual({
-      brandId: BRAND,
-      businessId: BUSINESS,
-      brandCreated: true,
-      businessCreated: true,
-    });
+    expect(result).toBeUndefined();
   });
 
   it('does not accept caller-supplied organization or Brand ids', async () => {
