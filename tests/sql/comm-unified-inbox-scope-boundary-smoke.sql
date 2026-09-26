@@ -180,6 +180,12 @@ insert into public.conversation_messages(
   ('72100000-0000-4000-8000-000000009311','00000000-0000-4000-8000-000000009310','72000000-0000-4000-8000-000000009311','71000000-0000-4000-8000-000000009311','WHATSAPP','INBOUND','branch a'),
   ('72100000-0000-4000-8000-000000009312','00000000-0000-4000-8000-000000009310','72000000-0000-4000-8000-000000009312','71000000-0000-4000-8000-000000009312','WHATSAPP','INBOUND','branch b');
 
+insert into public.whatsapp_events(
+  id,organization_id,lead_id,conversation_id,provider_message_id,direction,event_type,payload
+) values
+  ('72200000-0000-4000-8000-000000009311','00000000-0000-4000-8000-000000009310','71000000-0000-4000-8000-000000009311','72000000-0000-4000-8000-000000009311','wamid.scope.a','INBOUND','MESSAGE_RECEIVED','{"branch":"A"}'::jsonb),
+  ('72200000-0000-4000-8000-000000009312','00000000-0000-4000-8000-000000009310','71000000-0000-4000-8000-000000009312','72000000-0000-4000-8000-000000009312','wamid.scope.b','INBOUND','MESSAGE_RECEIVED','{"branch":"B"}'::jsonb);
+
 insert into public.crm_identities(
   id,organization_id,identity_type,normalized_value,display_value
 ) values
@@ -200,6 +206,8 @@ insert into public.unified_inbox_conversation_projections(
   brand_id,
   tenant_business_id,
   branch_id,
+  department_id,
+  team_id,
   communication_channel_binding_id,
   chatwoot_inbox_mapping_id,
   chatwoot_conversation_display_id,
@@ -217,6 +225,8 @@ insert into public.unified_inbox_conversation_projections(
     '10000000-0000-4000-8000-000000009310',
     '20000000-0000-4000-8000-000000009310',
     '30000000-0000-4000-8000-000000009311',
+    '40000000-0000-4000-8000-000000009311',
+    '50000000-0000-4000-8000-000000009311',
     :'binding_a'::uuid,
     :'inbox_mapping_a'::uuid,
     9411,
@@ -234,6 +244,8 @@ insert into public.unified_inbox_conversation_projections(
     '10000000-0000-4000-8000-000000009310',
     '20000000-0000-4000-8000-000000009310',
     '30000000-0000-4000-8000-000000009312',
+    null,
+    null,
     :'binding_b'::uuid,
     :'inbox_mapping_b'::uuid,
     9412,
@@ -283,6 +295,10 @@ begin
      or (select count(*) from public.crm_identities where organization_id='00000000-0000-4000-8000-000000009310') <> 1
   then
     raise exception 'scoped user leaked unrelated Smart Core contact truth';
+  end if;
+
+  if (select count(*) from public.whatsapp_events where organization_id='00000000-0000-4000-8000-000000009310') <> 0 then
+    raise exception 'scoped user leaked raw Organization-wide communication event history';
   end if;
 end;
 $scoped_visibility$;
@@ -336,7 +352,7 @@ declare
 begin
   begin
     update public.sales_conversations
-       set priority=99
+       set summary='mutation-should-be-denied'
      where id='72000000-0000-4000-8000-000000009311';
     get diagnostics v_rows = row_count;
   exception when insufficient_privilege then
@@ -370,6 +386,10 @@ do $business_wide_viewer_visibility$
 begin
   if (select count(*) from public.sales_conversations where organization_id='00000000-0000-4000-8000-000000009310') <> 3 then
     raise exception 'Business-wide VIEWER lost intended read visibility';
+  end if;
+
+  if (select count(*) from public.whatsapp_events where organization_id='00000000-0000-4000-8000-000000009310') <> 2 then
+    raise exception 'Business-wide VIEWER unexpectedly hit scoped-only legacy boundary';
   end if;
 end;
 $business_wide_viewer_visibility$;
