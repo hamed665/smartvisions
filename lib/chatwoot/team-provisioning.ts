@@ -1,12 +1,32 @@
 import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { chatwootAdminAccountRequest } from '@/lib/chatwoot/account-admin-request';
+import { evaluateChatwootProvisioningActivation } from '@/lib/chatwoot/activation-contract';
+import {
+  chatwootAdminAccountRequest,
+  requireChatwootAdminProjection,
+} from '@/lib/chatwoot/account-admin-request';
 import { ChatwootHttpError } from '@/lib/chatwoot/http';
 import { ChatwootProvisioningError } from '@/lib/chatwoot/provisioning';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
 import { isUuid } from '@/lib/chatwoot/tenant-bridge';
 import { normalizeChatwootInt64Id } from '@/lib/chatwoot/tenant-bridge-slice-b';
+
+function requireExternalProvisioningActivation() {
+  const activation = evaluateChatwootProvisioningActivation({
+    deploymentEnvironment: process.env.DEPLOYMENT_ENV,
+    provisioningEnabled: process.env.CHATWOOT_PROVISIONING_ENABLED,
+    baseUrl: process.env.CHATWOOT_BASE_URL,
+    platformToken: process.env.CHATWOOT_PLATFORM_TOKEN,
+  });
+
+  if (!activation.ready) {
+    throw new ChatwootProvisioningError(
+      'ACTIVATION_BLOCKED',
+      'Chatwoot external provisioning is disabled or activation prerequisites are missing',
+    );
+  }
+}
 
 type TeamMappingRow = {
   id: string;
@@ -246,6 +266,7 @@ export async function provisionChatwootTeam(input: {
   requestKey: string;
   fetchImpl?: typeof fetch;
 }) {
+  requireExternalProvisioningActivation();
   const organizationId = requireUuid(input.organizationId, 'organizationId');
   const tenantBusinessId = requireUuid(
     input.tenantBusinessId,
@@ -256,6 +277,12 @@ export async function provisionChatwootTeam(input: {
     input.chatwootAccountMappingId,
     'chatwootAccountMappingId',
   );
+  await requireChatwootAdminProjection({
+    supabase: input.supabase,
+    organizationId,
+    tenantBusinessId,
+  });
+
   const createRequestKey = childKey(input.requestKey, 'create');
   const receiptRequestKey = childKey(input.requestKey, 'receipt');
   const activateRequestKey = childKey(input.requestKey, 'activate');

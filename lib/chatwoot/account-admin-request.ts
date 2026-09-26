@@ -138,6 +138,14 @@ async function readAdminProjection(input: {
   };
 }
 
+export async function requireChatwootAdminProjection(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  tenantBusinessId: string;
+}) {
+  return readAdminProjection(input);
+}
+
 async function issueEphemeralAdminToken(input: {
   chatwootUserId: number;
   fetchImpl?: typeof fetch;
@@ -196,7 +204,7 @@ export async function chatwootAdminAccountRequest<T>(input: {
   fetchImpl?: typeof fetch;
 }): Promise<T> {
   const resourcePath = accountResourcePath(input.resourcePath);
-  const projection = await readAdminProjection(input);
+  const projection = await requireChatwootAdminProjection(input);
   const token = await issueEphemeralAdminToken({
     chatwootUserId: projection.chatwootUserId,
     fetchImpl: input.fetchImpl,

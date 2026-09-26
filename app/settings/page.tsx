@@ -1,8 +1,11 @@
 import {
+  bootstrapCanonicalOperatingHierarchy,
   bootstrapCanonicalTenant,
   prepareCommunicationPlaneProjection,
   provisionCommunicationPlaneAccount,
+  provisionCommunicationPlaneApiInbox,
   provisionCommunicationPlaneOwnerAccess,
+  provisionCommunicationPlaneTeam,
 } from '@/app/business-os-actions';
 import { updateOrganizationSettings } from '@/app/management-actions';
 import { loadChatwootReadiness } from '@/lib/chatwoot/readiness';
@@ -28,6 +31,9 @@ export default async function SettingsPage() {
     { data: omanMarket },
     { data: communicationBindings },
     { data: accountMappings },
+    { data: branches },
+    { data: departments },
+    { data: teams },
   ] = await Promise.all([
       supabase
         .from('organization_settings')
@@ -53,7 +59,7 @@ export default async function SettingsPage() {
         .maybeSingle(),
       supabase
         .from('communication_channel_bindings')
-        .select('id,tenant_business_id,integration_connection_id,channel,status')
+        .select('id,tenant_business_id,branch_id,integration_connection_id,channel,status')
         .eq('organization_id', organizationId)
         .neq('status', 'ARCHIVED')
         .order('created_at'),
@@ -63,6 +69,21 @@ export default async function SettingsPage() {
         .eq('organization_id', organizationId)
         .neq('status', 'ARCHIVED')
         .order('created_at'),
+      supabase
+        .from('branches')
+        .select('id,tenant_business_id,name,code,country_code,timezone,status')
+        .eq('organization_id', organizationId)
+        .order('created_at'),
+      supabase
+        .from('departments')
+        .select('id,branch_id,name,code,status')
+        .eq('organization_id', organizationId)
+        .order('created_at'),
+      supabase
+        .from('teams')
+        .select('id,department_id,name,code,status')
+        .eq('organization_id', organizationId)
+        .order('created_at'),
     ]);
 
   const editable = role === 'OWNER';
@@ -71,6 +92,9 @@ export default async function SettingsPage() {
   const canonicalBusinesses = businesses ?? [];
   const activeBindings = communicationBindings ?? [];
   const liveAccountMappings = accountMappings ?? [];
+  const canonicalBranches = branches ?? [];
+  const canonicalDepartments = departments ?? [];
+  const canonicalTeams = teams ?? [];
   const bootstrapNeeded =
     canonicalBrands.length === 0 || canonicalBusinesses.length === 0;
   const chatwootReadiness = editable
@@ -249,6 +273,158 @@ export default async function SettingsPage() {
       <section className="panel">
         <div className="headerRow">
           <div>
+            <h2>Canonical operating hierarchy</h2>
+            <p className="muted">
+              Branch, Department and Team records remain Smart Core source-of-truth.
+              Chatwoot Inbox and Team projections are created only from this hierarchy.
+            </p>
+          </div>
+          <span className="status">
+            {canonicalTeams.length > 0 ? 'Hierarchy ready' : 'Hierarchy required'}
+          </span>
+        </div>
+
+        {canonicalBusinesses.length === 0 ? (
+          <p className="muted smallText">
+            Create the canonical Business before defining Branch, Department and Team scope.
+          </p>
+        ) : (
+          <>
+            {canonicalBusinesses.map((business) => {
+              const businessBranches = canonicalBranches.filter(
+                (branch) => branch.tenant_business_id === business.id,
+              );
+              const branchIds = new Set(businessBranches.map((branch) => branch.id));
+              const businessDepartments = canonicalDepartments.filter((department) =>
+                branchIds.has(department.branch_id),
+              );
+              const departmentIds = new Set(
+                businessDepartments.map((department) => department.id),
+              );
+              const businessTeams = canonicalTeams.filter((team) =>
+                departmentIds.has(team.department_id),
+              );
+
+              return (
+                <div key={business.id}>
+                  <div className="settingsList">
+                    <div className="settingsRow">
+                      <strong>{business.name}</strong>
+                      <span>
+                        {businessBranches.length} branch · {businessDepartments.length} department ·{' '}
+                        {businessTeams.length} team
+                      </span>
+                    </div>
+                    {businessBranches.map((branch) => (
+                      <div className="settingsRow" key={branch.id}>
+                        <strong>Branch · {branch.name}</strong>
+                        <span>
+                          {branch.code} · {branch.country_code ?? business.country_code ?? '—'} ·{' '}
+                          {branch.timezone ?? business.timezone ?? '—'} · {branch.status}
+                        </span>
+                      </div>
+                    ))}
+                    {businessDepartments.map((department) => (
+                      <div className="settingsRow" key={department.id}>
+                        <strong>Department · {department.name}</strong>
+                        <span>{department.code} · {department.status}</span>
+                      </div>
+                    ))}
+                    {businessTeams.map((team) => (
+                      <div className="settingsRow" key={team.id}>
+                        <strong>Team · {team.name}</strong>
+                        <span>{team.code} · {team.status}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <form action={bootstrapCanonicalOperatingHierarchy} className="settingsGrid">
+                    <input type="hidden" name="tenant_business_id" value={business.id} />
+                    <label>
+                      Branch name
+                      <input
+                        name="branch_name"
+                        placeholder="Enter the real Branch name"
+                        required
+                        disabled={!editable || business.status !== 'ACTIVE'}
+                      />
+                    </label>
+                    <label>
+                      Branch code
+                      <input
+                        name="branch_code"
+                        placeholder="e.g. main"
+                        required
+                        disabled={!editable || business.status !== 'ACTIVE'}
+                      />
+                    </label>
+                    <label>
+                      Branch country
+                      <input
+                        name="branch_country_code"
+                        defaultValue={business.country_code ?? ''}
+                        maxLength={2}
+                        disabled={!editable || business.status !== 'ACTIVE'}
+                      />
+                    </label>
+                    <label>
+                      Branch timezone
+                      <input
+                        name="branch_timezone"
+                        defaultValue={business.timezone ?? ''}
+                        disabled={!editable || business.status !== 'ACTIVE'}
+                      />
+                    </label>
+                    <label>
+                      Department name
+                      <input
+                        name="department_name"
+                        placeholder="Enter the real Department name"
+                        required
+                        disabled={!editable || business.status !== 'ACTIVE'}
+                      />
+                    </label>
+                    <label>
+                      Department code
+                      <input
+                        name="department_code"
+                        placeholder="e.g. customer-operations"
+                        required
+                        disabled={!editable || business.status !== 'ACTIVE'}
+                      />
+                    </label>
+                    <label>
+                      Team name
+                      <input
+                        name="team_name"
+                        placeholder="Enter the real Team name"
+                        required
+                        disabled={!editable || business.status !== 'ACTIVE'}
+                      />
+                    </label>
+                    <label>
+                      Team code
+                      <input
+                        name="team_code"
+                        placeholder="e.g. customer-care"
+                        required
+                        disabled={!editable || business.status !== 'ACTIVE'}
+                      />
+                    </label>
+                    <button disabled={!editable || business.status !== 'ACTIVE'}>
+                      Create / verify hierarchy
+                    </button>
+                  </form>
+                </div>
+              );
+            })}
+          </>
+        )}
+      </section>
+
+      <section className="panel">
+        <div className="headerRow">
+          <div>
             <h2>Communication Plane projection</h2>
             <p className="muted">
               Prepare the audited Smart Core mapping state for Chatwoot. This step creates only
@@ -274,6 +450,27 @@ export default async function SettingsPage() {
               const accountMapping = liveAccountMappings.find(
                 (mapping) => mapping.tenant_business_id === business.id,
               );
+              const businessBranches = canonicalBranches.filter(
+                (branch) =>
+                  branch.tenant_business_id === business.id &&
+                  branch.status === 'ACTIVE',
+              );
+              const branchIds = new Set(businessBranches.map((branch) => branch.id));
+              const businessDepartments = canonicalDepartments.filter(
+                (department) =>
+                  branchIds.has(department.branch_id) &&
+                  department.status === 'ACTIVE',
+              );
+              const departmentIds = new Set(
+                businessDepartments.map((department) => department.id),
+              );
+              const businessTeams = canonicalTeams.filter(
+                (team) =>
+                  departmentIds.has(team.department_id) &&
+                  team.status === 'ACTIVE',
+              );
+              const ownerAccessPrepared =
+                (chatwootReadiness?.projectionCounts.memberships ?? 0) > 0;
 
               return (
                 <div className="settingsRow" key={business.id}>
@@ -340,6 +537,76 @@ export default async function SettingsPage() {
                             Provision / verify my Chatwoot access
                           </button>
                         </form>
+
+                        {businessBranches.flatMap((branch) =>
+                          bindings
+                            .filter(
+                              (binding) =>
+                                binding.status === 'ACTIVE' &&
+                                (binding.branch_id === null ||
+                                  binding.branch_id === branch.id),
+                            )
+                            .map((binding) => (
+                              <form
+                                action={provisionCommunicationPlaneApiInbox}
+                                key={`inbox-${branch.id}-${binding.id}`}
+                              >
+                                <input
+                                  type="hidden"
+                                  name="tenant_business_id"
+                                  value={business.id}
+                                />
+                                <input type="hidden" name="branch_id" value={branch.id} />
+                                <input
+                                  type="hidden"
+                                  name="communication_channel_binding_id"
+                                  value={binding.id}
+                                />
+                                <input
+                                  type="hidden"
+                                  name="chatwoot_account_mapping_id"
+                                  value={accountMapping.id}
+                                />
+                                <button
+                                  disabled={
+                                    !editable ||
+                                    !chatwootReadiness?.liveProvisioningReady ||
+                                    !ownerAccessPrepared
+                                  }
+                                >
+                                  Provision / verify {binding.channel} API Inbox · {branch.name}
+                                </button>
+                              </form>
+                            )),
+                        )}
+
+                        {businessTeams.map((team) => (
+                          <form
+                            action={provisionCommunicationPlaneTeam}
+                            key={`team-${team.id}`}
+                          >
+                            <input
+                              type="hidden"
+                              name="tenant_business_id"
+                              value={business.id}
+                            />
+                            <input type="hidden" name="smart_team_id" value={team.id} />
+                            <input
+                              type="hidden"
+                              name="chatwoot_account_mapping_id"
+                              value={accountMapping.id}
+                            />
+                            <button
+                              disabled={
+                                !editable ||
+                                !chatwootReadiness?.liveProvisioningReady ||
+                                !ownerAccessPrepared
+                              }
+                            >
+                              Provision / verify Chatwoot Team · {team.name}
+                            </button>
+                          </form>
+                        ))}
                       </>
                     ) : null}
                   </div>
@@ -350,7 +617,9 @@ export default async function SettingsPage() {
         )}
         <p className="muted smallText">
           External Chatwoot provisioning remains separately gated by Production health,
-          Platform-token presence and the explicit provisioning activation flag.
+          Platform-token presence and the explicit provisioning activation flag. API Inbox and
+          Chatwoot Team creation also require an ACTIVE OWNER administrator projection before any
+          mapping claim is written.
           {editable && chatwootReadiness
             ? ` Current blockers: ${chatwootReadiness.blockers.length > 0
                 ? chatwootReadiness.blockers.join(' · ')
