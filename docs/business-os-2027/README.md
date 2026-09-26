@@ -14,8 +14,8 @@ Production changes are promoted only after the repository's safety, CI, migratio
 2. [IMPLEMENTATION_MAP.md](./IMPLEMENTATION_MAP.md) — dependency-ordered execution history and phase map.
 3. [MASTER_PROGRAM_SECTIONS.md](./MASTER_PROGRAM_SECTIONS.md) — stable future execution program using Sections/Work Package IDs instead of future PR numbers.
 4. [DELIVERY_PACKAGING_STANDARD.md](./DELIVERY_PACKAGING_STANDARD.md) — compact vertical-slice delivery rules that reduce PR fragmentation without reducing scope, safety, verification, or architectural completeness.
-6. [SERVICE_CONTRACT_STANDARD.md](./SERVICE_CONTRACT_STANDARD.md) — required contract for every domain/service.
-5. [STATE_EVENT_CATALOG.md](./STATE_EVENT_CATALOG.md) — initial canonical state machines and event naming.
+5. [SERVICE_CONTRACT_STANDARD.md](./SERVICE_CONTRACT_STANDARD.md) — required contract for every domain/service.
+6. [STATE_EVENT_CATALOG.md](./STATE_EVENT_CATALOG.md) — initial canonical state machines and event naming.
 7. [MIGRATION_FROM_GROWTH_OS.md](./MIGRATION_FROM_GROWTH_OS.md) — reuse/extend/replace decisions for existing production primitives.
 8. [CONTROL_PLANE_FOUNDATION.md](./CONTROL_PLANE_FOUNDATION.md) — Production-evidence Gap Map, compatibility decisions, and Phase 1 domain contract.
 9. [OMNICHANNEL_ADAPTER_BOUNDARY.md](./OMNICHANNEL_ADAPTER_BOUNDARY.md) — Phase 2 evidence, Gap Map, capability matrix and semantic adapter contract.
