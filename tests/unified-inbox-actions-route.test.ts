@@ -6,6 +6,9 @@ describe('Unified Inbox action route wiring', () => {
     const source = readFileSync('app/api/conversations/[id]/actions/route.ts', 'utf8');
     expect(source).toContain('performUnifiedInboxConversationAction');
     expect(source).toContain('parseUnifiedInboxConversationActionBody');
+    expect(source).toContain('getUnifiedInboxConversationActionOptions');
+    expect(source).toContain('performUnifiedInboxInternalNote');
+    expect(source).toContain('parseUnifiedInboxInternalNoteBody');
     expect(source).not.toContain('fetch(');
     expect(source).not.toContain('service_role');
     expect(source).not.toContain('MetaCloudWhatsAppProvider');
@@ -18,5 +21,20 @@ describe('Unified Inbox action route wiring', () => {
     expect(source).toContain('readExternalConversation');
     expect(source).toContain('CHATWOOT_CONVERSATION_ACTION_VERIFIED');
     expect(source).toContain("resourcePath: '/labels'");
+    expect(source).toContain('smartvisions_request_id');
+    expect(source).toContain('private: true');
+    expect(source).toContain('isSafeChatwootAttachmentUrl');
+  });
+
+  it('keeps attachment routes behind Smart Core authorization and proxy download', () => {
+    const list = readFileSync('app/api/conversations/[id]/attachments/route.ts', 'utf8');
+    const download = readFileSync('app/api/conversations/[id]/attachments/[attachmentId]/route.ts', 'utf8');
+    expect(list).toContain('getCurrentOrganization');
+    expect(list).toContain('getUnifiedInboxAttachments');
+    expect(download).toContain('getCurrentOrganization');
+    expect(download).toContain('downloadUnifiedInboxAttachment');
+    expect(download).toContain("'X-Content-Type-Options': 'nosniff'");
+    expect(download).toContain("'Cache-Control': 'private, no-store'");
+    expect(download).not.toContain('CHATWOOT_PLATFORM_TOKEN');
   });
 });

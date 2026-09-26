@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 
 import {
+  getUnifiedInboxConversationActionOptions,
   parseUnifiedInboxConversationActionBody,
+  parseUnifiedInboxInternalNoteBody,
   performUnifiedInboxConversationAction,
+  performUnifiedInboxInternalNote,
   UnifiedInboxActionError,
 } from '@/lib/chatwoot/conversation-actions';
 import { ChatwootHttpError } from '@/lib/chatwoot/http';
@@ -28,6 +31,40 @@ function statusFor(error: unknown) {
   return 500;
 }
 
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    const { supabase, organizationId } = await getCurrentOrganization();
+    const options = await getUnifiedInboxConversationActionOptions({
+      supabase,
+      organizationId,
+      conversationId: id,
+    });
+    return NextResponse.json(options, {
+      headers: { 'Cache-Control': 'private, no-store' },
+    });
+  } catch (error) {
+    const status = statusFor(error);
+    const message = error instanceof UnifiedInboxActionError
+      ? error.message
+      : error instanceof ChatwootHttpError
+        ? 'Chatwoot action options could not be loaded safely'
+        : 'Unified Inbox action options failed';
+
+    return NextResponse.json(
+      {
+        error: message,
+        ...(error instanceof UnifiedInboxActionError ? { code: error.code } : {}),
+      },
+      { status },
+    );
+  }
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -35,15 +72,25 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json();
-    const parsed = parseUnifiedInboxConversationActionBody(id, body);
     const { supabase, organizationId, userId } = await getCurrentOrganization();
+    const actionName = body && typeof body === 'object' && !Array.isArray(body)
+      && typeof (body as Record<string, unknown>).action === 'string'
+      ? String((body as Record<string, unknown>).action).trim().toUpperCase()
+      : '';
 
-    const result = await performUnifiedInboxConversationAction({
-      supabase,
-      organizationId,
-      userId,
-      request: parsed,
-    });
+    const result = actionName === 'INTERNAL_NOTE'
+      ? await performUnifiedInboxInternalNote({
+        supabase,
+        organizationId,
+        userId,
+        request: parseUnifiedInboxInternalNoteBody(id, body),
+      })
+      : await performUnifiedInboxConversationAction({
+        supabase,
+        organizationId,
+        userId,
+        request: parseUnifiedInboxConversationActionBody(id, body),
+      });
 
     return NextResponse.json(result, {
       headers: { 'Cache-Control': 'private, no-store' },

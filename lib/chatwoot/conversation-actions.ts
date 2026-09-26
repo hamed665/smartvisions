@@ -21,6 +21,9 @@ const REQUEST_ID_RE = /^[A-Za-z0-9:_-]{8,140}$/;
 const ALLOWED_STATUSES = new Set(['open', 'resolved', 'pending', 'snoozed']);
 const MAX_LABELS = 50;
 const MAX_LABEL_LENGTH = 120;
+const MAX_INTERNAL_NOTE_LENGTH = 10_000;
+const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
+const MAX_ATTACHMENT_MESSAGE_PAGES = 5;
 const MANAGE_ROLES = new Set(['OWNER', 'ADMIN', 'SALES_MANAGER']);
 const ASSIGNEE_ROLES = new Set([
   'OWNER',
@@ -52,6 +55,51 @@ export type UnifiedInboxConversationActionInput = {
   conversationId: string;
   requestId: string;
   action: UnifiedInboxConversationAction;
+};
+
+export type UnifiedInboxInternalNoteInput = {
+  conversationId: string;
+  requestId: string;
+  content: string;
+};
+
+
+export type UnifiedInboxAttachment = {
+  id: number;
+  messageId: number;
+  fileType: string;
+  contentType: string | null;
+  extension: string | null;
+  fileSize: number | null;
+  createdAt: number;
+  downloadable: boolean;
+};
+
+export type UnifiedInboxConversationActionOptions = {
+  statuses: Array<'open' | 'resolved' | 'pending' | 'snoozed'>;
+  current: {
+    status: string | null;
+    snoozedUntil: number | null;
+    labels: string[];
+    smartUserId: string | null;
+    teamId: string | null;
+  };
+  labels: string[];
+  assignees: Array<{
+    smartUserId: string;
+    name: string;
+    availabilityStatus: string | null;
+  }>;
+  teams: Array<{
+    teamId: string;
+    name: string;
+  }>;
+  notes: Array<{
+    id: number;
+    content: string;
+    createdAt: number;
+    senderName: string | null;
+  }>;
 };
 
 export type UnifiedInboxActionErrorCode =
@@ -153,6 +201,79 @@ function canonicalLabels(value: unknown) {
   return [...new Set(labels)].sort((a, b) => a.localeCompare(b));
 }
 
+function chatwootRows(value: unknown) {
+  if (Array.isArray(value)) return value.filter(isObject);
+  if (!isObject(value)) return [];
+  if (Array.isArray(value.payload)) return value.payload.filter(isObject);
+  return [];
+}
+
+function labelCatalog(value: unknown) {
+  return [...new Set(
+    chatwootRows(value)
+      .map((row) => typeof row.title === 'string' ? row.title.trim() : '')
+      .filter((label) => label.length > 0 && label.length <= MAX_LABEL_LENGTH),
+  )].sort((a, b) => a.localeCompare(b));
+}
+
+function agentCatalog(value: unknown) {
+  return chatwootRows(value)
+    .map((row) => {
+      const id = normalizeChatwootInt32Id(row.id);
+      const name = typeof row.name === 'string' && row.name.trim()
+        ? row.name.trim()
+        : typeof row.available_name === 'string' && row.available_name.trim()
+          ? row.available_name.trim()
+          : null;
+      const availabilityStatus = typeof row.availability_status === 'string'
+        ? row.availability_status.trim()
+        : null;
+      return id === null || !name ? null : { id, name, availabilityStatus };
+    })
+    .filter((row): row is { id: number; name: string; availabilityStatus: string | null } => Boolean(row));
+}
+
+
+function privateNoteCatalog(value: unknown) {
+  return chatwootRows(value)
+    .map((row) => {
+      const id = normalizeChatwootInt32Id(row.id);
+      const conversationId = normalizeChatwootInt32Id(row.conversation_id);
+      const content = typeof row.content === 'string' ? row.content : null;
+      const createdAt = Number(row.created_at);
+      const sender = isObject(row.sender) ? row.sender : null;
+      const senderName = sender && typeof sender.name === 'string' && sender.name.trim()
+        ? sender.name.trim()
+        : null;
+      if (
+        id === null
+        || conversationId === null
+        || row.private !== true
+        || content === null
+        || !Number.isFinite(createdAt)
+        || createdAt <= 0
+      ) {
+        return null;
+      }
+      return {
+        id,
+        conversationId,
+        content,
+        createdAt,
+        senderName,
+        contentAttributes: isObject(row.content_attributes) ? row.content_attributes : {},
+      };
+    })
+    .filter((row): row is {
+      id: number;
+      conversationId: number;
+      content: string;
+      createdAt: number;
+      senderName: string | null;
+      contentAttributes: Record<string, unknown>;
+    } => Boolean(row));
+}
+
 export function parseUnifiedInboxConversationActionBody(
   conversationId: string,
   value: unknown,
@@ -237,6 +358,37 @@ export function parseUnifiedInboxConversationActionBody(
   return fail('INVALID_INPUT', 'Unsupported Unified Inbox action');
 }
 
+
+export function parseUnifiedInboxInternalNoteBody(
+  conversationId: string,
+  value: unknown,
+): UnifiedInboxInternalNoteInput {
+  const normalizedConversationId = canonicalUuid(conversationId);
+  const body = isObject(value) ? value : null;
+  const requestId = canonicalRequestId(body?.requestId);
+  const action = typeof body?.action === 'string'
+    ? body.action.trim().toUpperCase()
+    : '';
+  const content = typeof body?.content === 'string' ? body.content.trim() : '';
+
+  if (
+    !normalizedConversationId
+    || !body
+    || !requestId
+    || action !== 'INTERNAL_NOTE'
+    || content.length < 1
+    || content.length > MAX_INTERNAL_NOTE_LENGTH
+  ) {
+    return fail('INVALID_INPUT', 'Invalid Unified Inbox internal note payload');
+  }
+
+  return {
+    conversationId: normalizedConversationId,
+    requestId,
+    content,
+  };
+}
+
 function activationReady() {
   const activation = evaluateChatwootProvisioningActivation({
     deploymentEnvironment: process.env.DEPLOYMENT_ENV,
@@ -289,6 +441,41 @@ function oneClaim(value: unknown): ActionClaim {
     team_id: row.team_id === null ? null : String(row.team_id),
     chatwoot_conversation_display_id: displayId,
   };
+}
+
+async function loadReadableProjection(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  conversationId: string;
+}) {
+  const readable = await input.supabase.rpc('can_read_unified_inbox_conversation', {
+    p_organization_id: input.organizationId,
+    p_conversation_id: input.conversationId,
+  });
+  if (readable.error) {
+    fail('UPSTREAM_FAILED', 'Unified Inbox read authorization lookup failed');
+  }
+  if (readable.data !== true) {
+    fail('FORBIDDEN', 'Unified Inbox conversation is not readable for this scope');
+  }
+
+  const projection = await input.supabase
+    .from('unified_inbox_conversation_projections')
+    .select(
+      'id,organization_id,conversation_id,brand_id,tenant_business_id,branch_id,department_id,team_id,chatwoot_conversation_display_id,lifecycle_status,version',
+    )
+    .eq('organization_id', input.organizationId)
+    .eq('conversation_id', input.conversationId)
+    .in('lifecycle_status', ['ACTIVE', 'DEGRADED'])
+    .maybeSingle();
+
+  if (projection.error) {
+    fail('UPSTREAM_FAILED', 'Unified Inbox projection lookup failed');
+  }
+  if (!projection.data) {
+    fail('NOT_READY', 'Conversation has no active Unified Inbox projection');
+  }
+  return projection.data as ProjectionRow;
 }
 
 async function loadManageableProjection(input: {
@@ -668,7 +855,11 @@ async function resolveExternalTarget(input: {
   };
 }
 
-function claimPayload(action: UnifiedInboxConversationAction) {
+type UnifiedInboxClaimAction =
+  | UnifiedInboxConversationAction
+  | { action: 'INTERNAL_NOTE'; content: string };
+
+function claimPayload(action: UnifiedInboxClaimAction) {
   if (action.action === 'STATUS') {
     return {
       status: action.status,
@@ -677,7 +868,8 @@ function claimPayload(action: UnifiedInboxConversationAction) {
   }
   if (action.action === 'LABELS') return { labels: action.labels };
   if (action.action === 'ASSIGNEE') return { smartUserId: action.smartUserId };
-  return { teamId: action.teamId };
+  if (action.action === 'TEAM') return { teamId: action.teamId };
+  return { content: action.content };
 }
 
 function normalizeSnoozedUntil(value: unknown) {
@@ -782,12 +974,522 @@ async function readExternalConversation(input: {
   return parseExternalConversation(raw);
 }
 
+
+export async function getUnifiedInboxConversationActionOptions(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  conversationId: string;
+  service?: SupabaseClient;
+  fetchImpl?: typeof fetch;
+}): Promise<UnifiedInboxConversationActionOptions> {
+  activationReady();
+
+  const projection = await loadManageableProjection({
+    supabase: input.supabase,
+    organizationId: input.organizationId,
+    conversationId: input.conversationId,
+  });
+  const service = input.service ?? createSupabaseServiceClient();
+  const proxy = await issueAdminProxy({
+    service,
+    organizationId: input.organizationId,
+    tenantBusinessId: projection.tenant_business_id,
+    fetchImpl: input.fetchImpl,
+  });
+
+  const [external, rawLabels, rawAgents, rawMessages, memberships, teamMappings] = await Promise.all([
+    readExternalConversation({
+      proxy,
+      displayId: projection.chatwoot_conversation_display_id,
+      fetchImpl: input.fetchImpl,
+    }),
+    accountRequest<unknown>({
+      proxy,
+      resourcePath: '/labels',
+      fetchImpl: input.fetchImpl,
+    }),
+    accountRequest<unknown>({
+      proxy,
+      resourcePath: '/agents',
+      fetchImpl: input.fetchImpl,
+    }),
+    accountRequest<unknown>({
+      proxy,
+      resourcePath: `/conversations/${projection.chatwoot_conversation_display_id}/messages`,
+      fetchImpl: input.fetchImpl,
+    }),
+    service
+      .from('chatwoot_account_memberships')
+      .select('smart_user_id,chatwoot_user_mapping_id,chatwoot_account_mapping_id,effective_smart_role,status')
+      .eq('organization_id', input.organizationId)
+      .eq('tenant_business_id', projection.tenant_business_id)
+      .eq('chatwoot_account_mapping_id', proxy.accountMappingId)
+      .eq('status', 'ACTIVE'),
+    service
+      .from('chatwoot_team_mappings')
+      .select('smart_team_id,chatwoot_account_mapping_id,chatwoot_team_id,status')
+      .eq('organization_id', input.organizationId)
+      .eq('tenant_business_id', projection.tenant_business_id)
+      .eq('chatwoot_account_mapping_id', proxy.accountMappingId)
+      .eq('status', 'ACTIVE'),
+  ]);
+
+  if (memberships.error || teamMappings.error) {
+    fail('UPSTREAM_FAILED', 'Unified Inbox action option lookup failed');
+  }
+
+  const eligibleMemberships = (memberships.data ?? []).filter((row) => (
+    typeof row.smart_user_id === 'string'
+    && typeof row.chatwoot_user_mapping_id === 'string'
+    && ASSIGNEE_ROLES.has(String(row.effective_smart_role ?? ''))
+  ));
+  const mappingIds = [...new Set(
+    eligibleMemberships.map((row) => String(row.chatwoot_user_mapping_id)),
+  )];
+  const userMappings = mappingIds.length > 0
+    ? await service
+      .from('chatwoot_user_mappings')
+      .select('id,smart_user_id,chatwoot_user_id,status')
+      .in('id', mappingIds)
+      .eq('status', 'ACTIVE')
+    : { data: [], error: null };
+
+  if (userMappings.error) {
+    fail('UPSTREAM_FAILED', 'Unified Inbox assignee mapping lookup failed');
+  }
+
+  const externalAgents = new Map(
+    agentCatalog(rawAgents).map((agent) => [agent.id, agent]),
+  );
+  const membershipByMapping = new Map(
+    eligibleMemberships.map((membership) => [
+      String(membership.chatwoot_user_mapping_id),
+      membership,
+    ]),
+  );
+
+  const assignees = (userMappings.data ?? [])
+    .map((mapping) => {
+      const chatwootUserId = normalizeChatwootInt32Id(mapping.chatwoot_user_id);
+      const membership = membershipByMapping.get(String(mapping.id));
+      const agent = chatwootUserId === null ? null : externalAgents.get(chatwootUserId);
+      if (
+        !membership
+        || !agent
+        || String(mapping.smart_user_id) !== String(membership.smart_user_id)
+      ) {
+        return null;
+      }
+      return {
+        smartUserId: String(mapping.smart_user_id),
+        name: agent.name,
+        availabilityStatus: agent.availabilityStatus,
+      };
+    })
+    .filter((row): row is {
+      smartUserId: string;
+      name: string;
+      availabilityStatus: string | null;
+    } => Boolean(row))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const externalAssigneeMapping = (userMappings.data ?? []).find((mapping) => (
+    normalizeChatwootInt32Id(mapping.chatwoot_user_id) === external.assigneeId
+  ));
+
+  const validTeamMappings = (teamMappings.data ?? [])
+    .map((row) => ({
+      smartTeamId: canonicalUuid(row.smart_team_id),
+      chatwootTeamId: normalizeChatwootInt64Id(row.chatwoot_team_id),
+    }))
+    .filter((row): row is { smartTeamId: string; chatwootTeamId: string } => (
+      Boolean(row.smartTeamId) && row.chatwootTeamId !== null
+    ));
+  const smartTeamIds = validTeamMappings.map((row) => row.smartTeamId);
+  const canonicalTeams = smartTeamIds.length > 0
+    ? await service
+      .from('teams')
+      .select('id,name,department_id,status')
+      .eq('organization_id', input.organizationId)
+      .in('id', smartTeamIds)
+      .eq('status', 'ACTIVE')
+    : { data: [], error: null };
+
+  if (canonicalTeams.error) {
+    fail('UPSTREAM_FAILED', 'Unified Inbox team catalog lookup failed');
+  }
+
+  const departmentIds = [...new Set(
+    (canonicalTeams.data ?? [])
+      .map((team) => canonicalUuid(team.department_id))
+      .filter((id): id is string => Boolean(id)),
+  )];
+  const allowedDepartments = departmentIds.length > 0
+    ? await service
+      .from('departments')
+      .select('id')
+      .eq('organization_id', input.organizationId)
+      .eq('branch_id', projection.branch_id)
+      .in('id', departmentIds)
+      .eq('status', 'ACTIVE')
+    : { data: [], error: null };
+
+  if (allowedDepartments.error) {
+    fail('UPSTREAM_FAILED', 'Unified Inbox team scope lookup failed');
+  }
+
+  const allowedDepartmentIds = new Set(
+    (allowedDepartments.data ?? []).map((department) => String(department.id)),
+  );
+  const validTeamIds = new Set(validTeamMappings.map((mapping) => mapping.smartTeamId));
+  const teams = (canonicalTeams.data ?? [])
+    .filter((team) => (
+      validTeamIds.has(String(team.id))
+      && allowedDepartmentIds.has(String(team.department_id))
+    ))
+    .map((team) => ({
+      teamId: String(team.id),
+      name: String(team.name),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const externalTeamMapping = validTeamMappings.find(
+    (mapping) => mapping.chatwootTeamId === external.teamId,
+  );
+
+  return {
+    statuses: ['open', 'pending', 'resolved', 'snoozed'],
+    current: {
+      status: external.status,
+      snoozedUntil: external.snoozedUntil,
+      labels: external.labels,
+      smartUserId: externalAssigneeMapping
+        ? String(externalAssigneeMapping.smart_user_id)
+        : null,
+      teamId: externalTeamMapping?.smartTeamId ?? null,
+    },
+    labels: labelCatalog(rawLabels),
+    assignees,
+    teams,
+    notes: privateNoteCatalog(rawMessages)
+      .filter((note) => note.conversationId === projection.chatwoot_conversation_display_id)
+      .slice(-20)
+      .reverse()
+      .map((note) => ({
+        id: note.id,
+        content: note.content,
+        createdAt: note.createdAt,
+        senderName: note.senderName,
+      })),
+  };
+}
+
+function attachmentRowsFromMessages(value: unknown, accountId: number) {
+  const rows: UnifiedInboxAttachment[] = [];
+  for (const message of chatwootRows(value)) {
+    const messageId = normalizeChatwootInt32Id(message.id);
+    const createdAt = Number(message.created_at);
+    if (messageId === null || !Number.isFinite(createdAt) || createdAt <= 0) continue;
+    const attachments = Array.isArray(message.attachments)
+      ? message.attachments.filter(isObject)
+      : [];
+    for (const attachment of attachments) {
+      const id = normalizeChatwootInt32Id(attachment.id);
+      const attachmentMessageId = normalizeChatwootInt32Id(attachment.message_id);
+      const attachmentAccountId = normalizeChatwootInt32Id(attachment.account_id);
+      if (
+        id === null
+        || attachmentMessageId !== messageId
+        || attachmentAccountId !== accountId
+      ) continue;
+      const fileSize = Number(attachment.file_size);
+      const normalizedSize = Number.isSafeInteger(fileSize) && fileSize >= 0
+        ? fileSize
+        : null;
+      rows.push({
+        id,
+        messageId,
+        fileType: typeof attachment.file_type === 'string'
+          ? attachment.file_type.trim()
+          : 'file',
+        contentType: typeof attachment.content_type === 'string'
+          ? attachment.content_type.trim()
+          : null,
+        extension: typeof attachment.extension === 'string'
+          ? attachment.extension.trim().toLowerCase()
+          : null,
+        fileSize: normalizedSize,
+        createdAt,
+        downloadable: isSafeChatwootAttachmentUrl(attachment.data_url),
+      });
+    }
+  }
+  return rows;
+}
+
+export function isSafeChatwootAttachmentUrl(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) return false;
+  const base = process.env.CHATWOOT_BASE_URL;
+  if (typeof base !== 'string' || !base.trim()) return false;
+  try {
+    const baseUrl = new URL(base);
+    const target = new URL(value.trim(), baseUrl);
+    return (
+      target.protocol === 'https:'
+      && target.origin === baseUrl.origin
+      && !target.username
+      && !target.password
+      && target.pathname.startsWith('/rails/active_storage/')
+    );
+  } catch {
+    return false;
+  }
+}
+
+function safeAttachmentUrl(value: unknown) {
+  if (!isSafeChatwootAttachmentUrl(value)) return null;
+  return new URL(String(value), String(process.env.CHATWOOT_BASE_URL));
+}
+
+async function readBoundedConversationMessagePages(input: {
+  proxy: AdminProxy;
+  displayId: number;
+  fetchImpl?: typeof fetch;
+}) {
+  const messages: Record<string, unknown>[] = [];
+  let before: number | null = null;
+
+  for (let page = 0; page < MAX_ATTACHMENT_MESSAGE_PAGES; page += 1) {
+    const raw = await accountRequest<unknown>({
+      proxy: input.proxy,
+      resourcePath: `/conversations/${input.displayId}/messages${before ? `?before=${before}` : ''}`,
+      fetchImpl: input.fetchImpl,
+    });
+    const rows = chatwootRows(raw);
+    if (rows.length === 0) break;
+    messages.push(...rows);
+
+    const ids = rows
+      .map((row) => normalizeChatwootInt32Id(row.id))
+      .filter((id): id is number => id !== null);
+    if (rows.length < 20 || ids.length === 0) break;
+    before = Math.min(...ids);
+  }
+
+  return messages;
+}
+
+async function loadAttachmentContext(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  conversationId: string;
+  service?: SupabaseClient;
+  fetchImpl?: typeof fetch;
+}) {
+  activationReady();
+  const projection = await loadReadableProjection({
+    supabase: input.supabase,
+    organizationId: input.organizationId,
+    conversationId: input.conversationId,
+  });
+  const service = input.service ?? createSupabaseServiceClient();
+  const proxy = await issueAdminProxy({
+    service,
+    organizationId: input.organizationId,
+    tenantBusinessId: projection.tenant_business_id,
+    fetchImpl: input.fetchImpl,
+  });
+  const messages = await readBoundedConversationMessagePages({
+    proxy,
+    displayId: projection.chatwoot_conversation_display_id,
+    fetchImpl: input.fetchImpl,
+  });
+  return { projection, proxy, messages, service };
+}
+
+export async function getUnifiedInboxAttachments(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  conversationId: string;
+  service?: SupabaseClient;
+  fetchImpl?: typeof fetch;
+}) {
+  const { proxy, messages } = await loadAttachmentContext(input);
+  const rows = attachmentRowsFromMessages({ payload: messages }, proxy.accountId)
+    .sort((a, b) => b.createdAt - a.createdAt || b.id - a.id);
+
+  return {
+    attachments: rows,
+    boundedMessageCount: messages.length,
+    truncated: messages.length >= MAX_ATTACHMENT_MESSAGE_PAGES * 20,
+  };
+}
+
+function attachmentFilename(attachment: UnifiedInboxAttachment) {
+  const extension = attachment.extension && /^[a-z0-9]{1,12}$/.test(attachment.extension)
+    ? `.${attachment.extension}`
+    : '';
+  return `attachment-${attachment.id}${extension}`;
+}
+
+function boundedAttachmentStream(body: ReadableStream<Uint8Array>) {
+  const reader = body.getReader();
+  let total = 0;
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) {
+        controller.close();
+        reader.releaseLock();
+        return;
+      }
+      if (!value) return;
+      total += value.byteLength;
+      if (total > MAX_ATTACHMENT_BYTES) {
+        await reader.cancel();
+        controller.error(new Error('Attachment exceeded the safe download limit'));
+        return;
+      }
+      controller.enqueue(value);
+    },
+    async cancel(reason) {
+      await reader.cancel(reason);
+    },
+  });
+}
+
+export async function downloadUnifiedInboxAttachment(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  conversationId: string;
+  attachmentId: number;
+  userId: string;
+  service?: SupabaseClient;
+  fetchImpl?: typeof fetch;
+}) {
+  if (!Number.isSafeInteger(input.attachmentId) || input.attachmentId <= 0) {
+    fail('INVALID_INPUT', 'Invalid attachment identifier');
+  }
+
+  const { projection, proxy, messages, service } = await loadAttachmentContext(input);
+  let summary: UnifiedInboxAttachment | null = null;
+  let dataUrl: URL | null = null;
+
+  for (const message of messages) {
+    const messageId = normalizeChatwootInt32Id(message.id);
+    if (messageId === null) continue;
+    const attachments = Array.isArray(message.attachments)
+      ? message.attachments.filter(isObject)
+      : [];
+    for (const attachment of attachments) {
+      if (normalizeChatwootInt32Id(attachment.id) !== input.attachmentId) continue;
+      if (
+        normalizeChatwootInt32Id(attachment.message_id) !== messageId
+        || normalizeChatwootInt32Id(attachment.account_id) !== proxy.accountId
+      ) {
+        fail('FORBIDDEN', 'Attachment escaped its governed Chatwoot message/account scope');
+      }
+      const rows = attachmentRowsFromMessages({
+        payload: [{ ...message, attachments: [attachment] }],
+      }, proxy.accountId);
+      summary = rows[0] ?? null;
+      dataUrl = safeAttachmentUrl(attachment.data_url);
+      break;
+    }
+    if (summary) break;
+  }
+
+  if (!summary) {
+    fail('NOT_READY', 'Attachment was not found in the bounded conversation history');
+  }
+  if (!dataUrl || !summary.downloadable) {
+    fail('FORBIDDEN', 'Attachment source is not an approved Chatwoot Active Storage URL');
+  }
+  if (summary.fileSize !== null && summary.fileSize > MAX_ATTACHMENT_BYTES) {
+    fail('INVALID_INPUT', 'Attachment exceeds the safe download limit');
+  }
+
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const response = await fetchImpl(dataUrl.toString(), {
+      method: 'GET',
+      cache: 'no-store',
+      redirect: 'follow',
+      signal: controller.signal,
+      headers: { Accept: '*/*' },
+    });
+    if (!response.ok || !response.body) {
+      throw new ChatwootHttpError({
+        code: 'UPSTREAM_FAILED',
+        message: 'Chatwoot attachment download failed',
+        status: response.status,
+      });
+    }
+    const rawContentLength = response.headers.get('content-length');
+    const contentLength = rawContentLength ? Number(rawContentLength) : Number.NaN;
+    if (Number.isFinite(contentLength) && contentLength > MAX_ATTACHMENT_BYTES) {
+      await response.body.cancel();
+      fail('INVALID_INPUT', 'Attachment exceeds the safe download limit');
+    }
+    const audit = await service.from('audit_logs').insert({
+      organization_id: input.organizationId,
+      actor_type: 'USER',
+      actor_id: input.userId,
+      action: 'CHATWOOT_ATTACHMENT_DOWNLOAD_AUTHORIZED',
+      entity_type: 'unified_inbox_projection',
+      entity_id: projection.id,
+      brand_id: projection.brand_id,
+      tenant_business_id: projection.tenant_business_id,
+      branch_id: projection.branch_id,
+      department_id: projection.department_id,
+      team_id: projection.team_id,
+      correlation_id: globalThis.crypto.randomUUID(),
+      after_data: {
+        attachment_id: summary.id,
+        message_id: summary.messageId,
+        file_type: summary.fileType,
+        content_type: summary.contentType,
+        file_size: summary.fileSize,
+        direct_storage_url_exposed: false,
+      },
+    });
+    if (audit.error) {
+      await response.body.cancel();
+      fail('UPSTREAM_FAILED', 'Attachment audit could not be persisted');
+    }
+
+    return {
+      body: boundedAttachmentStream(response.body),
+      contentType: summary.contentType
+        || response.headers.get('content-type')
+        || 'application/octet-stream',
+      contentLength: Number.isFinite(contentLength) && contentLength >= 0
+        ? contentLength
+        : summary.fileSize,
+      filename: attachmentFilename(summary),
+    };
+  } catch (error) {
+    if (error instanceof UnifiedInboxActionError || error instanceof ChatwootHttpError) {
+      throw error;
+    }
+    throw new ChatwootHttpError({
+      code: 'NETWORK_FAILED',
+      message: 'Chatwoot attachment network request failed',
+      retryable: true,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function claimAction(input: {
   supabase: SupabaseClient;
   organizationId: string;
   conversationId: string;
   requestId: string;
-  action: UnifiedInboxConversationAction;
+  action: UnifiedInboxClaimAction;
 }) {
   const result = await input.supabase.rpc('claim_unified_inbox_action', {
     p_organization_id: input.organizationId,
@@ -838,6 +1540,180 @@ function auditAfterData(input: {
     };
   }
   return { ...base, action: 'TEAM', target_team_id: input.target.teamId };
+}
+
+
+export function privateNoteMatchesRequest(input: {
+  value: unknown;
+  displayId: number;
+  requestId: string;
+  content: string;
+}) {
+  return privateNoteCatalog(input.value).find((note) => (
+    note.conversationId === input.displayId
+    && note.content === input.content
+    && note.contentAttributes.smartvisions_request_id === input.requestId
+    && note.contentAttributes.smartvisions_origin === 'SMART_CORE'
+  )) ?? null;
+}
+
+async function readPrivateNoteByRequestId(input: {
+  proxy: AdminProxy;
+  displayId: number;
+  requestId: string;
+  content: string;
+  afterMessageId?: number | null;
+  fetchImpl?: typeof fetch;
+}) {
+  const after = input.afterMessageId && input.afterMessageId > 1
+    ? `?after=${input.afterMessageId - 1}`
+    : '';
+  const raw = await accountRequest<unknown>({
+    proxy: input.proxy,
+    resourcePath: `/conversations/${input.displayId}/messages${after}`,
+    fetchImpl: input.fetchImpl,
+  });
+  return privateNoteMatchesRequest({
+    value: raw,
+    displayId: input.displayId,
+    requestId: input.requestId,
+    content: input.content,
+  });
+}
+
+export async function performUnifiedInboxInternalNote(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  userId: string;
+  request: UnifiedInboxInternalNoteInput;
+  service?: SupabaseClient;
+  fetchImpl?: typeof fetch;
+}) {
+  activationReady();
+
+  const projection = await loadManageableProjection({
+    supabase: input.supabase,
+    organizationId: input.organizationId,
+    conversationId: input.request.conversationId,
+  });
+  const service = input.service ?? createSupabaseServiceClient();
+  const proxy = await issueAdminProxy({
+    service,
+    organizationId: input.organizationId,
+    tenantBusinessId: projection.tenant_business_id,
+    fetchImpl: input.fetchImpl,
+  });
+  const noteAction = {
+    action: 'INTERNAL_NOTE' as const,
+    content: input.request.content,
+  };
+  const claim = await claimAction({
+    supabase: input.supabase,
+    organizationId: input.organizationId,
+    conversationId: input.request.conversationId,
+    requestId: input.request.requestId,
+    action: noteAction,
+  });
+
+  if (claim.projection_id !== projection.id) {
+    fail('RECONCILIATION_REQUIRED', 'Internal note claim no longer matches the loaded projection');
+  }
+
+  let createdMessageId: number | null = null;
+  let mutationError: unknown = null;
+
+  if (claim.is_new) {
+    try {
+      const created = await accountRequest<unknown>({
+        proxy,
+        resourcePath: `/conversations/${claim.chatwoot_conversation_display_id}/messages`,
+        method: 'POST',
+        body: {
+          content: input.request.content,
+          message_type: 'outgoing',
+          content_type: 'text',
+          private: true,
+          content_attributes: {
+            smartvisions_request_id: input.request.requestId,
+            smartvisions_origin: 'SMART_CORE',
+          },
+        },
+        fetchImpl: input.fetchImpl,
+      });
+      if (isObject(created)) {
+        createdMessageId = normalizeChatwootInt32Id(created.id);
+      }
+    } catch (error) {
+      mutationError = error;
+      if (!(error instanceof ChatwootHttpError) || !error.ambiguousMutationOutcome) {
+        throw error;
+      }
+    }
+  }
+
+  let verifiedNote;
+  try {
+    verifiedNote = await readPrivateNoteByRequestId({
+      proxy,
+      displayId: claim.chatwoot_conversation_display_id,
+      requestId: input.request.requestId,
+      content: input.request.content,
+      afterMessageId: createdMessageId,
+      fetchImpl: input.fetchImpl,
+    });
+  } catch (error) {
+    if (mutationError) {
+      fail(
+        'RECONCILIATION_REQUIRED',
+        'Internal note outcome is ambiguous and exact reconciliation failed',
+      );
+    }
+    throw error;
+  }
+
+  if (!verifiedNote) {
+    fail(
+      'RECONCILIATION_REQUIRED',
+      claim.is_new
+        ? 'Internal note was not confirmed by exact Chatwoot reconciliation; do not resend blindly'
+        : 'Replayed internal note claim is not yet confirmed in Chatwoot',
+    );
+  }
+
+  const audit = await input.supabase.from('audit_logs').insert({
+    organization_id: input.organizationId,
+    actor_type: 'USER',
+    actor_id: input.userId,
+    action: 'CHATWOOT_INTERNAL_NOTE_VERIFIED',
+    entity_type: 'unified_inbox_projection',
+    entity_id: claim.projection_id,
+    brand_id: claim.brand_id,
+    tenant_business_id: claim.tenant_business_id,
+    branch_id: claim.branch_id,
+    department_id: claim.department_id,
+    team_id: claim.team_id,
+    correlation_id: input.request.requestId,
+    after_data: {
+      external_verified: true,
+      replayed: !claim.is_new,
+      chatwoot_message_id: verifiedNote.id,
+      private: true,
+      content_length: input.request.content.length,
+      claimed_projection_version: claim.claimed_projection_version,
+      current_projection_version: claim.current_projection_version,
+    },
+  });
+
+  return {
+    ok: true as const,
+    action: 'INTERNAL_NOTE' as const,
+    replayed: !claim.is_new,
+    externallyVerified: true as const,
+    chatwootMessageId: verifiedNote.id,
+    ...(audit.error
+      ? { warning: 'Internal note verified; audit reconciliation needs attention' }
+      : {}),
+  };
 }
 
 export async function performUnifiedInboxConversationAction(input: {
