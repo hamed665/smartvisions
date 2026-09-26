@@ -134,9 +134,9 @@ select (public.create_member_scope_assignment(
   'c5-ext-branch-role'
 )).id as assignment_id \gset
 
-reset role;
-select set_config('request.jwt.claim.sub','',false);
-
+-- Keep the authenticated OWNER context for fixture adoption. The canonical
+-- role authority deliberately rejects unauthenticated trigger execution even
+-- for superuser fixtures.
 select set_config('smartvisions.chatwoot_bridge_command','1',true);
 update public.chatwoot_account_memberships
    set chatwoot_account_user_id = 9203,
@@ -161,13 +161,6 @@ update public.chatwoot_inbox_mappings
        updated_by_user_id = '00000000-0000-0000-0000-000000009201'
  where id = :'inbox_mapping_id'::uuid;
 select set_config('smartvisions.chatwoot_bridge_command','0',true);
-
-set role authenticated;
-select set_config(
-  'request.jwt.claim.sub',
-  '00000000-0000-0000-0000-000000009201',
-  false
-);
 
 do $direct_reduction_stays_blocked$
 begin
