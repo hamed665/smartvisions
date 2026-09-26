@@ -25,20 +25,21 @@ This delivery-policy change was prepared from verified `main@4d1da421c9c02423989
 
 Use this checkpoint before every older section below, but always re-read runtime/current main first.
 
-- Verified baseline before the current hierarchy/Inbox/Team package: `main@7a1a64d8c658ec8328956d0dd6be8eafb596ab2a` after PR #247.
-- PR #247 added the first receipt-backed OWNER Chatwoot User + administrator AccountUser projection. Exact-main CI and Cloudflare Production Deploy are SUCCESS.
+- Verified baseline before this package: `main@c97335cd6584ac7611f85007366ba69a4e7889b5` after PR #248.
+- PR #248 added OWNER-only canonical Branch/Department/Team bootstrap, owner-scoped Chatwoot readiness inventory, and guarded API Inbox/Team operator paths. Exact-main CI and Cloudflare Production Deploy are SUCCESS.
 - Production Chatwoot remains healthy at `https://inbox.smartvisionsai.com` on the dedicated OVH VPS. Railway remains Candidate/rollback evidence only, not a Production dependency.
 - Production Smart Core remains Cloudflare Workers + Supabase. Chatwoot remains only the Communication Plane.
-- Production migration head remains `0090_chatwoot_fk_index_hardening`.
+- Production migration head before this package is `0090_chatwoot_fk_index_hardening`.
 - Production still contains zero canonical Brand, tenant Business, Branch, Department, Team and zero Chatwoot mapping/claim rows. Do not fabricate any of these to make the UI look populated.
 - Connected canonical EMAIL and WHATSAPP integration connections exist, but no Communication Plane binding has been created because no real tenant Business exists yet.
-- `CHATWOOT_PLATFORM_TOKEN` is still absent and `CHATWOOT_PROVISIONING_ENABLED=false`. Keep it false. Do not paste the token into chat, Git, Supabase rows, logs or browser state.
+- `CHATWOOT_PLATFORM_TOKEN` remains absent and `CHATWOOT_PROVISIONING_ENABLED=false`. Keep it false. Do not paste the token into chat, Git, Supabase rows, logs or browser state.
 - Shadow Mode remains ON. The latest verified deployment window created zero new outreach, WhatsApp or Email events.
-- Governed runtime paths now exist for Brand/Business bootstrap, communication projection preparation, Chatwoot Account projection, OWNER User/AccountUser projection, API Inbox projection and Chatwoot Team projection.
-- The current hierarchy/Inbox/Team delivery package adds OWNER-only canonical Branch -> Department -> Team bootstrap, explicit activation and ACTIVE-admin preflights before Inbox/Team mapping claims, and operator controls. It does not activate Production provisioning or create Production tenant data.
-- Readiness inventory is OWNER-only and uses privileged server reads only after current OWNER authentication; global User mappings are scoped through tenant memberships rather than a nonexistent organization_id column.
+- Current implementation package adds source-backed scoped Inbox/Team desired-set reconciliation for already-verified Business-wide AccountUsers. Exact external semantics are GET -> at most one replace-set PATCH -> GET exact verification; ambiguous PATCH is GET-reconciliation-only.
+- Canonical desired access is calculated through existing Organization -> Brand -> Business -> Branch -> Department -> Team scope precedence with no caller-provided ABAC attributes.
+- A canonical user who should have scoped access but lacks an ACTIVE Business-wide Chatwoot AccountUser/User projection blocks reconciliation instead of being silently omitted. Scoped-only users therefore remain intentionally unsupported.
+- Migration `0091_chatwoot_scoped_access_reduction_gate.sql` extends reverse-role safety to BRANCH/DEPARTMENT/TEAM. Once projected access exists, reductions from scoped non-VIEWER authority to VIEWER are blocked until a later external-first demotion orchestration removes/verifies external access.
 - Continue at `SECTION COMMUNICATION / COMM-TENANT-BRIDGE`.
-- Remaining real activation order is: evidence-backed Brand/Business -> real Branch/Department/Team -> projection preparation -> Platform token staging -> explicit activation -> Account -> OWNER User/Membership -> API Inbox/Team -> C5 scoped access closeout -> COMM-UNIFIED-INBOX.
+- Next security boundary after this package: external-first scoped demotion orchestration, then real tenant/token activation evidence. Do not jump to `COMM-UNIFIED-INBOX` until COMM-TENANT-BRIDGE exit gates are actually satisfied.
 
 ## Superseding continuation checkpoint — 2026-09-26
 

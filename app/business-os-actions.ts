@@ -13,6 +13,7 @@ import { provisionChatwootApiInbox } from '@/lib/chatwoot/api-inbox-provisioning
 import { prepareChatwootTenantProjection } from '@/lib/chatwoot/prepare-tenant-projection';
 import { loadChatwootReadiness } from '@/lib/chatwoot/readiness';
 import { provisionCurrentOwnerChatwootAccess } from '@/lib/chatwoot/owner-access-orchestration';
+import { reconcileChatwootScopedAccess } from '@/lib/chatwoot/scoped-access-reconciliation';
 import { provisionChatwootTeam } from '@/lib/chatwoot/team-provisioning';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 
@@ -267,6 +268,35 @@ export async function provisionCommunicationPlaneTeam(formData: FormData) {
       ':' +
       smartTeamId +
       ':chatwoot-team:v1',
+  });
+
+  revalidatePath('/settings');
+  revalidatePath('/system');
+}
+
+
+export async function reconcileCommunicationPlaneScopedAccess(formData: FormData) {
+  const ctx = await getCurrentOrganization(true);
+  const kind = value(formData, 'resource_kind');
+  const mappingId = value(formData, 'mapping_id');
+  const readiness = await loadChatwootReadiness({
+    supabase: ctx.supabase,
+    organizationId: ctx.organizationId,
+  });
+
+  if (!readiness.liveProvisioningReady) {
+    throw new Error('Communication Plane external provisioning is not ready');
+  }
+
+  if (kind !== 'INBOX' && kind !== 'TEAM') {
+    throw new Error('Communication Plane scoped access resource is invalid');
+  }
+
+  await reconcileChatwootScopedAccess({
+    supabase: ctx.supabase,
+    organizationId: ctx.organizationId,
+    kind,
+    mappingId,
   });
 
   revalidatePath('/settings');

@@ -170,6 +170,24 @@ Downstream external projection remains ordered:
 
 The Inbox and Team provisioning adapters independently re-check the Production activation contract and verified OWNER administrator projection before creating a mapping claim. This prevents a direct internal caller from leaving orphaned PROVISIONING mappings while external provisioning is disabled or OWNER access is not active.
 
+## Scoped Inbox / Team access gate
+
+After API Inbox / Chatwoot Team mappings become ACTIVE, member sets remain governed by Smart Core scope rather than Chatwoot-side manual truth.
+
+For already-verified Business-wide AccountUsers, scoped reconciliation follows:
+
+1. re-prove Production activation and current OWNER administrator projection;
+2. re-read canonical Business/Branch/Department/Team lineage;
+3. resolve each Organization member through the existing Smart Core scope precedence with no untrusted ABAC attributes;
+4. fail if canonical scoped access expects a user whose ACTIVE Business-wide Chatwoot AccountUser/User projection is missing;
+5. GET the exact current Chatwoot member set;
+6. issue at most one exact replace-set PATCH when it differs;
+7. GET again and require exact equality;
+8. on ambiguous PATCH, perform GET-only reconciliation and never blindly PATCH again;
+9. write bounded canonical audit evidence without tokens, message bodies or customer PII.
+
+Scoped-only users remain blocked because first-version AccountUser activation still requires Business-wide non-VIEWER authority. A lower-scope authority reduction that would remove projected access is also blocked by migration 0091 until an external-first demotion workflow can remove and verify Chatwoot access before canonical authority is reduced.
+
 ## Stop conditions
 
 Do not activate provisioning when any of these are true:
