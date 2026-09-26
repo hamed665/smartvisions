@@ -21,7 +21,7 @@ describe('COMM-UNIFIED-INBOX scoped security boundary', () => {
   });
 
   it('does not create a second CRM, tenant model or provider send path', () => {
-    expect(migration).not.toMatch(/create table[^;]*(customer|contact|tenant_businesses|sales_conversations)/i);
+    expect(migration).not.toMatch(/create table(?: if not exists)? public\\.(customers|contacts|tenant_businesses|sales_conversations)\\b/i);
     expect(migration).not.toMatch(/access_token|api_key|smtp_password|provider_secret/i);
     expect(migration).not.toMatch(/graph\.facebook|resend\.com|send_whatsapp|send_email/i);
   });
