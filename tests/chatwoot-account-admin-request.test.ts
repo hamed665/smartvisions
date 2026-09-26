@@ -20,6 +20,7 @@ const ACCOUNT_MAPPING = '00000000-0000-4000-8000-000000000904';
 const USER_MAPPING = '00000000-0000-4000-8000-000000000905';
 
 function enableProvisioning() {
+  vi.stubEnv('DEPLOYMENT_ENV', 'production');
   vi.stubEnv('CHATWOOT_PROVISIONING_ENABLED', 'true');
   vi.stubEnv('CHATWOOT_BASE_URL', 'https://inbox.example.com');
   vi.stubEnv('CHATWOOT_PLATFORM_TOKEN', 'platform-token');
