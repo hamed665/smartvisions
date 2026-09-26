@@ -17,11 +17,26 @@ create table public.sales_conversations (
   organization_id uuid not null references public.organizations(id) on delete cascade,
   lead_id uuid references public.leads(id) on delete cascade,
   channel text not null,
+  agent_mode text not null default 'AUTO',
   summary text,
-  stage text not null default 'IN_CONVERSATION',
   last_message_at timestamptz,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  stage text not null default 'IN_CONVERSATION',
+  priority integer not null default 0,
+  unread_count integer not null default 0,
+  awaiting_party text not null default 'NONE',
+  requires_human boolean not null default false,
+  last_inbound_at timestamptz,
+  last_outbound_at timestamptz,
+  detected_language text,
+  detected_dialect text,
+  persian_summary text,
+  intent_label text,
+  sentiment_label text,
+  stage_reason text,
+  sales_state jsonb not null default '{}'::jsonb,
+  sales_state_updated_at timestamptz
 );
 
 create table public.agent_runs (
