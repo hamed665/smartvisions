@@ -36,7 +36,7 @@ function requireExternalProvisioningActivation() {
   if (!activation.ready) {
     throw new ChatwootProvisioningError(
       'ACTIVATION_BLOCKED',
-      'Chatwoot external provisioning activation is not ready',
+      'Chatwoot external provisioning is disabled or activation prerequisites are missing',
     );
   }
 }
