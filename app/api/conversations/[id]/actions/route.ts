@@ -3,7 +3,9 @@ import { NextResponse } from 'next/server';
 import {
   getUnifiedInboxConversationActionOptions,
   parseUnifiedInboxConversationActionBody,
+  parseUnifiedInboxInternalNoteBody,
   performUnifiedInboxConversationAction,
+  performUnifiedInboxInternalNote,
   UnifiedInboxActionError,
 } from '@/lib/chatwoot/conversation-actions';
 import { ChatwootHttpError } from '@/lib/chatwoot/http';
@@ -70,15 +72,25 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json();
-    const parsed = parseUnifiedInboxConversationActionBody(id, body);
     const { supabase, organizationId, userId } = await getCurrentOrganization();
+    const actionName = body && typeof body === 'object' && !Array.isArray(body)
+      && typeof (body as Record<string, unknown>).action === 'string'
+      ? String((body as Record<string, unknown>).action).trim().toUpperCase()
+      : '';
 
-    const result = await performUnifiedInboxConversationAction({
-      supabase,
-      organizationId,
-      userId,
-      request: parsed,
-    });
+    const result = actionName === 'INTERNAL_NOTE'
+      ? await performUnifiedInboxInternalNote({
+        supabase,
+        organizationId,
+        userId,
+        request: parseUnifiedInboxInternalNoteBody(id, body),
+      })
+      : await performUnifiedInboxConversationAction({
+        supabase,
+        organizationId,
+        userId,
+        request: parseUnifiedInboxConversationActionBody(id, body),
+      });
 
     return NextResponse.json(result, {
       headers: { 'Cache-Control': 'private, no-store' },
