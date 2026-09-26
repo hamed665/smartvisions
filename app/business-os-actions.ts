@@ -48,11 +48,4 @@ export async function bootstrapCanonicalTenant(formData: FormData) {
 
   revalidatePath('/settings');
   revalidatePath('/system');
-
-  return {
-    brandId: brand.row.id,
-    businessId: business.row.id,
-    brandCreated: brand.created,
-    businessCreated: business.created,
-  };
 }
