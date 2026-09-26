@@ -125,6 +125,27 @@ The action remains dormant while `CHATWOOT_PROVISIONING_ENABLED=false`. Adding t
 13. verify Account/User/Membership/API Inbox/Team mappings;
 14. keep provider/customer sends disabled until their separate action gate is proven.
 
+## OWNER identity and membership activation
+
+The first human Chatwoot access projection is deliberately restricted to the currently authenticated Smart Visions Organization OWNER.
+
+The governed sequence is:
+
+1. require the full Production activation contract before any User/AccountUser mapping mutation;
+2. authenticate the current Smart Core user and require canonical Organization `OWNER` role;
+3. require an `ACTIVE` verified Chatwoot Account mapping for the tenant Business;
+4. create/adopt the global Chatwoot User mapping through `create_chatwoot_user_mapping`;
+5. create/adopt the external Chatwoot User, persist a server-only reconciliation receipt, then activate the mapping through `activate_chatwoot_user_mapping_verified`;
+6. create the Account membership through `create_chatwoot_account_membership`, which recomputes canonical Smart Core role at the database mutation boundary;
+7. project OWNER only as Chatwoot `administrator`;
+8. reconcile external AccountUser identity/role into the immutable receipt path;
+9. activate the membership only through `activate_chatwoot_account_membership_verified`;
+10. existing ACTIVE projections are re-verified instead of recreated.
+
+The service-role client is used only for the existing immutable reconciliation receipt writers. It is not used to create/update User mappings, Account memberships, role state, or activation state. Those mutations remain authenticated SECURITY INVOKER command paths.
+
+General ADMIN / SALES_MANAGER / SALES_AGENT projection remains a later governed expansion. VIEWER remains intentionally unprojected because Community Chatwoot has no equivalent read-only AccountUser role.
+
 ## Stop conditions
 
 Do not activate provisioning when any of these are true:
