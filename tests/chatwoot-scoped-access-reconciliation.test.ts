@@ -23,7 +23,10 @@ vi.mock('@/lib/supabase/service', () => ({
 }));
 
 import { ChatwootHttpError } from '@/lib/chatwoot/http';
-import { reconcileChatwootScopedAccess } from '@/lib/chatwoot/scoped-access-reconciliation';
+import {
+  reconcileChatwootScopedAccess,
+  reduceMemberScopeAssignmentExternalFirst,
+} from '@/lib/chatwoot/scoped-access-reconciliation';
 
 const ORG = '00000000-0000-4000-8000-000000002001';
 const BRAND = '00000000-0000-4000-8000-000000002002';
@@ -36,10 +39,13 @@ const AGENT = '00000000-0000-4000-8000-000000002008';
 const SCOPED = '00000000-0000-4000-8000-000000002009';
 const OWNER_USER_MAPPING = '00000000-0000-4000-8000-000000002010';
 const AGENT_USER_MAPPING = '00000000-0000-4000-8000-000000002011';
+const ASSIGNMENT = '00000000-0000-4000-8000-000000002012';
+const RECEIPT = '00000000-0000-4000-8000-000000002013';
 
 type Row = Record<string, unknown>;
 
 function genericService(rows: Record<string, Row[]>) {
+  const rpc = vi.fn(async () => ({ data: null, error: null }));
   return {
     from: vi.fn((table: string) => {
       let selected = '*';
@@ -97,26 +103,30 @@ function genericService(rows: Record<string, Row[]>) {
 
       return builder;
     }),
+    rpc,
   } as unknown as SupabaseClient;
 }
 
 function serviceRows(input?: {
   branchViewer?: boolean;
+  branchAgent?: boolean;
   scopedOnlyGrant?: boolean;
 }) {
   const assignments: Row[] = [];
-  if (input?.branchViewer) {
+  if (input?.branchViewer || input?.branchAgent) {
     assignments.push({
+      id: ASSIGNMENT,
       organization_id: ORG,
       user_id: AGENT,
       scope_type: 'BRANCH',
-      role: 'VIEWER',
+      role: input?.branchViewer ? 'VIEWER' : 'SALES_AGENT',
       brand_id: null,
       tenant_business_id: null,
       branch_id: BRANCH,
       department_id: null,
       team_id: null,
       attributes: {},
+      version: 1,
     });
   }
   if (input?.scopedOnlyGrant) {
@@ -221,6 +231,7 @@ function serviceRows(input?: {
 
 function authenticatedOwner() {
   const auditInsert = vi.fn(async () => ({ error: null }));
+  const rpc = vi.fn(async () => ({ data: null, error: null }));
   const from = vi.fn((table: string) => {
     if (table === 'organization_members') {
       const builder: Record<string, unknown> = {};
@@ -247,8 +258,10 @@ function authenticatedOwner() {
         })),
       },
       from,
+      rpc,
     } as unknown as SupabaseClient,
     auditInsert,
+    rpc,
   };
 }
 
