@@ -241,7 +241,14 @@ select (public.update_member_scope_assignment(
 
 do $assert_non_reduction$
 begin
-  if :'team_assignment_version'::integer <> 2 then
+  if (
+    select version
+      from public.member_scope_assignments
+     where organization_id = '00000000-0000-0000-0000-000000009111'
+       and user_id = '00000000-0000-0000-0000-000000009102'
+       and scope_type = 'TEAM'
+       and team_id = '50000000-0000-0000-0000-000000009111'
+  ) <> 2 then
     raise exception 'non-reducing TEAM role update did not advance version';
   end if;
 end;
