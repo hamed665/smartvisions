@@ -154,7 +154,12 @@ begin
   );
 
   if not v_row.is_new
-     or v_row.projection_id <> :'projection_id'::uuid
+     or v_row.projection_id <> (
+       select id
+       from public.unified_inbox_conversation_projections
+       where organization_id='00000000-0000-4000-8000-000000009810'
+         and conversation_id='72000000-0000-4000-8000-000000009810'
+     )
      or v_row.claimed_projection_version <> 1
      or v_row.current_projection_version <> 1
      or v_row.chatwoot_conversation_display_id <> 9812
@@ -217,7 +222,12 @@ begin
       'actions-direct-insert',
       'SET_CONVERSATION_STATUS',
       'UNIFIED_INBOX_PROJECTION',
-      :'projection_id'::uuid,
+      (
+        select id
+        from public.unified_inbox_conversation_projections
+        where organization_id='00000000-0000-4000-8000-000000009810'
+          and conversation_id='72000000-0000-4000-8000-000000009810'
+      ),
       1,
       repeat('a',64),
       '00000000-0000-4000-8000-000000009802'
