@@ -4,6 +4,8 @@ import {
   externalConversationMatchesTarget,
   mutationRequestForUnifiedInboxAction,
   parseUnifiedInboxConversationActionBody,
+  parseUnifiedInboxInternalNoteBody,
+  privateNoteMatchesRequest,
   UnifiedInboxActionError,
 } from '@/lib/chatwoot/conversation-actions';
 
@@ -58,6 +60,67 @@ describe('Chatwoot Unified Inbox conversation actions', () => {
       action: 'TEAM',
       teamId: 'not-a-uuid',
     })).toThrow('Invalid Unified Inbox team action');
+  });
+
+  it('accepts bounded private internal-note payloads and rejects blank notes', () => {
+    expect(parseUnifiedInboxInternalNoteBody(CONVERSATION_ID, {
+      requestId: 'req-note-0001',
+      action: 'INTERNAL_NOTE',
+      content: '  Call customer after 3 PM.  ',
+    })).toEqual({
+      conversationId: CONVERSATION_ID,
+      requestId: 'req-note-0001',
+      content: 'Call customer after 3 PM.',
+    });
+
+    expect(() => parseUnifiedInboxInternalNoteBody(CONVERSATION_ID, {
+      requestId: 'req-note-0002',
+      action: 'INTERNAL_NOTE',
+      content: '   ',
+    })).toThrow('Invalid Unified Inbox internal note payload');
+  });
+
+  it('reconciles only an exact private note with the Smart Core request marker', () => {
+    const payload = {
+      payload: [{
+        id: 501,
+        conversation_id: 42,
+        content: 'Private follow-up',
+        private: true,
+        created_at: 1_800_000_000,
+        sender: { name: 'Owner' },
+        content_attributes: {
+          smartvisions_request_id: 'req-note-0003',
+          smartvisions_origin: 'SMART_CORE',
+        },
+      }],
+    };
+
+    expect(privateNoteMatchesRequest({
+      value: payload,
+      displayId: 42,
+      requestId: 'req-note-0003',
+      content: 'Private follow-up',
+    })?.id).toBe(501);
+
+    expect(privateNoteMatchesRequest({
+      value: {
+        payload: [{
+          ...payload.payload[0],
+          private: false,
+        }],
+      },
+      displayId: 42,
+      requestId: 'req-note-0003',
+      content: 'Private follow-up',
+    })).toBeNull();
+
+    expect(privateNoteMatchesRequest({
+      value: payload,
+      displayId: 42,
+      requestId: 'req-note-other',
+      content: 'Private follow-up',
+    })).toBeNull();
   });
 
   it('maps mutations to pinned Chatwoot v4.18 account endpoints', () => {
