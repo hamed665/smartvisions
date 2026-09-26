@@ -5,6 +5,25 @@
 This is the current operational handoff for Growth OS. Current `main`, routed Cloudflare Production and Production Supabase evidence override older planning documents, stale issue text and chat history.
 
 
+## Superseding Unified Inbox Production checkpoint — 2026-09-26
+
+This checkpoint supersedes older same-day Communication/Unified Inbox notes below. Historical sections remain for provenance only.
+
+- Current canonical repository main: `a9e5a7387d6d4602e5ed363361761f187868d757` after PR #257.
+- PR #252 established the scoped Unified Inbox security boundary; Production Supabase migration `0093_comm_unified_inbox_scope_boundary` is live.
+- PR #253 added the signed Chatwoot webhook journal -> idempotent projection reconciler; Production migration `0094_comm_unified_inbox_reconciler` is live.
+- PR #254 hardened Unified Inbox FK indexes; Production migration `0095_comm_unified_inbox_fk_index_hardening` is live and Supabase reports zero Unified-Inbox unindexed-FK findings.
+- PR #255 added the bounded Unified Inbox read model, deterministic activity/id cursor pagination, scoped counters and per-user read/open state; Production migration `0096_comm_unified_inbox_read_model` is live.
+- PR #256 removed the new read-state RLS initPlan warnings without changing authorization semantics; Production migration `0097_comm_unified_inbox_read_state_rls_initplan` is live.
+- PR #257 wires the real `/conversations` operator UI and detail rail to that read model. The UI now uses per-user unread state, scoped counters, bounded search/filtering, deterministic next-page cursors and governed mark-read when a conversation is open.
+- PR #257 exact-head CI #1331 passed. Post-merge main CI #1332 succeeded on exact `main@a9e5a7387d6d4602e5ed363361761f187868d757`.
+- Cloudflare Production Deploy #812 succeeded on that exact merge commit. Release-candidate smoke, controlled SSR load, Production promotion, route verification, routed Production smoke and safe API/webhook rejection smoke all passed.
+- `sales_conversations` remains canonical Conversation truth. `unified_inbox_conversation_projections` remains a Communication Plane scope/state projection. `unified_inbox_user_states` stores only per-user read/open state.
+- Owner manual reply and takeover/control paths were not widened or replaced. The existing provider-bound send gate remains authoritative.
+- Chatwoot Production remains on the dedicated OVH VPS at `https://inbox.smartvisionsai.com`; Railway is not part of the Production path and no new Railway work belongs in this continuation.
+- No Chatwoot Platform-token activation or provisioning activation was introduced by the Unified Inbox packages.
+- Next bounded continuation: complete governed Conversation operations on top of the same projection/read model: status/labels/assignment/team-transfer reconciliation, internal notes and attachment read bounds. Do not create a second Conversation/CRM/IAM/Queue source of truth.
+
 ## Superseding Tenant Bridge runtime checkpoint — 2026-09-26
 
 This checkpoint supersedes older same-day Chatwoot/Bridge checkpoints below. Historical sections remain for provenance only.
