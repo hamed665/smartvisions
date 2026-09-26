@@ -1,7 +1,10 @@
 import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { chatwootAdminAccountRequest } from '@/lib/chatwoot/account-admin-request';
+import {
+  chatwootAdminAccountRequest,
+  requireChatwootAdminProjection,
+} from '@/lib/chatwoot/account-admin-request';
 import { ChatwootHttpError } from '@/lib/chatwoot/http';
 import {
   ChatwootProvisioningError,
@@ -371,6 +374,12 @@ export async function provisionChatwootApiInbox(input: {
   );
   const projectedName = requireText(input.projectedName, 'projectedName', 120);
   const webhookOrigin = publicWebhookOrigin();
+  await requireChatwootAdminProjection({
+    supabase: input.supabase,
+    organizationId,
+    tenantBusinessId,
+  });
+
   const createRequestKey = childKey(input.requestKey, 'create');
   const receiptRequestKey = childKey(input.requestKey, 'receipt');
   const activateRequestKey = childKey(input.requestKey, 'activate');
