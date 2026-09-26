@@ -273,6 +273,158 @@ export default async function SettingsPage() {
       <section className="panel">
         <div className="headerRow">
           <div>
+            <h2>Canonical operating hierarchy</h2>
+            <p className="muted">
+              Branch, Department and Team records remain Smart Core source-of-truth.
+              Chatwoot Inbox and Team projections are created only from this hierarchy.
+            </p>
+          </div>
+          <span className="status">
+            {canonicalTeams.length > 0 ? 'Hierarchy ready' : 'Hierarchy required'}
+          </span>
+        </div>
+
+        {canonicalBusinesses.length === 0 ? (
+          <p className="muted smallText">
+            Create the canonical Business before defining Branch, Department and Team scope.
+          </p>
+        ) : (
+          <>
+            {canonicalBusinesses.map((business) => {
+              const businessBranches = canonicalBranches.filter(
+                (branch) => branch.tenant_business_id === business.id,
+              );
+              const branchIds = new Set(businessBranches.map((branch) => branch.id));
+              const businessDepartments = canonicalDepartments.filter((department) =>
+                branchIds.has(department.branch_id),
+              );
+              const departmentIds = new Set(
+                businessDepartments.map((department) => department.id),
+              );
+              const businessTeams = canonicalTeams.filter((team) =>
+                departmentIds.has(team.department_id),
+              );
+
+              return (
+                <div key={business.id}>
+                  <div className="settingsList">
+                    <div className="settingsRow">
+                      <strong>{business.name}</strong>
+                      <span>
+                        {businessBranches.length} branch · {businessDepartments.length} department ·{' '}
+                        {businessTeams.length} team
+                      </span>
+                    </div>
+                    {businessBranches.map((branch) => (
+                      <div className="settingsRow" key={branch.id}>
+                        <strong>Branch · {branch.name}</strong>
+                        <span>
+                          {branch.code} · {branch.country_code ?? business.country_code ?? '—'} ·{' '}
+                          {branch.timezone ?? business.timezone ?? '—'} · {branch.status}
+                        </span>
+                      </div>
+                    ))}
+                    {businessDepartments.map((department) => (
+                      <div className="settingsRow" key={department.id}>
+                        <strong>Department · {department.name}</strong>
+                        <span>{department.code} · {department.status}</span>
+                      </div>
+                    ))}
+                    {businessTeams.map((team) => (
+                      <div className="settingsRow" key={team.id}>
+                        <strong>Team · {team.name}</strong>
+                        <span>{team.code} · {team.status}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <form action={bootstrapCanonicalOperatingHierarchy} className="settingsGrid">
+                    <input type="hidden" name="tenant_business_id" value={business.id} />
+                    <label>
+                      Branch name
+                      <input
+                        name="branch_name"
+                        placeholder="Enter the real Branch name"
+                        required
+                        disabled={!editable || business.status !== 'ACTIVE'}
+                      />
+                    </label>
+                    <label>
+                      Branch code
+                      <input
+                        name="branch_code"
+                        placeholder="e.g. main"
+                        required
+                        disabled={!editable || business.status !== 'ACTIVE'}
+                      />
+                    </label>
+                    <label>
+                      Branch country
+                      <input
+                        name="branch_country_code"
+                        defaultValue={business.country_code ?? ''}
+                        maxLength={2}
+                        disabled={!editable || business.status !== 'ACTIVE'}
+                      />
+                    </label>
+                    <label>
+                      Branch timezone
+                      <input
+                        name="branch_timezone"
+                        defaultValue={business.timezone ?? ''}
+                        disabled={!editable || business.status !== 'ACTIVE'}
+                      />
+                    </label>
+                    <label>
+                      Department name
+                      <input
+                        name="department_name"
+                        placeholder="Enter the real Department name"
+                        required
+                        disabled={!editable || business.status !== 'ACTIVE'}
+                      />
+                    </label>
+                    <label>
+                      Department code
+                      <input
+                        name="department_code"
+                        placeholder="e.g. customer-operations"
+                        required
+                        disabled={!editable || business.status !== 'ACTIVE'}
+                      />
+                    </label>
+                    <label>
+                      Team name
+                      <input
+                        name="team_name"
+                        placeholder="Enter the real Team name"
+                        required
+                        disabled={!editable || business.status !== 'ACTIVE'}
+                      />
+                    </label>
+                    <label>
+                      Team code
+                      <input
+                        name="team_code"
+                        placeholder="e.g. customer-care"
+                        required
+                        disabled={!editable || business.status !== 'ACTIVE'}
+                      />
+                    </label>
+                    <button disabled={!editable || business.status !== 'ACTIVE'}>
+                      Create / verify hierarchy
+                    </button>
+                  </form>
+                </div>
+              );
+            })}
+          </>
+        )}
+      </section>
+
+      <section className="panel">
+        <div className="headerRow">
+          <div>
             <h2>Communication Plane projection</h2>
             <p className="muted">
               Prepare the audited Smart Core mapping state for Chatwoot. This step creates only
