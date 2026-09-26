@@ -24,6 +24,21 @@ create table public.sales_conversations (
   updated_at timestamptz not null default now()
 );
 
+create table public.agent_runs (
+  id uuid primary key,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  lead_id uuid references public.leads(id) on delete cascade,
+  conversation_id uuid references public.sales_conversations(id) on delete cascade,
+  input_message text not null default '',
+  routed_agents jsonb not null default '[]'::jsonb,
+  status text not null default 'COMPLETED',
+  trace jsonb not null default '{}'::jsonb,
+  prompt_version integer,
+  knowledge_version integer,
+  started_at timestamptz not null default now(),
+  completed_at timestamptz
+);
+
 create table public.conversation_messages (
   id uuid primary key,
   organization_id uuid not null references public.organizations(id) on delete cascade,
@@ -149,7 +164,7 @@ declare
   t text;
 begin
   foreach t in array array[
-    'leads','sales_conversations','conversation_messages','outreach_messages',
+    'leads','sales_conversations','agent_runs','conversation_messages','outreach_messages',
     'whatsapp_events','email_events','followup_jobs','handoff_events',
     'reply_events','operator_briefs'
   ]
