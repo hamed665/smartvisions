@@ -32,6 +32,13 @@ const SCOPED_ROLES = new Set<ScopedRole>([
   'SALES_AGENT',
   'VIEWER',
 ]);
+const SCOPED_TYPES = new Set<MemberScopeAssignment['scopeType']>([
+  'BRAND',
+  'BUSINESS',
+  'BRANCH',
+  'DEPARTMENT',
+  'TEAM',
+]);
 
 type ScopedAccessKind = 'INBOX' | 'TEAM';
 
@@ -134,6 +141,7 @@ function scopeAssignment(row: Record<string, unknown>): MemberScopeAssignment {
     !isUuid(String(row.organization_id ?? '')) ||
     !isUuid(String(row.user_id ?? '')) ||
     typeof row.scope_type !== 'string' ||
+    !SCOPED_TYPES.has(row.scope_type as MemberScopeAssignment['scopeType']) ||
     !SCOPED_ROLES.has(row.role as ScopedRole) ||
     !row.attributes ||
     typeof row.attributes !== 'object' ||
