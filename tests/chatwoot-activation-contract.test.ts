@@ -45,6 +45,25 @@ describe('Chatwoot provisioning activation contract', () => {
     expect(state.blockers).toContain('PROVISIONING_DISABLED');
   });
 
+  it('rejects non-HTTPS or path-bearing Production base URLs', () => {
+    for (const baseUrl of [
+      'http://inbox.smartvisionsai.com',
+      'https://inbox.smartvisionsai.com/api',
+      'https://user:pass@inbox.smartvisionsai.com',
+      'https://inbox.smartvisionsai.com?token=x',
+    ]) {
+      const state = evaluateChatwootProvisioningActivation({
+        deploymentEnvironment: 'production',
+        provisioningEnabled: 'true',
+        baseUrl,
+        platformToken: 'server-secret',
+      });
+
+      expect(state.ready).toBe(false);
+      expect(state.blockers).toContain('BASE_URL_INVALID');
+    }
+  });
+
   it('reports token presence only and never returns the token value', () => {
     const secret = 'super-sensitive-platform-token';
     const state = evaluateChatwootProvisioningActivation({

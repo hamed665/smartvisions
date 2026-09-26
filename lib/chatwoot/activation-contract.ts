@@ -13,6 +13,27 @@ export type ChatwootProvisioningActivation = {
   blockers: ChatwootProvisioningBlocker[];
 };
 
+function hasSafeProductionBaseUrl(value: unknown) {
+  if (typeof value !== 'string') return false;
+  const normalized = value.trim();
+  if (!normalized) return false;
+
+  try {
+    const url = new URL(normalized);
+    return (
+      url.protocol === 'https:' &&
+      Boolean(url.hostname) &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash &&
+      (url.pathname === '/' || url.pathname === '')
+    );
+  } catch {
+    return false;
+  }
+}
+
 function hasSafeSecretShape(value: unknown) {
   return (
     typeof value === 'string' &&
@@ -33,8 +54,7 @@ export function evaluateChatwootProvisioningActivation(input: {
       ? input.deploymentEnvironment.trim()
       : null;
   const requested = input.provisioningEnabled === 'true';
-  const baseUrlConfigured =
-    typeof input.baseUrl === 'string' && input.baseUrl.trim().length > 0;
+  const baseUrlConfigured = hasSafeProductionBaseUrl(input.baseUrl);
   const platformTokenConfigured = hasSafeSecretShape(input.platformToken);
 
   const blockers: ChatwootProvisioningBlocker[] = [];

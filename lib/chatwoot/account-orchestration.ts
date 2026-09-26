@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { evaluateChatwootProvisioningActivation } from '@/lib/chatwoot/activation-contract';
 import {
   ChatwootProvisioningError,
   ensureChatwootAccount,
@@ -22,6 +23,22 @@ type AccountAttemptClaim = {
 
 function fail(message: string): never {
   throw new ChatwootProvisioningError('RECONCILIATION_REQUIRED', message);
+}
+
+function requireExternalProvisioningActivation() {
+  const activation = evaluateChatwootProvisioningActivation({
+    deploymentEnvironment: process.env.DEPLOYMENT_ENV,
+    provisioningEnabled: process.env.CHATWOOT_PROVISIONING_ENABLED,
+    baseUrl: process.env.CHATWOOT_BASE_URL,
+    platformToken: process.env.CHATWOOT_PLATFORM_TOKEN,
+  });
+
+  if (!activation.ready) {
+    throw new ChatwootProvisioningError(
+      'ACTIVATION_BLOCKED',
+      'Chatwoot external provisioning is disabled or activation prerequisites are missing',
+    );
+  }
 }
 
 async function loadMapping(input: {
@@ -82,20 +99,21 @@ async function requireActiveOwnerAndBusiness(input: {
 }
 
 /**
- * Candidate-only Account orchestration. Caller supplies an authenticated
- * Supabase client; no service-role mapping write is performed here.
- * No route invokes this module while the dependency stack is Draft.
+ * Governed Account orchestration for the canonical tenant bridge.
+ *
+ * The caller supplies an authenticated OWNER-scoped Supabase client. This
+ * function performs no service-role mapping write and refuses to create a
+ * durable external-attempt claim until the Production activation contract is
+ * fully satisfied.
  */
-export async function provisionCandidateChatwootAccount(input: {
+export async function provisionChatwootAccount(input: {
   supabase: SupabaseClient;
   organizationId: string;
   mappingId: string;
   requestKey: string;
   fetchImpl?: typeof fetch;
 }): Promise<ChatwootAccountMappingRow> {
-  if (process.env.CHATWOOT_PROVISIONING_ENABLED !== 'true') {
-    return fail('Chatwoot provisioning is disabled');
-  }
+  requireExternalProvisioningActivation();
 
   const requestKey = normalizeRequestKey(input.requestKey);
   if (!isUuid(input.organizationId) || !isUuid(input.mappingId) ||
@@ -196,3 +214,10 @@ export async function provisionCandidateChatwootAccount(input: {
   }
   return updated;
 }
+
+
+/**
+ * Backward-compatible export for existing tests/callers. New code must use
+ * provisionChatwootAccount; the runtime behavior is Production-gated.
+ */
+export const provisionCandidateChatwootAccount = provisionChatwootAccount;

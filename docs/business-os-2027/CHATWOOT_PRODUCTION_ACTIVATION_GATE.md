@@ -96,6 +96,18 @@ Create the Production integration only from the protected Super Admin surface:
 
 If token rotation is required, replace the GitHub Actions secret and redeploy before revoking the prior Platform App/token.
 
+## Governed Account execution path
+
+The supported first external projection entrypoint is the OWNER-only Settings action for a prepared Chatwoot Account mapping.
+
+Execution order is fail-closed:
+
+`OWNER action -> sanitized readiness -> Production activation contract -> canonical OWNER/Business re-read -> durable external-create claim -> Chatwoot marker reconciliation -> at most one Account create -> mapping commit`
+
+The Account orchestration refuses to create the durable external-attempt claim unless all Production activation configuration is already present. A missing token, disabled provisioning flag, non-Production deployment, or invalid Production base URL therefore fails before database claim or external HTTP.
+
+The action remains dormant while `CHATWOOT_PROVISIONING_ENABLED=false`. Adding the code path does not authorize Production mutation.
+
 ## First activation sequence
 
 1. verify current main, Production deploy, Supabase migration head and safety controls;
