@@ -552,6 +552,12 @@ grant execute on function public.record_chatwoot_scoped_access_reduction(
 revoke all on function private.chatwoot_scoped_reduction_receipt_allows(
   uuid, uuid, integer, uuid, text, text, jsonb
 ) from public, anon, authenticated, service_role;
+-- The member_scope_assignments reduction trigger executes as the authenticated
+-- OWNER, matching the existing 0091 private interlock helper pattern. Expose
+-- only EXECUTE; the helper returns a boolean and cannot mutate IAM or receipts.
+grant execute on function private.chatwoot_scoped_reduction_receipt_allows(
+  uuid, uuid, integer, uuid, text, text, jsonb
+) to authenticated;
 
 revoke all on function public.apply_member_scope_assignment_reduction_verified(
   uuid, uuid, integer, text, text, jsonb, uuid, text
