@@ -5,7 +5,8 @@ begin;
 insert into auth.users(id) values
   ('00000000-0000-4000-8000-000000009301'),
   ('00000000-0000-4000-8000-000000009302'),
-  ('00000000-0000-4000-8000-000000009303');
+  ('00000000-0000-4000-8000-000000009303'),
+  ('00000000-0000-4000-8000-000000009304');
 
 insert into public.organizations(id,name) values
   ('00000000-0000-4000-8000-000000009310','Unified Inbox scope org');
@@ -13,7 +14,8 @@ insert into public.organizations(id,name) values
 insert into public.organization_members(organization_id,user_id,role) values
   ('00000000-0000-4000-8000-000000009310','00000000-0000-4000-8000-000000009301','OWNER'),
   ('00000000-0000-4000-8000-000000009310','00000000-0000-4000-8000-000000009302','VIEWER'),
-  ('00000000-0000-4000-8000-000000009310','00000000-0000-4000-8000-000000009303','ADMIN');
+  ('00000000-0000-4000-8000-000000009310','00000000-0000-4000-8000-000000009303','ADMIN'),
+  ('00000000-0000-4000-8000-000000009310','00000000-0000-4000-8000-000000009304','VIEWER');
 
 insert into public.brands(id,organization_id,name,slug,status) values
   ('10000000-0000-4000-8000-000000009310','00000000-0000-4000-8000-000000009310','Unified Inbox Brand','unified-inbox-brand','ACTIVE');
@@ -169,7 +171,8 @@ insert into public.sales_conversations(
   id,organization_id,lead_id,channel,last_message_at
 ) values
   ('72000000-0000-4000-8000-000000009311','00000000-0000-4000-8000-000000009310','71000000-0000-4000-8000-000000009311','WHATSAPP',statement_timestamp()),
-  ('72000000-0000-4000-8000-000000009312','00000000-0000-4000-8000-000000009310','71000000-0000-4000-8000-000000009312','WHATSAPP',statement_timestamp());
+  ('72000000-0000-4000-8000-000000009312','00000000-0000-4000-8000-000000009310','71000000-0000-4000-8000-000000009312','WHATSAPP',statement_timestamp()),
+  ('72000000-0000-4000-8000-000000009313','00000000-0000-4000-8000-000000009310',null,'EMAIL',statement_timestamp());
 
 insert into public.conversation_messages(
   id,organization_id,conversation_id,lead_id,channel,direction,original_text
@@ -251,8 +254,8 @@ select set_config('request.jwt.claim.sub','00000000-0000-4000-8000-000000009301'
 
 do $owner_visibility$
 begin
-  if (select count(*) from public.sales_conversations where organization_id='00000000-0000-4000-8000-000000009310') <> 2 then
-    raise exception 'OWNER lost intended Unified Inbox conversation visibility';
+  if (select count(*) from public.sales_conversations where organization_id='00000000-0000-4000-8000-000000009310') <> 3 then
+    raise exception 'OWNER lost intended Unified Inbox/legacy conversation visibility';
   end if;
 end;
 $owner_visibility$;
@@ -300,6 +303,30 @@ begin
   if v_role <> 'VIEWER' then
     raise exception 'TEAM VIEWER did not override broader BRANCH SALES_AGENT';
   end if;
+
+  if not public.can_access_unified_inbox_scope(
+    '00000000-0000-4000-8000-000000009310',
+    '10000000-0000-4000-8000-000000009310',
+    '20000000-0000-4000-8000-000000009310',
+    '30000000-0000-4000-8000-000000009311',
+    '40000000-0000-4000-8000-000000009311',
+    '50000000-0000-4000-8000-000000009311'
+  ) then
+    raise exception 'VIEWER role unexpectedly lost Unified Inbox read access';
+  end if;
+
+  select public.unified_inbox_effective_role(
+    '00000000-0000-4000-8000-000000009310',
+    '10000000-0000-4000-8000-000000009310',
+    '20000000-0000-4000-8000-000000009310',
+    '30000000-0000-4000-8000-000000009312',
+    null,
+    null
+  ) into v_role;
+
+  if v_role is not null then
+    raise exception 'scoped-only VIEWER fell back outside assigned Branch scope';
+  end if;
 end;
 $scope_precedence$;
 
@@ -322,17 +349,30 @@ begin
 end;
 $scoped_mutation_denied$;
 
--- Business-wide ADMIN sees all projected conversations, but no unprojected row
--- is used as an implicit scope grant.
+-- Business-wide ADMIN preserves the existing Organization-wide read surface,
+-- including legacy rows that have not entered the Chatwoot projection yet.
 select set_config('request.jwt.claim.sub','00000000-0000-4000-8000-000000009303',false);
 
 do $business_wide_visibility$
 begin
-  if (select count(*) from public.sales_conversations where organization_id='00000000-0000-4000-8000-000000009310') <> 2 then
-    raise exception 'Business-wide ADMIN did not receive intended projected scope';
+  if (select count(*) from public.sales_conversations where organization_id='00000000-0000-4000-8000-000000009310') <> 3 then
+    raise exception 'Business-wide ADMIN lost existing Organization-wide conversation visibility';
   end if;
 end;
 $business_wide_visibility$;
+
+-- A Business-wide VIEWER with no lower-scope assignment is a read-only
+-- Organization-wide operator. Native Chatwoot SSO is still separately denied
+-- by C5; Unified Inbox read visibility does not depend on native SSO.
+select set_config('request.jwt.claim.sub','00000000-0000-4000-8000-000000009304',false);
+
+do $business_wide_viewer_visibility$
+begin
+  if (select count(*) from public.sales_conversations where organization_id='00000000-0000-4000-8000-000000009310') <> 3 then
+    raise exception 'Business-wide VIEWER lost intended read visibility';
+  end if;
+end;
+$business_wide_viewer_visibility$;
 
 reset role;
 select set_config('request.jwt.claim.sub','',false);
