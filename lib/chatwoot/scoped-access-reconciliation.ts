@@ -980,3 +980,512 @@ export async function reconcileChatwootScopedAccess(input: {
       : 'ALREADY_VERIFIED',
   } as const;
 }
+
+
+type ScopedReductionOperation = 'UPDATE' | 'DELETE';
+const MAX_REDUCTION_TARGETS = 250;
+
+function reductionKey(input: {
+  assignmentId: string;
+  expectedVersion: number;
+  operation: ScopedReductionOperation;
+  stage: 'receipt' | 'apply';
+}) {
+  return [
+    'c5',
+    input.assignmentId,
+    String(input.expectedVersion),
+    input.operation.toLowerCase(),
+    input.stage,
+    'v1',
+  ].join(':');
+}
+
+async function applyCanonicalScopeReduction(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  assignmentId: string;
+  expectedVersion: number;
+  operation: ScopedReductionOperation;
+  postRole: ScopedRole | null;
+  postAttributes: Record<string, unknown>;
+  receiptId?: string;
+}) {
+  if (input.receiptId) {
+    const { data, error } = await input.supabase.rpc(
+      'apply_member_scope_assignment_reduction_verified',
+      {
+        p_organization_id: input.organizationId,
+        p_assignment_id: input.assignmentId,
+        p_expected_version: input.expectedVersion,
+        p_operation: input.operation,
+        p_post_role: input.postRole,
+        p_post_attributes: input.postAttributes,
+        p_receipt_id: input.receiptId,
+        p_request_key: reductionKey({
+          assignmentId: input.assignmentId,
+          expectedVersion: input.expectedVersion,
+          operation: input.operation,
+          stage: 'apply',
+        }),
+      },
+    );
+
+    if (error) {
+      return fail('Verified canonical scoped reduction failed after external removal');
+    }
+
+    return data;
+  }
+
+  if (input.operation === 'UPDATE') {
+    if (!input.postRole) return fail('Scoped reduction update requires a target role');
+
+    const { data, error } = await input.supabase.rpc(
+      'update_member_scope_assignment',
+      {
+        p_organization_id: input.organizationId,
+        p_assignment_id: input.assignmentId,
+        p_expected_version: input.expectedVersion,
+        p_role: input.postRole,
+        p_attributes: input.postAttributes,
+        p_request_key: reductionKey({
+          assignmentId: input.assignmentId,
+          expectedVersion: input.expectedVersion,
+          operation: input.operation,
+          stage: 'apply',
+        }),
+      },
+    );
+
+    if (error) {
+      return fail('Canonical scoped assignment update failed');
+    }
+    return data;
+  }
+
+  const { data, error } = await input.supabase.rpc(
+    'delete_member_scope_assignment',
+    {
+      p_organization_id: input.organizationId,
+      p_assignment_id: input.assignmentId,
+      p_expected_version: input.expectedVersion,
+      p_request_key: reductionKey({
+        assignmentId: input.assignmentId,
+        expectedVersion: input.expectedVersion,
+        operation: input.operation,
+        stage: 'apply',
+      }),
+    },
+  );
+
+  if (error) {
+    return fail('Canonical scoped assignment delete failed');
+  }
+  return data;
+}
+
+export async function reduceMemberScopeAssignmentExternalFirst(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  assignmentId: string;
+  expectedVersion: number;
+  operation: ScopedReductionOperation;
+  postRole?: ScopedRole | null;
+  postAttributes?: Record<string, unknown>;
+  fetchImpl?: typeof fetch;
+}) {
+  requireExternalProvisioningActivation();
+
+  if (
+    !isUuid(input.organizationId) ||
+    !isUuid(input.assignmentId) ||
+    !Number.isInteger(input.expectedVersion) ||
+    input.expectedVersion < 1 ||
+    (input.operation !== 'UPDATE' && input.operation !== 'DELETE')
+  ) {
+    throw new ChatwootProvisioningError(
+      'INVALID_INPUT',
+      'Scoped reduction input is invalid',
+    );
+  }
+
+  const actorUserId = await requireCurrentOwnerActor({
+    supabase: input.supabase,
+    organizationId: input.organizationId,
+  });
+
+  const postRole =
+    input.operation === 'UPDATE'
+      ? input.postRole && SCOPED_ROLES.has(input.postRole)
+        ? input.postRole
+        : fail('Scoped reduction update requires a canonical target role')
+      : null;
+  const postAttributes =
+    input.operation === 'UPDATE'
+      ? input.postAttributes ?? {}
+      : {};
+
+  if (
+    postAttributes === null ||
+    typeof postAttributes !== 'object' ||
+    Array.isArray(postAttributes)
+  ) {
+    return fail('Scoped reduction attributes must be an object');
+  }
+
+  const service = createSupabaseServiceClient();
+
+  const [assignmentResult, assignmentsResult, memberResult, inboxResult, teamResult] =
+    await Promise.all([
+      service
+        .from('member_scope_assignments')
+        .select(
+          'id,organization_id,user_id,scope_type,role,brand_id,tenant_business_id,branch_id,department_id,team_id,attributes,version',
+        )
+        .eq('organization_id', input.organizationId)
+        .eq('id', input.assignmentId)
+        .single(),
+      service
+        .from('member_scope_assignments')
+        .select(
+          'id,organization_id,user_id,scope_type,role,brand_id,tenant_business_id,branch_id,department_id,team_id,attributes,version',
+        )
+        .eq('organization_id', input.organizationId)
+        .limit(MAX_SCOPE_ROWS + 1),
+      service
+        .from('organization_members')
+        .select('organization_id,user_id,role')
+        .eq('organization_id', input.organizationId),
+      service
+        .from('chatwoot_inbox_mappings')
+        .select('id')
+        .eq('organization_id', input.organizationId)
+        .eq('status', 'ACTIVE')
+        .limit(MAX_REDUCTION_TARGETS + 1),
+      service
+        .from('chatwoot_team_mappings')
+        .select('id')
+        .eq('organization_id', input.organizationId)
+        .eq('status', 'ACTIVE')
+        .limit(MAX_REDUCTION_TARGETS + 1),
+    ]);
+
+  if (
+    assignmentResult.error ||
+    !assignmentResult.data ||
+    assignmentResult.data.organization_id !== input.organizationId ||
+    assignmentResult.data.id !== input.assignmentId ||
+    assignmentResult.data.version !== input.expectedVersion ||
+    !['BRANCH', 'DEPARTMENT', 'TEAM'].includes(
+      String(assignmentResult.data.scope_type),
+    )
+  ) {
+    return fail('A current BRANCH/DEPARTMENT/TEAM scope assignment is required');
+  }
+
+  if (
+    assignmentsResult.error ||
+    !Array.isArray(assignmentsResult.data) ||
+    assignmentsResult.data.length > MAX_SCOPE_ROWS ||
+    memberResult.error ||
+    !Array.isArray(memberResult.data) ||
+    inboxResult.error ||
+    !Array.isArray(inboxResult.data) ||
+    teamResult.error ||
+    !Array.isArray(teamResult.data) ||
+    inboxResult.data.length + teamResult.data.length > MAX_REDUCTION_TARGETS
+  ) {
+    return fail('Scoped reduction inventory is unavailable or exceeds the safety bound');
+  }
+
+  const targetUserId = String(assignmentResult.data.user_id);
+  if (!isUuid(targetUserId)) {
+    return fail('Scoped reduction target user is invalid');
+  }
+
+  const targetMember = memberResult.data.find(
+    (row) => row.user_id === targetUserId,
+  );
+  if (
+    !targetMember ||
+    targetMember.organization_id !== input.organizationId
+  ) {
+    return fail('Scoped reduction target Organization member is missing');
+  }
+  const organizationRole = normalizeOrganizationRole(targetMember.role);
+
+  const assignmentRows = assignmentsResult.data.filter(
+    (row) => row.user_id === targetUserId,
+  );
+  const beforeAssignments = assignmentRows.map((row) =>
+    scopeAssignment(row as Record<string, unknown>),
+  );
+  const currentAssignment = scopeAssignment(
+    assignmentResult.data as Record<string, unknown>,
+  );
+
+  const afterAssignments = beforeAssignments.filter(
+    (assignment) =>
+      !(
+        assignment.userId === currentAssignment.userId &&
+        assignment.scopeType === currentAssignment.scopeType &&
+        assignment.scopeId === currentAssignment.scopeId
+      ),
+  );
+
+  if (input.operation === 'UPDATE') {
+    afterAssignments.push({
+      ...currentAssignment,
+      role: postRole as ScopedRole,
+      attributes: postAttributes,
+    });
+  }
+
+  const targets = await Promise.all([
+    ...inboxResult.data.map((row) =>
+      loadAccessTarget({
+        service,
+        organizationId: input.organizationId,
+        kind: 'INBOX',
+        mappingId: String(row.id),
+      }),
+    ),
+    ...teamResult.data.map((row) =>
+      loadAccessTarget({
+        service,
+        organizationId: input.organizationId,
+        kind: 'TEAM',
+        mappingId: String(row.id),
+      }),
+    ),
+  ]);
+
+  const affectedTargets = targets.filter((target) => {
+    const beforeRole = effectiveRoleForScope({
+      organizationRole,
+      userId: targetUserId,
+      target: target.target,
+      lineage: target.lineage,
+      assignments: beforeAssignments,
+    });
+    const afterRole = effectiveRoleForScope({
+      organizationRole,
+      userId: targetUserId,
+      target: target.target,
+      lineage: target.lineage,
+      assignments: afterAssignments,
+    });
+    return beforeRole !== 'VIEWER' && afterRole === 'VIEWER';
+  });
+
+  if (affectedTargets.length === 0) {
+    const canonicalResult = await applyCanonicalScopeReduction({
+      supabase: input.supabase,
+      organizationId: input.organizationId,
+      assignmentId: input.assignmentId,
+      expectedVersion: input.expectedVersion,
+      operation: input.operation,
+      postRole,
+      postAttributes,
+    });
+
+    return {
+      assignmentId: input.assignmentId,
+      operation: input.operation,
+      externalResourcesVerifiedAbsent: 0,
+      outcome: 'CANONICAL_REDUCTION_NO_EXTERNAL_REMOVAL_REQUIRED',
+      canonicalResult,
+    } as const;
+  }
+
+  const { data: userMapping, error: userMappingError } = await service
+    .from('chatwoot_user_mappings')
+    .select('id,smart_user_id,chatwoot_user_id,status')
+    .eq('smart_user_id', targetUserId)
+    .eq('status', 'ACTIVE')
+    .single();
+
+  const chatwootUserId = normalizeChatwootInt32Id(
+    userMapping?.chatwoot_user_id,
+  );
+  if (
+    userMappingError ||
+    !userMapping ||
+    userMapping.smart_user_id !== targetUserId ||
+    chatwootUserId === null
+  ) {
+    return fail('ACTIVE Chatwoot User projection is required before scoped demotion');
+  }
+
+  const businessIds = [
+    ...new Set(affectedTargets.map((target) => target.tenantBusinessId)),
+  ];
+
+  const { data: memberships, error: membershipsError } = await service
+    .from('chatwoot_account_memberships')
+    .select(
+      'tenant_business_id,smart_user_id,chatwoot_user_mapping_id,chatwoot_account_mapping_id,chatwoot_account_user_id,status',
+    )
+    .eq('organization_id', input.organizationId)
+    .eq('smart_user_id', targetUserId)
+    .eq('status', 'ACTIVE')
+    .in('tenant_business_id', businessIds);
+
+  if (
+    membershipsError ||
+    !Array.isArray(memberships) ||
+    memberships.length !== businessIds.length
+  ) {
+    return fail('ACTIVE Business-wide Chatwoot AccountUser projection is required before scoped demotion');
+  }
+
+  for (const target of affectedTargets) {
+    const membership = memberships.find(
+      (row) => row.tenant_business_id === target.tenantBusinessId,
+    );
+    if (
+      !membership ||
+      membership.smart_user_id !== targetUserId ||
+      membership.chatwoot_user_mapping_id !== userMapping.id ||
+      membership.chatwoot_account_mapping_id !== target.accountMappingId ||
+      membership.chatwoot_account_user_id === null
+    ) {
+      return fail('Scoped demotion AccountUser projection does not match the affected resource');
+    }
+  }
+
+  const verifiedInboxMappingIds: string[] = [];
+  const verifiedTeamMappingIds: string[] = [];
+  let changedResourceCount = 0;
+  let ambiguousMutationCount = 0;
+
+  for (const target of affectedTargets) {
+    const before = await readExternalMembers({
+      supabase: input.supabase,
+      organizationId: input.organizationId,
+      target,
+      fetchImpl: input.fetchImpl,
+    });
+    const desired = before.filter((id) => id !== chatwootUserId);
+
+    if (!sameIds(before, desired)) {
+      changedResourceCount += 1;
+      try {
+        await replaceExternalMembers({
+          supabase: input.supabase,
+          organizationId: input.organizationId,
+          target,
+          desiredUserIds: desired,
+          fetchImpl: input.fetchImpl,
+        });
+      } catch (error) {
+        if (
+          !(error instanceof ChatwootHttpError) ||
+          !error.ambiguousMutationOutcome
+        ) {
+          throw error;
+        }
+        ambiguousMutationCount += 1;
+      }
+    }
+
+    const verified = await readExternalMembers({
+      supabase: input.supabase,
+      organizationId: input.organizationId,
+      target,
+      fetchImpl: input.fetchImpl,
+    });
+
+    if (verified.includes(chatwootUserId)) {
+      return fail('External scoped access removal was not confirmed by GET reconciliation');
+    }
+
+    if (target.kind === 'INBOX') {
+      verifiedInboxMappingIds.push(target.mappingId);
+    } else {
+      verifiedTeamMappingIds.push(target.mappingId);
+    }
+  }
+
+  const receiptRequestKey = reductionKey({
+    assignmentId: input.assignmentId,
+    expectedVersion: input.expectedVersion,
+    operation: input.operation,
+    stage: 'receipt',
+  });
+
+  const { data: receiptData, error: receiptError } = await service.rpc(
+    'record_chatwoot_scoped_access_reduction',
+    {
+      p_organization_id: input.organizationId,
+      p_assignment_id: input.assignmentId,
+      p_expected_assignment_version: input.expectedVersion,
+      p_operation: input.operation,
+      p_post_role: postRole,
+      p_post_attributes: postAttributes,
+      p_chatwoot_user_id: chatwootUserId,
+      p_verified_inbox_mapping_ids: verifiedInboxMappingIds,
+      p_verified_team_mapping_ids: verifiedTeamMappingIds,
+      p_request_key: receiptRequestKey,
+    },
+  );
+
+  const receipt =
+    Array.isArray(receiptData) && receiptData.length === 1
+      ? receiptData[0]
+      : receiptData;
+
+  if (
+    receiptError ||
+    !receipt ||
+    typeof receipt !== 'object' ||
+    !isUuid((receipt as Record<string, unknown>).id)
+  ) {
+    return fail('Verified scoped access reduction receipt could not be persisted');
+  }
+
+  const { error: auditError } = await input.supabase.from('audit_logs').insert({
+    organization_id: input.organizationId,
+    actor_type: 'USER',
+    actor_id: actorUserId,
+    action: 'CHATWOOT_SCOPED_ACCESS_REMOVED_BEFORE_REDUCTION',
+    entity_type: 'member_scope_assignment',
+    entity_id: input.assignmentId,
+    before_data: {
+      assignment_version: input.expectedVersion,
+      affected_resource_count: affectedTargets.length,
+    },
+    after_data: {
+      verified_absent_resource_count: affectedTargets.length,
+      changed_resource_count: changedResourceCount,
+      ambiguous_mutation_count: ambiguousMutationCount,
+      receipt_id: (receipt as Record<string, unknown>).id,
+    },
+  });
+
+  if (auditError) {
+    return fail('Verified scoped access removal could not be audited');
+  }
+
+  const canonicalResult = await applyCanonicalScopeReduction({
+    supabase: input.supabase,
+    organizationId: input.organizationId,
+    assignmentId: input.assignmentId,
+    expectedVersion: input.expectedVersion,
+    operation: input.operation,
+    postRole,
+    postAttributes,
+    receiptId: String((receipt as Record<string, unknown>).id),
+  });
+
+  return {
+    assignmentId: input.assignmentId,
+    operation: input.operation,
+    externalResourcesVerifiedAbsent: affectedTargets.length,
+    changedResourceCount,
+    ambiguousMutationCount,
+    outcome: 'EXTERNAL_ACCESS_REMOVED_THEN_CANONICAL_REDUCTION_APPLIED',
+    canonicalResult,
+  } as const;
+}
