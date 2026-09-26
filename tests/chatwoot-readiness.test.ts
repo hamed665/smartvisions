@@ -43,7 +43,8 @@ describe('Chatwoot readiness loader', () => {
       supabase: fakeSupabase({
         brands: 1,
         tenant_businesses: 1,
-        chatwoot_account_mappings: 0,
+        communication_channel_bindings: 1,
+        chatwoot_account_mappings: 1,
         chatwoot_user_mappings: 0,
         chatwoot_account_memberships: 0,
         chatwoot_inbox_mappings: 0,
