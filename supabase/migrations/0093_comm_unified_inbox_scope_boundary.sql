@@ -151,7 +151,10 @@ begin
        or new.chatwoot_inbox_mapping_id is distinct from old.chatwoot_inbox_mapping_id
        or new.chatwoot_team_mapping_id is distinct from old.chatwoot_team_mapping_id
        or new.chatwoot_conversation_display_id is distinct from old.chatwoot_conversation_display_id
-       or new.chatwoot_conversation_uuid is distinct from old.chatwoot_conversation_uuid
+       or (
+         old.chatwoot_conversation_uuid is not null
+         and new.chatwoot_conversation_uuid is distinct from old.chatwoot_conversation_uuid
+       )
     then
       raise exception 'Unified Inbox projection identity/scope is immutable';
     end if;
@@ -233,7 +236,7 @@ begin
        and cb.id = new.communication_channel_binding_id
        and cb.tenant_business_id = new.tenant_business_id
        and cb.branch_id = new.branch_id
-       and cb.status in ('ACTIVE','PAUSED')
+       and cb.status = 'ACTIVE'
   ) then
     raise exception 'Unified Inbox projection channel binding mismatch';
   end if;
