@@ -22,6 +22,8 @@ const ALLOWED_STATUSES = new Set(['open', 'resolved', 'pending', 'snoozed']);
 const MAX_LABELS = 50;
 const MAX_LABEL_LENGTH = 120;
 const MAX_INTERNAL_NOTE_LENGTH = 10_000;
+const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
+const MAX_ATTACHMENT_MESSAGE_PAGES = 5;
 const MANAGE_ROLES = new Set(['OWNER', 'ADMIN', 'SALES_MANAGER']);
 const ASSIGNEE_ROLES = new Set([
   'OWNER',
@@ -59,6 +61,18 @@ export type UnifiedInboxInternalNoteInput = {
   conversationId: string;
   requestId: string;
   content: string;
+};
+
+
+export type UnifiedInboxAttachment = {
+  id: number;
+  messageId: number;
+  fileType: string;
+  contentType: string | null;
+  extension: string | null;
+  fileSize: number | null;
+  createdAt: number;
+  downloadable: boolean;
 };
 
 export type UnifiedInboxConversationActionOptions = {
@@ -427,6 +441,41 @@ function oneClaim(value: unknown): ActionClaim {
     team_id: row.team_id === null ? null : String(row.team_id),
     chatwoot_conversation_display_id: displayId,
   };
+}
+
+async function loadReadableProjection(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  conversationId: string;
+}) {
+  const readable = await input.supabase.rpc('can_read_unified_inbox_conversation', {
+    p_organization_id: input.organizationId,
+    p_conversation_id: input.conversationId,
+  });
+  if (readable.error) {
+    fail('UPSTREAM_FAILED', 'Unified Inbox read authorization lookup failed');
+  }
+  if (readable.data !== true) {
+    fail('FORBIDDEN', 'Unified Inbox conversation is not readable for this scope');
+  }
+
+  const projection = await input.supabase
+    .from('unified_inbox_conversation_projections')
+    .select(
+      'id,organization_id,conversation_id,brand_id,tenant_business_id,branch_id,department_id,team_id,chatwoot_conversation_display_id,lifecycle_status,version',
+    )
+    .eq('organization_id', input.organizationId)
+    .eq('conversation_id', input.conversationId)
+    .in('lifecycle_status', ['ACTIVE', 'DEGRADED'])
+    .maybeSingle();
+
+  if (projection.error) {
+    fail('UPSTREAM_FAILED', 'Unified Inbox projection lookup failed');
+  }
+  if (!projection.data) {
+    fail('NOT_READY', 'Conversation has no active Unified Inbox projection');
+  }
+  return projection.data as ProjectionRow;
 }
 
 async function loadManageableProjection(input: {
@@ -1133,6 +1182,277 @@ export async function getUnifiedInboxConversationActionOptions(input: {
         senderName: note.senderName,
       })),
   };
+}
+
+function attachmentRowsFromMessages(value: unknown, accountId: number) {
+  const rows: UnifiedInboxAttachment[] = [];
+  for (const message of chatwootRows(value)) {
+    const messageId = normalizeChatwootInt32Id(message.id);
+    const createdAt = Number(message.created_at);
+    if (messageId === null || !Number.isFinite(createdAt) || createdAt <= 0) continue;
+    const attachments = Array.isArray(message.attachments)
+      ? message.attachments.filter(isObject)
+      : [];
+    for (const attachment of attachments) {
+      const id = normalizeChatwootInt32Id(attachment.id);
+      const attachmentMessageId = normalizeChatwootInt32Id(attachment.message_id);
+      const attachmentAccountId = normalizeChatwootInt32Id(attachment.account_id);
+      if (
+        id === null
+        || attachmentMessageId !== messageId
+        || attachmentAccountId !== accountId
+      ) continue;
+      const fileSize = Number(attachment.file_size);
+      const normalizedSize = Number.isSafeInteger(fileSize) && fileSize >= 0
+        ? fileSize
+        : null;
+      rows.push({
+        id,
+        messageId,
+        fileType: typeof attachment.file_type === 'string'
+          ? attachment.file_type.trim()
+          : 'file',
+        contentType: typeof attachment.content_type === 'string'
+          ? attachment.content_type.trim()
+          : null,
+        extension: typeof attachment.extension === 'string'
+          ? attachment.extension.trim().toLowerCase()
+          : null,
+        fileSize: normalizedSize,
+        createdAt,
+        downloadable: isSafeChatwootAttachmentUrl(attachment.data_url),
+      });
+    }
+  }
+  return rows;
+}
+
+export function isSafeChatwootAttachmentUrl(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) return false;
+  const base = process.env.CHATWOOT_BASE_URL;
+  if (typeof base !== 'string' || !base.trim()) return false;
+  try {
+    const baseUrl = new URL(base);
+    const target = new URL(value.trim(), baseUrl);
+    return (
+      target.protocol === 'https:'
+      && target.origin === baseUrl.origin
+      && !target.username
+      && !target.password
+      && target.pathname.startsWith('/rails/active_storage/')
+    );
+  } catch {
+    return false;
+  }
+}
+
+function safeAttachmentUrl(value: unknown) {
+  if (!isSafeChatwootAttachmentUrl(value)) return null;
+  return new URL(String(value), String(process.env.CHATWOOT_BASE_URL));
+}
+
+async function readBoundedConversationMessagePages(input: {
+  proxy: AdminProxy;
+  displayId: number;
+  fetchImpl?: typeof fetch;
+}) {
+  const messages: Record<string, unknown>[] = [];
+  let before: number | null = null;
+
+  for (let page = 0; page < MAX_ATTACHMENT_MESSAGE_PAGES; page += 1) {
+    const raw = await accountRequest<unknown>({
+      proxy: input.proxy,
+      resourcePath: `/conversations/${input.displayId}/messages${before ? `?before=${before}` : ''}`,
+      fetchImpl: input.fetchImpl,
+    });
+    const rows = chatwootRows(raw);
+    if (rows.length === 0) break;
+    messages.push(...rows);
+
+    const ids = rows
+      .map((row) => normalizeChatwootInt32Id(row.id))
+      .filter((id): id is number => id !== null);
+    if (rows.length < 20 || ids.length === 0) break;
+    before = Math.min(...ids);
+  }
+
+  return messages;
+}
+
+async function loadAttachmentContext(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  conversationId: string;
+  service?: SupabaseClient;
+  fetchImpl?: typeof fetch;
+}) {
+  activationReady();
+  const projection = await loadReadableProjection({
+    supabase: input.supabase,
+    organizationId: input.organizationId,
+    conversationId: input.conversationId,
+  });
+  const service = input.service ?? createSupabaseServiceClient();
+  const proxy = await issueAdminProxy({
+    service,
+    organizationId: input.organizationId,
+    tenantBusinessId: projection.tenant_business_id,
+    fetchImpl: input.fetchImpl,
+  });
+  const messages = await readBoundedConversationMessagePages({
+    proxy,
+    displayId: projection.chatwoot_conversation_display_id,
+    fetchImpl: input.fetchImpl,
+  });
+  return { projection, proxy, messages };
+}
+
+export async function getUnifiedInboxAttachments(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  conversationId: string;
+  service?: SupabaseClient;
+  fetchImpl?: typeof fetch;
+}) {
+  const { proxy, messages } = await loadAttachmentContext(input);
+  const rows = attachmentRowsFromMessages({ payload: messages }, proxy.accountId)
+    .sort((a, b) => b.createdAt - a.createdAt || b.id - a.id);
+
+  return {
+    attachments: rows,
+    boundedMessageCount: messages.length,
+    truncated: messages.length >= MAX_ATTACHMENT_MESSAGE_PAGES * 20,
+  };
+}
+
+function attachmentFilename(attachment: UnifiedInboxAttachment) {
+  const extension = attachment.extension && /^[a-z0-9]{1,12}$/.test(attachment.extension)
+    ? `.${attachment.extension}`
+    : '';
+  return `attachment-${attachment.id}${extension}`;
+}
+
+function boundedAttachmentStream(body: ReadableStream<Uint8Array>) {
+  const reader = body.getReader();
+  let total = 0;
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) {
+        controller.close();
+        reader.releaseLock();
+        return;
+      }
+      if (!value) return;
+      total += value.byteLength;
+      if (total > MAX_ATTACHMENT_BYTES) {
+        await reader.cancel();
+        controller.error(new Error('Attachment exceeded the safe download limit'));
+        return;
+      }
+      controller.enqueue(value);
+    },
+    async cancel(reason) {
+      await reader.cancel(reason);
+    },
+  });
+}
+
+export async function downloadUnifiedInboxAttachment(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  conversationId: string;
+  attachmentId: number;
+  service?: SupabaseClient;
+  fetchImpl?: typeof fetch;
+}) {
+  if (!Number.isSafeInteger(input.attachmentId) || input.attachmentId <= 0) {
+    fail('INVALID_INPUT', 'Invalid attachment identifier');
+  }
+
+  const { proxy, messages } = await loadAttachmentContext(input);
+  let summary: UnifiedInboxAttachment | null = null;
+  let dataUrl: URL | null = null;
+
+  for (const message of messages) {
+    const messageId = normalizeChatwootInt32Id(message.id);
+    if (messageId === null) continue;
+    const attachments = Array.isArray(message.attachments)
+      ? message.attachments.filter(isObject)
+      : [];
+    for (const attachment of attachments) {
+      if (normalizeChatwootInt32Id(attachment.id) !== input.attachmentId) continue;
+      if (
+        normalizeChatwootInt32Id(attachment.message_id) !== messageId
+        || normalizeChatwootInt32Id(attachment.account_id) !== proxy.accountId
+      ) {
+        fail('FORBIDDEN', 'Attachment escaped its governed Chatwoot message/account scope');
+      }
+      const rows = attachmentRowsFromMessages({
+        payload: [{ ...message, attachments: [attachment] }],
+      }, proxy.accountId);
+      summary = rows[0] ?? null;
+      dataUrl = safeAttachmentUrl(attachment.data_url);
+      break;
+    }
+    if (summary) break;
+  }
+
+  if (!summary) {
+    fail('NOT_READY', 'Attachment was not found in the bounded conversation history');
+  }
+  if (!dataUrl || !summary.downloadable) {
+    fail('FORBIDDEN', 'Attachment source is not an approved Chatwoot Active Storage URL');
+  }
+  if (summary.fileSize !== null && summary.fileSize > MAX_ATTACHMENT_BYTES) {
+    fail('INVALID_INPUT', 'Attachment exceeds the safe download limit');
+  }
+
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const response = await fetchImpl(dataUrl.toString(), {
+      method: 'GET',
+      cache: 'no-store',
+      redirect: 'follow',
+      signal: controller.signal,
+      headers: { Accept: '*/*' },
+    });
+    if (!response.ok || !response.body) {
+      throw new ChatwootHttpError({
+        code: 'UPSTREAM_FAILED',
+        message: 'Chatwoot attachment download failed',
+        status: response.status,
+      });
+    }
+    const contentLength = Number(response.headers.get('content-length'));
+    if (Number.isFinite(contentLength) && contentLength > MAX_ATTACHMENT_BYTES) {
+      await response.body.cancel();
+      fail('INVALID_INPUT', 'Attachment exceeds the safe download limit');
+    }
+    return {
+      body: boundedAttachmentStream(response.body),
+      contentType: summary.contentType
+        || response.headers.get('content-type')
+        || 'application/octet-stream',
+      contentLength: Number.isFinite(contentLength) && contentLength >= 0
+        ? contentLength
+        : summary.fileSize,
+      filename: attachmentFilename(summary),
+    };
+  } catch (error) {
+    if (error instanceof UnifiedInboxActionError || error instanceof ChatwootHttpError) {
+      throw error;
+    }
+    throw new ChatwootHttpError({
+      code: 'NETWORK_FAILED',
+      message: 'Chatwoot attachment network request failed',
+      retryable: true,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function claimAction(input: {
