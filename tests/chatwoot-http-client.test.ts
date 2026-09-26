@@ -14,6 +14,7 @@ afterEach(() => {
 });
 
 function enableProvisioning() {
+  vi.stubEnv('DEPLOYMENT_ENV', 'production');
   vi.stubEnv('CHATWOOT_PROVISIONING_ENABLED', 'true');
   vi.stubEnv('CHATWOOT_BASE_URL', 'https://inbox.example.com');
   vi.stubEnv('CHATWOOT_PLATFORM_TOKEN', 'platform-secret-token');
@@ -23,6 +24,27 @@ function enableProvisioning() {
 describe('Chatwoot provisioning HTTP client', () => {
   it('fails closed before fetch when provisioning is not explicitly enabled', async () => {
     vi.stubEnv('CHATWOOT_PROVISIONING_ENABLED', 'false');
+    vi.stubEnv('CHATWOOT_BASE_URL', 'https://inbox.example.com');
+    vi.stubEnv('CHATWOOT_PLATFORM_TOKEN', 'platform-secret-token');
+
+    const fetchMock = vi.fn();
+
+    await expect(
+      chatwootPlatformProvisioningRequest({
+        path: '/platform/api/v1/accounts',
+        fetchImpl: fetchMock as unknown as typeof fetch,
+      }),
+    ).rejects.toMatchObject({
+      code: 'PROVISIONING_DISABLED',
+      ambiguousMutationOutcome: false,
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('fails closed before fetch outside the Production deployment environment', async () => {
+    vi.stubEnv('DEPLOYMENT_ENV', 'candidate');
+    vi.stubEnv('CHATWOOT_PROVISIONING_ENABLED', 'true');
     vi.stubEnv('CHATWOOT_BASE_URL', 'https://inbox.example.com');
     vi.stubEnv('CHATWOOT_PLATFORM_TOKEN', 'platform-secret-token');
 
