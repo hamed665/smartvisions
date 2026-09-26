@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { evaluateChatwootProvisioningActivation } from '@/lib/chatwoot/activation-contract';
 import {
   classifyChatwootHttpStatus,
   isChatwootReadMethod,
@@ -46,7 +47,12 @@ export class ChatwootHttpError extends Error {
 }
 
 function provisioningEnabled() {
-  return process.env.CHATWOOT_PROVISIONING_ENABLED === 'true';
+  return evaluateChatwootProvisioningActivation({
+    deploymentEnvironment: process.env.DEPLOYMENT_ENV,
+    provisioningEnabled: process.env.CHATWOOT_PROVISIONING_ENABLED,
+    baseUrl: process.env.CHATWOOT_BASE_URL,
+    platformToken: process.env.CHATWOOT_PLATFORM_TOKEN,
+  }).ready;
 }
 
 function baseUrl() {
