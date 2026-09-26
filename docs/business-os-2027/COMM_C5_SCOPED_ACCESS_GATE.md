@@ -1,12 +1,14 @@
 # COMM C5 — scoped Chatwoot membership security gate
 
-Status: PARTIALLY IMPLEMENTED / FAIL-CLOSED. Business-wide eligible AccountUsers can be reconciled into Inbox/Team desired sets from canonical Smart Core scope. External-first BRANCH/DEPARTMENT/TEAM reductions are now implemented through remove → GET-verify → immutable receipt → canonical mutation sequencing. Scoped-only users that lack a verified Business-wide AccountUser remain blocked. Production provisioning remains disabled.
+Status: POLICY CLOSED / RUNTIME FAIL-CLOSED. Business-wide eligible AccountUsers can be reconciled into Inbox/Team desired sets from canonical Smart Core scope. External-first BRANCH/DEPARTMENT/TEAM reductions are implemented through remove → GET-verify → immutable receipt → canonical mutation sequencing. Native Chatwoot AccountUser + SSO is intentionally Business-wide only; scoped-only staff remain outside native Chatwoot and will use the scope-aware Smart Core unified inbox. Production provisioning remains disabled.
 
 ## Verified source contract (Chatwoot Community Edition v4.18.0)
 
 - `app/policies/conversation_policy.rb`: `show?` permits an administrator, agent bot, or `inbox_access? || team_access?`. Inbox access checks membership in the conversation's Inbox independently of its Team. Team access checks membership for conversations carrying that Team ID.
 - `app/controllers/api/v1/accounts/inbox_members_controller.rb`: PATCH updates the Inbox's member set, adding requested IDs and removing IDs absent from the request.
 - `app/policies/inbox_policy.rb`: the Inbox scope resolves `user.assigned_inboxes`; administrator permissions differ from agent permissions.
+- `app/policies/contact_policy.rb`: ordinary Chatwoot agents may index, search, filter, show, update and create Contacts at Account scope; these actions are not narrowed by Inbox/Team membership.
+- `app/controllers/api/v1/accounts/contacts_controller.rb`: Contact index/search operate on `Current.account.contacts`, proving that a scoped-only AccountUser would receive a broader native CRM surface than Smart Core Branch/Department/Team authority.
 
 Source: https://github.com/chatwoot/chatwoot/blob/v4.18.0/app/policies/conversation_policy.rb and https://github.com/chatwoot/chatwoot/blob/v4.18.0/app/controllers/api/v1/accounts/inbox_members_controller.rb.
 
@@ -49,6 +51,23 @@ The next migration, `0092_chatwoot_external_first_scoped_demotion.sql`, introduc
 
 The receipt is not canonical IAM authority. It cannot create or widen a scope assignment, is bound to the exact assignment/version/operation/post-role/post-attributes hash, and becomes unusable after the assignment version advances. service_role may only persist the immutable verification receipt; authenticated OWNER remains the canonical mutation authority.
 
+## Scoped-only native Chatwoot policy closeout
+
+Smart Visions will **not** create a native Chatwoot AccountUser or native Chatwoot SSO session for a user whose canonical Business-wide role resolves to VIEWER, even when that user has a non-VIEWER BRANCH / DEPARTMENT / TEAM assignment.
+
+This is an intentional security boundary, not a missing convenience feature. Chatwoot Community v4.18.0 narrows Conversation access through Inbox/Team membership, but its Contact policy exposes Account-wide Contact list/search/show/update/create actions to ordinary agents. Therefore a scoped-only AccountUser would violate the Smart Core invariant that external access must be no broader than canonical scope.
+
+Native Chatwoot is therefore reserved for users with verified Business-wide non-VIEWER authority:
+
+- OWNER -> Chatwoot administrator;
+- ADMIN / SALES_MANAGER / SALES_AGENT at Organization / Brand / Business effective scope -> Chatwoot agent;
+- VIEWER at Business scope -> no Chatwoot AccountUser and no native SSO;
+- lower-scope-only staff -> no native Chatwoot AccountUser and no native SSO.
+
+Lower-scope staff will operate through `COMM-UNIFIED-INBOX`, where Smart Core can enforce Branch / Department / Team scope before exposing conversations, contacts or actions.
+
+The SSO adapter recomputes live Business-wide canonical authority before issuing a Platform login URL and requires it to match the stored ACTIVE AccountUser projection. A stale ACTIVE AccountUser therefore cannot continue to receive SSO after canonical Business-wide authority disappears.
+
 ## Release gate
 
-Scoped-only AccountUser support remains blocked until its external effective permissions are proven for shared-Inbox counterexamples and SSO/account-role semantics. Keep Shadow Mode on and keep Production provisioning disabled until the real tenant, Platform token, explicit activation and runtime evidence gates are satisfied.
+Scoped-only native Chatwoot AccountUser support is closed as unsupported because source evidence proves Account-wide Contact access for ordinary agents. Scope-aware staff access moves to COMM-UNIFIED-INBOX instead. Keep Shadow Mode on and keep Production provisioning disabled until the real tenant, Platform token, explicit activation and runtime evidence gates are satisfied.
