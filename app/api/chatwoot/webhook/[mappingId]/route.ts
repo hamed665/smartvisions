@@ -3,6 +3,10 @@ import {
   ChatwootWebhookError,
   persistSignedChatwootWebhook,
 } from '@/lib/chatwoot/webhook-receiver';
+import {
+  ChatwootProjectionError,
+  processChatwootWebhookProjection,
+} from '@/lib/chatwoot/webhook-projection';
 
 const MAX_WEBHOOK_BYTES = 1024 * 1024;
 
@@ -92,8 +96,25 @@ export async function POST(
       signature: request.headers.get('x-chatwoot-signature'),
     });
 
-    return NextResponse.json(result, { status: 200 });
+    const projection = await processChatwootWebhookProjection({
+      eventId: result.eventId,
+    });
+
+    return NextResponse.json(
+      {
+        ...result,
+        projectionStatus: projection.status,
+      },
+      { status: 200 },
+    );
   } catch (error) {
+    if (error instanceof ChatwootProjectionError) {
+      return NextResponse.json(
+        { error: 'Chatwoot webhook projection temporarily unavailable' },
+        { status: 503 },
+      );
+    }
+
     if (error instanceof ChatwootWebhookError) {
       if (error.code === 'INVALID_REQUEST') {
         return NextResponse.json(
