@@ -9,15 +9,22 @@ const ORG = '00000000-0000-4000-8000-000000000111';
 
 function fakeSupabase(counts: Record<string, number>) {
   return {
-    from: vi.fn((table: string) => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(async (column: string, value: string) => {
-          expect(column).toBe('organization_id');
-          expect(value).toBe(ORG);
-          return { count: counts[table] ?? 0, error: null };
-        }),
-      })),
-    })),
+    from: vi.fn((table: string) => {
+      const response = { count: counts[table] ?? 0, error: null };
+      const builder: Record<string, unknown> = {};
+      builder.select = vi.fn(() => builder);
+      builder.eq = vi.fn((column: string, value: string) => {
+        expect(column).toBe('organization_id');
+        expect(value).toBe(ORG);
+        return builder;
+      });
+      builder.in = vi.fn(() => builder);
+      builder.then = (
+        resolve: (value: typeof response) => unknown,
+        reject?: (reason: unknown) => unknown,
+      ) => Promise.resolve(response).then(resolve, reject);
+      return builder;
+    }),
   } as unknown as SupabaseClient;
 }
 
