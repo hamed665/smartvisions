@@ -120,8 +120,8 @@ create index if not exists unified_inbox_projection_contact_idx
 
 alter table public.unified_inbox_conversation_projections enable row level security;
 
--- Projection identity and tenant lineage are immutable. Communication state may
--- be reconciled later, but only through an explicit reconciler command path.
+-- Projection tenant/channel identity is immutable. Department/Team assignment
+-- and communication state may be reconciled through the governed command path.
 create or replace function public.enforce_unified_inbox_projection_contract()
 returns trigger
 language plpgsql
@@ -145,11 +145,8 @@ begin
        or new.brand_id is distinct from old.brand_id
        or new.tenant_business_id is distinct from old.tenant_business_id
        or new.branch_id is distinct from old.branch_id
-       or new.department_id is distinct from old.department_id
-       or new.team_id is distinct from old.team_id
        or new.communication_channel_binding_id is distinct from old.communication_channel_binding_id
        or new.chatwoot_inbox_mapping_id is distinct from old.chatwoot_inbox_mapping_id
-       or new.chatwoot_team_mapping_id is distinct from old.chatwoot_team_mapping_id
        or new.chatwoot_conversation_display_id is distinct from old.chatwoot_conversation_display_id
        or (
          old.chatwoot_conversation_uuid is not null
@@ -345,6 +342,20 @@ $$;
 -- C5 scoped-only representation is preserved: Organization VIEWER plus one or
 -- more lower-scope assignments. Outside those explicit assignments the role is
 -- NULL, not Organization VIEWER.
+create or replace function public.is_unified_inbox_business_wide_member(
+  p_organization_id uuid
+)
+returns boolean
+language sql
+stable
+security invoker
+set search_path = public, auth, pg_catalog
+as $
+  select
+    public.is_org_member(p_organization_id)
+    and not public.is_unified_inbox_scoped_only_member(p_organization_id);
+$;
+
 create or replace function public.unified_inbox_effective_role(
   p_organization_id uuid,
   p_brand_id uuid,
@@ -550,6 +561,58 @@ as $$
     );
 $$;
 
+-- Scoped-only sessions must not bypass the Unified Inbox through legacy
+-- Organization-wide surfaces that do not yet have a canonical target-scope
+-- mapping. Business-wide operators retain the existing access contract.
+do $unified_inbox_legacy_scope_boundary$
+declare
+  v_table text;
+begin
+  foreach v_table in array array[
+    'agent_outputs','agent_settings','approval_rules','automation_rules',
+    'campaigns','cost_guard_settings','crm_custom_field_definitions',
+    'crm_deals','crm_pipeline_stages','crm_pipelines','crm_segment_versions',
+    'crm_segments','crm_tasks','discovery_records','email_events',
+    'feature_flag_overrides','followup_jobs','growth_opportunities',
+    'handoff_events','integration_connections','intent_opportunities',
+    'knowledge_versions','lead_sources','locale_profiles','mailboxes',
+    'market_settings','message_templates','message_variants',
+    'organization_entitlement_overrides','organization_settings',
+    'outreach_messages','outreach_policies','portfolio_items',
+    'preview_events','preview_templates','previews','prompt_versions',
+    'reply_decisions','reply_events','scope_configuration_overrides',
+    'service_prices','services','subscriptions','suppression_list',
+    'system_controls','usage_events','voice_transcriptions',
+    'website_audits','whatsapp_events'
+  ]
+  loop
+    if to_regclass(format('public.%I', v_table)) is null then
+      continue;
+    end if;
+
+    execute format(
+      'drop policy if exists unified_inbox_business_wide_boundary on public.%I',
+      v_table
+    );
+    execute format(
+      'create policy unified_inbox_business_wide_boundary on public.%I as restrictive for all to authenticated using (public.is_unified_inbox_business_wide_member(organization_id)) with check (public.is_unified_inbox_business_wide_member(organization_id))',
+      v_table
+    );
+  end loop;
+end;
+$unified_inbox_legacy_scope_boundary$;
+
+-- Keep bounded audit INSERT available for scoped operator actions while hiding
+-- the Organization-wide audit stream from scoped-only readers.
+drop policy if exists unified_inbox_audit_business_wide_read_boundary
+  on public.audit_logs;
+create policy unified_inbox_audit_business_wide_read_boundary
+on public.audit_logs
+as restrictive
+for select
+to authenticated
+using (public.is_unified_inbox_business_wide_member(organization_id));
+
 -- Replace legacy Organization-member ALL policies with scoped SELECT and
 -- OWNER-only authenticated mutation. service_role keeps its existing runtime
 -- authority and bypasses RLS; it does not become canonical user/scope authority.
@@ -704,6 +767,8 @@ revoke all on function public.enforce_unified_inbox_projection_contract()
   from public, anon, authenticated, service_role;
 revoke all on function public.is_unified_inbox_scoped_only_member(uuid)
   from public, anon;
+revoke all on function public.is_unified_inbox_business_wide_member(uuid)
+  from public, anon;
 revoke all on function public.unified_inbox_effective_role(
   uuid, uuid, uuid, uuid, uuid, uuid
 ) from public, anon;
@@ -718,6 +783,8 @@ revoke all on function public.can_read_unified_inbox_business(uuid, uuid)
   from public, anon;
 
 grant execute on function public.is_unified_inbox_scoped_only_member(uuid)
+  to authenticated, service_role;
+grant execute on function public.is_unified_inbox_business_wide_member(uuid)
   to authenticated, service_role;
 grant execute on function public.unified_inbox_effective_role(
   uuid, uuid, uuid, uuid, uuid, uuid
