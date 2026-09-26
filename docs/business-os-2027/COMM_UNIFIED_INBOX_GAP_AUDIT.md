@@ -82,26 +82,19 @@ The projection identity/scope is immutable and direct mutation is dormant behind
 
 ## Scope semantics
 
-The database scope resolver mirrors the existing `effectiveRoleForScope` semantics:
+The database scope resolver preserves the existing canonical scope precedence:
 
 TEAM > DEPARTMENT > BRANCH > BUSINESS > BRAND > Organization fallback.
 
-OWNER remains OWNER.
+OWNER remains OWNER. Business-wide ADMIN / SALES_MANAGER / SALES_AGENT retain their existing Organization-wide Smart Core read surface. A Business-wide VIEWER with no lower-scope assignment is also read-only Organization-wide inside Smart Core; C5 still denies that role native Chatwoot AccountUser/SSO.
 
-For non-owner users, the deepest applicable assignment wins. `VIEWER` therefore remains a real reduction and cannot accidentally inherit a broader agent role.
+The established scoped-only representation is different: Organization VIEWER plus one or more lower-scope assignments. For that user, the deepest applicable assignment wins. Outside all explicit assignments the resolver returns no role instead of falling back to Organization VIEWER, so a Branch-only user cannot see another Branch.
 
-ABAC assignment attributes fail closed in this database boundary unless the assignment has an empty attribute contract. Trusted policy-attribute contexts remain a server concern; SQL does not invent them.
+VIEWER is a valid Unified Inbox read role. It remains non-mutating at the direct authenticated RLS boundary. A deeper TEAM VIEWER can therefore reduce a broader BRANCH SALES_AGENT without accidentally losing the ability to read that Team.
 
-Conversation visibility requires an ACTIVE/DEGRADED projection and an effective role in:
+ABAC assignment attributes fail closed in this database boundary when an applicable assignment requires non-empty attributes. Trusted policy-attribute contexts remain a server concern; SQL does not invent them.
 
-- OWNER
-- ADMIN
-- SALES_MANAGER
-- SALES_AGENT
-
-A fallback VIEWER receives no conversation scope.
-
-Legacy/unprojected conversation rows remain visible to OWNER for backward compatibility but fail closed for non-owner users.
+Scoped-only conversation visibility requires an ACTIVE/DEGRADED projection matching canonical scope. Legacy/unprojected rows remain visible to OWNER and business-wide Organization operators for backward compatibility, but they do not become an implicit scope grant for scoped-only staff.
 
 ## Contact truth
 
@@ -125,7 +118,8 @@ CI must run the migration and a PostgreSQL 17 smoke test that proves:
 - a different Branch does not leak;
 - TEAM VIEWER overrides a broader BRANCH SALES_AGENT assignment;
 - scoped staff cannot mutate the conversation;
-- Business-wide ADMIN sees intended projected Business scope;
+- Business-wide ADMIN preserves its existing Organization-wide read surface, including legacy rows;
+- Business-wide VIEWER with no lower-scope assignment retains read-only Organization-wide visibility;
 - no authenticated/service-role projection writer is opened by this security package.
 
 ## Deliberately not implemented in this security package
