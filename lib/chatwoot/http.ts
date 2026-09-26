@@ -47,12 +47,16 @@ export class ChatwootHttpError extends Error {
 }
 
 function provisioningEnabled() {
-  return evaluateChatwootProvisioningActivation({
+  const activation = evaluateChatwootProvisioningActivation({
     deploymentEnvironment: process.env.DEPLOYMENT_ENV,
     provisioningEnabled: process.env.CHATWOOT_PROVISIONING_ENABLED,
     baseUrl: process.env.CHATWOOT_BASE_URL,
     platformToken: process.env.CHATWOOT_PLATFORM_TOKEN,
-  }).ready;
+  });
+
+  return (
+    activation.deploymentEnvironment === 'production' && activation.requested
+  );
 }
 
 function baseUrl() {
