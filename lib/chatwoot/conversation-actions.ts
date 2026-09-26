@@ -21,6 +21,7 @@ const REQUEST_ID_RE = /^[A-Za-z0-9:_-]{8,140}$/;
 const ALLOWED_STATUSES = new Set(['open', 'resolved', 'pending', 'snoozed']);
 const MAX_LABELS = 50;
 const MAX_LABEL_LENGTH = 120;
+const MAX_INTERNAL_NOTE_LENGTH = 10_000;
 const MANAGE_ROLES = new Set(['OWNER', 'ADMIN', 'SALES_MANAGER']);
 const ASSIGNEE_ROLES = new Set([
   'OWNER',
@@ -54,6 +55,12 @@ export type UnifiedInboxConversationActionInput = {
   action: UnifiedInboxConversationAction;
 };
 
+export type UnifiedInboxInternalNoteInput = {
+  conversationId: string;
+  requestId: string;
+  content: string;
+};
+
 export type UnifiedInboxConversationActionOptions = {
   statuses: Array<'open' | 'resolved' | 'pending' | 'snoozed'>;
   current: {
@@ -72,6 +79,12 @@ export type UnifiedInboxConversationActionOptions = {
   teams: Array<{
     teamId: string;
     name: string;
+  }>;
+  notes: Array<{
+    id: number;
+    content: string;
+    createdAt: number;
+    senderName: string | null;
   }>;
 };
 
@@ -206,6 +219,47 @@ function agentCatalog(value: unknown) {
     .filter((row): row is { id: number; name: string; availabilityStatus: string | null } => Boolean(row));
 }
 
+
+function privateNoteCatalog(value: unknown) {
+  return chatwootRows(value)
+    .map((row) => {
+      const id = normalizeChatwootInt32Id(row.id);
+      const conversationId = normalizeChatwootInt32Id(row.conversation_id);
+      const content = typeof row.content === 'string' ? row.content : null;
+      const createdAt = Number(row.created_at);
+      const sender = isObject(row.sender) ? row.sender : null;
+      const senderName = sender && typeof sender.name === 'string' && sender.name.trim()
+        ? sender.name.trim()
+        : null;
+      if (
+        id === null
+        || conversationId === null
+        || row.private !== true
+        || content === null
+        || !Number.isFinite(createdAt)
+        || createdAt <= 0
+      ) {
+        return null;
+      }
+      return {
+        id,
+        conversationId,
+        content,
+        createdAt,
+        senderName,
+        contentAttributes: isObject(row.content_attributes) ? row.content_attributes : {},
+      };
+    })
+    .filter((row): row is {
+      id: number;
+      conversationId: number;
+      content: string;
+      createdAt: number;
+      senderName: string | null;
+      contentAttributes: Record<string, unknown>;
+    } => Boolean(row));
+}
+
 export function parseUnifiedInboxConversationActionBody(
   conversationId: string,
   value: unknown,
@@ -288,6 +342,37 @@ export function parseUnifiedInboxConversationActionBody(
   }
 
   return fail('INVALID_INPUT', 'Unsupported Unified Inbox action');
+}
+
+
+export function parseUnifiedInboxInternalNoteBody(
+  conversationId: string,
+  value: unknown,
+): UnifiedInboxInternalNoteInput {
+  const normalizedConversationId = canonicalUuid(conversationId);
+  const body = isObject(value) ? value : null;
+  const requestId = canonicalRequestId(body?.requestId);
+  const action = typeof body?.action === 'string'
+    ? body.action.trim().toUpperCase()
+    : '';
+  const content = typeof body?.content === 'string' ? body.content.trim() : '';
+
+  if (
+    !normalizedConversationId
+    || !body
+    || !requestId
+    || action !== 'INTERNAL_NOTE'
+    || content.length < 1
+    || content.length > MAX_INTERNAL_NOTE_LENGTH
+  ) {
+    return fail('INVALID_INPUT', 'Invalid Unified Inbox internal note payload');
+  }
+
+  return {
+    conversationId: normalizedConversationId,
+    requestId,
+    content,
+  };
 }
 
 function activationReady() {
@@ -721,7 +806,11 @@ async function resolveExternalTarget(input: {
   };
 }
 
-function claimPayload(action: UnifiedInboxConversationAction) {
+type UnifiedInboxClaimAction =
+  | UnifiedInboxConversationAction
+  | { action: 'INTERNAL_NOTE'; content: string };
+
+function claimPayload(action: UnifiedInboxClaimAction) {
   if (action.action === 'STATUS') {
     return {
       status: action.status,
@@ -730,7 +819,8 @@ function claimPayload(action: UnifiedInboxConversationAction) {
   }
   if (action.action === 'LABELS') return { labels: action.labels };
   if (action.action === 'ASSIGNEE') return { smartUserId: action.smartUserId };
-  return { teamId: action.teamId };
+  if (action.action === 'TEAM') return { teamId: action.teamId };
+  return { content: action.content };
 }
 
 function normalizeSnoozedUntil(value: unknown) {
@@ -858,7 +948,7 @@ export async function getUnifiedInboxConversationActionOptions(input: {
     fetchImpl: input.fetchImpl,
   });
 
-  const [external, rawLabels, rawAgents, memberships, teamMappings] = await Promise.all([
+  const [external, rawLabels, rawAgents, rawMessages, memberships, teamMappings] = await Promise.all([
     readExternalConversation({
       proxy,
       displayId: projection.chatwoot_conversation_display_id,
@@ -872,6 +962,11 @@ export async function getUnifiedInboxConversationActionOptions(input: {
     accountRequest<unknown>({
       proxy,
       resourcePath: '/agents',
+      fetchImpl: input.fetchImpl,
+    }),
+    accountRequest<unknown>({
+      proxy,
+      resourcePath: `/conversations/${projection.chatwoot_conversation_display_id}/messages`,
       fetchImpl: input.fetchImpl,
     }),
     service
@@ -1027,6 +1122,16 @@ export async function getUnifiedInboxConversationActionOptions(input: {
     labels: labelCatalog(rawLabels),
     assignees,
     teams,
+    notes: privateNoteCatalog(rawMessages)
+      .filter((note) => note.conversationId === projection.chatwoot_conversation_display_id)
+      .slice(-20)
+      .reverse()
+      .map((note) => ({
+        id: note.id,
+        content: note.content,
+        createdAt: note.createdAt,
+        senderName: note.senderName,
+      })),
   };
 }
 
@@ -1035,7 +1140,7 @@ async function claimAction(input: {
   organizationId: string;
   conversationId: string;
   requestId: string;
-  action: UnifiedInboxConversationAction;
+  action: UnifiedInboxClaimAction;
 }) {
   const result = await input.supabase.rpc('claim_unified_inbox_action', {
     p_organization_id: input.organizationId,
@@ -1086,6 +1191,180 @@ function auditAfterData(input: {
     };
   }
   return { ...base, action: 'TEAM', target_team_id: input.target.teamId };
+}
+
+
+function privateNoteMatchesRequest(input: {
+  value: unknown;
+  displayId: number;
+  requestId: string;
+  content: string;
+}) {
+  return privateNoteCatalog(input.value).find((note) => (
+    note.conversationId === input.displayId
+    && note.content === input.content
+    && note.contentAttributes.smartvisions_request_id === input.requestId
+    && note.contentAttributes.smartvisions_origin === 'SMART_CORE'
+  )) ?? null;
+}
+
+async function readPrivateNoteByRequestId(input: {
+  proxy: AdminProxy;
+  displayId: number;
+  requestId: string;
+  content: string;
+  afterMessageId?: number | null;
+  fetchImpl?: typeof fetch;
+}) {
+  const after = input.afterMessageId && input.afterMessageId > 1
+    ? `?after=${input.afterMessageId - 1}`
+    : '';
+  const raw = await accountRequest<unknown>({
+    proxy: input.proxy,
+    resourcePath: `/conversations/${input.displayId}/messages${after}`,
+    fetchImpl: input.fetchImpl,
+  });
+  return privateNoteMatchesRequest({
+    value: raw,
+    displayId: input.displayId,
+    requestId: input.requestId,
+    content: input.content,
+  });
+}
+
+export async function performUnifiedInboxInternalNote(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  userId: string;
+  request: UnifiedInboxInternalNoteInput;
+  service?: SupabaseClient;
+  fetchImpl?: typeof fetch;
+}) {
+  activationReady();
+
+  const projection = await loadManageableProjection({
+    supabase: input.supabase,
+    organizationId: input.organizationId,
+    conversationId: input.request.conversationId,
+  });
+  const service = input.service ?? createSupabaseServiceClient();
+  const proxy = await issueAdminProxy({
+    service,
+    organizationId: input.organizationId,
+    tenantBusinessId: projection.tenant_business_id,
+    fetchImpl: input.fetchImpl,
+  });
+  const noteAction = {
+    action: 'INTERNAL_NOTE' as const,
+    content: input.request.content,
+  };
+  const claim = await claimAction({
+    supabase: input.supabase,
+    organizationId: input.organizationId,
+    conversationId: input.request.conversationId,
+    requestId: input.request.requestId,
+    action: noteAction,
+  });
+
+  if (claim.projection_id !== projection.id) {
+    fail('RECONCILIATION_REQUIRED', 'Internal note claim no longer matches the loaded projection');
+  }
+
+  let createdMessageId: number | null = null;
+  let mutationError: unknown = null;
+
+  if (claim.is_new) {
+    try {
+      const created = await accountRequest<unknown>({
+        proxy,
+        resourcePath: `/conversations/${claim.chatwoot_conversation_display_id}/messages`,
+        method: 'POST',
+        body: {
+          content: input.request.content,
+          message_type: 'outgoing',
+          content_type: 'text',
+          private: true,
+          content_attributes: {
+            smartvisions_request_id: input.request.requestId,
+            smartvisions_origin: 'SMART_CORE',
+          },
+        },
+        fetchImpl: input.fetchImpl,
+      });
+      if (isObject(created)) {
+        createdMessageId = normalizeChatwootInt32Id(created.id);
+      }
+    } catch (error) {
+      mutationError = error;
+      if (!(error instanceof ChatwootHttpError) || !error.ambiguousMutationOutcome) {
+        throw error;
+      }
+    }
+  }
+
+  let verifiedNote;
+  try {
+    verifiedNote = await readPrivateNoteByRequestId({
+      proxy,
+      displayId: claim.chatwoot_conversation_display_id,
+      requestId: input.request.requestId,
+      content: input.request.content,
+      afterMessageId: createdMessageId,
+      fetchImpl: input.fetchImpl,
+    });
+  } catch (error) {
+    if (mutationError) {
+      fail(
+        'RECONCILIATION_REQUIRED',
+        'Internal note outcome is ambiguous and exact reconciliation failed',
+      );
+    }
+    throw error;
+  }
+
+  if (!verifiedNote) {
+    fail(
+      'RECONCILIATION_REQUIRED',
+      claim.is_new
+        ? 'Internal note was not confirmed by exact Chatwoot reconciliation; do not resend blindly'
+        : 'Replayed internal note claim is not yet confirmed in Chatwoot',
+    );
+  }
+
+  const audit = await input.supabase.from('audit_logs').insert({
+    organization_id: input.organizationId,
+    actor_type: 'USER',
+    actor_id: input.userId,
+    action: 'CHATWOOT_INTERNAL_NOTE_VERIFIED',
+    entity_type: 'unified_inbox_projection',
+    entity_id: claim.projection_id,
+    brand_id: claim.brand_id,
+    tenant_business_id: claim.tenant_business_id,
+    branch_id: claim.branch_id,
+    department_id: claim.department_id,
+    team_id: claim.team_id,
+    correlation_id: input.request.requestId,
+    after_data: {
+      external_verified: true,
+      replayed: !claim.is_new,
+      chatwoot_message_id: verifiedNote.id,
+      private: true,
+      content_length: input.request.content.length,
+      claimed_projection_version: claim.claimed_projection_version,
+      current_projection_version: claim.current_projection_version,
+    },
+  });
+
+  return {
+    ok: true as const,
+    action: 'INTERNAL_NOTE' as const,
+    replayed: !claim.is_new,
+    externallyVerified: true as const,
+    chatwootMessageId: verifiedNote.id,
+    ...(audit.error
+      ? { warning: 'Internal note verified; audit reconciliation needs attention' }
+      : {}),
+  };
 }
 
 export async function performUnifiedInboxConversationAction(input: {
