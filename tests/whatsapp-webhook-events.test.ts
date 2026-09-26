@@ -4,7 +4,8 @@ import { extractWhatsAppInbound, extractWhatsAppStatuses } from '@/lib/whatsapp/
 describe('WhatsApp webhook normalization', () => {
   it('normalizes inbound text and voice messages', () => {
     const payload = {
-      entry: [{ changes: [{ value: {
+      entry: [{ id: 'waba-123', changes: [{ value: {
+        metadata: { display_phone_number: '+968 9000 0000', phone_number_id: 'phone-123' },
         contacts: [{ profile: { name: 'Customer' }, wa_id: '96890000000' }],
         messages: [
           { id: 'wamid.text', from: '96890000000', timestamp: '1787350000', type: 'text', text: { body: 'hello' } },
@@ -15,8 +16,35 @@ describe('WhatsApp webhook normalization', () => {
 
     const events = extractWhatsAppInbound(payload);
     expect(events).toHaveLength(2);
-    expect(events[0]).toMatchObject({ providerMessageId: 'wamid.text', text: 'hello', contactName: 'Customer' });
+    expect(events[0]).toMatchObject({
+      providerMessageId: 'wamid.text',
+      text: 'hello',
+      contactName: 'Customer',
+      destination: {
+        displayPhoneNumber: '+968 9000 0000',
+        phoneNumberId: 'phone-123',
+        wabaId: 'waba-123',
+      },
+    });
     expect(events[1]).toMatchObject({ providerMessageId: 'wamid.voice', mediaId: 'media-1', mimeType: 'audio/ogg', voice: true });
+  });
+
+  it('keeps destination context on status events for tenant routing', () => {
+    const statuses = extractWhatsAppStatuses({
+      entry: [{
+        id: 'waba-status',
+        changes: [{
+          value: {
+            metadata: { phone_number_id: 'phone-status' },
+            statuses: [{ id: 'wamid.status', status: 'read' }],
+          },
+        }],
+      }],
+    });
+    expect(statuses[0]).toMatchObject({
+      providerMessageId: 'wamid.status',
+      destination: { phoneNumberId: 'phone-status', wabaId: 'waba-status' },
+    });
   });
 
   it('preserves click-to-whatsapp referral attribution from Meta inbound payloads', () => {
