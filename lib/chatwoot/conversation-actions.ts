@@ -1304,7 +1304,7 @@ async function loadAttachmentContext(input: {
     displayId: projection.chatwoot_conversation_display_id,
     fetchImpl: input.fetchImpl,
   });
-  return { projection, proxy, messages };
+  return { projection, proxy, messages, service };
 }
 
 export async function getUnifiedInboxAttachments(input: {
@@ -1363,6 +1363,7 @@ export async function downloadUnifiedInboxAttachment(input: {
   organizationId: string;
   conversationId: string;
   attachmentId: number;
+  userId: string;
   service?: SupabaseClient;
   fetchImpl?: typeof fetch;
 }) {
@@ -1370,7 +1371,7 @@ export async function downloadUnifiedInboxAttachment(input: {
     fail('INVALID_INPUT', 'Invalid attachment identifier');
   }
 
-  const { proxy, messages } = await loadAttachmentContext(input);
+  const { projection, proxy, messages, service } = await loadAttachmentContext(input);
   let summary: UnifiedInboxAttachment | null = null;
   let dataUrl: URL | null = null;
 
@@ -1431,6 +1432,33 @@ export async function downloadUnifiedInboxAttachment(input: {
       await response.body.cancel();
       fail('INVALID_INPUT', 'Attachment exceeds the safe download limit');
     }
+    const audit = await service.from('audit_logs').insert({
+      organization_id: input.organizationId,
+      actor_type: 'USER',
+      actor_id: input.userId,
+      action: 'CHATWOOT_ATTACHMENT_DOWNLOAD_AUTHORIZED',
+      entity_type: 'unified_inbox_projection',
+      entity_id: projection.id,
+      brand_id: projection.brand_id,
+      tenant_business_id: projection.tenant_business_id,
+      branch_id: projection.branch_id,
+      department_id: projection.department_id,
+      team_id: projection.team_id,
+      correlation_id: globalThis.crypto.randomUUID(),
+      after_data: {
+        attachment_id: summary.id,
+        message_id: summary.messageId,
+        file_type: summary.fileType,
+        content_type: summary.contentType,
+        file_size: summary.fileSize,
+        direct_storage_url_exposed: false,
+      },
+    });
+    if (audit.error) {
+      await response.body.cancel();
+      fail('UPSTREAM_FAILED', 'Attachment audit could not be persisted');
+    }
+
     return {
       body: boundedAttachmentStream(response.body),
       contentType: summary.contentType
