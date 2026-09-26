@@ -37,6 +37,7 @@ describe('COMM-UNIFIED-INBOX scoped security boundary', () => {
     expect(migration).toContain("if v_org_role = 'OWNER'");
     expect(migration).toContain("v_org_role = 'VIEWER'");
     expect(migration).toContain("in ('OWNER','ADMIN','SALES_MANAGER','SALES_AGENT','VIEWER')");
+    expect(migration).toContain('is_unified_inbox_business_wide_member');
   });
 
   it('replaces legacy Organization-wide conversation/contact RLS with scoped reads', () => {
@@ -55,6 +56,27 @@ describe('COMM-UNIFIED-INBOX scoped security boundary', () => {
     expect(migration).toContain('can_read_unified_inbox_conversation');
     expect(migration).toContain('can_read_unified_inbox_lead');
     expect(migration).toContain('can_read_unified_inbox_business');
+  });
+
+  it('blocks scoped-only escape through legacy Organization-wide surfaces', () => {
+    expect(migration).toContain('unified_inbox_business_wide_boundary');
+    expect(migration).toContain("'whatsapp_events'");
+    expect(migration).toContain("'system_controls'");
+    expect(migration).toContain('unified_inbox_audit_business_wide_read_boundary');
+    expect(smoke).toContain('scoped user leaked raw Organization-wide communication event history');
+    expect(smoke).toContain('Business-wide VIEWER unexpectedly hit scoped-only legacy boundary');
+  });
+
+  it('keeps tenant/channel identity immutable but leaves assignment snapshots reconcilable', () => {
+    const guard = migration.slice(
+      migration.indexOf("if tg_op = 'UPDATE' then"),
+      migration.indexOf("if new.version <> old.version + 1"),
+    );
+    expect(guard).toContain('new.branch_id is distinct from old.branch_id');
+    expect(guard).toContain('new.chatwoot_inbox_mapping_id is distinct from old.chatwoot_inbox_mapping_id');
+    expect(guard).not.toContain('new.department_id is distinct from old.department_id');
+    expect(guard).not.toContain('new.team_id is distinct from old.team_id');
+    expect(guard).not.toContain('new.chatwoot_team_mapping_id is distinct from old.chatwoot_team_mapping_id');
   });
 
   it('keeps projection writes dormant until the governed reconciler package exists', () => {
@@ -79,5 +101,6 @@ describe('COMM-UNIFIED-INBOX scoped security boundary', () => {
     expect(smoke).toContain('scoped-only VIEWER fell back outside assigned Branch scope');
     expect(smoke).toContain('Business-wide VIEWER lost intended read visibility');
     expect(smoke).toContain('Business-wide ADMIN lost existing Organization-wide conversation visibility');
+    expect(smoke).toContain('scoped user leaked raw Organization-wide communication event history');
   });
 });
