@@ -43,7 +43,7 @@ insert into public.integration_connections(
   id,organization_id,provider,channel,enabled,status
 ) values
   ('60000000-0000-4000-8000-000000009311','00000000-0000-4000-8000-000000009310','META','WHATSAPP',true,'CONNECTED'),
-  ('60000000-0000-4000-8000-000000009312','00000000-0000-4000-8000-000000009310','META','WHATSAPP',true,'CONNECTED');
+  ('60000000-0000-4000-8000-000000009312','00000000-0000-4000-8000-000000009310','RESEND','EMAIL',true,'CONNECTED');
 
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-4000-8000-000000009301',false);
@@ -62,7 +62,7 @@ select (public.create_communication_channel_binding(
   '20000000-0000-4000-8000-000000009310',
   '30000000-0000-4000-8000-000000009312',
   '60000000-0000-4000-8000-000000009312',
-  'WHATSAPP',
+  'EMAIL',
   'unified-inbox-binding-b'
 )).id as binding_b \gset
 
@@ -171,20 +171,19 @@ insert into public.sales_conversations(
   id,organization_id,lead_id,channel,last_message_at
 ) values
   ('72000000-0000-4000-8000-000000009311','00000000-0000-4000-8000-000000009310','71000000-0000-4000-8000-000000009311','WHATSAPP',statement_timestamp()),
-  ('72000000-0000-4000-8000-000000009312','00000000-0000-4000-8000-000000009310','71000000-0000-4000-8000-000000009312','WHATSAPP',statement_timestamp()),
+  ('72000000-0000-4000-8000-000000009312','00000000-0000-4000-8000-000000009310','71000000-0000-4000-8000-000000009312','EMAIL',statement_timestamp()),
   ('72000000-0000-4000-8000-000000009313','00000000-0000-4000-8000-000000009310',null,'EMAIL',statement_timestamp());
 
 insert into public.conversation_messages(
   id,organization_id,conversation_id,lead_id,channel,direction,original_text
 ) values
   ('72100000-0000-4000-8000-000000009311','00000000-0000-4000-8000-000000009310','72000000-0000-4000-8000-000000009311','71000000-0000-4000-8000-000000009311','WHATSAPP','INBOUND','branch a'),
-  ('72100000-0000-4000-8000-000000009312','00000000-0000-4000-8000-000000009310','72000000-0000-4000-8000-000000009312','71000000-0000-4000-8000-000000009312','WHATSAPP','INBOUND','branch b');
+  ('72100000-0000-4000-8000-000000009312','00000000-0000-4000-8000-000000009310','72000000-0000-4000-8000-000000009312','71000000-0000-4000-8000-000000009312','EMAIL','INBOUND','branch b');
 
 insert into public.whatsapp_events(
   id,organization_id,lead_id,conversation_id,provider_message_id,direction,event_type,payload
 ) values
-  ('72200000-0000-4000-8000-000000009311','00000000-0000-4000-8000-000000009310','71000000-0000-4000-8000-000000009311','72000000-0000-4000-8000-000000009311','wamid.scope.a','INBOUND','MESSAGE_RECEIVED','{"branch":"A"}'::jsonb),
-  ('72200000-0000-4000-8000-000000009312','00000000-0000-4000-8000-000000009310','71000000-0000-4000-8000-000000009312','72000000-0000-4000-8000-000000009312','wamid.scope.b','INBOUND','MESSAGE_RECEIVED','{"branch":"B"}'::jsonb);
+  ('72200000-0000-4000-8000-000000009311','00000000-0000-4000-8000-000000009310','71000000-0000-4000-8000-000000009311','72000000-0000-4000-8000-000000009311','wamid.scope.a','INBOUND','MESSAGE_RECEIVED','{"branch":"A"}'::jsonb);
 
 insert into public.crm_identities(
   id,organization_id,identity_type,normalized_value,display_value
@@ -388,7 +387,7 @@ begin
     raise exception 'Business-wide VIEWER lost intended read visibility';
   end if;
 
-  if (select count(*) from public.whatsapp_events where organization_id='00000000-0000-4000-8000-000000009310') <> 2 then
+  if (select count(*) from public.whatsapp_events where organization_id='00000000-0000-4000-8000-000000009310') <> 1 then
     raise exception 'Business-wide VIEWER unexpectedly hit scoped-only legacy boundary';
   end if;
 end;
