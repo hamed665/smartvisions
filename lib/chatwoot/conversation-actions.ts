@@ -1194,7 +1194,7 @@ function auditAfterData(input: {
 }
 
 
-function privateNoteMatchesRequest(input: {
+export function privateNoteMatchesRequest(input: {
   value: unknown;
   displayId: number;
   requestId: string;
