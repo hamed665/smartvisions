@@ -25,21 +25,21 @@ This delivery-policy change was prepared from verified `main@4d1da421c9c02423989
 
 Use this checkpoint before every older section below, but always re-read runtime/current main first.
 
-- Verified baseline before this package: `main@c97335cd6584ac7611f85007366ba69a4e7889b5` after PR #248.
-- PR #248 added OWNER-only canonical Branch/Department/Team bootstrap, owner-scoped Chatwoot readiness inventory, and guarded API Inbox/Team operator paths. Exact-main CI and Cloudflare Production Deploy are SUCCESS.
-- Production Chatwoot remains healthy at `https://inbox.smartvisionsai.com` on the dedicated OVH VPS. Railway remains Candidate/rollback evidence only, not a Production dependency.
-- Production Smart Core remains Cloudflare Workers + Supabase. Chatwoot remains only the Communication Plane.
-- Production migration head before this package is `0090_chatwoot_fk_index_hardening`.
-- Production still contains zero canonical Brand, tenant Business, Branch, Department, Team and zero Chatwoot mapping/claim rows. Do not fabricate any of these to make the UI look populated.
-- Connected canonical EMAIL and WHATSAPP integration connections exist, but no Communication Plane binding has been created because no real tenant Business exists yet.
-- `CHATWOOT_PLATFORM_TOKEN` remains absent and `CHATWOOT_PROVISIONING_ENABLED=false`. Keep it false. Do not paste the token into chat, Git, Supabase rows, logs or browser state.
-- Shadow Mode remains ON. The latest verified deployment window created zero new outreach, WhatsApp or Email events.
-- Current implementation package adds source-backed scoped Inbox/Team desired-set reconciliation for already-verified Business-wide AccountUsers. Exact external semantics are GET -> at most one replace-set PATCH -> GET exact verification; ambiguous PATCH is GET-reconciliation-only.
-- Canonical desired access is calculated through existing Organization -> Brand -> Business -> Branch -> Department -> Team scope precedence with no caller-provided ABAC attributes.
-- A canonical user who should have scoped access but lacks an ACTIVE Business-wide Chatwoot AccountUser/User projection blocks reconciliation instead of being silently omitted. Scoped-only users therefore remain intentionally unsupported.
-- Migration `0091_chatwoot_scoped_access_reduction_gate.sql` extends reverse-role safety to BRANCH/DEPARTMENT/TEAM. Once projected access exists, reductions from scoped non-VIEWER authority to VIEWER are blocked until a later external-first demotion orchestration removes/verifies external access.
+- Verified baseline before this package: `main@64ab0fb3f5d56a57d6b11e3c2ae6b50ef1433b40` after PR #249.
+- PR #249 added source-backed Inbox/Team desired-set reconciliation for already-verified Business-wide AccountUsers. Exact-main CI and Cloudflare Production Deploy are SUCCESS.
+- Production migration `0091_chatwoot_scoped_access_reduction_gate` was then applied and verified live as version `20260926100839`; all three lower-scope reduction triggers exist.
+- Production Chatwoot remains on the dedicated OVH VPS. Smart Core remains Cloudflare Workers + Supabase. Railway remains Candidate/rollback evidence only.
+- Production still contains zero canonical Brand, tenant Business, Branch, Department, Team and zero Chatwoot projection rows. Do not fabricate tenant data.
+- `CHATWOOT_PLATFORM_TOKEN` remains absent and `CHATWOOT_PROVISIONING_ENABLED=false`. Keep provisioning off.
+- Shadow Mode remains ON.
+- Current delivery package adds migration `0092_chatwoot_external_first_scoped_demotion.sql` plus runtime orchestration for lower-scope reductions.
+- External-first order is: compute before/after canonical effective role -> identify only ACTIVE Inbox/Team targets that lose access -> GET current members -> at most one replace-set PATCH removing the target Chatwoot User -> GET-verify absence -> persist an immutable five-minute service-role verification receipt -> authenticated OWNER applies the canonical update/delete through the existing governed scope-assignment command path.
+- Ambiguous PATCH outcomes are never retried blindly. Only GET reconciliation follows.
+- The receipt is bound to exact Organization, assignment, assignment version, target operation, post-role, post-attributes hash and verified mapping IDs. It is evidence only, not IAM authority.
+- If no external resource loses access, the existing canonical scope-assignment RPC remains the path and no receipt is created.
+- Scoped-only AccountUsers remain intentionally unsupported. Do not widen a Business-wide AccountUser merely to satisfy a lower-scope grant.
 - Continue at `SECTION COMMUNICATION / COMM-TENANT-BRIDGE`.
-- Next security boundary after this package: external-first scoped demotion orchestration, then real tenant/token activation evidence. Do not jump to `COMM-UNIFIED-INBOX` until COMM-TENANT-BRIDGE exit gates are actually satisfied.
+- After this package, the next real C5 boundary is scoped-only AccountUser/SSO policy closeout. Do not enter `COMM-UNIFIED-INBOX` until the COMM-TENANT-BRIDGE exit gate is actually proven.
 
 ## Superseding continuation checkpoint — 2026-09-26
 

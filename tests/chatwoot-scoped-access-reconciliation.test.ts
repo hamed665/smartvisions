@@ -23,7 +23,10 @@ vi.mock('@/lib/supabase/service', () => ({
 }));
 
 import { ChatwootHttpError } from '@/lib/chatwoot/http';
-import { reconcileChatwootScopedAccess } from '@/lib/chatwoot/scoped-access-reconciliation';
+import {
+  reconcileChatwootScopedAccess,
+  reduceMemberScopeAssignmentExternalFirst,
+} from '@/lib/chatwoot/scoped-access-reconciliation';
 
 const ORG = '00000000-0000-4000-8000-000000002001';
 const BRAND = '00000000-0000-4000-8000-000000002002';
@@ -36,10 +39,27 @@ const AGENT = '00000000-0000-4000-8000-000000002008';
 const SCOPED = '00000000-0000-4000-8000-000000002009';
 const OWNER_USER_MAPPING = '00000000-0000-4000-8000-000000002010';
 const AGENT_USER_MAPPING = '00000000-0000-4000-8000-000000002011';
+const ASSIGNMENT = '00000000-0000-4000-8000-000000002012';
+const RECEIPT = '00000000-0000-4000-8000-000000002013';
 
 type Row = Record<string, unknown>;
 
-function genericService(rows: Record<string, Row[]>) {
+function rpcMock() {
+  return vi.fn(
+    async (
+      _name?: string,
+      _args?: Record<string, unknown>,
+    ): Promise<{ data: unknown; error: unknown }> => ({
+      data: null,
+      error: null,
+    }),
+  );
+}
+
+function genericService(
+  rows: Record<string, Row[]>,
+  rpc = rpcMock(),
+) {
   return {
     from: vi.fn((table: string) => {
       let selected = '*';
@@ -97,26 +117,30 @@ function genericService(rows: Record<string, Row[]>) {
 
       return builder;
     }),
+    rpc,
   } as unknown as SupabaseClient;
 }
 
 function serviceRows(input?: {
   branchViewer?: boolean;
+  branchAgent?: boolean;
   scopedOnlyGrant?: boolean;
 }) {
   const assignments: Row[] = [];
-  if (input?.branchViewer) {
+  if (input?.branchViewer || input?.branchAgent) {
     assignments.push({
+      id: ASSIGNMENT,
       organization_id: ORG,
       user_id: AGENT,
       scope_type: 'BRANCH',
-      role: 'VIEWER',
+      role: input?.branchViewer ? 'VIEWER' : 'SALES_AGENT',
       brand_id: null,
       tenant_business_id: null,
       branch_id: BRANCH,
       department_id: null,
       team_id: null,
       attributes: {},
+      version: 1,
     });
   }
   if (input?.scopedOnlyGrant) {
@@ -221,6 +245,7 @@ function serviceRows(input?: {
 
 function authenticatedOwner() {
   const auditInsert = vi.fn(async () => ({ error: null }));
+  const rpc = rpcMock();
   const from = vi.fn((table: string) => {
     if (table === 'organization_members') {
       const builder: Record<string, unknown> = {};
@@ -247,8 +272,10 @@ function authenticatedOwner() {
         })),
       },
       from,
+      rpc,
     } as unknown as SupabaseClient,
     auditInsert,
+    rpc,
   };
 }
 
@@ -415,5 +442,238 @@ describe('Chatwoot scoped Inbox/Team access reconciliation', () => {
     ).rejects.toMatchObject({ code: 'RECONCILIATION_REQUIRED' });
 
     expect(adminRequest).toHaveBeenCalledTimes(3);
+  });
+});
+
+
+describe('Chatwoot external-first scoped demotion', () => {
+  it('fails before auth or privileged reads while provisioning is disabled', async () => {
+    vi.stubEnv('CHATWOOT_PROVISIONING_ENABLED', 'false');
+    const { supabase } = authenticatedOwner();
+
+    await expect(
+      reduceMemberScopeAssignmentExternalFirst({
+        supabase,
+        organizationId: ORG,
+        assignmentId: ASSIGNMENT,
+        expectedVersion: 1,
+        operation: 'UPDATE',
+        postRole: 'VIEWER',
+        postAttributes: {},
+      }),
+    ).rejects.toMatchObject({ code: 'ACTIVATION_BLOCKED' });
+
+    expect(supabase.auth.getUser).not.toHaveBeenCalled();
+    expect(serviceFactory).not.toHaveBeenCalled();
+    expect(adminRequest).not.toHaveBeenCalled();
+  });
+
+  it('removes external Inbox access, GET-verifies absence, records a receipt, then commits canonical reduction', async () => {
+    const { supabase, rpc, auditInsert } = authenticatedOwner();
+    const serviceRpc = rpcMock();
+    const service = genericService(
+      serviceRows({ branchAgent: true }),
+      serviceRpc,
+    );
+
+    serviceRpc.mockImplementation(async (name?: string) => {
+      if (name === 'record_chatwoot_scoped_access_reduction') {
+        return {
+          data: {
+            id: RECEIPT,
+            organization_id: ORG,
+            assignment_id: ASSIGNMENT,
+            assignment_version: 1,
+          },
+          error: null,
+        };
+      }
+      throw new Error('unexpected service RPC ' + name);
+    });
+
+    rpc.mockImplementation(async (name?: string) => {
+      if (name === 'apply_member_scope_assignment_reduction_verified') {
+        return {
+          data: {
+            assignment_id: ASSIGNMENT,
+            deleted: false,
+            version: 2,
+            role: 'VIEWER',
+          },
+          error: null,
+        };
+      }
+      throw new Error('unexpected authenticated RPC ' + name);
+    });
+
+    serviceFactory.mockReturnValue(service);
+
+    adminRequest
+      .mockResolvedValueOnce({ payload: [agent(151), agent(152)] })
+      .mockResolvedValueOnce({ payload: [agent(151)] })
+      .mockResolvedValueOnce({ payload: [agent(151)] });
+
+    const result = await reduceMemberScopeAssignmentExternalFirst({
+      supabase,
+      organizationId: ORG,
+      assignmentId: ASSIGNMENT,
+      expectedVersion: 1,
+      operation: 'UPDATE',
+      postRole: 'VIEWER',
+      postAttributes: {},
+    });
+
+    expect(result).toMatchObject({
+      assignmentId: ASSIGNMENT,
+      operation: 'UPDATE',
+      externalResourcesVerifiedAbsent: 1,
+      changedResourceCount: 1,
+      ambiguousMutationCount: 0,
+      outcome: 'EXTERNAL_ACCESS_REMOVED_THEN_CANONICAL_REDUCTION_APPLIED',
+    });
+
+    expect(adminRequest.mock.calls.map((call) => call[0]?.method)).toEqual([
+      'GET',
+      'PATCH',
+      'GET',
+    ]);
+    expect(adminRequest.mock.calls[1]?.[0]).toMatchObject({
+      resourcePath: '/inbox_members',
+      body: {
+        inbox_id: 701,
+        user_ids: [151],
+      },
+    });
+
+    expect(serviceRpc).toHaveBeenCalledWith(
+      'record_chatwoot_scoped_access_reduction',
+      expect.objectContaining({
+        p_organization_id: ORG,
+        p_assignment_id: ASSIGNMENT,
+        p_expected_assignment_version: 1,
+        p_operation: 'UPDATE',
+        p_post_role: 'VIEWER',
+        p_chatwoot_user_id: 152,
+        p_verified_inbox_mapping_ids: [INBOX_MAPPING],
+        p_verified_team_mapping_ids: [],
+      }),
+    );
+
+    expect(rpc).toHaveBeenCalledWith(
+      'apply_member_scope_assignment_reduction_verified',
+      expect.objectContaining({
+        p_organization_id: ORG,
+        p_assignment_id: ASSIGNMENT,
+        p_expected_version: 1,
+        p_operation: 'UPDATE',
+        p_post_role: 'VIEWER',
+        p_receipt_id: RECEIPT,
+      }),
+    );
+
+    expect(auditInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organization_id: ORG,
+        actor_type: 'USER',
+        actor_id: OWNER,
+        action: 'CHATWOOT_SCOPED_ACCESS_REMOVED_BEFORE_REDUCTION',
+        entity_id: ASSIGNMENT,
+      }),
+    );
+  });
+
+  it('does not blindly repeat an ambiguous PATCH and proceeds only after GET proves absence', async () => {
+    const { supabase, rpc } = authenticatedOwner();
+    const serviceRpc = rpcMock();
+    const service = genericService(
+      serviceRows({ branchAgent: true }),
+      serviceRpc,
+    );
+
+    serviceRpc.mockResolvedValue({
+      data: { id: RECEIPT },
+      error: null,
+    });
+    rpc.mockResolvedValue({
+      data: {
+        assignment_id: ASSIGNMENT,
+        deleted: false,
+        version: 2,
+        role: 'VIEWER',
+      },
+      error: null,
+    });
+    serviceFactory.mockReturnValue(service);
+
+    adminRequest
+      .mockResolvedValueOnce({ payload: [agent(151), agent(152)] })
+      .mockRejectedValueOnce(
+        new ChatwootHttpError({
+          code: 'NETWORK_FAILED',
+          message: 'patch outcome unknown',
+          retryable: false,
+          ambiguousMutationOutcome: true,
+        }),
+      )
+      .mockResolvedValueOnce({ payload: [agent(151)] });
+
+    const result = await reduceMemberScopeAssignmentExternalFirst({
+      supabase,
+      organizationId: ORG,
+      assignmentId: ASSIGNMENT,
+      expectedVersion: 1,
+      operation: 'UPDATE',
+      postRole: 'VIEWER',
+      postAttributes: {},
+    });
+
+    expect(result.ambiguousMutationCount).toBe(1);
+    expect(
+      adminRequest.mock.calls.filter((call) => call[0]?.method === 'PATCH'),
+    ).toHaveLength(1);
+    expect(adminRequest.mock.calls.map((call) => call[0]?.method)).toEqual([
+      'GET',
+      'PATCH',
+      'GET',
+    ]);
+  });
+
+  it('uses the existing canonical RPC without external mutation when effective access is not reduced to VIEWER', async () => {
+    const { supabase, rpc } = authenticatedOwner();
+    const service = genericService(serviceRows({ branchAgent: true }));
+    serviceFactory.mockReturnValue(service);
+
+    rpc.mockResolvedValue({
+      data: {
+        id: ASSIGNMENT,
+        version: 2,
+        role: 'SALES_MANAGER',
+      },
+      error: null,
+    });
+
+    const result = await reduceMemberScopeAssignmentExternalFirst({
+      supabase,
+      organizationId: ORG,
+      assignmentId: ASSIGNMENT,
+      expectedVersion: 1,
+      operation: 'UPDATE',
+      postRole: 'SALES_MANAGER',
+      postAttributes: {},
+    });
+
+    expect(result).toMatchObject({
+      externalResourcesVerifiedAbsent: 0,
+      outcome: 'CANONICAL_REDUCTION_NO_EXTERNAL_REMOVAL_REQUIRED',
+    });
+    expect(adminRequest).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith(
+      'update_member_scope_assignment',
+      expect.objectContaining({
+        p_assignment_id: ASSIGNMENT,
+        p_expected_version: 1,
+        p_role: 'SALES_MANAGER',
+      }),
+    );
   });
 });

@@ -1,6 +1,6 @@
 # COMM C5 — scoped Chatwoot membership security gate
 
-Status: PARTIALLY IMPLEMENTED / FAIL-CLOSED. Business-wide eligible AccountUsers can now be reconciled into Inbox/Team desired sets from canonical Smart Core scope. Scoped-only users that lack a verified Business-wide AccountUser remain blocked. Lower-scope authority reductions that would remove projected access are also blocked until external-first demotion orchestration is completed. Production provisioning remains disabled.
+Status: PARTIALLY IMPLEMENTED / FAIL-CLOSED. Business-wide eligible AccountUsers can be reconciled into Inbox/Team desired sets from canonical Smart Core scope. External-first BRANCH/DEPARTMENT/TEAM reductions are now implemented through remove → GET-verify → immutable receipt → canonical mutation sequencing. Scoped-only users that lack a verified Business-wide AccountUser remain blocked. Production provisioning remains disabled.
 
 ## Verified source contract (Chatwoot Community Edition v4.18.0)
 
@@ -43,8 +43,12 @@ Only users that already have a verified ACTIVE Business-wide Chatwoot AccountUse
 
 Migration `0091_chatwoot_scoped_access_reduction_gate.sql` extends the reverse-role safety boundary to BRANCH / DEPARTMENT / TEAM. Once a projected resource and live Account membership exist, a canonical mutation that would reduce effective scoped authority from non-VIEWER to VIEWER is blocked. Promotions/equivalent Chatwoot-agent role changes remain allowed because temporary under-privilege is safe.
 
-This gate deliberately does not pretend the external-first demotion workflow is complete. The next security unit must remove/verify scoped external access first, then commit the canonical reduction.
+Migration `0091_chatwoot_scoped_access_reduction_gate.sql` is now Production-live as migration version `20260926100839`. Direct lower-scope reductions remain blocked.
+
+The next migration, `0092_chatwoot_external_first_scoped_demotion.sql`, introduces a five-minute immutable service-recorded verification receipt and an authenticated OWNER-only consumer. The server orchestration computes before/after effective role for every bounded ACTIVE Inbox/Team target, removes the target Chatwoot User only where the post-change role becomes VIEWER, performs GET verification after at most one PATCH, records the verified resource IDs, and only then invokes the canonical scope-assignment update/delete command. Ambiguous PATCH outcomes are reconciled by GET only.
+
+The receipt is not canonical IAM authority. It cannot create or widen a scope assignment, is bound to the exact assignment/version/operation/post-role/post-attributes hash, and becomes unusable after the assignment version advances. service_role may only persist the immutable verification receipt; authenticated OWNER remains the canonical mutation authority.
 
 ## Release gate
 
-No implementation of scoped-only Inbox/Team membership is safe until its external effective permissions are proven with source-backed policy checks and tests for mixed Team conversations in a shared Inbox. Keep this PR Draft and keep Shadow Mode on. Production has no Chatwoot tables at this audit checkpoint.
+Scoped-only AccountUser support remains blocked until its external effective permissions are proven for shared-Inbox counterexamples and SSO/account-role semantics. Keep Shadow Mode on and keep Production provisioning disabled until the real tenant, Platform token, explicit activation and runtime evidence gates are satisfied.

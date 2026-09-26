@@ -13,7 +13,10 @@ import { provisionChatwootApiInbox } from '@/lib/chatwoot/api-inbox-provisioning
 import { prepareChatwootTenantProjection } from '@/lib/chatwoot/prepare-tenant-projection';
 import { loadChatwootReadiness } from '@/lib/chatwoot/readiness';
 import { provisionCurrentOwnerChatwootAccess } from '@/lib/chatwoot/owner-access-orchestration';
-import { reconcileChatwootScopedAccess } from '@/lib/chatwoot/scoped-access-reconciliation';
+import {
+  reconcileChatwootScopedAccess,
+  reduceMemberScopeAssignmentExternalFirst,
+} from '@/lib/chatwoot/scoped-access-reconciliation';
 import { provisionChatwootTeam } from '@/lib/chatwoot/team-provisioning';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 
@@ -297,6 +300,45 @@ export async function reconcileCommunicationPlaneScopedAccess(formData: FormData
     organizationId: ctx.organizationId,
     kind,
     mappingId,
+  });
+
+  revalidatePath('/settings');
+  revalidatePath('/system');
+}
+
+
+export async function reduceCommunicationPlaneScopedAssignment(formData: FormData) {
+  const ctx = await getCurrentOrganization(true);
+  const operation = value(formData, 'operation').toUpperCase();
+  const postRole = value(formData, 'post_role').toUpperCase();
+
+  if (operation !== 'UPDATE' && operation !== 'DELETE') {
+    throw new Error('Scoped assignment reduction operation is invalid');
+  }
+
+  if (
+    operation === 'UPDATE' &&
+    !['ADMIN', 'SALES_MANAGER', 'SALES_AGENT', 'VIEWER'].includes(postRole)
+  ) {
+    throw new Error('Scoped assignment target role is invalid');
+  }
+
+  const expectedVersion = Number.parseInt(
+    value(formData, 'expected_version'),
+    10,
+  );
+
+  await reduceMemberScopeAssignmentExternalFirst({
+    supabase: ctx.supabase,
+    organizationId: ctx.organizationId,
+    assignmentId: value(formData, 'assignment_id'),
+    expectedVersion,
+    operation,
+    postRole:
+      operation === 'UPDATE'
+        ? (postRole as 'ADMIN' | 'SALES_MANAGER' | 'SALES_AGENT' | 'VIEWER')
+        : null,
+    postAttributes: {},
   });
 
   revalidatePath('/settings');
