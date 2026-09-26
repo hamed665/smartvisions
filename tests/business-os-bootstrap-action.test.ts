@@ -13,6 +13,9 @@ const {
   loadChatwootReadiness,
   provisionChatwootAccount,
   provisionCurrentOwnerChatwootAccess,
+  bootstrapOperatingHierarchy,
+  provisionChatwootApiInbox,
+  provisionChatwootTeam,
 } = vi.hoisted(() => ({
   getCurrentOrganization: vi.fn(),
   parseBrandBootstrapPayload: vi.fn((value) => value),
@@ -24,6 +27,9 @@ const {
   loadChatwootReadiness: vi.fn(),
   provisionChatwootAccount: vi.fn(),
   provisionCurrentOwnerChatwootAccess: vi.fn(),
+  bootstrapOperatingHierarchy: vi.fn(),
+  provisionChatwootApiInbox: vi.fn(),
+  provisionChatwootTeam: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/org', () => ({ getCurrentOrganization }));
@@ -37,6 +43,15 @@ vi.mock('@/lib/chatwoot/account-orchestration', () => ({
 vi.mock('@/lib/chatwoot/owner-access-orchestration', () => ({
   provisionCurrentOwnerChatwootAccess,
 }));
+vi.mock('@/lib/business-os/control-plane-hierarchy', () => ({
+  bootstrapOperatingHierarchy,
+}));
+vi.mock('@/lib/chatwoot/api-inbox-provisioning', () => ({
+  provisionChatwootApiInbox,
+}));
+vi.mock('@/lib/chatwoot/team-provisioning', () => ({
+  provisionChatwootTeam,
+}));
 vi.mock('next/cache', () => ({ revalidatePath }));
 vi.mock('@/lib/business-os/control-plane-bootstrap', () => ({
   parseBrandBootstrapPayload,
@@ -46,10 +61,13 @@ vi.mock('@/lib/business-os/control-plane-bootstrap', () => ({
 }));
 
 import {
+  bootstrapCanonicalOperatingHierarchy,
   bootstrapCanonicalTenant,
   prepareCommunicationPlaneProjection,
   provisionCommunicationPlaneAccount,
+  provisionCommunicationPlaneApiInbox,
   provisionCommunicationPlaneOwnerAccess,
+  provisionCommunicationPlaneTeam,
 } from '@/app/business-os-actions';
 
 const ORG = '00000000-0000-4000-8000-000000000201';
@@ -328,5 +346,91 @@ describe('Business OS governed Chatwoot OWNER access action', () => {
     expect(revalidatePath).toHaveBeenCalledWith('/settings');
     expect(revalidatePath).toHaveBeenCalledWith('/system');
     expect(result).toBeUndefined();
+  });
+});
+
+
+describe('Business OS canonical operating hierarchy action', () => {
+  it('binds hierarchy creation to the authenticated OWNER Organization', async () => {
+    const supabase = { marker: 'authenticated-client' };
+
+    getCurrentOrganization.mockResolvedValue({
+      supabase,
+      organizationId: ORG,
+      role: 'OWNER',
+      userId: USER,
+    });
+    bootstrapOperatingHierarchy.mockResolvedValue({
+      branch: { row: { id: 'branch' }, created: true },
+      department: { row: { id: 'department' }, created: true },
+      team: { row: { id: 'team' }, created: true },
+    });
+
+    const form = new FormData();
+    form.set('tenant_business_id', BUSINESS);
+    form.set('branch_name', 'Muscat');
+    form.set('branch_code', 'muscat');
+    form.set('branch_country_code', 'OM');
+    form.set('branch_timezone', 'Asia/Muscat');
+    form.set('department_name', 'Customer Operations');
+    form.set('department_code', 'customer-operations');
+    form.set('team_name', 'Customer Care');
+    form.set('team_code', 'customer-care');
+    form.set('organization_id', '99999999-0000-4000-8000-000000000999');
+
+    await bootstrapCanonicalOperatingHierarchy(form);
+
+    expect(bootstrapOperatingHierarchy).toHaveBeenCalledWith({
+      supabase,
+      organizationId: ORG,
+      userId: USER,
+      tenantBusinessId: BUSINESS,
+      branchName: 'Muscat',
+      branchCode: 'muscat',
+      branchCountryCode: 'OM',
+      branchTimezone: 'Asia/Muscat',
+      departmentName: 'Customer Operations',
+      departmentCode: 'customer-operations',
+      teamName: 'Customer Care',
+      teamCode: 'customer-care',
+    });
+    expect(revalidatePath).toHaveBeenCalledWith('/settings');
+    expect(revalidatePath).toHaveBeenCalledWith('/system');
+  });
+});
+
+describe('Business OS governed Chatwoot Inbox and Team actions', () => {
+  it('blocks Inbox and Team orchestration before readiness passes', async () => {
+    const supabase = { marker: 'authenticated-client' };
+    getCurrentOrganization.mockResolvedValue({
+      supabase,
+      organizationId: ORG,
+      role: 'OWNER',
+      userId: USER,
+    });
+    loadChatwootReadiness.mockResolvedValue({
+      liveProvisioningReady: false,
+    });
+
+    const inboxForm = new FormData();
+    inboxForm.set('tenant_business_id', BUSINESS);
+    inboxForm.set('branch_id', '00000000-0000-4000-8000-000000000211');
+    inboxForm.set('communication_channel_binding_id', '00000000-0000-4000-8000-000000000212');
+    inboxForm.set('chatwoot_account_mapping_id', MAPPING);
+
+    const teamForm = new FormData();
+    teamForm.set('tenant_business_id', BUSINESS);
+    teamForm.set('smart_team_id', '00000000-0000-4000-8000-000000000213');
+    teamForm.set('chatwoot_account_mapping_id', MAPPING);
+
+    await expect(
+      provisionCommunicationPlaneApiInbox(inboxForm),
+    ).rejects.toThrow('not ready');
+    await expect(
+      provisionCommunicationPlaneTeam(teamForm),
+    ).rejects.toThrow('not ready');
+
+    expect(provisionChatwootApiInbox).not.toHaveBeenCalled();
+    expect(provisionChatwootTeam).not.toHaveBeenCalled();
   });
 });
