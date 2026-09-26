@@ -1,5 +1,25 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## Delivery model checkpoint — compact vertical slices, full scope
+
+This program does **not** plan or report future work by PR count.
+
+Use `SECTION -> WORK PACKAGE ID -> verified runtime gap -> implementation evidence -> acceptance gate` as the only stable continuation model.
+
+Delivery must follow `DELIVERY_PACKAGING_STANDARD.md`:
+
+- prefer coherent vertical slices over one-Work-Package-per-PR fragmentation;
+- combine compatible audit, schema, API/runtime, authorization, tests, required UI, migration/rollback and documentation work when they share one bounded context and one safe promotion boundary;
+- split only for a real independent security, migration, provider, financial, rollback or Production-verification gate;
+- do not pre-schedule separate audit/hardening/index/docs PRs by habit;
+- no approved Work Package may disappear to make delivery look smaller;
+- completion is measured by Work Package acceptance criteria and Section exit gates, not PR volume;
+- actual PR numbers are evidence only after they exist.
+
+Owner preference is compact, high-throughput delivery, but there is no hard PR cap. Architecture, tenant isolation, safety, rollback, testing, observability and complete product scope remain non-negotiable.
+
+This delivery-policy change was prepared from verified `main@4d1da421c9c0242398926f637bc343285cbe6f7a`; always re-read current main before the next mutation.
+
 
 ## Current continuation checkpoint — 2026-09-26 after PR #239
 
