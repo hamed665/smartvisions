@@ -33,6 +33,10 @@ type HeartbeatMetrics = {
   telegramDigestReason?: string;
   pilotStatus?: number;
   pilotFailedOutcomes?: number;
+  chatwootReconcileStatus?: number;
+  chatwootReconciled?: number;
+  chatwootIgnored?: number;
+  chatwootReconcileFailed?: number;
 };
 
 type WorkerVersion = {
@@ -97,6 +101,10 @@ function sanitizeMetrics(value: unknown): HeartbeatMetrics {
     telegramDigestReason: boundedText(raw.telegramDigestReason),
     pilotStatus: boundedInteger(raw.pilotStatus),
     pilotFailedOutcomes: boundedInteger(raw.pilotFailedOutcomes),
+    chatwootReconcileStatus: boundedInteger(raw.chatwootReconcileStatus),
+    chatwootReconciled: boundedInteger(raw.chatwootReconciled),
+    chatwootIgnored: boundedInteger(raw.chatwootIgnored),
+    chatwootReconcileFailed: boundedInteger(raw.chatwootReconcileFailed),
   };
 }
 
