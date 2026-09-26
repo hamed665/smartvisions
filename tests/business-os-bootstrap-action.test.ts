@@ -17,6 +17,7 @@ const {
   provisionChatwootApiInbox,
   provisionChatwootTeam,
   reconcileChatwootScopedAccess,
+  reduceMemberScopeAssignmentExternalFirst,
 } = vi.hoisted(() => ({
   getCurrentOrganization: vi.fn(),
   parseBrandBootstrapPayload: vi.fn((value) => value),
@@ -32,6 +33,7 @@ const {
   provisionChatwootApiInbox: vi.fn(),
   provisionChatwootTeam: vi.fn(),
   reconcileChatwootScopedAccess: vi.fn(),
+  reduceMemberScopeAssignmentExternalFirst: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/org', () => ({ getCurrentOrganization }));
@@ -56,6 +58,7 @@ vi.mock('@/lib/chatwoot/team-provisioning', () => ({
 }));
 vi.mock('@/lib/chatwoot/scoped-access-reconciliation', () => ({
   reconcileChatwootScopedAccess,
+  reduceMemberScopeAssignmentExternalFirst,
 }));
 vi.mock('next/cache', () => ({ revalidatePath }));
 vi.mock('@/lib/business-os/control-plane-bootstrap', () => ({
@@ -74,6 +77,7 @@ import {
   provisionCommunicationPlaneOwnerAccess,
   provisionCommunicationPlaneTeam,
   reconcileCommunicationPlaneScopedAccess,
+  reduceCommunicationPlaneScopedAssignment,
 } from '@/app/business-os-actions';
 
 const ORG = '00000000-0000-4000-8000-000000000201';
@@ -501,5 +505,69 @@ describe('Business OS governed scoped Chatwoot access action', () => {
     });
     expect(revalidatePath).toHaveBeenCalledWith('/settings');
     expect(revalidatePath).toHaveBeenCalledWith('/system');
+  });
+});
+
+
+describe('Business OS external-first scoped reduction action', () => {
+  it('derives Organization scope from the authenticated OWNER context', async () => {
+    const supabase = { marker: 'authenticated-client' };
+    getCurrentOrganization.mockResolvedValue({
+      supabase,
+      organizationId: ORG,
+      role: 'OWNER',
+      userId: USER,
+    });
+    reduceMemberScopeAssignmentExternalFirst.mockResolvedValue({
+      assignmentId: MAPPING,
+      operation: 'UPDATE',
+      externalResourcesVerifiedAbsent: 1,
+      changedResourceCount: 1,
+      ambiguousMutationCount: 0,
+      outcome: 'EXTERNAL_ACCESS_REMOVED_THEN_CANONICAL_REDUCTION_APPLIED',
+    });
+
+    const form = new FormData();
+    form.set('assignment_id', MAPPING);
+    form.set('expected_version', '3');
+    form.set('operation', 'UPDATE');
+    form.set('post_role', 'VIEWER');
+    form.set('organization_id', '99999999-0000-4000-8000-000000000999');
+
+    await reduceCommunicationPlaneScopedAssignment(form);
+
+    expect(reduceMemberScopeAssignmentExternalFirst).toHaveBeenCalledWith({
+      supabase,
+      organizationId: ORG,
+      assignmentId: MAPPING,
+      expectedVersion: 3,
+      operation: 'UPDATE',
+      postRole: 'VIEWER',
+      postAttributes: {},
+    });
+    expect(revalidatePath).toHaveBeenCalledWith('/settings');
+    expect(revalidatePath).toHaveBeenCalledWith('/system');
+  });
+
+  it('rejects an invalid reduction operation before orchestration', async () => {
+    const supabase = { marker: 'authenticated-client' };
+    getCurrentOrganization.mockResolvedValue({
+      supabase,
+      organizationId: ORG,
+      role: 'OWNER',
+      userId: USER,
+    });
+
+    const form = new FormData();
+    form.set('assignment_id', MAPPING);
+    form.set('expected_version', '3');
+    form.set('operation', 'UPSERT');
+    form.set('post_role', 'VIEWER');
+
+    await expect(
+      reduceCommunicationPlaneScopedAssignment(form),
+    ).rejects.toThrow('operation is invalid');
+
+    expect(reduceMemberScopeAssignmentExternalFirst).not.toHaveBeenCalled();
   });
 });
