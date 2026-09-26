@@ -340,12 +340,6 @@ export default async function SettingsPage() {
                             Provision / verify my Chatwoot access
                           </button>
                         </form>
-                        <a
-                          href={`/api/chatwoot/sso/${organizationId}/${business.id}`}
-                          className="muted smallText"
-                        >
-                          Open Communication Inbox
-                        </a>
                       </>
                     ) : null}
                   </div>
