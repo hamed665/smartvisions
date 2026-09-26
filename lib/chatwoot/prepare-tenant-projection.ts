@@ -206,26 +206,32 @@ export async function prepareChatwootTenantProjection(input: {
     integrationIds: integrations.map((integration) => integration.id),
   });
 
+  for (const integration of integrations) {
+    const existing = existingBindings.find(
+      (binding) => binding.integration_connection_id === integration.id,
+    );
+
+    if (
+      existing &&
+      (existing.tenant_business_id !== input.tenantBusinessId ||
+        existing.channel !== integration.channel)
+    ) {
+      throw new ChatwootTenantProjectionPreparationError(
+        'CONFLICT',
+        'A connected communication integration is already bound to a different tenant scope',
+      );
+    }
+  }
+
   const bindings: CommunicationChannelBindingRow[] = [];
   let createdBindingCount = 0;
 
   for (const integration of integrations) {
     const existing = existingBindings.find(
-      (binding) =>
-        binding.integration_connection_id === integration.id,
+      (binding) => binding.integration_connection_id === integration.id,
     );
 
     if (existing) {
-      if (
-        existing.tenant_business_id !== input.tenantBusinessId ||
-        existing.channel !== integration.channel
-      ) {
-        throw new ChatwootTenantProjectionPreparationError(
-          'CONFLICT',
-          'A connected communication integration is already bound to a different tenant scope',
-        );
-      }
-
       bindings.push(existing);
       continue;
     }
