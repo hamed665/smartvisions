@@ -3,12 +3,16 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 vi.mock('server-only', () => ({}));
 
-const { serviceFactory } = vi.hoisted(() => ({
+const { serviceFactory, selfBusinessWideRole } = vi.hoisted(() => ({
   serviceFactory: vi.fn(),
+  selfBusinessWideRole: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/service', () => ({
   createSupabaseServiceClient: serviceFactory,
+}));
+vi.mock('@/lib/chatwoot/membership-role', () => ({
+  readSelfBusinessWideChatwootRole: selfBusinessWideRole,
 }));
 
 import {
@@ -42,6 +46,9 @@ function setup(input: {
   chatwootRole?: string;
   accountMembershipUserId?: string;
   accountMembershipBusinessId?: string;
+  canonicalEffectiveRole?: string;
+  canonicalChatwootRole?: string | null;
+  canonicalReject?: boolean;
 } = {}) {
   const serviceReads: string[] = [];
 
@@ -112,6 +119,24 @@ function setup(input: {
 
   serviceFactory.mockReturnValue(service);
 
+  if (input.canonicalReject) {
+    selfBusinessWideRole.mockRejectedValue(
+      new Error('canonical Business-wide role unavailable'),
+    );
+  } else {
+    const owner = (input.orgRole ?? 'ADMIN') === 'OWNER';
+    selfBusinessWideRole.mockResolvedValue({
+      effectiveSmartRole:
+        input.canonicalEffectiveRole ?? (owner ? 'OWNER' : 'ADMIN'),
+      chatwootRole:
+        input.canonicalChatwootRole !== undefined
+          ? input.canonicalChatwootRole
+          : owner
+            ? 'administrator'
+            : 'agent',
+    });
+  }
+
   const membershipBuilder = {
     select: () => membershipBuilder,
     eq: () => membershipBuilder,
@@ -167,6 +192,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
   serviceFactory.mockReset();
+  selfBusinessWideRole.mockReset();
 });
 
 describe('Chatwoot SSO adapter', () => {
@@ -229,6 +255,52 @@ describe('Chatwoot SSO adapter', () => {
       expect(serviceFactory).not.toHaveBeenCalled();
       expect(fetchMock).not.toHaveBeenCalled();
     }
+  });
+
+  it('denies lower-scope-only users because native Chatwoot SSO is Business-wide only', async () => {
+    enable();
+    const { supabase } = setup({
+      orgRole: 'VIEWER',
+      canonicalEffectiveRole: 'VIEWER',
+      canonicalChatwootRole: null,
+      effectiveRole: 'SALES_AGENT',
+      chatwootRole: 'agent',
+    });
+    const fetchMock = vi.fn();
+
+    await expect(
+      createChatwootSsoLoginUrl({
+        supabase,
+        organizationId: ORG,
+        tenantBusinessId: BUSINESS,
+        fetchImpl: fetchMock as unknown as typeof fetch,
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    expect(serviceFactory).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('denies an ACTIVE stored AccountUser when live canonical Business-wide authority drifted', async () => {
+    enable();
+    const { supabase } = setup({
+      canonicalEffectiveRole: 'VIEWER',
+      canonicalChatwootRole: null,
+      effectiveRole: 'ADMIN',
+      chatwootRole: 'agent',
+    });
+    const fetchMock = vi.fn();
+
+    await expect(
+      createChatwootSsoLoginUrl({
+        supabase,
+        organizationId: ORG,
+        tenantBusinessId: BUSINESS,
+        fetchImpl: fetchMock as unknown as typeof fetch,
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('denies VIEWER/stale projection before the Platform login endpoint', async () => {
