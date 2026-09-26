@@ -1,6 +1,26 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
 
+## Current continuation checkpoint — 2026-09-26 after PR #239
+
+Use this checkpoint before every older section below.
+
+- Current canonical repository main: `ca5067ae817b9cc07f49be5bc12ded11cc879cb8`.
+- PR #238 closed the fail-closed Cloudflare Chatwoot runtime boundary. Production has the correct Chatwoot base URL and webhook public origin, but `CHATWOOT_PROVISIONING_ENABLED=false`; the release candidate remains Chatwoot-unbound.
+- `CHATWOOT_PLATFORM_TOKEN` is not provisioned. Do not create or transfer a Platform token through chat, GitHub files, logs, browser state or database mappings. Secure server-only secret transport plus an exact activation contract must be verified first.
+- PR #239 added an authenticated OWNER-only governed bootstrap endpoint at `/api/business-os/control-plane/bootstrap` for canonical Brand and tenant Business creation.
+- Bootstrap idempotency reuses existing canonical uniqueness instead of inventing a new claim subsystem: Brand `(organization_id, slug)`; Business `(brand_id, slug)`. Exact replay is safe; conflicting data on the same natural key fails closed.
+- The endpoint reuses existing RLS and Control Plane audit triggers. It has no service-role bypass, Chatwoot HTTP call, provider send, new queue, new CRM or new tenant model.
+- PR #239 exact-head CI #1260 was green. Post-merge main CI run `36204798135` and Cloudflare Production Deploy run `36204923459` were both SUCCESS on exact `main@ca5067ae817b9cc07f49be5bc12ded11cc879cb8`.
+- Runtime build evidence contains the bootstrap route. Unauthenticated POST is blocked by existing auth middleware with HTTP 307 -> `/login`.
+- Production migration head remains `0090_chatwoot_fk_index_hardening`.
+- Post-deploy Production still has `brands=0`, `tenant_businesses=0`, zero Chatwoot mappings/journal/command claims and zero new Brand/Business audit rows. Deployment-window outreach/WhatsApp/Email deltas are all zero.
+- Safety remains unchanged: Shadow Mode ON; Global Kill Switch OFF; Email pause OFF; WhatsApp AI pause OFF; Agents pause OFF.
+- Chatwoot Production remains healthy on OVH at `https://inbox.smartvisionsai.com`; canonical Chatwoot image is unchanged from PR #236.
+- Railway `smartvisions-chatwoot-candidate` remains read-only rollback evidence and must not be deleted without explicit destructive approval.
+- **Do not bootstrap synthetic data.** The governed path now exists, but the first real Brand/tenant Business still requires evidence-backed canonical values and an explicit Production decision.
+- **Do not start External Provisioning yet.** The Platform token secret boundary is the next infrastructure blocker; provisioning must remain false until that boundary and the real tenant scope are both proven.
+
 ## Superseding continuation checkpoint — 2026-09-26
 
 Use this checkpoint before older historical notes in this file.
