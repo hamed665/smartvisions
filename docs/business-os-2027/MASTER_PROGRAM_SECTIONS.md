@@ -1456,24 +1456,24 @@ Where applicable it requires:
 - rollback/recovery evidence;
 - documentation/handoff reconciliation.
 
-# Pull-request policy
+# Delivery packaging and pull-request policy
 
-PRs are intentionally variable-sized implementation evidence.
+The stable roadmap is Section/Work-Package based. Pull Requests are implementation evidence only.
+
+Detailed packaging rules are defined in `DELIVERY_PACKAGING_STANDARD.md`.
 
 Rules:
 
-1. Never pre-assign GitHub PR numbers to future work.
-2. Never renumber Sections or Work Package IDs because an extra PR was required.
-3. A single work package may have:
-   - audit PR;
-   - implementation PR;
-   - hardening PR;
-   - advisor/index cleanup PR;
-   - Production closeout PR.
-4. Record actual PR numbers only after they exist.
-5. The continuation cursor advances only when the work package Definition of Done is satisfied.
-6. An emergency/hotfix PR does not change roadmap numbering.
-7. Runtime/Production evidence may reorder execution inside a Section when a real blocker exists, but the semantic IDs remain stable.
+1. Never pre-assign GitHub PR numbers or a fixed PR count to future work.
+2. Never renumber Sections or Work Package IDs because implementation packaging changes.
+3. Prefer complete vertical slices that combine compatible audit, schema, API/runtime, authorization, tests, UI, migration/rollback and documentation work when they share one bounded context and one safe promotion boundary.
+4. Do not create separate audit, implementation, hardening, index-cleanup or documentation PRs by habit. Split only when a real independent security, migration, provider, financial, rollback or Production-verification gate requires it.
+5. Multiple adjacent Work Packages may share one delivery package when ownership, failure model, test story and rollback boundary remain clear.
+6. Never reduce approved product scope, architecture quality, safety, observability, rollback evidence or test coverage merely to minimize PR volume.
+7. Record actual PR numbers only after they exist.
+8. The continuation cursor advances only when the Work Package Definition of Done is satisfied by real evidence.
+9. Emergency/hotfix work does not change roadmap numbering.
+10. Runtime/Production evidence may reorder execution inside a Section when a real blocker exists, but semantic IDs remain stable.
 
 # Non-negotiable architecture rules
 

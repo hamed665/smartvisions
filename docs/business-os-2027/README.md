@@ -13,18 +13,19 @@ Production changes are promoted only after the repository's safety, CI, migratio
 1. [MASTER_ARCHITECTURE.md](./MASTER_ARCHITECTURE.md) — target product/domain architecture.
 2. [IMPLEMENTATION_MAP.md](./IMPLEMENTATION_MAP.md) — dependency-ordered execution history and phase map.
 3. [MASTER_PROGRAM_SECTIONS.md](./MASTER_PROGRAM_SECTIONS.md) — stable future execution program using Sections/Work Package IDs instead of future PR numbers.
-4. [SERVICE_CONTRACT_STANDARD.md](./SERVICE_CONTRACT_STANDARD.md) — required contract for every domain/service.
-5. [STATE_EVENT_CATALOG.md](./STATE_EVENT_CATALOG.md) — initial canonical state machines and event naming.
-6. [MIGRATION_FROM_GROWTH_OS.md](./MIGRATION_FROM_GROWTH_OS.md) — reuse/extend/replace decisions for existing production primitives.
-7. [CONTROL_PLANE_FOUNDATION.md](./CONTROL_PLANE_FOUNDATION.md) — Production-evidence Gap Map, compatibility decisions, and Phase 1 domain contract.
-8. [OMNICHANNEL_ADAPTER_BOUNDARY.md](./OMNICHANNEL_ADAPTER_BOUNDARY.md) — Phase 2 evidence, Gap Map, capability matrix and semantic adapter contract.
-9. [CUSTOMER_360_CRM_NORMALIZATION.md](./CUSTOMER_360_CRM_NORMALIZATION.md) — Phase 3 Production evidence, CRM Gap Map, identity-resolution contract and compatibility plan.
-10. [CUSTOM_FIELD_GOVERNANCE_GAP_AUDIT.md](./CUSTOM_FIELD_GOVERNANCE_GAP_AUDIT.md) — Phase 3 Slice 5 governed Custom Field contract and Production evidence.
-11. [SEGMENT_GOVERNANCE_GAP_AUDIT.md](./SEGMENT_GOVERNANCE_GAP_AUDIT.md) — Phase 3 Slice 6 Segment decisions, implementation boundaries and Production closeout.
-12. [CHATWOOT_SOURCE_GAP_AUDIT.md](./CHATWOOT_SOURCE_GAP_AUDIT.md) — source/license/deployment/provider-ownership audit for the Chatwoot Communication Plane.
-13. [CHATWOOT_TENANT_BRIDGE_GAP_AUDIT.md](./CHATWOOT_TENANT_BRIDGE_GAP_AUDIT.md) — deterministic tenant/business/user/account/inbox/team/contact/conversation mapping audit.
-14. [CHATWOOT_PRODUCTION_PROMOTION_READINESS_AUDIT.md](./CHATWOOT_PRODUCTION_PROMOTION_READINESS_AUDIT.md) — evidence-backed gate between the verified isolated Candidate and any future Production Chatwoot provisioning.
-15. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
+4. [DELIVERY_PACKAGING_STANDARD.md](./DELIVERY_PACKAGING_STANDARD.md) — compact vertical-slice delivery rules that reduce PR fragmentation without reducing scope, safety, verification, or architectural completeness.
+5. [SERVICE_CONTRACT_STANDARD.md](./SERVICE_CONTRACT_STANDARD.md) — required contract for every domain/service.
+6. [STATE_EVENT_CATALOG.md](./STATE_EVENT_CATALOG.md) — initial canonical state machines and event naming.
+7. [MIGRATION_FROM_GROWTH_OS.md](./MIGRATION_FROM_GROWTH_OS.md) — reuse/extend/replace decisions for existing production primitives.
+8. [CONTROL_PLANE_FOUNDATION.md](./CONTROL_PLANE_FOUNDATION.md) — Production-evidence Gap Map, compatibility decisions, and Phase 1 domain contract.
+9. [OMNICHANNEL_ADAPTER_BOUNDARY.md](./OMNICHANNEL_ADAPTER_BOUNDARY.md) — Phase 2 evidence, Gap Map, capability matrix and semantic adapter contract.
+10. [CUSTOMER_360_CRM_NORMALIZATION.md](./CUSTOMER_360_CRM_NORMALIZATION.md) — Phase 3 Production evidence, CRM Gap Map, identity-resolution contract and compatibility plan.
+11. [CUSTOM_FIELD_GOVERNANCE_GAP_AUDIT.md](./CUSTOM_FIELD_GOVERNANCE_GAP_AUDIT.md) — Phase 3 Slice 5 governed Custom Field contract and Production evidence.
+12. [SEGMENT_GOVERNANCE_GAP_AUDIT.md](./SEGMENT_GOVERNANCE_GAP_AUDIT.md) — Phase 3 Slice 6 Segment decisions, implementation boundaries and Production closeout.
+13. [CHATWOOT_SOURCE_GAP_AUDIT.md](./CHATWOOT_SOURCE_GAP_AUDIT.md) — source/license/deployment/provider-ownership audit for the Chatwoot Communication Plane.
+14. [CHATWOOT_TENANT_BRIDGE_GAP_AUDIT.md](./CHATWOOT_TENANT_BRIDGE_GAP_AUDIT.md) — deterministic tenant/business/user/account/inbox/team/contact/conversation mapping audit.
+15. [CHATWOOT_PRODUCTION_PROMOTION_READINESS_AUDIT.md](./CHATWOOT_PRODUCTION_PROMOTION_READINESS_AUDIT.md) — evidence-backed gate between the verified isolated Candidate and any future Production Chatwoot provisioning.
+16. [NEXT_CHAT_HANDOFF.md](./NEXT_CHAT_HANDOFF.md) — canonical instructions for continuing the project in a new chat/session.
 
 ## Phase 0 exit criteria
 
