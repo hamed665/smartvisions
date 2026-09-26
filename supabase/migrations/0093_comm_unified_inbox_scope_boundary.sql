@@ -130,6 +130,7 @@ set search_path = public, pg_catalog
 as $$
 declare
   v_conversation_org uuid;
+  v_conversation_channel text;
 begin
   if tg_op = 'DELETE' then
     raise exception 'Unified Inbox projections use lifecycle state; DELETE is not permitted';
@@ -171,8 +172,8 @@ begin
     raise exception 'new Unified Inbox projection must start live at version 1';
   end if;
 
-  select sc.organization_id
-    into v_conversation_org
+  select sc.organization_id, upper(sc.channel)
+    into v_conversation_org, v_conversation_channel
     from public.sales_conversations sc
    where sc.id = new.conversation_id;
 
@@ -233,6 +234,7 @@ begin
        and cb.id = new.communication_channel_binding_id
        and cb.tenant_business_id = new.tenant_business_id
        and cb.branch_id = new.branch_id
+       and cb.channel = v_conversation_channel
        and cb.status = 'ACTIVE'
   ) then
     raise exception 'Unified Inbox projection channel binding mismatch';
