@@ -7,6 +7,7 @@ import {
   parseBrandBootstrapPayload,
   parseBusinessBootstrapPayload,
 } from '@/lib/business-os/control-plane-bootstrap';
+import { prepareChatwootTenantProjection } from '@/lib/chatwoot/prepare-tenant-projection';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 
 function value(formData: FormData, key: string) {
@@ -44,6 +45,21 @@ export async function bootstrapCanonicalTenant(formData: FormData) {
     supabase: ctx.supabase,
     userId: ctx.userId,
     payload: businessPayload,
+  });
+
+  revalidatePath('/settings');
+  revalidatePath('/system');
+}
+
+
+export async function prepareCommunicationPlaneProjection(formData: FormData) {
+  const ctx = await getCurrentOrganization(true);
+  const tenantBusinessId = value(formData, 'tenant_business_id');
+
+  await prepareChatwootTenantProjection({
+    supabase: ctx.supabase,
+    organizationId: ctx.organizationId,
+    tenantBusinessId,
   });
 
   revalidatePath('/settings');
