@@ -6,6 +6,7 @@ export type ChatwootReadinessInput = {
   chatwootHealthy: boolean;
   brandCount: number;
   tenantBusinessCount: number;
+  communicationBindingCount: number;
   accountMappingCount: number;
   userMappingCount: number;
   membershipCount: number;
@@ -19,7 +20,9 @@ export type ChatwootReadinessBlocker =
   | 'CHATWOOT_UNHEALTHY'
   | 'PLATFORM_TOKEN_MISSING'
   | 'REAL_BRAND_MISSING'
-  | 'REAL_BUSINESS_MISSING';
+  | 'REAL_BUSINESS_MISSING'
+  | 'COMMUNICATION_BINDING_MISSING'
+  | 'ACCOUNT_MAPPING_MISSING';
 
 export function buildChatwootReadiness(input: ChatwootReadinessInput) {
   const blockers: ChatwootReadinessBlocker[] = [];
@@ -30,6 +33,10 @@ export function buildChatwootReadiness(input: ChatwootReadinessInput) {
   if (!input.platformTokenConfigured) blockers.push('PLATFORM_TOKEN_MISSING');
   if (input.brandCount < 1) blockers.push('REAL_BRAND_MISSING');
   if (input.tenantBusinessCount < 1) blockers.push('REAL_BUSINESS_MISSING');
+  if (input.communicationBindingCount < 1) {
+    blockers.push('COMMUNICATION_BINDING_MISSING');
+  }
+  if (input.accountMappingCount < 1) blockers.push('ACCOUNT_MAPPING_MISSING');
 
   const activationReady = blockers.length === 0;
   const liveProvisioningReady = activationReady && input.provisioningEnabled;
@@ -43,6 +50,7 @@ export function buildChatwootReadiness(input: ChatwootReadinessInput) {
     brandCount: input.brandCount,
     tenantBusinessCount: input.tenantBusinessCount,
     projectionCounts: {
+      communicationBindings: input.communicationBindingCount,
       accounts: input.accountMappingCount,
       users: input.userMappingCount,
       memberships: input.membershipCount,

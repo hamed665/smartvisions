@@ -55,7 +55,9 @@ External Chatwoot provisioning is allowed only when every condition is true:
 2. `CHATWOOT_PROVISIONING_ENABLED=true`;
 3. Production Chatwoot base URL is valid;
 4. the server-only Platform token is present and valid;
-5. the caller passes the existing tenant/business authorization and durable command/reconciliation gates.
+5. at least one governed ACTIVE communication binding exists for the real tenant Business;
+6. the tenant has one live Chatwoot Account mapping prepared through the durable Smart Core command path;
+7. the caller passes the existing tenant/business authorization and durable command/reconciliation gates.
 
 Any missing condition fails closed before network mutation.
 
@@ -74,6 +76,8 @@ Before first activation there must be evidence-backed canonical Smart Core scope
 - no fabricated mapping from Growth/Hunter `public.businesses`.
 
 The first real tenant projection remains governed by `COMM-TENANT-BRIDGE`.
+
+Projection preparation is deliberately separate from external provisioning. The OWNER-only preparation action may create audited Smart Core `communication_channel_bindings` and a `chatwoot_account_mappings` row in `PROVISIONING` state, but it does not call Chatwoot, create an external Account, or send any provider/customer message.
 
 ## Platform App creation evidence
 
@@ -96,22 +100,26 @@ If token rotation is required, replace the GitHub Actions secret and redeploy be
 
 1. verify current main, Production deploy, Supabase migration head and safety controls;
 2. verify Production Chatwoot health;
-3. stage `CHATWOOT_PLATFORM_TOKEN` through the server-only transport;
-4. verify only the Production Worker has the secret binding name;
-5. keep `CHATWOOT_PROVISIONING_ENABLED=false`;
-6. bootstrap one real Brand and tenant Business through the governed OWNER-only endpoint;
-7. verify audit evidence and tenant scope;
-8. run a no-mutation readiness check;
-9. explicitly change the activation flag in a separately reviewed Production change;
-10. provision one tenant through durable claims/reconciliation;
-11. verify Account/User/Membership/API Inbox/Team mappings;
-12. keep provider/customer sends disabled until their separate action gate is proven.
+3. bootstrap one real Brand and tenant Business through the governed OWNER-only surface;
+4. verify audit evidence and tenant scope;
+5. prepare the tenant Communication Plane projection, creating only governed Smart Core communication bindings and the Account mapping;
+6. verify the preparation is idempotent, tenant-scoped and contains no external Chatwoot side effect;
+7. stage `CHATWOOT_PLATFORM_TOKEN` through the server-only transport;
+8. verify only the Production Worker has the secret binding name;
+9. keep `CHATWOOT_PROVISIONING_ENABLED=false`;
+10. run the owner-only readiness check and require zero activation blockers;
+11. explicitly change the activation flag in a separately reviewed Production change;
+12. provision one tenant through durable claims/reconciliation;
+13. verify Account/User/Membership/API Inbox/Team mappings;
+14. keep provider/customer sends disabled until their separate action gate is proven.
 
 ## Stop conditions
 
 Do not activate provisioning when any of these are true:
 
 - no real canonical tenant Business exists;
+- no governed ACTIVE communication binding exists for the tenant;
+- no live Smart Core Chatwoot Account mapping is prepared;
 - token binding is absent;
 - release candidate contains the Platform token;
 - Production Chatwoot health fails;

@@ -1,4 +1,7 @@
-import { bootstrapCanonicalTenant } from '@/app/business-os-actions';
+import {
+  bootstrapCanonicalTenant,
+  prepareCommunicationPlaneProjection,
+} from '@/app/business-os-actions';
 import { updateOrganizationSettings } from '@/app/management-actions';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 
@@ -15,8 +18,14 @@ function slugify(value: string) {
 
 export default async function SettingsPage() {
   const { supabase, organizationId, role } = await getCurrentOrganization();
-  const [{ data: settings }, { data: brands }, { data: businesses }, { data: omanMarket }] =
-    await Promise.all([
+  const [
+    { data: settings },
+    { data: brands },
+    { data: businesses },
+    { data: omanMarket },
+    { data: communicationBindings },
+    { data: accountMappings },
+  ] = await Promise.all([
       supabase
         .from('organization_settings')
         .select('*')
@@ -39,12 +48,26 @@ export default async function SettingsPage() {
         .eq('country_code', 'OM')
         .eq('enabled', true)
         .maybeSingle(),
+      supabase
+        .from('communication_channel_bindings')
+        .select('id,tenant_business_id,integration_connection_id,channel,status')
+        .eq('organization_id', organizationId)
+        .neq('status', 'ARCHIVED')
+        .order('created_at'),
+      supabase
+        .from('chatwoot_account_mappings')
+        .select('id,tenant_business_id,chatwoot_account_id,status,version')
+        .eq('organization_id', organizationId)
+        .neq('status', 'ARCHIVED')
+        .order('created_at'),
     ]);
 
   const editable = role === 'OWNER';
   const brandName = settings?.brand_name ?? 'Smart Visions';
   const canonicalBrands = brands ?? [];
   const canonicalBusinesses = businesses ?? [];
+  const activeBindings = communicationBindings ?? [];
+  const liveAccountMappings = accountMappings ?? [];
   const bootstrapNeeded =
     canonicalBrands.length === 0 || canonicalBusinesses.length === 0;
 
@@ -215,6 +238,72 @@ export default async function SettingsPage() {
             ))}
           </div>
         )}
+      </section>
+
+      <section className="panel">
+        <div className="headerRow">
+          <div>
+            <h2>Communication Plane projection</h2>
+            <p className="muted">
+              Prepare the audited Smart Core mapping state for Chatwoot. This step creates only
+              tenant-scoped database bindings and does not call Chatwoot or send a provider message.
+            </p>
+          </div>
+          <span className="status">
+            {liveAccountMappings.length > 0 ? 'Projection prepared' : 'Not prepared'}
+          </span>
+        </div>
+
+        {canonicalBusinesses.length === 0 ? (
+          <p className="muted smallText">
+            Create the canonical Brand and Business first. Projection preparation stays unavailable
+            until real tenant scope exists.
+          </p>
+        ) : (
+          <div className="settingsList">
+            {canonicalBusinesses.map((business) => {
+              const bindings = activeBindings.filter(
+                (binding) => binding.tenant_business_id === business.id,
+              );
+              const accountMapping = liveAccountMappings.find(
+                (mapping) => mapping.tenant_business_id === business.id,
+              );
+
+              return (
+                <div className="settingsRow" key={business.id}>
+                  <div>
+                    <strong>{business.name}</strong>
+                    <span className="muted smallText">
+                      {bindings.length > 0
+                        ? bindings.map((binding) => binding.channel).join(' + ')
+                        : 'No communication bindings'}
+                      {' · '}
+                      {accountMapping
+                        ? `Account mapping ${accountMapping.status}`
+                        : 'No Chatwoot Account mapping'}
+                    </span>
+                  </div>
+                  <form action={prepareCommunicationPlaneProjection}>
+                    <input
+                      type="hidden"
+                      name="tenant_business_id"
+                      value={business.id}
+                    />
+                    <button
+                      disabled={!editable || business.status !== 'ACTIVE'}
+                    >
+                      Prepare / verify projection
+                    </button>
+                  </form>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <p className="muted smallText">
+          External Chatwoot provisioning remains separately gated by Production health,
+          Platform-token presence and the explicit provisioning activation flag.
+        </p>
       </section>
     </div>
   );

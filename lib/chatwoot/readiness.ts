@@ -10,11 +10,18 @@ async function countScopedRows(
   supabase: SupabaseClient,
   table: string,
   organizationId: string,
+  statuses?: string[],
 ) {
-  const { count, error } = await supabase
+  let query = supabase
     .from(table)
     .select('id', { count: 'exact', head: true })
     .eq('organization_id', organizationId);
+
+  if (statuses?.length) {
+    query = query.in('status', statuses);
+  }
+
+  const { count, error } = await query;
 
   if (error) throw new Error(`Unable to read ${table} readiness state`);
   return count ?? 0;
@@ -60,6 +67,7 @@ export async function loadChatwootReadiness(input: {
     chatwootHealthy,
     brandCount,
     tenantBusinessCount,
+    communicationBindingCount,
     accountMappingCount,
     userMappingCount,
     membershipCount,
@@ -67,9 +75,15 @@ export async function loadChatwootReadiness(input: {
     teamMappingCount,
   ] = await Promise.all([
     readChatwootHealth(baseUrl),
-    countScopedRows(input.supabase, 'brands', input.organizationId),
-    countScopedRows(input.supabase, 'tenant_businesses', input.organizationId),
-    countScopedRows(input.supabase, 'chatwoot_account_mappings', input.organizationId),
+    countScopedRows(input.supabase, 'brands', input.organizationId, ['ACTIVE']),
+    countScopedRows(input.supabase, 'tenant_businesses', input.organizationId, ['ACTIVE']),
+    countScopedRows(input.supabase, 'communication_channel_bindings', input.organizationId, ['ACTIVE']),
+    countScopedRows(
+      input.supabase,
+      'chatwoot_account_mappings',
+      input.organizationId,
+      ['PROVISIONING', 'ACTIVE', 'DEGRADED'],
+    ),
     countScopedRows(input.supabase, 'chatwoot_user_mappings', input.organizationId),
     countScopedRows(input.supabase, 'chatwoot_account_memberships', input.organizationId),
     countScopedRows(input.supabase, 'chatwoot_inbox_mappings', input.organizationId),
@@ -90,6 +104,7 @@ export async function loadChatwootReadiness(input: {
     chatwootHealthy,
     brandCount,
     tenantBusinessCount,
+    communicationBindingCount,
     accountMappingCount,
     userMappingCount,
     membershipCount,

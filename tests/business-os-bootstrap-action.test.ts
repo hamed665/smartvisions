@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('server-only', () => ({}));
+
 const {
   getCurrentOrganization,
   parseBrandBootstrapPayload,
@@ -7,6 +9,7 @@ const {
   createBrandBootstrap,
   createBusinessBootstrap,
   revalidatePath,
+  prepareChatwootTenantProjection,
 } = vi.hoisted(() => ({
   getCurrentOrganization: vi.fn(),
   parseBrandBootstrapPayload: vi.fn((value) => value),
@@ -14,9 +17,13 @@ const {
   createBrandBootstrap: vi.fn(),
   createBusinessBootstrap: vi.fn(),
   revalidatePath: vi.fn(),
+  prepareChatwootTenantProjection: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/org', () => ({ getCurrentOrganization }));
+vi.mock('@/lib/chatwoot/prepare-tenant-projection', () => ({
+  prepareChatwootTenantProjection,
+}));
 vi.mock('next/cache', () => ({ revalidatePath }));
 vi.mock('@/lib/business-os/control-plane-bootstrap', () => ({
   parseBrandBootstrapPayload,
@@ -25,7 +32,10 @@ vi.mock('@/lib/business-os/control-plane-bootstrap', () => ({
   createBusinessBootstrap,
 }));
 
-import { bootstrapCanonicalTenant } from '@/app/business-os-actions';
+import {
+  bootstrapCanonicalTenant,
+  prepareCommunicationPlaneProjection,
+} from '@/app/business-os-actions';
 
 const ORG = '00000000-0000-4000-8000-000000000201';
 const USER = '00000000-0000-4000-8000-000000000202';
@@ -140,5 +150,41 @@ describe('Business OS canonical tenant bootstrap action', () => {
         brandId: BRAND,
       }),
     );
+  });
+});
+
+describe('Business OS Communication Plane projection action', () => {
+  it('binds projection preparation to the authenticated OWNER organization', async () => {
+    const supabase = { marker: 'authenticated-client' };
+
+    getCurrentOrganization.mockResolvedValue({
+      supabase,
+      organizationId: ORG,
+      role: 'OWNER',
+      userId: USER,
+    });
+    prepareChatwootTenantProjection.mockResolvedValue({
+      business: { id: BUSINESS },
+      bindings: [],
+      accountMapping: { id: 'mapping' },
+      createdBindingCount: 0,
+      createdAccountMapping: false,
+    });
+
+    const form = new FormData();
+    form.set('tenant_business_id', BUSINESS);
+    form.set('organization_id', '99999999-0000-4000-8000-000000000999');
+
+    const result = await prepareCommunicationPlaneProjection(form);
+
+    expect(getCurrentOrganization).toHaveBeenCalledWith(true);
+    expect(prepareChatwootTenantProjection).toHaveBeenCalledWith({
+      supabase,
+      organizationId: ORG,
+      tenantBusinessId: BUSINESS,
+    });
+    expect(revalidatePath).toHaveBeenCalledWith('/settings');
+    expect(revalidatePath).toHaveBeenCalledWith('/system');
+    expect(result).toBeUndefined();
   });
 });
