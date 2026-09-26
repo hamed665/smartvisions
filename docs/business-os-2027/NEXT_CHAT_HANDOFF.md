@@ -25,21 +25,19 @@ This delivery-policy change was prepared from verified `main@4d1da421c9c02423989
 
 Use this checkpoint before every older section below, but always re-read runtime/current main first.
 
-- Verified baseline before this package: `main@64ab0fb3f5d56a57d6b11e3c2ae6b50ef1433b40` after PR #249.
-- PR #249 added source-backed Inbox/Team desired-set reconciliation for already-verified Business-wide AccountUsers. Exact-main CI and Cloudflare Production Deploy are SUCCESS.
-- Production migration `0091_chatwoot_scoped_access_reduction_gate` was then applied and verified live as version `20260926100839`; all three lower-scope reduction triggers exist.
-- Production Chatwoot remains on the dedicated OVH VPS. Smart Core remains Cloudflare Workers + Supabase. Railway remains Candidate/rollback evidence only.
-- Production still contains zero canonical Brand, tenant Business, Branch, Department, Team and zero Chatwoot projection rows. Do not fabricate tenant data.
-- `CHATWOOT_PLATFORM_TOKEN` remains absent and `CHATWOOT_PROVISIONING_ENABLED=false`. Keep provisioning off.
-- Shadow Mode remains ON.
-- Current delivery package adds migration `0092_chatwoot_external_first_scoped_demotion.sql` plus runtime orchestration for lower-scope reductions.
-- External-first order is: compute before/after canonical effective role -> identify only ACTIVE Inbox/Team targets that lose access -> GET current members -> at most one replace-set PATCH removing the target Chatwoot User -> GET-verify absence -> persist an immutable five-minute service-role verification receipt -> authenticated OWNER applies the canonical update/delete through the existing governed scope-assignment command path.
-- Ambiguous PATCH outcomes are never retried blindly. Only GET reconciliation follows.
-- The receipt is bound to exact Organization, assignment, assignment version, target operation, post-role, post-attributes hash and verified mapping IDs. It is evidence only, not IAM authority.
-- If no external resource loses access, the existing canonical scope-assignment RPC remains the path and no receipt is created.
-- Scoped-only AccountUsers remain intentionally unsupported. Do not widen a Business-wide AccountUser merely to satisfy a lower-scope grant.
-- Continue at `SECTION COMMUNICATION / COMM-TENANT-BRIDGE`.
-- After this package, the next real C5 boundary is scoped-only AccountUser/SSO policy closeout. Do not enter `COMM-UNIFIED-INBOX` until the COMM-TENANT-BRIDGE exit gate is actually proven.
+- Current verified baseline before this policy-closeout package: `main@039083c38e87dc6c24bf2906cce9d7d763972f3f` after PR #250.
+- PR #250 completed external-first lower-scope demotion orchestration. Exact-main CI and Cloudflare Production Deploy are SUCCESS.
+- Production Supabase is live through `0092_chatwoot_external_first_scoped_demotion` as version `20260926105514`. The immutable reduction receipt table exists and contains zero Production rows because no real Chatwoot tenant projection has been activated.
+- Production Chatwoot remains healthy on the dedicated OVH VPS; Smart Core remains Cloudflare Workers + Supabase; Railway remains Candidate/rollback evidence only.
+- Production still has zero Brand, tenant Business, Branch, Department, Team, Chatwoot AccountUser, Inbox and Team projection rows. Do not fabricate tenant data.
+- Shadow Mode remains ON. Latest verified post-merge outbound deltas are zero for outreach, WhatsApp and Email.
+- `CHATWOOT_PLATFORM_TOKEN` remains absent and `CHATWOOT_PROVISIONING_ENABLED=false`. Keep provisioning off until the real tenant/token/explicit-activation gate is reviewed.
+- C5 native-access policy is now source-backed and closed: Chatwoot AccountUser + native SSO is Business-wide only. OWNER -> administrator; Business-wide ADMIN/SALES_MANAGER/SALES_AGENT -> agent; Business-wide VIEWER -> no AccountUser/SSO.
+- Scoped-only BRANCH/DEPARTMENT/TEAM staff must not receive native Chatwoot AccountUser/SSO. Chatwoot Community v4.18.0 ContactPolicy allows ordinary agents to list/search/show/update/create Account-wide Contacts, so native AccountUser would be broader than canonical Smart Core scope.
+- Scoped-only staff are therefore served by the future Smart Core `COMM-UNIFIED-INBOX`, where Branch/Department/Team scope can be enforced before conversation/contact/action exposure.
+- The SSO adapter now recomputes live Business-wide Smart Core authority before issuing a Platform login URL and requires it to match the stored ACTIVE AccountUser role, preventing stale native SSO after canonical Business-wide authority disappears.
+- `COMM-TENANT-BRIDGE` implementation boundary is closed in code/security policy. Its Production activation remains a separate operational release gate requiring real tenant data, server-only Platform token staging, explicit provisioning activation and runtime verification.
+- Do not fabricate activation evidence. Continue with the next safe implementation package while preserving the activation gate; scoped-only human UX belongs in `COMM-UNIFIED-INBOX`.
 
 ## Superseding continuation checkpoint — 2026-09-26
 

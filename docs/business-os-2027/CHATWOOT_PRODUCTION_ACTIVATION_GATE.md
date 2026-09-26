@@ -207,6 +207,21 @@ The required order is:
 
 The service role writes verification evidence only. It does not mutate canonical IAM. If canonical commit fails after external removal, the system is temporarily under-privileged, which is the safe direction, and the same exact canonical command can be retried through its idempotent request key.
 
+## Native Chatwoot operator boundary
+
+Native Chatwoot AccountUser and Platform SSO are Business-wide operator surfaces. Before issuing SSO, Smart Core recomputes the current authenticated user's Business-wide effective role from Organization / Brand / Business authority and requires that live role to match the stored ACTIVE Chatwoot AccountUser projection.
+
+Supported native projection:
+
+- OWNER -> Chatwoot `administrator`;
+- Business-wide ADMIN / SALES_MANAGER / SALES_AGENT -> Chatwoot `agent`;
+- Business-wide VIEWER -> no AccountUser and no native SSO;
+- BRANCH / DEPARTMENT / TEAM-only staff -> no AccountUser and no native SSO.
+
+This restriction is source-backed. Chatwoot Community v4.18.0 narrows Conversation visibility through Inbox/Team membership, but ordinary agents can list/search/show/update/create Contacts at Account scope. Creating a native AccountUser for scoped-only staff would therefore widen access beyond Smart Core authority.
+
+Scope-aware staff operation belongs to the Smart Core unified inbox, not native Chatwoot SSO.
+
 ## Stop conditions
 
 Do not activate provisioning when any of these are true:
