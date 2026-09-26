@@ -245,6 +245,46 @@ describe('Chatwoot tenant projection preparation', () => {
     expect(createChatwootAccountMapping).not.toHaveBeenCalled();
   });
 
+  it('preflights all binding conflicts before creating any new binding', async () => {
+    const supabase = queryResult({
+      business: {
+        id: BUSINESS,
+        organization_id: ORG,
+        name: 'Smart Visions',
+        status: 'ACTIVE',
+      },
+      integrations: [
+        { id: EMAIL, channel: 'EMAIL', enabled: true, status: 'CONNECTED' },
+        {
+          id: WHATSAPP,
+          channel: 'WHATSAPP',
+          enabled: true,
+          status: 'CONNECTED',
+        },
+      ],
+      bindings: [
+        binding({
+          id: '00000000-0000-4000-8000-000000000312',
+          integrationConnectionId: WHATSAPP,
+          channel: 'WHATSAPP',
+          tenantBusinessId: OTHER_BUSINESS,
+        }),
+      ],
+      accountMapping: null,
+    });
+
+    await expect(
+      prepareChatwootTenantProjection({
+        supabase,
+        organizationId: ORG,
+        tenantBusinessId: BUSINESS,
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+
+    expect(createCommunicationChannelBinding).not.toHaveBeenCalled();
+    expect(createChatwootAccountMapping).not.toHaveBeenCalled();
+  });
+
   it('requires at least one connected supported communication integration', async () => {
     const supabase = queryResult({
       business: {
