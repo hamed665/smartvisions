@@ -44,8 +44,22 @@ const RECEIPT = '00000000-0000-4000-8000-000000002013';
 
 type Row = Record<string, unknown>;
 
-function genericService(rows: Record<string, Row[]>) {
-  const rpc: any = vi.fn(async () => ({ data: null, error: null }));
+function rpcMock() {
+  return vi.fn(
+    async (
+      _name?: string,
+      _args?: Record<string, unknown>,
+    ): Promise<{ data: unknown; error: unknown }> => ({
+      data: null,
+      error: null,
+    }),
+  );
+}
+
+function genericService(
+  rows: Record<string, Row[]>,
+  rpc = rpcMock(),
+) {
   return {
     from: vi.fn((table: string) => {
       let selected = '*';
@@ -231,7 +245,7 @@ function serviceRows(input?: {
 
 function authenticatedOwner() {
   const auditInsert = vi.fn(async () => ({ error: null }));
-  const rpc: any = vi.fn(async () => ({ data: null, error: null }));
+  const rpc = rpcMock();
   const from = vi.fn((table: string) => {
     if (table === 'organization_members') {
       const builder: Record<string, unknown> = {};
@@ -456,10 +470,13 @@ describe('Chatwoot external-first scoped demotion', () => {
 
   it('removes external Inbox access, GET-verifies absence, records a receipt, then commits canonical reduction', async () => {
     const { supabase, rpc, auditInsert } = authenticatedOwner();
-    const service = genericService(serviceRows({ branchAgent: true }));
-    const serviceRpc = (service as unknown as { rpc: any }).rpc;
+    const serviceRpc = rpcMock();
+    const service = genericService(
+      serviceRows({ branchAgent: true }),
+      serviceRpc,
+    );
 
-    serviceRpc.mockImplementation(async (name: string) => {
+    serviceRpc.mockImplementation(async (name?: string) => {
       if (name === 'record_chatwoot_scoped_access_reduction') {
         return {
           data: {
@@ -474,7 +491,7 @@ describe('Chatwoot external-first scoped demotion', () => {
       throw new Error('unexpected service RPC ' + name);
     });
 
-    rpc.mockImplementation(async (name: string) => {
+    rpc.mockImplementation(async (name?: string) => {
       if (name === 'apply_member_scope_assignment_reduction_verified') {
         return {
           data: {
@@ -567,8 +584,11 @@ describe('Chatwoot external-first scoped demotion', () => {
 
   it('does not blindly repeat an ambiguous PATCH and proceeds only after GET proves absence', async () => {
     const { supabase, rpc } = authenticatedOwner();
-    const service = genericService(serviceRows({ branchAgent: true }));
-    const serviceRpc = (service as unknown as { rpc: any }).rpc;
+    const serviceRpc = rpcMock();
+    const service = genericService(
+      serviceRows({ branchAgent: true }),
+      serviceRpc,
+    );
 
     serviceRpc.mockResolvedValue({
       data: { id: RECEIPT },
