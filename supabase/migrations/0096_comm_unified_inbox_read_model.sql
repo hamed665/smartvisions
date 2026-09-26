@@ -292,9 +292,10 @@ begin
       sc.intent_label,
       sc.sentiment_label,
       sc.stage_reason,
-      greatest(
-        coalesce(p.last_activity_at, 'epoch'::timestamptz),
-        coalesce(sc.last_message_at, 'epoch'::timestamptz),
+      coalesce(
+        greatest(p.last_activity_at, sc.last_message_at),
+        p.last_activity_at,
+        sc.last_message_at,
         sc.updated_at,
         sc.created_at
       ) as activity_at,
