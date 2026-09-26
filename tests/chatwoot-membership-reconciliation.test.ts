@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 vi.mock('server-only', () => ({}));
 
 import {
+  ensureAndRecordChatwootMembership,
   reconcileAndRecordChatwootMembership,
   removeAndRecordChatwootMembership,
 } from '@/lib/chatwoot/membership-reconciliation';
@@ -74,6 +75,57 @@ afterEach(() => {
 });
 
 describe('C3B membership reconciliation receipts', () => {
+  it('ensures OWNER AccountUser then records PRESENT administrator evidence', async () => {
+    enabled();
+    const { service, rpc } = serviceWithReceipt({
+      observedPresence: 'PRESENT',
+      observedAccountUserId: '9223372036854775807',
+      observedRole: 'administrator',
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: '9223372036854775807',
+          account_id: 501,
+          user_id: 151,
+          role: 'administrator',
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await ensureAndRecordChatwootMembership({
+      service,
+      organizationId: ORGANIZATION_ID,
+      tenantBusinessId: BUSINESS_ID,
+      membershipId: MEMBERSHIP_ID,
+      membershipVersion: 2,
+      chatwootAccountId: 501,
+      chatwootUserId: 151,
+      role: 'administrator',
+      requestKey: 'membership-owner-ensure-1',
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(result.accountUser).toMatchObject({
+      id: '9223372036854775807',
+      accountId: 501,
+      userId: 151,
+      role: 'administrator',
+    });
+    expect(result.receipt.observed_presence).toBe('PRESENT');
+    expect(result.receipt.observed_role).toBe('administrator');
+    expect(fetchMock.mock.calls.map((call) => call[1]?.method)).toEqual(['POST']);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc.mock.calls[0]?.[1]).toMatchObject({
+      p_observed_presence: 'PRESENT',
+      p_observed_account_user_id: '9223372036854775807',
+      p_observed_role: 'administrator',
+      p_request_key: 'membership-owner-ensure-1',
+    });
+  });
+
   it('records one server receipt from exact GET membership evidence', async () => {
     enabled();
     const { service, rpc } = serviceWithReceipt({
