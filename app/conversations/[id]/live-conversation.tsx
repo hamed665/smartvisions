@@ -241,7 +241,10 @@ export function LiveConversationConsole({
   }, [conversation.id]);
 
   useEffect(() => {
-    void loadOperatorOptions();
+    const timer = window.setTimeout(() => {
+      void loadOperatorOptions();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [loadOperatorOptions]);
 
   const loadAttachments = useCallback(async () => {
@@ -358,7 +361,10 @@ export function LiveConversationConsole({
   const latestMessageId = snapshot.messages.at(-1)?.id;
 
   useEffect(() => {
-    void loadAttachments();
+    const timer = window.setTimeout(() => {
+      void loadAttachments();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [loadAttachments, latestMessageId]);
 
   useEffect(() => {
