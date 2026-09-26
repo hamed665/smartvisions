@@ -20,7 +20,6 @@ vi.mock('@/lib/chatwoot/tenant-bridge', () => ({
 }));
 
 import {
-  ChatwootTenantProjectionPreparationError,
   prepareChatwootTenantProjection,
 } from '@/lib/chatwoot/prepare-tenant-projection';
 
@@ -240,9 +239,7 @@ describe('Chatwoot tenant projection preparation', () => {
         organizationId: ORG,
         tenantBusinessId: BUSINESS,
       }),
-    ).rejects.toMatchObject<
-      Partial<ChatwootTenantProjectionPreparationError>
-    >({ code: 'CONFLICT' });
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
 
     expect(createCommunicationChannelBinding).not.toHaveBeenCalled();
     expect(createChatwootAccountMapping).not.toHaveBeenCalled();
