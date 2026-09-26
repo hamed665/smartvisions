@@ -10,6 +10,7 @@ import {
 import { provisionChatwootAccount } from '@/lib/chatwoot/account-orchestration';
 import { prepareChatwootTenantProjection } from '@/lib/chatwoot/prepare-tenant-projection';
 import { loadChatwootReadiness } from '@/lib/chatwoot/readiness';
+import { provisionCurrentOwnerChatwootAccess } from '@/lib/chatwoot/owner-access-orchestration';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 
 function value(formData: FormData, key: string) {
@@ -86,6 +87,29 @@ export async function provisionCommunicationPlaneAccount(formData: FormData) {
     organizationId: ctx.organizationId,
     mappingId,
     requestKey: `comm-tenant-bridge:${mappingId}:external-account:v1`,
+  });
+
+  revalidatePath('/settings');
+  revalidatePath('/system');
+}
+
+
+export async function provisionCommunicationPlaneOwnerAccess(formData: FormData) {
+  const ctx = await getCurrentOrganization(true);
+  const tenantBusinessId = value(formData, 'tenant_business_id');
+  const readiness = await loadChatwootReadiness({
+    supabase: ctx.supabase,
+    organizationId: ctx.organizationId,
+  });
+
+  if (!readiness.liveProvisioningReady) {
+    throw new Error('Communication Plane external provisioning is not ready');
+  }
+
+  await provisionCurrentOwnerChatwootAccess({
+    supabase: ctx.supabase,
+    organizationId: ctx.organizationId,
+    tenantBusinessId,
   });
 
   revalidatePath('/settings');

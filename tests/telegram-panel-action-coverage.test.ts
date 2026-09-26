@@ -10,6 +10,7 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
     bootstrapCanonicalTenant:'SPECIALIZED:BUSINESS_OS_TENANT_BOOTSTRAP',
     prepareCommunicationPlaneProjection:'SPECIALIZED:CHATWOOT_TENANT_PROJECTION_PREPARE',
     provisionCommunicationPlaneAccount:'SPECIALIZED:CHATWOOT_EXTERNAL_ACCOUNT_PROVISION',
+    provisionCommunicationPlaneOwnerAccess:'SPECIALIZED:CHATWOOT_OWNER_ACCESS_PROVISION',
   },
   'app/control-center-actions.ts': {
     updateService:'service.update', createService:'service.create', updatePrice:'price.update', updateMarket:'market.update', updateAgent:'agent.update', updateApprovalRule:'approval.require',
@@ -118,6 +119,7 @@ describe('Control Center ↔ Telegram action coverage', () => {
     expect(CLASSIFICATION['app/business-os-actions.ts'].bootstrapCanonicalTenant).toBe('SPECIALIZED:BUSINESS_OS_TENANT_BOOTSTRAP');
     expect(CLASSIFICATION['app/business-os-actions.ts'].prepareCommunicationPlaneProjection).toBe('SPECIALIZED:CHATWOOT_TENANT_PROJECTION_PREPARE');
     expect(CLASSIFICATION['app/business-os-actions.ts'].provisionCommunicationPlaneAccount).toBe('SPECIALIZED:CHATWOOT_EXTERNAL_ACCOUNT_PROVISION');
+    expect(CLASSIFICATION['app/business-os-actions.ts'].provisionCommunicationPlaneOwnerAccess).toBe('SPECIALIZED:CHATWOOT_OWNER_ACCESS_PROVISION');
     expect(CLASSIFICATION['app/whatsapp-opt-in-actions.ts'].recordWhatsAppMarketingOptIn).toBe('SPECIALIZED:VERIFIED_WHATSAPP_OPT_IN');
     expect(CLASSIFICATION['app/whatsapp-opt-in-actions.ts'].recordWhatsAppMarketingOptOut).toBe('SPECIALIZED:WHATSAPP_OPT_OUT');
     expect(CLASSIFICATION['app/whatsapp-opt-in-actions.ts'].sendApprovedWhatsAppOptInFirstTouch).toBe('SPECIALIZED:OWNER_APPROVED_OPT_IN_SEND');

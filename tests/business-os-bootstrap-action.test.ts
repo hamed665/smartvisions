@@ -12,6 +12,7 @@ const {
   prepareChatwootTenantProjection,
   loadChatwootReadiness,
   provisionChatwootAccount,
+  provisionCurrentOwnerChatwootAccess,
 } = vi.hoisted(() => ({
   getCurrentOrganization: vi.fn(),
   parseBrandBootstrapPayload: vi.fn((value) => value),
@@ -22,6 +23,7 @@ const {
   prepareChatwootTenantProjection: vi.fn(),
   loadChatwootReadiness: vi.fn(),
   provisionChatwootAccount: vi.fn(),
+  provisionCurrentOwnerChatwootAccess: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/org', () => ({ getCurrentOrganization }));
@@ -31,6 +33,9 @@ vi.mock('@/lib/chatwoot/prepare-tenant-projection', () => ({
 vi.mock('@/lib/chatwoot/readiness', () => ({ loadChatwootReadiness }));
 vi.mock('@/lib/chatwoot/account-orchestration', () => ({
   provisionChatwootAccount,
+}));
+vi.mock('@/lib/chatwoot/owner-access-orchestration', () => ({
+  provisionCurrentOwnerChatwootAccess,
 }));
 vi.mock('next/cache', () => ({ revalidatePath }));
 vi.mock('@/lib/business-os/control-plane-bootstrap', () => ({
@@ -44,6 +49,7 @@ import {
   bootstrapCanonicalTenant,
   prepareCommunicationPlaneProjection,
   provisionCommunicationPlaneAccount,
+  provisionCommunicationPlaneOwnerAccess,
 } from '@/app/business-os-actions';
 
 const ORG = '00000000-0000-4000-8000-000000000201';
@@ -257,6 +263,67 @@ describe('Business OS governed Chatwoot Account action', () => {
       organizationId: ORG,
       mappingId: MAPPING,
       requestKey: `comm-tenant-bridge:${MAPPING}:external-account:v1`,
+    });
+    expect(revalidatePath).toHaveBeenCalledWith('/settings');
+    expect(revalidatePath).toHaveBeenCalledWith('/system');
+    expect(result).toBeUndefined();
+  });
+});
+
+
+describe('Business OS governed Chatwoot OWNER access action', () => {
+  it('does not invoke OWNER access orchestration while readiness is blocked', async () => {
+    const supabase = { marker: 'authenticated-client' };
+    getCurrentOrganization.mockResolvedValue({
+      supabase,
+      organizationId: ORG,
+      role: 'OWNER',
+      userId: USER,
+    });
+    loadChatwootReadiness.mockResolvedValue({
+      liveProvisioningReady: false,
+    });
+
+    const form = new FormData();
+    form.set('tenant_business_id', BUSINESS);
+
+    await expect(
+      provisionCommunicationPlaneOwnerAccess(form),
+    ).rejects.toThrow('not ready');
+
+    expect(provisionCurrentOwnerChatwootAccess).not.toHaveBeenCalled();
+  });
+
+  it('derives Organization scope from the authenticated OWNER context', async () => {
+    const supabase = { marker: 'authenticated-client' };
+    getCurrentOrganization.mockResolvedValue({
+      supabase,
+      organizationId: ORG,
+      role: 'OWNER',
+      userId: USER,
+    });
+    loadChatwootReadiness.mockResolvedValue({
+      liveProvisioningReady: true,
+    });
+    provisionCurrentOwnerChatwootAccess.mockResolvedValue({
+      tenantBusinessId: BUSINESS,
+      chatwootAccountId: 501,
+      chatwootUserId: 151,
+      userMappingStatus: 'ACTIVE',
+      membershipStatus: 'ACTIVE',
+      chatwootRole: 'administrator',
+    });
+
+    const form = new FormData();
+    form.set('tenant_business_id', BUSINESS);
+    form.set('organization_id', '99999999-0000-4000-8000-000000000999');
+
+    const result = await provisionCommunicationPlaneOwnerAccess(form);
+
+    expect(provisionCurrentOwnerChatwootAccess).toHaveBeenCalledWith({
+      supabase,
+      organizationId: ORG,
+      tenantBusinessId: BUSINESS,
     });
     expect(revalidatePath).toHaveBeenCalledWith('/settings');
     expect(revalidatePath).toHaveBeenCalledWith('/system');
