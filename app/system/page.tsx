@@ -4,12 +4,13 @@ import { updateSystemControls } from '@/app/management-actions';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { buildLaunchReadiness } from '@/lib/reliability/launch-readiness';
 import { runtimeEvidenceSummary, runtimeFreshness } from '@/lib/reliability/operational-truth';
+import { loadChatwootReadiness } from '@/lib/chatwoot/readiness';
 export const dynamic='force-dynamic';
 
 export default async function SystemPage(){
   const {supabase,organizationId,role}=await getCurrentOrganization();
   const monthStart=new Date();monthStart.setUTCDate(1);monthStart.setUTCHours(0,0,0,0);
-  const [{data:ruleData},{data:controls},{data:costGuard},{data:integrations},{data:usage},{data:outreach},{data:runtimeAudit}]=await Promise.all([
+  const [{data:ruleData},{data:controls},{data:costGuard},{data:integrations},{data:usage},{data:outreach},{data:runtimeAudit},chatwootReadiness]=await Promise.all([
     supabase.from('approval_rules').select('id,action_key,requires_approval,config').eq('organization_id',organizationId).order('action_key'),
     supabase.from('system_controls').select('organization_id,global_kill_switch,email_paused,whatsapp_ai_paused,agents_paused,shadow_mode,updated_at').eq('organization_id',organizationId).maybeSingle(),
     supabase.from('cost_guard_settings').select('*').eq('organization_id',organizationId).maybeSingle(),
@@ -17,6 +18,7 @@ export default async function SystemPage(){
     supabase.from('usage_events').select('cost_usd').eq('organization_id',organizationId).gte('created_at',monthStart.toISOString()),
     supabase.from('outreach_policies').select('enabled,manual_review_required').eq('organization_id',organizationId),
     supabase.from('audit_logs').select('after_data,created_at').eq('organization_id',organizationId).eq('action','OPERATIONS_SCHEDULED_RESULT').order('created_at',{ascending:false}).limit(1).maybeSingle(),
+    loadChatwootReadiness({supabase,organizationId}),
   ]);
   const rules=ruleData??[];const editable=role==='OWNER';
   const monthSpend=(usage??[]).reduce((sum,row)=>sum+Number(row.cost_usd??0),0);
@@ -25,6 +27,7 @@ export default async function SystemPage(){
   const readiness=buildLaunchReadiness({controls,costGuard,monthSpendUsd:monthSpend,integrations:integrations??[],enabledOutreachMarkets:enabledMarkets,manualReviewMarkets:manualMarkets});
   const runtimeState=runtimeFreshness({createdAt:runtimeAudit?.created_at});
   const runtimeEvidence=runtimeEvidenceSummary(runtimeAudit?.after_data);
+  const communicationStatus=chatwootReadiness.liveProvisioningReady?'ACTIVE':chatwootReadiness.activationReady?'READY TO ACTIVATE':'BLOCKED';
   return <div>
     <div className="headerRow"><div><h1>System & Safety</h1><p className="muted">Runtime automation safety, emergency controls, approval boundaries and launch readiness.</p></div><span className={`status ${controls?.global_kill_switch?'dangerStatus':''}`}>{controls?.global_kill_switch?'KILL SWITCH ON':readiness.liveAutomationReady?'Live-ready':readiness.codeReady?'Code-ready / gated':'Blocked'}</span></div>
 
@@ -33,6 +36,8 @@ export default async function SystemPage(){
     <section className="panel"><div className="headerRow"><div><h2>Scheduled runtime evidence</h2><p className="muted">Production trigger is expected every 2 minutes; durable heartbeat evidence is deliberately sampled every {runtimeEvidence.sampleMinutes || 10} minutes. Missing samples become stale instead of being mistaken for a healthy scheduler.</p></div><span className={`status ${runtimeState==='STALE'||runtimeState==='ERROR'?'dangerStatus':''}`}>{runtimeState}</span></div><div className="settingsList"><div className="settingsRow"><strong>Observed cron</strong><span>{runtimeEvidence.cron||'Not observed'}</span></div><div className="settingsRow"><strong>Last sampled result</strong><span>{runtimeAudit?.created_at?new Date(runtimeAudit.created_at).toLocaleString():'Never'}</span></div><div className="settingsRow"><strong>Worker version</strong><span>{runtimeEvidence.workerVersionId||'Legacy heartbeat / version not recorded'}</span></div><div className="settingsRow"><strong>Outcome</strong><span>failed {runtimeEvidence.failed} · throttled {runtimeEvidence.throttled} · safety blocked {runtimeEvidence.safetyBlocked}</span></div><div className="settingsRow"><strong>Evidence path</strong><span>{runtimeEvidence.evidenceAction||'—'}{runtimeEvidence.evidenceReason?` · ${runtimeEvidence.evidenceReason}`:''}</span></div></div></section>
 
     <section className="panel"><div className="headerRow"><div><h2>Production V1 launch gates</h2><p className="muted">Code-ready is different from live-autonomous. Pending provider verification keeps outbound fail-closed rather than pretending a green badge is a business strategy.</p></div><span className={`status ${readiness.codeReady?'':'dangerStatus'}`}>{readiness.liveAutomationReady?'LIVE AUTOMATION READY':readiness.codeReady?'CONTROLLED PILOT READY':'BLOCKED'}</span></div><div className="settingsList">{readiness.gates.map(gate=><div className="settingsRow" key={gate.key}><div><strong>{gate.label}</strong><span className="muted smallText">{gate.detail}</span></div><span className={`status ${gate.state==='BLOCKED'?'dangerStatus':''}`}>{gate.state}</span></div>)}</div></section>
+
+    <section className="panel"><div className="headerRow"><div><h2>Communication Plane readiness</h2><p className="muted">Server-side readiness for the governed Smart Core → Chatwoot bridge. Secret values are never exposed here.</p></div><span className={`status ${communicationStatus==='BLOCKED'?'dangerStatus':''}`}>{communicationStatus}</span></div><div className="settingsList"><div className="settingsRow"><strong>Chatwoot health</strong><span>{chatwootReadiness.chatwootHealthy?'Healthy':'Unavailable'}</span></div><div className="settingsRow"><strong>Platform token</strong><span>{chatwootReadiness.platformTokenConfigured?'Staged on Production':'Not staged'}</span></div><div className="settingsRow"><strong>Provisioning</strong><span>{chatwootReadiness.provisioningEnabled?'Enabled':'Disabled / fail-closed'}</span></div><div className="settingsRow"><strong>Canonical tenant</strong><span>{chatwootReadiness.brandCount} Brand · {chatwootReadiness.tenantBusinessCount} Business</span></div><div className="settingsRow"><strong>Chatwoot projection</strong><span>{chatwootReadiness.projectionCounts.accounts} account · {chatwootReadiness.projectionCounts.users} user · {chatwootReadiness.projectionCounts.memberships} membership · {chatwootReadiness.projectionCounts.inboxes} inbox · {chatwootReadiness.projectionCounts.teams} team</span></div><div className="settingsRow"><strong>Activation blockers</strong><span>{chatwootReadiness.blockers.length?chatwootReadiness.blockers.join(' · '):'None'}</span></div></div></section>
 
     <section className="panel"><h2>Approval boundaries</h2><p className="muted">Routine low-risk answers should remain autonomous only after launch approval. Mark actions that genuinely need owner review.</p></section><div className="settingsList">{rules.map(r=><form action={updateApprovalRule} className="settingsRow" key={r.id}><input type="hidden" name="id" value={r.id}/><div><strong>{r.action_key}</strong><span className="muted smallText">Production approval policy</span></div><label className="toggleLabel"><input type="checkbox" name="requires_approval" defaultChecked={r.requires_approval} disabled={!editable}/> Requires approval</label><button disabled={!editable}>Save</button></form>)}</div>
   </div>
