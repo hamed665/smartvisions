@@ -1,6 +1,6 @@
 # COMM-UNIFIED-INBOX — verified gap audit and security split
 
-Status: SECURITY BOUNDARY PACKAGE IN IMPLEMENTATION
+Status: SECURITY BOUNDARY MERGED; RECONCILER PACKAGE IN IMPLEMENTATION
 
 Verified on: 2026-09-26
 
@@ -26,7 +26,7 @@ This document records only facts verified for the COMM-UNIFIED-INBOX cursor. It 
 - Production Chatwoot `/health`: HTTP 200 with `{"status":"woot"}`.
 - Production Chatwoot login: HTTP 200.
 - Smart Core login: HTTP 200.
-- OVH remains Production Chatwoot. Railway remains Candidate/rollback evidence only.
+- OVH VPS is the canonical Production Chatwoot runtime. Railway is not part of the active Production path.
 
 ## Existing conversation surface
 
@@ -141,3 +141,28 @@ The following remain in the next COMM-UNIFIED-INBOX vertical package:
 - existing UI extension and mobile/accessibility/i18n-ready contracts.
 
 No Production Chatwoot token, provisioning flag, Shadow Mode, provider credential or outbound safety control is changed here.
+
+
+## Reconciler package cursor
+
+The next vertical package is journal-first:
+
+signed API Inbox webhook
+→ existing `chatwoot_webhook_events`
+→ service-role-only idempotent reconciler
+→ existing `unified_inbox_conversation_projections`.
+
+It does not add another queue, another Conversation table, or another CRM. The
+Smart Core link must come from the signed
+`additional_attributes.smartvisions_conversation_id` projection marker;
+missing markers are ignored instead of guessed from contact or message data.
+
+Projection reconciliation is monotonic on Chatwoot `updated_at`: older signed
+events are terminally ignored and cannot regress status, labels, assignment or
+Team state. Chatwoot Team IDs must resolve through the existing governed
+`chatwoot_team_mappings` and canonical Department/Branch lineage.
+
+Public webhook acknowledgement remains journal-only. The existing Cloudflare
+production scheduler drains a bounded set of RECEIVED journal rows through an
+internal-only endpoint. No provider send authority, Platform token,
+provisioning flag or Shadow Mode setting is touched.
