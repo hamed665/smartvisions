@@ -1,8 +1,10 @@
 import {
   bootstrapCanonicalTenant,
   prepareCommunicationPlaneProjection,
+  provisionCommunicationPlaneAccount,
 } from '@/app/business-os-actions';
 import { updateOrganizationSettings } from '@/app/management-actions';
+import { loadChatwootReadiness } from '@/lib/chatwoot/readiness';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 
 export const dynamic = 'force-dynamic';
@@ -70,6 +72,9 @@ export default async function SettingsPage() {
   const liveAccountMappings = accountMappings ?? [];
   const bootstrapNeeded =
     canonicalBrands.length === 0 || canonicalBusinesses.length === 0;
+  const chatwootReadiness = editable
+    ? await loadChatwootReadiness({ supabase, organizationId })
+    : null;
 
   return (
     <div>
@@ -283,18 +288,43 @@ export default async function SettingsPage() {
                         : 'No Chatwoot Account mapping'}
                     </span>
                   </div>
-                  <form action={prepareCommunicationPlaneProjection}>
-                    <input
-                      type="hidden"
-                      name="tenant_business_id"
-                      value={business.id}
-                    />
-                    <button
-                      disabled={!editable || business.status !== 'ACTIVE'}
-                    >
-                      Prepare / verify projection
-                    </button>
-                  </form>
+                  <div>
+                    <form action={prepareCommunicationPlaneProjection}>
+                      <input
+                        type="hidden"
+                        name="tenant_business_id"
+                        value={business.id}
+                      />
+                      <button
+                        disabled={!editable || business.status !== 'ACTIVE'}
+                      >
+                        Prepare / verify projection
+                      </button>
+                    </form>
+                    {accountMapping &&
+                    accountMapping.status !== 'ACTIVE' ? (
+                      <form action={provisionCommunicationPlaneAccount}>
+                        <input
+                          type="hidden"
+                          name="chatwoot_account_mapping_id"
+                          value={accountMapping.id}
+                        />
+                        <button
+                          disabled={
+                            !editable ||
+                            !chatwootReadiness?.liveProvisioningReady
+                          }
+                        >
+                          Provision Chatwoot Account
+                        </button>
+                      </form>
+                    ) : null}
+                    {accountMapping?.status === 'ACTIVE' ? (
+                      <span className="muted smallText">
+                        External Account {accountMapping.chatwoot_account_id ?? 'verified'}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               );
             })}
@@ -303,6 +333,13 @@ export default async function SettingsPage() {
         <p className="muted smallText">
           External Chatwoot provisioning remains separately gated by Production health,
           Platform-token presence and the explicit provisioning activation flag.
+          {editable && chatwootReadiness
+            ? ` Current blockers: ${chatwootReadiness.blockers.length > 0
+                ? chatwootReadiness.blockers.join(' · ')
+                : chatwootReadiness.provisioningEnabled
+                  ? 'none'
+                  : 'PROVISIONING_DISABLED'}.`
+            : ''}
         </p>
       </section>
     </div>
