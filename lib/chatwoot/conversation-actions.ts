@@ -1427,7 +1427,8 @@ export async function downloadUnifiedInboxAttachment(input: {
         status: response.status,
       });
     }
-    const contentLength = Number(response.headers.get('content-length'));
+    const rawContentLength = response.headers.get('content-length');
+    const contentLength = rawContentLength ? Number(rawContentLength) : Number.NaN;
     if (Number.isFinite(contentLength) && contentLength > MAX_ATTACHMENT_BYTES) {
       await response.body.cancel();
       fail('INVALID_INPUT', 'Attachment exceeds the safe download limit');
