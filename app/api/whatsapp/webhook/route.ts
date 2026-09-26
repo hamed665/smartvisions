@@ -41,21 +41,26 @@ export async function POST(request: Request) {
     // time-boxed, exact-recipient INTERNAL_TEST rule can turn this into an immediate
     // in-process Agent + controlled approved-send attempt. Live-test failure never
     // changes webhook acknowledgement, because a Meta retry must not become a send retry.
-    if ('organizationId' in persistence && typeof persistence.organizationId === 'string') {
-      for (const event of inbound.filter((item) => item.type === 'text').slice(0, 3)) {
-        try {
-          const result = await runInternalTestLiveReply({
-            organizationId: persistence.organizationId,
+    for (const event of inbound.filter((item) => item.type === 'text').slice(0, 3)) {
+      try {
+        const matchingOrganizationId = persistence.organizationIds.length === 1
+          ? persistence.organizationIds[0]
+          : null;
+        if (!matchingOrganizationId) {
+          liveTest = { attempted: false, sent: false, reason: 'MULTI_TENANT_WEBHOOK_BATCH_NO_INLINE_REPLY' };
+          break;
+        }
+        const result = await runInternalTestLiveReply({
+            organizationId: matchingOrganizationId,
             providerMessageId: event.providerMessageId,
             inboundFrom: event.from,
             messageType: event.type,
           });
-          liveTest = result;
-          if (result.attempted) break;
-        } catch {
-          liveTest = { attempted: true, sent: false, reason: 'LIVE_TEST_FAILED_NO_WEBHOOK_RETRY' };
-          break;
-        }
+        liveTest = result;
+        if (result.attempted) break;
+      } catch {
+        liveTest = { attempted: true, sent: false, reason: 'LIVE_TEST_FAILED_NO_WEBHOOK_RETRY' };
+        break;
       }
     }
 

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { applyWhatsAppInboundLifecycle, applyWhatsAppStatusLifecycle } from './lifecycle';
+import { resolveMetaWhatsAppDestination } from './tenant-routing';
 import type { NormalizedWhatsAppInbound, NormalizedWhatsAppStatus } from './webhook';
 
 function serviceClient() {
@@ -9,43 +10,64 @@ function serviceClient() {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-async function resolveWhatsAppOrganizationId() {
-  const supabase = serviceClient();
-  const { data, error } = await supabase
-    .from('integration_connections')
-    .select('organization_id')
-    .eq('provider', 'META')
-    .eq('channel', 'WHATSAPP')
-    .limit(2);
-  if (error) throw new Error(`WhatsApp integration lookup failed: ${error.message}`);
-  if (!data || data.length !== 1) {
-    throw new Error('WhatsApp webhook requires exactly one META/WHATSAPP integration');
-  }
-  return String(data[0].organization_id);
-}
-
 export async function persistWhatsAppWebhookEvents(input: {
   inbound: NormalizedWhatsAppInbound[];
   statuses: NormalizedWhatsAppStatus[];
 }) {
-  if (input.inbound.length === 0 && input.statuses.length === 0) return { inserted: 0, duplicates: 0, linkedInbound: 0, statusUpdates: 0 };
+  if (input.inbound.length === 0 && input.statuses.length === 0) {
+    return {
+      inserted: 0,
+      duplicates: 0,
+      linkedInbound: 0,
+      statusUpdates: 0,
+      organizationIds: [] as string[],
+    };
+  }
 
-  const organizationId = await resolveWhatsAppOrganizationId();
   const supabase = serviceClient();
+  const routedInbound = await Promise.all(input.inbound.map(async (event) => ({
+    event,
+    route: await resolveMetaWhatsAppDestination({ service: supabase, destination: event.destination }),
+  })));
+  const routedStatuses = await Promise.all(input.statuses.map(async (event) => ({
+    event,
+    route: await resolveMetaWhatsAppDestination({ service: supabase, destination: event.destination }),
+  })));
+
   const rows = [
-    ...input.inbound.map(event => ({
-      organization_id: organizationId,
+    ...routedInbound.map(({ event, route }) => ({
+      organization_id: route.organizationId,
       provider_message_id: event.providerMessageId,
       direction: 'INBOUND',
       event_type: event.type.toUpperCase(),
-      payload: event,
+      payload: {
+        ...event,
+        routing: {
+          tenantBusinessId: route.tenantBusinessId,
+          branchId: route.branchId,
+          bindingId: route.bindingId,
+          integrationConnectionId: route.integrationConnectionId,
+          phoneNumberId: route.phoneNumberId,
+          wabaId: route.wabaId,
+        },
+      },
     })),
-    ...input.statuses.map(event => ({
-      organization_id: organizationId,
+    ...routedStatuses.map(({ event, route }) => ({
+      organization_id: route.organizationId,
       provider_message_id: event.providerMessageId,
       direction: 'STATUS',
       event_type: event.status.toUpperCase(),
-      payload: event,
+      payload: {
+        ...event,
+        routing: {
+          tenantBusinessId: route.tenantBusinessId,
+          branchId: route.branchId,
+          bindingId: route.bindingId,
+          integrationConnectionId: route.integrationConnectionId,
+          phoneNumberId: route.phoneNumberId,
+          wabaId: route.wabaId,
+        },
+      },
     })),
   ];
 
@@ -59,17 +81,28 @@ export async function persistWhatsAppWebhookEvents(input: {
   if (error) throw new Error(`WhatsApp event persistence failed: ${error.message}`);
 
   let linkedInbound = 0;
-  for (const event of input.inbound) {
-    const lifecycle = await applyWhatsAppInboundLifecycle(organizationId, event);
+  for (const { event, route } of routedInbound) {
+    const lifecycle = await applyWhatsAppInboundLifecycle(route.organizationId, event);
     if (lifecycle.linked) linkedInbound += 1;
   }
 
   let statusUpdates = 0;
-  for (const event of input.statuses) {
-    const lifecycle = await applyWhatsAppStatusLifecycle(organizationId, event);
+  for (const { event, route } of routedStatuses) {
+    const lifecycle = await applyWhatsAppStatusLifecycle(route.organizationId, event);
     statusUpdates += lifecycle.matched;
   }
 
   const inserted = data?.length ?? 0;
-  return { inserted, duplicates: Math.max(0, rows.length - inserted), organizationId, linkedInbound, statusUpdates };
+  const organizationIds = Array.from(new Set([
+    ...routedInbound.map(item => item.route.organizationId),
+    ...routedStatuses.map(item => item.route.organizationId),
+  ]));
+
+  return {
+    inserted,
+    duplicates: Math.max(0, rows.length - inserted),
+    organizationIds,
+    linkedInbound,
+    statusUpdates,
+  };
 }

@@ -22,13 +22,25 @@ function resolveMetaGraphVersion() {
   return process.env.META_GRAPH_VERSION?.trim() || 'v23.0';
 }
 
+export type MetaCloudWhatsAppProviderConfig = {
+  token?: string;
+  phoneNumberId?: string;
+  graphVersion?: string;
+  catalogId?: string;
+};
+
 export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
-  constructor(
-    private readonly token = resolveMetaWhatsAppToken(),
-    private readonly phoneNumberId = resolveMetaPhoneNumberId(),
-    private readonly graphVersion = resolveMetaGraphVersion(),
-    private readonly catalogId = resolveWhatsAppCatalogId(),
-  ) {}
+  private readonly token?: string;
+  private readonly phoneNumberId?: string;
+  private readonly graphVersion: string;
+  private readonly catalogId?: string;
+
+  constructor(config: MetaCloudWhatsAppProviderConfig = {}) {
+    this.token = config.token ?? resolveMetaWhatsAppToken();
+    this.phoneNumberId = config.phoneNumberId ?? resolveMetaPhoneNumberId();
+    this.graphVersion = config.graphVersion ?? resolveMetaGraphVersion();
+    this.catalogId = config.catalogId ?? resolveWhatsAppCatalogId();
+  }
 
   private assertConfigured() {
     if (!this.token || !this.phoneNumberId) {

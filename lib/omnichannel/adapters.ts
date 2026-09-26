@@ -195,6 +195,7 @@ export const whatsappSemanticAdapter: ChannelSemanticAdapter<
       ...(event.text ? { text: event.text } : {}),
       metadata: {
         providerType: event.type,
+        destination: event.destination,
         contactName: event.contactName ?? null,
         mediaId: event.mediaId ?? null,
         mimeType: event.mimeType ?? null,
@@ -215,6 +216,7 @@ export const whatsappSemanticAdapter: ChannelSemanticAdapter<
         : {}),
       ...(event.errorTitle ? { detail: event.errorTitle } : {}),
       metadata: {
+        destination: event.destination,
         recipientId: event.recipientId ?? null,
         providerConversationId: event.conversationId ?? null,
         pricingCategory: event.pricingCategory ?? null,

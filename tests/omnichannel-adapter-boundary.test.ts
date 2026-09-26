@@ -149,6 +149,7 @@ describe('Business OS omnichannel semantic boundary', () => {
   it('normalizes WhatsApp inbound/referral evidence without doing lifecycle work', () => {
     const normalized = whatsappSemanticAdapter.normalizeInbound({
       providerMessageId: 'wamid.1',
+      destination: { phoneNumberId: 'phone-1', wabaId: 'waba-1' },
       from: '96890000000',
       timestamp: '1789986000',
       type: 'text',
@@ -169,6 +170,7 @@ describe('Business OS omnichannel semantic boundary', () => {
       text: 'Hi',
       metadata: {
         providerType: 'text',
+        destination: { phoneNumberId: 'phone-1', wabaId: 'waba-1' },
         contactName: 'Customer',
         referral: {
           sourceType: 'ad',
@@ -179,6 +181,7 @@ describe('Business OS omnichannel semantic boundary', () => {
 
     const withoutTimestamp = whatsappSemanticAdapter.normalizeInbound({
       providerMessageId: 'wamid.2',
+      destination: { phoneNumberId: 'phone-1', wabaId: 'waba-1' },
       from: '96890000001',
       type: 'audio',
       mediaId: 'media-1',
@@ -202,6 +205,7 @@ describe('Business OS omnichannel semantic boundary', () => {
     for (const [status, expected] of cases) {
       const normalizedStatus = whatsappSemanticAdapter.normalizeStatus({
         providerMessageId: 'wamid.1',
+        destination: { phoneNumberId: 'phone-1', wabaId: 'waba-1' },
         status,
       });
       expect(normalizedStatus).not.toBeNull();
