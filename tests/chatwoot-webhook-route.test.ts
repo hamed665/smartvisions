@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { persist, WebhookError } = vi.hoisted(() => {
+const { persist, processProjection, WebhookError, ProjectionError } = vi.hoisted(() => {
   class WebhookError extends Error {
     constructor(
       public readonly code:
@@ -15,15 +15,34 @@ const { persist, WebhookError } = vi.hoisted(() => {
     }
   }
 
+  class ProjectionError extends Error {
+    constructor(
+      public readonly code:
+        | 'INVALID_EVENT'
+        | 'MAPPING_MISSING'
+        | 'PERSISTENCE_FAILED',
+      message: string,
+    ) {
+      super(message);
+      this.name = 'ChatwootProjectionError';
+    }
+  }
+
   return {
     persist: vi.fn(),
+    processProjection: vi.fn(),
     WebhookError,
+    ProjectionError,
   };
 });
 
 vi.mock('@/lib/chatwoot/webhook-receiver', () => ({
   ChatwootWebhookError: WebhookError,
   persistSignedChatwootWebhook: persist,
+}));
+vi.mock('@/lib/chatwoot/webhook-projection', () => ({
+  ChatwootProjectionError: ProjectionError,
+  processChatwootWebhookProjection: processProjection,
 }));
 
 import { POST } from '@/app/api/chatwoot/webhook/[mappingId]/route';
@@ -54,16 +73,22 @@ function request(input?: {
 afterEach(() => {
   vi.restoreAllMocks();
   persist.mockReset();
+  processProjection.mockReset();
 });
 
 describe('Chatwoot webhook route', () => {
-  it('fast-ACKs a verified journaled webhook', async () => {
+  it('ACKs only after the verified journal event is projected or intentionally ignored', async () => {
     persist.mockResolvedValueOnce({
       accepted: true,
       replayed: false,
       eventId: '00000000-0000-4000-8000-000000001103',
       status: 'RECEIVED',
       eventType: 'message_created',
+    });
+    processProjection.mockResolvedValueOnce({
+      eventId: '00000000-0000-4000-8000-000000001103',
+      status: 'PROCESSED',
+      replayed: false,
     });
 
     const response = await POST(request(), {
@@ -75,6 +100,7 @@ describe('Chatwoot webhook route', () => {
       accepted: true,
       replayed: false,
       status: 'RECEIVED',
+      projectionStatus: 'PROCESSED',
     });
     expect(persist).toHaveBeenCalledTimes(1);
     expect(persist.mock.calls[0]?.[0]).toMatchObject({
@@ -83,6 +109,31 @@ describe('Chatwoot webhook route', () => {
       timestamp: '1797000000',
       signature: 'sha256=' + 'a'.repeat(64),
     });
+  });
+
+  it('returns retryable 503 when durable projection fails after journaling', async () => {
+    persist.mockResolvedValueOnce({
+      accepted: true,
+      replayed: false,
+      eventId: '00000000-0000-4000-8000-000000001103',
+      status: 'RECEIVED',
+      eventType: 'message_created',
+    });
+    processProjection.mockRejectedValueOnce(
+      new ProjectionError('PERSISTENCE_FAILED', 'internal projection detail'),
+    );
+
+    const response = await POST(request(), {
+      params: Promise.resolve({ mappingId: MAPPING_ID }),
+    });
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Chatwoot webhook projection temporarily unavailable',
+    });
+    expect(JSON.stringify(await Promise.resolve({}))).not.toContain(
+      'internal projection detail',
+    );
   });
 
   it('rejects non-JSON content before receiver work', async () => {
