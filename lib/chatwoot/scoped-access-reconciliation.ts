@@ -40,7 +40,7 @@ const SCOPED_TYPES = new Set<MemberScopeAssignment['scopeType']>([
   'TEAM',
 ]);
 
-type ScopedAccessKind = 'INBOX' | 'TEAM';
+export type ScopedAccessKind = 'INBOX' | 'TEAM';
 
 type CanonicalMember = {
   organization_id: string;
@@ -778,6 +778,66 @@ async function writeAudit(input: {
   if (error) {
     return fail('Scoped Chatwoot access verification could not be audited');
   }
+}
+
+export async function loadChatwootScopedAccessInventory(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+}) {
+  await requireCurrentOwnerActor(input);
+  const service = createSupabaseServiceClient();
+
+  const [inboxes, teams] = await Promise.all([
+    service
+      .from('chatwoot_inbox_mappings')
+      .select(
+        'id,tenant_business_id,branch_id,chatwoot_inbox_id,status,version',
+      )
+      .eq('organization_id', input.organizationId)
+      .eq('status', 'ACTIVE')
+      .limit(MAX_SCOPE_ROWS + 1),
+    service
+      .from('chatwoot_team_mappings')
+      .select(
+        'id,tenant_business_id,smart_team_id,chatwoot_team_id,status,version',
+      )
+      .eq('organization_id', input.organizationId)
+      .eq('status', 'ACTIVE')
+      .limit(MAX_SCOPE_ROWS + 1),
+  ]);
+
+  if (
+    inboxes.error ||
+    teams.error ||
+    !Array.isArray(inboxes.data) ||
+    !Array.isArray(teams.data) ||
+    inboxes.data.length > MAX_SCOPE_ROWS ||
+    teams.data.length > MAX_SCOPE_ROWS
+  ) {
+    return fail('Scoped Chatwoot projection inventory is unavailable');
+  }
+
+  return {
+    inboxes: inboxes.data.map((row) => ({
+      kind: 'INBOX' as const,
+      mappingId: String(row.id),
+      tenantBusinessId: String(row.tenant_business_id),
+      branchId:
+        typeof row.branch_id === 'string' && isUuid(row.branch_id)
+          ? row.branch_id
+          : null,
+      externalId: normalizeChatwootInt32Id(row.chatwoot_inbox_id),
+      version: Number(row.version),
+    })),
+    teams: teams.data.map((row) => ({
+      kind: 'TEAM' as const,
+      mappingId: String(row.id),
+      tenantBusinessId: String(row.tenant_business_id),
+      smartTeamId: String(row.smart_team_id),
+      externalId: normalizeChatwootInt64Id(row.chatwoot_team_id),
+      version: Number(row.version),
+    })),
+  };
 }
 
 export async function reconcileChatwootScopedAccess(input: {
