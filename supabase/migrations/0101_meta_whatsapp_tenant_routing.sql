@@ -62,7 +62,7 @@ returns public.communication_channel_bindings
 language plpgsql
 security invoker
 set search_path = public, auth, vault, pg_catalog
-as $
+as $$
 declare
   v_current public.communication_channel_bindings%rowtype;
   v_updated public.communication_channel_bindings%rowtype;
@@ -152,7 +152,7 @@ begin
 
   return v_updated;
 end;
-$;
+$$;
 
 create or replace function public.resolve_meta_whatsapp_destination(
   p_phone_number_id text,
