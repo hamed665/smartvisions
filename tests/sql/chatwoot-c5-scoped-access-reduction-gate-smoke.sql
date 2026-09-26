@@ -165,7 +165,14 @@ begin
   begin
     perform public.update_member_scope_assignment(
       '00000000-0000-0000-0000-000000009111',
-      :'branch_assignment_id'::uuid,
+      (
+        select id
+          from public.member_scope_assignments
+         where organization_id = '00000000-0000-0000-0000-000000009111'
+           and user_id = '00000000-0000-0000-0000-000000009102'
+           and scope_type = 'BRANCH'
+           and branch_id = '30000000-0000-0000-0000-000000009111'
+      ),
       1,
       'VIEWER',
       '{}'::jsonb,
@@ -197,7 +204,14 @@ begin
   begin
     perform public.update_member_scope_assignment(
       '00000000-0000-0000-0000-000000009111',
-      :'team_assignment_id'::uuid,
+      (
+        select id
+          from public.member_scope_assignments
+         where organization_id = '00000000-0000-0000-0000-000000009111'
+           and user_id = '00000000-0000-0000-0000-000000009102'
+           and scope_type = 'TEAM'
+           and team_id = '50000000-0000-0000-0000-000000009111'
+      ),
       1,
       'VIEWER',
       '{}'::jsonb,
