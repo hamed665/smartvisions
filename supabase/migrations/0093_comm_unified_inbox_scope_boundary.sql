@@ -135,7 +135,7 @@ begin
     raise exception 'Unified Inbox projections use lifecycle state; DELETE is not permitted';
   end if;
 
-  if current_setting('smartvisions.unified_inbox_projection_command', true) <> '1' then
+  if coalesce(current_setting('smartvisions.unified_inbox_projection_command', true), '') <> '1' then
     raise exception 'Unified Inbox projection mutation requires reconciler command path';
   end if;
 
