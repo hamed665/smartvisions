@@ -3,6 +3,7 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { chatwootPlatformProvisioningRequest } from '@/lib/chatwoot/http';
 import { normalizeChatwootBaseUrl } from '@/lib/chatwoot/http-contract';
+import { readSelfBusinessWideChatwootRole } from '@/lib/chatwoot/membership-role';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
 import { isUuid } from '@/lib/chatwoot/tenant-bridge';
 import { normalizeChatwootInt32Id } from '@/lib/chatwoot/tenant-bridge-slice-b';
@@ -136,8 +137,26 @@ export async function createChatwootSsoLoginUrl(input: {
     return fail('FORBIDDEN', 'Chatwoot SSO scope is not accessible');
   }
 
+  // Native Chatwoot SSO is intentionally Business-wide only. Lower-scope
+  // BRANCH/DEPARTMENT/TEAM users are served by the Smart Core unified inbox
+  // instead of receiving a broader Chatwoot AccountUser/SSO surface.
+  let canonicalProjection;
+  try {
+    canonicalProjection = await readSelfBusinessWideChatwootRole({
+      supabase: input.supabase,
+      organizationId: input.organizationId,
+      tenantBusinessId: input.tenantBusinessId,
+    });
+  } catch {
+    return fail('FORBIDDEN', 'Business-wide Chatwoot authority is required');
+  }
+
+  if (!canonicalProjection.chatwootRole) {
+    return fail('FORBIDDEN', 'Business-wide Chatwoot authority is required');
+  }
+
   // Privileged reads begin only after the session has proven exact
-  // Organization membership through self-read RLS.
+  // Organization membership and current Business-wide Smart Core authority.
   const service = createSupabaseServiceClient();
 
   const [business, userMapping, accountMapping, accountMembership] =
@@ -202,7 +221,10 @@ export async function createChatwootSsoLoginUrl(input: {
     !expectedProjection(
       accountMembership.data.effective_smart_role,
       accountMembership.data.chatwoot_role,
-    )
+    ) ||
+    accountMembership.data.effective_smart_role !==
+      canonicalProjection.effectiveSmartRole ||
+    accountMembership.data.chatwoot_role !== canonicalProjection.chatwootRole
   ) {
     return fail('FORBIDDEN', 'Active Chatwoot membership is required');
   }
