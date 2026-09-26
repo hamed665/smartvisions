@@ -18,6 +18,7 @@ describe('COMM-UNIFIED-INBOX scoped security boundary', () => {
     expect(migration).toContain('branch_id uuid not null');
     expect(migration).toContain('chatwoot_inbox_mapping_id uuid not null');
     expect(migration).toContain('chatwoot_conversation_display_id integer not null');
+    expect(migration).toContain('cb.channel = v_conversation_channel');
   });
 
   it('does not create a second CRM, tenant model or provider send path', () => {
