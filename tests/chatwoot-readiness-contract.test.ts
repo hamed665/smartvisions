@@ -11,7 +11,8 @@ function readyInput() {
     chatwootHealthy: true,
     brandCount: 1,
     tenantBusinessCount: 1,
-    accountMappingCount: 0,
+    communicationBindingCount: 1,
+    accountMappingCount: 1,
     userMappingCount: 0,
     membershipCount: 0,
     inboxMappingCount: 0,
@@ -36,6 +37,22 @@ describe('Chatwoot readiness contract', () => {
 
     expect(state.activationReady).toBe(true);
     expect(state.liveProvisioningReady).toBe(true);
+  });
+
+  it('requires prepared communication binding and Account mapping state', () => {
+    const state = buildChatwootReadiness({
+      ...readyInput(),
+      communicationBindingCount: 0,
+      accountMappingCount: 0,
+    });
+
+    expect(state.activationReady).toBe(false);
+    expect(state.blockers).toEqual(
+      expect.arrayContaining([
+        'COMMUNICATION_BINDING_MISSING',
+        'ACCOUNT_MAPPING_MISSING',
+      ]),
+    );
   });
 
   it('fails closed while the server-only Platform token is absent', () => {
