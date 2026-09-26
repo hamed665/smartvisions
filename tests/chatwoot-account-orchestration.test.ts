@@ -121,7 +121,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('C3B Candidate Account orchestration', () => {
+describe('C3B governed Account orchestration', () => {
   it('performs no DB or HTTP work when provisioning is disabled', async () => {
     const { supabase, rpc, tableReads } = setup({ claimNew: true });
     const fetchMock = vi.fn();
@@ -129,6 +129,30 @@ describe('C3B Candidate Account orchestration', () => {
       supabase, organizationId: ORGANIZATION_ID, mappingId: MAPPING_ID,
       requestKey: REQUEST_KEY, fetchImpl: fetchMock as unknown as typeof fetch,
     })).rejects.toThrow('disabled');
+    expect(rpc).not.toHaveBeenCalled();
+    expect(tableReads).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('performs no DB claim or HTTP work when activation config is incomplete', async () => {
+    vi.stubEnv('DEPLOYMENT_ENV', 'production');
+    vi.stubEnv('CHATWOOT_PROVISIONING_ENABLED', 'true');
+    vi.stubEnv('CHATWOOT_BASE_URL', 'https://inbox.example.com');
+    vi.stubEnv('CHATWOOT_PLATFORM_TOKEN', '');
+
+    const { supabase, rpc, tableReads } = setup({ claimNew: true });
+    const fetchMock = vi.fn();
+
+    await expect(
+      provisionCandidateChatwootAccount({
+        supabase,
+        organizationId: ORGANIZATION_ID,
+        mappingId: MAPPING_ID,
+        requestKey: REQUEST_KEY,
+        fetchImpl: fetchMock as unknown as typeof fetch,
+      }),
+    ).rejects.toMatchObject({ code: 'ACTIVATION_BLOCKED' });
+
     expect(rpc).not.toHaveBeenCalled();
     expect(tableReads).toEqual([]);
     expect(fetchMock).not.toHaveBeenCalled();
