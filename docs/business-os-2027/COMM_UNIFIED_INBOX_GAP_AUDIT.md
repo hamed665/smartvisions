@@ -55,7 +55,9 @@ Production RLS before this package uses Organization-member-wide `ALL` policies 
 - `leads`
 - `businesses`
 
-CRM identity reads are also Organization-member-wide.
+CRM identity reads are also Organization-member-wide. The audit also found adjacent legacy Growth OS surfaces such as WhatsApp/Email event history, handoff/reply/outreach state and runtime-control tables that are still guarded only by Organization membership. Without an additional boundary, a scoped-only Supabase session could bypass the Inbox routes and query those Organization-wide surfaces directly.
+
+This security package therefore adds a restrictive business-wide overlay to legacy surfaces that do not yet have their own canonical target-scope mapping. Scoped-only sessions fail closed on those surfaces, while existing business-wide operators retain their current access. Audit INSERT remains available for bounded operator actions, but the Organization-wide audit stream is hidden from scoped-only readers.
 
 The existing `sales_conversations` row has no canonical tenant Business / Branch / Department / Team lineage and no Chatwoot Conversation mapping. Therefore a scoped-only operator cannot be secured by filtering React output or by a route-only predicate. Direct Data API access would remain broader than the intended scope.
 
@@ -78,7 +80,7 @@ It binds an existing Smart Core `sales_conversations.id` to:
 
 This is not a second Conversation source of truth and not a CRM table. It contains no provider credential and no provider send authority.
 
-The projection identity/scope is immutable and direct mutation is dormant behind `smartvisions.unified_inbox_projection_command`. This package grants no INSERT/UPDATE/DELETE path to authenticated or service_role. The idempotent runtime reconciler is intentionally deferred to the next coherent package.
+The projection's tenant/channel identity is immutable and direct mutation is dormant behind `smartvisions.unified_inbox_projection_command`. Department/Team assignment snapshots are intentionally reconcilable so future assignment/transfer does not require a second Conversation row. This package grants no INSERT/UPDATE/DELETE path to authenticated or service_role. The idempotent runtime reconciler is intentionally deferred to the next coherent package.
 
 ## Scope semantics
 
@@ -116,7 +118,8 @@ CI must run the migration and a PostgreSQL 17 smoke test that proves:
 - OWNER retains intended current conversation visibility;
 - scoped-only Branch staff see only the projected Branch conversation and its messages/contact truth;
 - a different Branch does not leak;
-- TEAM VIEWER overrides a broader BRANCH SALES_AGENT assignment;
+- TEAM VIEWER overrides a broader BRANCH SALES_AGENT assignment while retaining read-only visibility;
+- scoped-only sessions cannot escape through raw Organization-wide communication/event surfaces;
 - scoped staff cannot mutate the conversation;
 - Business-wide ADMIN preserves its existing Organization-wide read surface, including legacy rows;
 - Business-wide VIEWER with no lower-scope assignment retains read-only Organization-wide visibility;
