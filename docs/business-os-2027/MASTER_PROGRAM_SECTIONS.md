@@ -127,11 +127,13 @@ Slice B status: **MERGED; PRODUCTION SCHEMA PROMOTED THROUGH 0089; LIVE EXTERNAL
 Slice B adds server-only User/AccountUser/API-Inbox/Team projection contracts. It preserves OWNER as the only first-version Chatwoot administrator; ADMIN and sales roles project to agent, and VIEWER receives no Chatwoot membership. Live Chatwoot provisioning remains deferred to the Candidate adapter slice.
 
 
-Status: **TENANT BRIDGE FOUNDATION MERGED AND PRODUCTION-PROMOTED; C5 SCOPED-ONLY ACCESS REMAINS BLOCKED BY SOURCE-BACKED POLICY GATE**
+Status: **TENANT BRIDGE FOUNDATION MERGED AND PRODUCTION-PROMOTED; GOVERNED ACCOUNT + OWNER USER/MEMBERSHIP EXECUTION PATHS EXIST BUT REMAIN DORMANT UNTIL REAL TENANT + TOKEN + EXPLICIT ACTIVATION; C5 SCOPED-ONLY ACCESS REMAINS SEPARATELY GATED**
 
 Detailed decisions: `CHATWOOT_TENANT_BRIDGE_GAP_AUDIT.md`.
 
 Production reconciliation on 2026-09-25 supersedes the historical stacked-Draft blocker text. The source foundation and bridge stack were merged with runner-backed exact-head CI; Production Supabase now carries migrations 0077 through 0089, including Vault boundary, governed User/Account membership, reconciliation receipts/interlocks, signed API Inbox webhook journal, governed API Inbox persistence and governed Team persistence. External Chatwoot provisioning remains unactivated until a real Candidate/Production Chatwoot runtime exists and passes the release gates.
+
+Current implementation checkpoint: Smart Core now has fail-closed Production activation contracts, governed Brand/Business bootstrap, tenant projection preparation, Account external orchestration, and the first OWNER-only User/AccountUser projection orchestration. None of these paths can execute externally while Production provisioning is disabled or the Platform token/real tenant prerequisites are absent. General non-OWNER staff projection, API Inbox/Team activation against a real tenant, scoped-only C5 access policy closeout, and downstream unified inbox use remain incomplete.
 
 The audit also closes these key decisions:
 
