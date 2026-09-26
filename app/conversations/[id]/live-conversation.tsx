@@ -63,6 +63,7 @@ export type LiveConversationSnapshot = {
 
 export type InboxConversationItem = {
   id: string;
+  customer_name: string | null;
   channel: string;
   stage: string;
   unread_count: number;
@@ -103,10 +104,12 @@ export function LiveConversationConsole({
   inbox: InboxConversationItem[];
 }) {
   const [snapshot, setSnapshot] = useState(initialSnapshot);
+  const [railItems, setRailItems] = useState(inbox);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState<'TAKEOVER' | 'RESUME' | 'SEND' | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [liveError, setLiveError] = useState<string | null>(null);
+  const [readStateError, setReadStateError] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState(() => Date.now());
   const endRef = useRef<HTMLDivElement | null>(null);
   const initialScrollDone = useRef(false);
@@ -126,6 +129,14 @@ export function LiveConversationConsole({
   );
   const terminal = ['WON', 'LOST', 'DO_NOT_CONTACT', 'SPAM'].includes(String(conversation.stage).toUpperCase());
   const manualReplyAvailable = fullOwnerTakeover && conversation.channel === 'WHATSAPP' && snapshot.editable && !terminal;
+
+  const latestInboundMessageId = useMemo(() => {
+    for (let index = snapshot.messages.length - 1; index >= 0; index -= 1) {
+      const message = snapshot.messages[index];
+      if (message.direction === 'INBOUND') return message.id;
+    }
+    return null;
+  }, [snapshot.messages]);
 
   const refresh = useCallback(async () => {
     if (requestInFlight.current) return;
@@ -161,6 +172,36 @@ export function LiveConversationConsole({
       document.removeEventListener('visibilitychange', tick);
     };
   }, [refresh]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function markRead() {
+      try {
+        const response = await fetch(`/api/conversations/${conversation.id}/read`, {
+          method: 'POST',
+          cache: 'no-store',
+          headers: { Accept: 'application/json' },
+        });
+        const body = await response.json() as { read?: boolean; error?: string };
+        if (!response.ok || !body.read) throw new Error(body.error ?? 'Unread sync failed');
+        if (cancelled) return;
+        setRailItems((items) => items.map((item) => (
+          item.id === conversation.id ? { ...item, unread_count: 0 } : item
+        )));
+        setReadStateError(null);
+      } catch (error) {
+        if (!cancelled) {
+          setReadStateError(error instanceof Error ? error.message : 'Unread sync failed');
+        }
+      }
+    }
+
+    void markRead();
+    return () => {
+      cancelled = true;
+    };
+  }, [conversation.id, latestInboundMessageId]);
 
   useEffect(() => {
     if (!initialScrollDone.current) {
@@ -250,21 +291,22 @@ export function LiveConversationConsole({
           <strong>Recent chats</strong>
         </div>
         <div className="liveRailList">
-          {inbox.map((item) => (
+          {railItems.map((item) => (
             <Link
               key={item.id}
               href={`/conversations/${item.id}`}
               className={`liveRailItem ${item.id === conversation.id ? 'active' : ''}`}
             >
               <div className="liveRailTopline">
-                <strong>{item.channel}</strong>
+                <strong>{item.customer_name || item.channel}</strong>
                 <span>{formatClock(item.last_message_at)}</span>
               </div>
               <p dir="rtl">{item.persian_summary || 'هنوز خلاصه فارسی ندارد'}</p>
               <div className="liveRailBadges">
+                <span>{item.channel}</span>
                 <span>{item.stage.replaceAll('_', ' ')}</span>
                 {item.requires_human || String(item.agent_mode ?? '').toUpperCase() === 'HUMAN'
-                  ? <span className="humanBadge">Owner</span>
+                  ? <span className="humanBadge">Human</span>
                   : null}
                 {item.unread_count > 0 ? <span className="unreadBadge">{item.unread_count}</span> : null}
               </div>
@@ -315,6 +357,7 @@ export function LiveConversationConsole({
 
         {notice ? <div className="liveNotice" role="status">{notice}</div> : null}
         {liveError ? <div className="liveNotice liveNoticeError">Live refresh issue: {liveError}. The page will keep retrying.</div> : null}
+        {readStateError ? <div className="liveNotice liveNoticeError">Unread state sync delayed: {readStateError}.</div> : null}
 
         <div className="liveMessageStream" aria-live="polite">
           {snapshot.messages.length === 0 ? (
