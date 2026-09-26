@@ -30,8 +30,15 @@ type RawWhatsAppReferral = {
   ctwa_clid?: string;
 };
 
+export type WhatsAppDestinationContext = {
+  displayPhoneNumber?: string;
+  phoneNumberId?: string;
+  wabaId?: string;
+};
+
 export type NormalizedWhatsAppInbound = {
   providerMessageId: string;
+  destination: WhatsAppDestinationContext;
   from: string;
   timestamp?: string;
   type: string;
@@ -45,6 +52,7 @@ export type NormalizedWhatsAppInbound = {
 
 export type NormalizedWhatsAppStatus = {
   providerMessageId: string;
+  destination: WhatsAppDestinationContext;
   status: 'sent' | 'delivered' | 'read' | 'failed' | 'deleted' | 'unknown';
   timestamp?: string;
   recipientId?: string;
@@ -56,8 +64,10 @@ export type NormalizedWhatsAppStatus = {
 
 type WhatsAppWebhookRoot = {
   entry?: Array<{
+    id?: string;
     changes?: Array<{
       value?: {
+        metadata?: { display_phone_number?: string; phone_number_id?: string };
         contacts?: Array<{ profile?: { name?: string }; wa_id?: string }>;
         messages?: Array<{
           id?: string;
@@ -90,6 +100,17 @@ function clean(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+function destinationContext(input: {
+  entryId?: string;
+  metadata?: { display_phone_number?: string; phone_number_id?: string };
+}): WhatsAppDestinationContext {
+  return {
+    displayPhoneNumber: clean(input.metadata?.display_phone_number),
+    phoneNumberId: clean(input.metadata?.phone_number_id),
+    wabaId: clean(input.entryId),
+  };
+}
+
 function referralContext(referral?: RawWhatsAppReferral) {
   if (!referral) return undefined;
   const normalized: WhatsAppReferralContext = {
@@ -109,11 +130,16 @@ export function extractWhatsAppInbound(payload: unknown): NormalizedWhatsAppInbo
   for (const entry of webhookRoot(payload).entry ?? []) {
     for (const change of entry.changes ?? []) {
       const value = change.value;
+      const destination = destinationContext({
+        entryId: (entry as { id?: string }).id,
+        metadata: value?.metadata,
+      });
       const contactName = value?.contacts?.[0]?.profile?.name;
       for (const message of value?.messages ?? []) {
         if (!message.id || !message.from || !message.type) continue;
         events.push({
           providerMessageId: message.id,
+          destination,
           from: message.from,
           timestamp: message.timestamp,
           type: message.type,
@@ -134,6 +160,10 @@ export function extractWhatsAppStatuses(payload: unknown): NormalizedWhatsAppSta
   const events: NormalizedWhatsAppStatus[] = [];
   for (const entry of webhookRoot(payload).entry ?? []) {
     for (const change of entry.changes ?? []) {
+      const destination = destinationContext({
+        entryId: (entry as { id?: string }).id,
+        metadata: change.value?.metadata,
+      });
       for (const status of change.value?.statuses ?? []) {
         if (!status.id) continue;
         const normalized = status.status === 'sent' || status.status === 'delivered' || status.status === 'read' || status.status === 'failed' || status.status === 'deleted'
@@ -142,6 +172,7 @@ export function extractWhatsAppStatuses(payload: unknown): NormalizedWhatsAppSta
         const firstError = status.errors?.[0];
         events.push({
           providerMessageId: status.id,
+          destination,
           status: normalized,
           timestamp: status.timestamp,
           recipientId: status.recipient_id,
