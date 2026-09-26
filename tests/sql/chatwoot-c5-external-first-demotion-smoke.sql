@@ -167,7 +167,14 @@ begin
   begin
     perform public.update_member_scope_assignment(
       '00000000-0000-0000-0000-000000009211',
-      :'assignment_id'::uuid,
+(
+        select id
+          from public.member_scope_assignments
+         where organization_id = '00000000-0000-0000-0000-000000009211'
+           and user_id = '00000000-0000-0000-0000-000000009202'
+           and scope_type = 'BRANCH'
+           and branch_id = '30000000-0000-0000-0000-000000009211'
+      ),
       1,
       'VIEWER',
       '{}'::jsonb,
@@ -195,7 +202,7 @@ select (public.record_chatwoot_scoped_access_reduction(
   'VIEWER',
   '{}'::jsonb,
   9202,
-  array[:'inbox_mapping_id'::uuid],
+  array[(:'inbox_mapping_id')::uuid],
   '{}'::uuid[],
   'c5-ext-receipt'
 )).id as receipt_id \gset
@@ -225,7 +232,14 @@ begin
   if (
     select role
       from public.member_scope_assignments
-     where id = :'assignment_id'::uuid
+     where id = (
+       select id
+         from public.member_scope_assignments
+        where organization_id = '00000000-0000-0000-0000-000000009211'
+          and user_id = '00000000-0000-0000-0000-000000009202'
+          and scope_type = 'BRANCH'
+          and branch_id = '30000000-0000-0000-0000-000000009211'
+     )
   ) <> 'VIEWER' then
     raise exception 'verified external-first scoped reduction did not commit canonical VIEWER role';
   end if;
@@ -233,7 +247,14 @@ begin
   if (
     select version
       from public.member_scope_assignments
-     where id = :'assignment_id'::uuid
+     where id = (
+       select id
+         from public.member_scope_assignments
+        where organization_id = '00000000-0000-0000-0000-000000009211'
+          and user_id = '00000000-0000-0000-0000-000000009202'
+          and scope_type = 'BRANCH'
+          and branch_id = '30000000-0000-0000-0000-000000009211'
+     )
   ) <> 2 then
     raise exception 'verified external-first scoped reduction did not advance assignment version';
   end if;
@@ -246,12 +267,24 @@ begin
   begin
     perform public.apply_member_scope_assignment_reduction_verified(
       '00000000-0000-0000-0000-000000009211',
-      :'assignment_id'::uuid,
+      (
+        select id
+          from public.member_scope_assignments
+         where organization_id = '00000000-0000-0000-0000-000000009211'
+           and user_id = '00000000-0000-0000-0000-000000009202'
+           and scope_type = 'BRANCH'
+           and branch_id = '30000000-0000-0000-0000-000000009211'
+      ),
       2,
       'UPDATE',
       'SALES_AGENT',
       '{}'::jsonb,
-      :'receipt_id'::uuid,
+      (
+        select id
+          from public.chatwoot_scoped_access_reduction_receipts
+         where organization_id = '00000000-0000-0000-0000-000000009211'
+           and request_key = 'c5-ext-receipt'
+      ),
       'c5-ext-mismatched-replay'
     );
     raise exception 'mismatched scoped reduction receipt unexpectedly authorized a different mutation';
