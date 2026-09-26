@@ -73,6 +73,17 @@ export type InboxConversationItem = {
   last_message_at: string | null;
 };
 
+type AttachmentItem = {
+  id: number;
+  messageId: number;
+  fileType: string;
+  contentType: string | null;
+  extension: string | null;
+  fileSize: number | null;
+  createdAt: number;
+  downloadable: boolean;
+};
+
 type OperatorActionOptions = {
   statuses: Array<'open' | 'resolved' | 'pending' | 'snoozed'>;
   current: {
@@ -155,6 +166,9 @@ export function LiveConversationConsole({
   const [assigneeDraft, setAssigneeDraft] = useState('');
   const [teamDraft, setTeamDraft] = useState('');
   const [noteDraft, setNoteDraft] = useState('');
+  const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  const [attachmentsTruncated, setAttachmentsTruncated] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const initialScrollDone = useRef(false);
   const requestInFlight = useRef(false);
@@ -229,6 +243,31 @@ export function LiveConversationConsole({
   useEffect(() => {
     void loadOperatorOptions();
   }, [loadOperatorOptions]);
+
+  const loadAttachments = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/conversations/${conversation.id}/attachments`, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+      });
+      const body = await response.json() as {
+        attachments?: AttachmentItem[];
+        truncated?: boolean;
+        error?: string;
+      };
+      if (!response.ok || !Array.isArray(body.attachments)) {
+        throw new Error(body.error ?? 'Attachments are not ready');
+      }
+      setAttachments(body.attachments);
+      setAttachmentsTruncated(Boolean(body.truncated));
+      setAttachmentError(null);
+    } catch (error) {
+      setAttachments([]);
+      setAttachmentsTruncated(false);
+      setAttachmentError(error instanceof Error ? error.message : 'Attachments are not ready');
+    }
+  }, [conversation.id]);
 
   async function applyOperatorAction(
     actionName: 'STATUS' | 'LABELS' | 'ASSIGNEE' | 'TEAM' | 'INTERNAL_NOTE',
@@ -317,6 +356,11 @@ export function LiveConversationConsole({
   }, []);
 
   const latestMessageId = snapshot.messages.at(-1)?.id;
+
+  useEffect(() => {
+    void loadAttachments();
+  }, [loadAttachments, latestMessageId]);
+
   useEffect(() => {
     if (!latestMessageId || !initialScrollDone.current) return;
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -629,6 +673,44 @@ export function LiveConversationConsole({
             </div>
             </div>
           ) : null}
+        </details>
+
+        <details className="liveAttachmentsPanel">
+          <summary>
+            <span>Attachments</span>
+            <small>{attachments.length}{attachmentsTruncated ? '+' : ''}</small>
+          </summary>
+          {attachmentError ? (
+            <div className="liveAttachmentUnavailable">{attachmentError}</div>
+          ) : attachments.length === 0 ? (
+            <div className="liveAttachmentUnavailable">No attachments in the bounded recent conversation history.</div>
+          ) : (
+            <div className="liveAttachmentList">
+              {attachments.map((attachment) => (
+                <div key={attachment.id} className="liveAttachmentItem">
+                  <div>
+                    <strong>{attachment.fileType || 'file'}</strong>
+                    <span>
+                      {attachment.contentType || attachment.extension || 'unknown type'}
+                      {attachment.fileSize !== null
+                        ? ` · ${Math.max(1, Math.ceil(attachment.fileSize / 1024))} KB`
+                        : ''}
+                    </span>
+                  </div>
+                  {attachment.downloadable ? (
+                    <a
+                      href={`/api/conversations/${conversation.id}/attachments/${attachment.id}`}
+                      rel="noreferrer"
+                    >
+                      Safe download
+                    </a>
+                  ) : (
+                    <span className="liveAttachmentBlocked">External source blocked</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </details>
 
         <div className="liveMessageStream" aria-live="polite">
