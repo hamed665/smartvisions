@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  ensureChatwootAccountUser,
   reconcileChatwootAccountUser,
   removeChatwootAccountUser,
 } from '@/lib/chatwoot/provisioning';
@@ -140,6 +141,47 @@ async function recordReceipt(input: {
   }
 
   return normalizeReceiptRow(data);
+}
+
+export async function ensureAndRecordChatwootMembership(input: {
+  service: SupabaseClient;
+  organizationId: string;
+  tenantBusinessId: string;
+  membershipId: string;
+  membershipVersion: number;
+  chatwootAccountId: number;
+  chatwootUserId: number;
+  role: ChatwootAccountRole;
+  requestKey: string;
+  fetchImpl?: typeof fetch;
+}) {
+  const accountId = requirePositiveInt32(
+    input.chatwootAccountId,
+    'chatwootAccountId',
+  );
+  const userId = requirePositiveInt32(input.chatwootUserId, 'chatwootUserId');
+
+  const result = await ensureChatwootAccountUser({
+    accountId,
+    userId,
+    role: input.role,
+    fetchImpl: input.fetchImpl,
+  });
+
+  const receipt = await recordReceipt({
+    ...input,
+    chatwootAccountId: accountId,
+    chatwootUserId: userId,
+    presence: 'PRESENT',
+    accountUserId: result.accountUser.id,
+    role: result.accountUser.role,
+  });
+
+  return {
+    accountUser: result.accountUser,
+    outcome: result.outcome,
+    receipt,
+  };
 }
 
 export async function reconcileAndRecordChatwootMembership(input: {
