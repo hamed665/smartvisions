@@ -146,6 +146,30 @@ The service-role client is used only for the existing immutable reconciliation r
 
 General ADMIN / SALES_MANAGER / SALES_AGENT projection remains a later governed expansion. VIEWER remains intentionally unprojected because Community Chatwoot has no equivalent read-only AccountUser role.
 
+## Canonical operating hierarchy and downstream projection
+
+API Inbox and Chatwoot Team projection require real Smart Core operating scope. No synthetic Branch, Department or Team may be created merely to unlock Chatwoot.
+
+The canonical lineage is:
+
+`Organization -> Brand -> tenant Business -> Branch -> Department -> Team`
+
+The OWNER-only hierarchy bootstrap surface reuses the existing Control Plane tables, RLS and audit triggers. Exact code/name replay is idempotent; a reused natural code with different canonical data fails closed.
+
+Downstream external projection remains ordered:
+
+1. ACTIVE canonical tenant Business;
+2. ACTIVE Branch/Department/Team lineage as applicable;
+3. ACTIVE communication binding;
+4. ACTIVE verified Chatwoot Account mapping;
+5. ACTIVE OWNER Chatwoot administrator projection;
+6. only then may an API Inbox or Chatwoot Team mapping claim be created;
+7. API Inbox secrets are captured immediately into Supabase Vault and only secret references persist;
+8. Team identity is reconciled through its deterministic Smart marker;
+9. receipt-backed activation is required before either mapping becomes ACTIVE.
+
+The Inbox and Team provisioning adapters independently re-check the Production activation contract and verified OWNER administrator projection before creating a mapping claim. This prevents a direct internal caller from leaving orphaned PROVISIONING mappings while external provisioning is disabled or OWNER access is not active.
+
 ## Stop conditions
 
 Do not activate provisioning when any of these are true:
