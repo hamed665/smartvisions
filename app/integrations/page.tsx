@@ -5,6 +5,7 @@ import { updateIntegration } from '@/app/management-actions';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { evaluateBudgetMode } from '@/lib/reliability/cost-guard';
 import { integrationFreshness } from '@/lib/reliability/operational-truth';
+import { getWebChatConnectionHealth } from '@/lib/web-chat/health';
 import { MetaWhatsAppEmbeddedSignup } from './meta-whatsapp-embedded-signup';
 
 export const dynamic = 'force-dynamic';
@@ -27,6 +28,7 @@ function credentialReady(provider: string, channel: string) {
     case 'CRAWL4AI:AUDIT': return Boolean(process.env.CRAWL4AI_URL);
     case 'REDIS:QUEUE': return Boolean(process.env.REDIS_URL);
     case 'EMAIL_PROVIDER:EMAIL': return Boolean(process.env.EMAIL_PROVIDER && process.env.EMAIL_PROVIDER_API_KEY);
+    case 'SMART_VISIONS:WEB_CHAT': return true;
     default: return false;
   }
 }
@@ -61,6 +63,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
     { data: voiceTranscriptions },
     { data: pilotBusinesses },
     { data: whatsappBindings },
+    webChatHealth,
   ] = await Promise.all([
     supabase.from('integration_connections').select('*').eq('organization_id', organizationId).order('provider').order('channel'),
     supabase.from('audit_logs').select('action,after_data,created_at').eq('organization_id', organizationId).in('action', ['CRAWL4AI_CONTROLLED_SMOKE_TEST', 'CRAWL4AI_CONTROLLED_SMOKE_TEST_FAILED', 'GOOGLE_PLACES_CONTROLLED_TEST', 'EMAIL_PROVIDER_CONTROLLED_VERIFICATION_SENT', 'EMAIL_PROVIDER_CONTROLLED_VERIFICATION_FAILED', 'META_WHATSAPP_CONTROLLED_VERIFICATION_SENT', 'META_WHATSAPP_CONTROLLED_VERIFICATION_FAILED']).order('created_at', { ascending: false }).limit(50),
@@ -75,6 +78,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
       .eq('organization_id', organizationId)
       .eq('channel', 'WHATSAPP')
       .eq('status', 'ACTIVE'),
+    getWebChatConnectionHealth(organizationId),
   ]);
 
   const rows = data ?? [];
@@ -144,6 +148,41 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
       <p className="muted">New paid provider operations are restricted by Cost Guard. Review <Link className="textLink" href="/cost-usage">Cost & Usage</Link> before running smoke tests.</p>
     </section> : null}
 
+    <section className="panel settingsCreate">
+      <h2>Web Chat canonical connection health</h2>
+      <p className="muted">Derived from active channel binding, enabled widget, exact origins, Chatwoot inbox/account mappings, signed/public message evidence, acceptance receipts and unresolved reconciliation. The bootstrap integration row is not the health authority.</p>
+      {webChatHealth.length === 0 ? <p className="muted">No real Web Chat binding exists yet. This remains a real-tenant acceptance gap; no synthetic tenant or session was created.</p> : (
+        <div className="settingsList">
+          {webChatHealth.map((health) => <div className="settingsRow" key={health.bindingId}>
+            <div>
+              <strong>{health.businessName}</strong>
+              <span className="muted smallText">{health.branchName} · {health.destinationLabel}</span>
+              <span className="muted smallText">Binding v{health.bindingVersion} · Connection {health.connectionStatus}</span>
+              {health.blockers.length ? <span className="muted smallText">Blockers: {health.blockers.join(', ')}</span> : null}
+              <span className="muted smallText">Allowed origins: {health.allowedOrigins.length ? health.allowedOrigins.join(', ') : 'none'}</span>
+            </div>
+            <div className="healthList compactHealth">
+              <span>Widget <strong>{health.widgetStatus}</strong></span>
+              <span>Origin <strong>{health.originStatus}</strong></span>
+              <span>Inbound <strong>{health.inboundHealth}</strong></span>
+              <span>Outbound <strong>{health.outboundHealth}</strong></span>
+              <span>Chatwoot inbox <strong>{health.chatwootInboxStatus}</strong></span>
+            </div>
+            <div className="healthList compactHealth">
+              <span>Incident <strong>{health.incidentStatus}</strong></span>
+              <span>Reconciliation <strong>{health.reconciliationCount}</strong></span>
+              <span>AI control <strong>{health.aiPaused ? 'PAUSED' : 'RUNNING'}</strong></span>
+              <span>Shadow Mode <strong>{health.shadowMode ? 'ON' : 'OFF'}</strong></span>
+              <span>Last inbox verify <strong>{health.inboxLastVerifiedAt ? new Date(health.inboxLastVerifiedAt).toLocaleString() : 'Never'}</strong></span>
+              <span>Last acceptance <strong>{health.lastAcceptanceAt ? new Date(health.lastAcceptanceAt).toLocaleString() : 'None'}</strong></span>
+              <span>Last inbound <strong>{health.lastInboundAt ? new Date(health.lastInboundAt).toLocaleString() : 'None'}</strong></span>
+              <span>Last outbound <strong>{health.lastOutboundAt ? new Date(health.lastOutboundAt).toLocaleString() : 'None'}</strong></span>
+            </div>
+          </div>)}
+        </div>
+      )}
+    </section>
+
     <div className="settingsList">
       {rows.map((r) => {
         const provider = String(r.provider);
@@ -159,11 +198,14 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
         });
         const latency = latencyByProvider.get(provider);
         const isWhatsApp = provider === 'META' && channel === 'WHATSAPP';
+        const isBuiltInWebChat = provider === 'SMART_VISIONS' && channel === 'WEB_CHAT';
+        const displayedStatus = isBuiltInWebChat ? 'BUILT_IN' : status;
+        const displayedFreshness = isBuiltInWebChat ? 'CANONICAL_BELOW' : freshness;
         return <form action={updateIntegration} className="settingsRow" key={r.id}>
           <input type="hidden" name="id" value={r.id} />
           <div>
             <strong>{provider}</strong>
-            <span className="muted smallText">{channel} · Connection {status} · Health {freshness}</span>
+            <span className="muted smallText">{channel} · Connection {displayedStatus} · Health {displayedFreshness}</span>
             <span className={`smallText ${credential ? 'credentialReady' : 'credentialMissing'}`}>{credential ? (status === 'CONNECTED' ? 'Credential present · prior production verification exists' : 'Credential present · not production verified') : 'Credential missing'}</span>
             {provider === 'GOOGLE_PLACES' ? <Link className="textLink smallText" href="/hunters/google-places">Controlled discovery test →</Link> : null}
             {provider === 'CRAWL4AI' ? <span className="muted smallText">Smoke test uses one fixed example.com audit only when you click Verify.</span> : null}
@@ -173,12 +215,13 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
               <span className="muted smallText">Voice pilot: {latestVoice ? (latestVoiceEvidence ? `${latestVoiceEvidence.status}${latestVoiceEvidence.detected_language ? ` · ${latestVoiceEvidence.detected_language}` : ''}` : 'real voice ready for transcription') : 'waiting for a real INTERNAL_TEST voice note'}</span>
             </> : null}
             {provider === 'META' && channel === 'INSTAGRAM' ? <span className="muted smallText">Instagram is intentionally deferred and has separate credentials from WhatsApp.</span> : null}
+            {isBuiltInWebChat ? <span className="muted smallText">Built-in bootstrap row only. Connection health, origins, inbox state, incidents and acceptance evidence come from the canonical Web Chat panel above.</span> : null}
           </div>
-          <label>Account label<input name="account_label" defaultValue={r.account_label ?? ''} disabled={!editable} /></label>
-          <label className="toggleLabel"><input type="checkbox" name="enabled" defaultChecked={r.enabled} disabled={!editable || !credential} /> Enabled</label>
+          <label>Account label<input name="account_label" defaultValue={r.account_label ?? ''} disabled={!editable || isBuiltInWebChat} /></label>
+          <label className="toggleLabel"><input type="checkbox" name="enabled" defaultChecked={r.enabled} disabled={!editable || !credential || isBuiltInWebChat} /> Enabled</label>
           <div className="healthList compactHealth">
-            <span>Connection <strong>{status}</strong></span>
-            <span>Health <strong>{freshness}</strong></span>
+            <span>Connection <strong>{displayedStatus}</strong></span>
+            <span>Health <strong>{displayedFreshness}</strong></span>
             <span>Latency <strong>{latency !== undefined ? `${latency} ms` : '—'}</strong></span>
             <span>Last check <strong>{r.last_checked_at ? new Date(r.last_checked_at).toLocaleString() : 'Never'}</strong></span>
             {r.last_error ? <span>Error <strong>{r.last_error}</strong></span> : null}
@@ -194,7 +237,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
               <button type="submit" formAction={transcribeLatestWhatsAppVoicePilot} disabled={!voicePilotReady}>Transcribe latest test voice</button>
             </> : null}
             {provider === 'CRAWL4AI' && channel === 'AUDIT' ? <button type="submit" formAction={verifyCrawl4AiIntegration} disabled={!editable || !credential}>Verify once</button> : null}
-            <button type="submit" disabled={!editable}>Save label/state</button>
+            {!isBuiltInWebChat ? <button type="submit" disabled={!editable}>Save label/state</button> : null}
           </div>
         </form>;
       })}
