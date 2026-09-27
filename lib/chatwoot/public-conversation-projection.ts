@@ -27,14 +27,14 @@ function hmac(token: string, identifier: string) {
   return createHmac('sha256', token).update(identifier).digest('hex');
 }
 
-async function request<T>(path: string, init?: RequestInit, fetchImpl: typeof fetch = fetch): Promise<T> {
+class PublicProjectionHttpError extends Error { constructor(readonly status: number) { super(`Chatwoot public projection request failed (${status})`); } }\n\nasync function request<T>(path: string, init?: RequestInit, fetchImpl: typeof fetch = fetch): Promise<T> {
   const response = await fetchImpl(new URL(path, baseUrl()), {
     ...init,
     headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     cache: 'no-store',
     redirect: 'error',
   });
-  if (!response.ok) throw new Error(`Chatwoot public projection request failed (${response.status})`);
+  if (!response.ok) throw new PublicProjectionHttpError(response.status);
   return await response.json() as T;
 }
 
@@ -72,8 +72,9 @@ async function getContact(ctx: ProjectionContext, fetchImpl?: typeof fetch) {
       undefined,
       fetchImpl,
     );
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof PublicProjectionHttpError && error.status === 404) return null;
+    throw error;
   }
 }
 
