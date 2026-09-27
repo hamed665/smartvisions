@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { extractProviderRateLimitEvidence, ProviderHttpError, type ProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
 import type { DeliveryEvent, EmailProvider, InboundReply, OutboundMessage } from './provider';
 
 function serviceClient() {
@@ -42,7 +43,7 @@ function statusFromEventType(eventType: string): DeliveryEvent['status'] | null 
 }
 
 export class ResendEmailProvider implements EmailProvider {
-  async sendEmail(input: OutboundMessage): Promise<{ providerMessageId: string }> {
+  async sendEmail(input: OutboundMessage): Promise<{ providerMessageId: string; rateLimit?: ProviderRateLimitEvidence | null }> {
     if (!input.subject?.trim()) throw new Error('Email subject is required');
     if (!input.idempotencyKey?.trim()) throw new Error('Email idempotency key is required');
 
@@ -67,13 +68,15 @@ export class ResendEmailProvider implements EmailProvider {
       }),
     });
 
+    const rateLimit = extractProviderRateLimitEvidence(response.headers);
+
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`Resend send failed (${response.status}): ${detail.slice(0, 500)}`);
+      throw new ProviderHttpError(`Resend send failed (${response.status}): ${detail.slice(0, 500)}`, response.status, rateLimit);
     }
     const body = await response.json() as { id?: string };
     if (!body.id) throw new Error('Resend response did not include an email id');
-    return { providerMessageId: body.id };
+    return { providerMessageId: body.id, ...(rateLimit ? { rateLimit } : {}) };
   }
 
   async fetchReplies(since: Date): Promise<InboundReply[]> {

@@ -1,3 +1,4 @@
+import { extractProviderRateLimitEvidence, ProviderHttpError } from '@/lib/omnichannel/rate-limit-evidence';
 import type {
   WhatsAppCatalogProductSendInput,
   WhatsAppProvider,
@@ -59,15 +60,17 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
       body: JSON.stringify(payload),
     });
 
+    const rateLimit = extractProviderRateLimitEvidence(response.headers);
+
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`Meta WhatsApp send failed (${response.status}): ${detail.slice(0, 500)}`);
+      throw new ProviderHttpError(`Meta WhatsApp send failed (${response.status}): ${detail.slice(0, 500)}`, response.status, rateLimit);
     }
 
     const body = await response.json() as { messages?: Array<{ id: string }> };
     const providerMessageId = body.messages?.[0]?.id;
     if (!providerMessageId) throw new Error('Meta WhatsApp response did not include a message id');
-    return { providerMessageId, status: 'accepted' };
+    return { providerMessageId, status: 'accepted', ...(rateLimit ? { rateLimit } : {}) };
   }
 
   async sendText(input: WhatsAppSendInput): Promise<WhatsAppSendResult> {

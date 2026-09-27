@@ -146,6 +146,76 @@ async function latestAcceptance(
   return result.data?.observed_at ? String(result.data.observed_at) : null;
 }
 
+type RateLimitAuditRow = {
+  created_at: string;
+  after_data: unknown;
+};
+
+async function latestRateLimitAudit(
+  service: ReturnType<typeof createSupabaseServiceClient>,
+  organizationId: string,
+  channel: 'EMAIL' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK_MESSENGER',
+): Promise<RateLimitAuditRow | null> {
+  const result = await service
+    .from('audit_logs')
+    .select('created_at,after_data')
+    .eq('organization_id', organizationId)
+    .eq('action', 'CHANNEL_PROVIDER_RATE_LIMIT_OBSERVED')
+    .eq('after_data->>channel', channel)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (result.error) throw new Error(`${channel} provider rate-limit health lookup failed`);
+  return result.data ? result.data as RateLimitAuditRow : null;
+}
+
+function healthObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function numericEvidence(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function rateLimitHealth(
+  row: RateLimitAuditRow | null,
+): { state: string; observedAt: string | null } {
+  if (!row) return { state: 'NO_PROVIDER_QUOTA_EVIDENCE', observedAt: null };
+
+  const after = healthObject(row.after_data);
+  const rate = healthObject(after?.rate_limit);
+  if (!rate) return { state: 'NO_PROVIDER_QUOTA_EVIDENCE', observedAt: row.created_at };
+
+  const remaining = numericEvidence(rate.remaining);
+  const limit = numericEvidence(rate.limit);
+  const retryAfter = numericEvidence(rate.retryAfterSeconds);
+  const app = healthObject(rate.appUsage);
+  const business = healthObject(rate.businessUsage);
+  const usageValues = [
+    numericEvidence(app?.callCountPct),
+    numericEvidence(app?.totalCpuTimePct),
+    numericEvidence(app?.totalTimePct),
+    numericEvidence(business?.maxCallCountPct),
+    numericEvidence(business?.maxTotalCpuTimePct),
+    numericEvidence(business?.maxTotalTimePct),
+  ].filter((value): value is number => value !== null);
+  const maxUsage = usageValues.length ? Math.max(...usageValues) : null;
+
+  if ((retryAfter !== null && retryAfter > 0) || remaining === 0) {
+    return { state: 'RATE_LIMITED', observedAt: row.created_at };
+  }
+  if (
+    (remaining !== null && limit !== null && limit > 0 && remaining / limit <= 0.1)
+    || (maxUsage !== null && maxUsage >= 90)
+  ) {
+    return { state: 'NEAR_LIMIT', observedAt: row.created_at };
+  }
+  return { state: 'EVIDENCE_PRESENT', observedAt: row.created_at };
+}
+
 function integrationState(row: IntegrationRow | undefined, credentialHealth: string) {
   if (!row) return { connectionStatus: 'ROW_MISSING', incidentState: 'NOT_CONFIGURED' };
   if (row.last_error) return { connectionStatus: row.status, incidentState: 'DEGRADED' };
@@ -184,6 +254,10 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
     messengerAcceptance,
     webChatAcceptance,
     webChatHealth,
+    emailRateLimitAudit,
+    whatsappRateLimitAudit,
+    instagramRateLimitAudit,
+    messengerRateLimitAudit,
   ] = await Promise.all([
     service
       .from('integration_connections')
@@ -207,6 +281,10 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
     latestAcceptance('facebook_messenger_activation_acceptance_receipts', organizationId),
     latestAcceptance('web_chat_activation_acceptance_receipts', organizationId),
     getWebChatConnectionHealth(organizationId),
+    latestRateLimitAudit(service, organizationId, 'EMAIL'),
+    latestRateLimitAudit(service, organizationId, 'WHATSAPP'),
+    latestRateLimitAudit(service, organizationId, 'INSTAGRAM'),
+    latestRateLimitAudit(service, organizationId, 'FACEBOOK_MESSENGER'),
   ]);
 
   if (integrationsResult.error) throw new Error('Integration connection health lookup failed');
@@ -216,6 +294,10 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
   const integrations = (integrationsResult.data ?? []) as IntegrationRow[];
   const bindings = (bindingsResult.data ?? []) as BindingRow[];
   const controls = controlsResult.data ? controlsResult.data as Record<string, unknown> : null;
+  const emailRateLimit = rateLimitHealth(emailRateLimitAudit);
+  const whatsappRateLimit = rateLimitHealth(whatsappRateLimitAudit);
+  const instagramRateLimit = rateLimitHealth(instagramRateLimitAudit);
+  const messengerRateLimit = rateLimitHealth(messengerRateLimitAudit);
 
   const integration = (provider: string, channel: string) =>
     integrations.find((row) => row.provider === provider && row.channel === channel);
@@ -269,8 +351,8 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
       connectionStatus: emailState.connectionStatus,
       credentialHealth: emailCredential,
       webhookHealth: emailEvent ? 'EVIDENCE_PRESENT' : 'NO_EVENT_EVIDENCE',
-      quotaHealth: 'NO_PROVIDER_QUOTA_EVIDENCE',
-      lastVerifiedAt: maxIso(emailIntegration?.last_checked_at, emailEvent?.createdAt),
+      quotaHealth: emailRateLimit.state,
+      lastVerifiedAt: maxIso(emailIntegration?.last_checked_at, emailEvent?.createdAt, emailRateLimit.observedAt),
       supportedCapabilities: descriptorCapabilities(EMAIL_CHANNEL_DESCRIPTOR),
       incidentState: pauseState(controls, 'EMAIL') !== 'RUNNING' ? pauseState(controls, 'EMAIL') : emailState.incidentState,
       blockers: [
@@ -281,7 +363,7 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
       lastEventAt: emailEvent?.createdAt ?? null,
       lastAcceptanceAt: null,
       controlState: pauseState(controls, 'EMAIL'),
-      evidenceSources: ['integration_connections', 'email_events', 'system_controls', 'EMAIL_CHANNEL_DESCRIPTOR'],
+      evidenceSources: ['integration_connections', 'email_events', 'system_controls', 'EMAIL_CHANNEL_DESCRIPTOR', 'audit_logs:CHANNEL_PROVIDER_RATE_LIMIT_OBSERVED'],
     },
     {
       channel: 'WHATSAPP',
@@ -290,9 +372,10 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
       connectionStatus: whatsappState.connectionStatus,
       credentialHealth: whatsappCredential,
       webhookHealth: whatsappEvent ? 'EVIDENCE_PRESENT' : 'NO_EVENT_EVIDENCE',
-      quotaHealth: 'NO_PROVIDER_QUOTA_EVIDENCE',
+      quotaHealth: whatsappRateLimit.state,
       lastVerifiedAt: maxIso(
         whatsappIntegration?.last_checked_at,
+        whatsappRateLimit.observedAt,
         whatsappEvent?.createdAt,
         ...channelBindings('WHATSAPP').map((row) => row.last_verified_at),
       ),
@@ -307,7 +390,7 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
       lastEventAt: whatsappEvent?.createdAt ?? null,
       lastAcceptanceAt: null,
       controlState: pauseState(controls, 'WHATSAPP'),
-      evidenceSources: ['integration_connections', 'communication_channel_bindings', 'whatsapp_events', 'system_controls', 'WHATSAPP_CHANNEL_DESCRIPTOR'],
+      evidenceSources: ['integration_connections', 'communication_channel_bindings', 'whatsapp_events', 'system_controls', 'WHATSAPP_CHANNEL_DESCRIPTOR', 'audit_logs:CHANNEL_PROVIDER_RATE_LIMIT_OBSERVED'],
     },
     {
       channel: 'INSTAGRAM',
@@ -322,9 +405,10 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
           ? 'MISSING_OR_INVALID'
           : 'BOUND',
       webhookHealth: instagramEvent ? 'EVIDENCE_PRESENT' : 'IMPLEMENTED_NO_LIVE_EVIDENCE',
-      quotaHealth: 'NO_PROVIDER_QUOTA_EVIDENCE',
+      quotaHealth: instagramRateLimit.state,
       lastVerifiedAt: maxIso(
         instagramIntegration?.last_checked_at,
+        instagramRateLimit.observedAt,
         instagramEvent?.createdAt,
         instagramAcceptance,
         ...instagramBindings.map((row) => row.last_verified_at),
@@ -342,7 +426,7 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
       lastEventAt: instagramEvent?.createdAt ?? null,
       lastAcceptanceAt: instagramAcceptance,
       controlState: pauseState(controls, 'INSTAGRAM'),
-      evidenceSources: ['integration_connections', 'communication_channel_bindings', 'instagram_events', 'instagram_activation_readiness', 'instagram_activation_acceptance_receipts'],
+      evidenceSources: ['integration_connections', 'communication_channel_bindings', 'instagram_events', 'instagram_activation_readiness', 'instagram_activation_acceptance_receipts', 'audit_logs:CHANNEL_PROVIDER_RATE_LIMIT_OBSERVED'],
     },
     {
       channel: 'FACEBOOK_MESSENGER',
@@ -357,9 +441,10 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
           ? 'MISSING_OR_INVALID'
           : 'BOUND',
       webhookHealth: messengerEvent ? 'EVIDENCE_PRESENT' : 'IMPLEMENTED_NO_LIVE_EVIDENCE',
-      quotaHealth: 'NO_PROVIDER_QUOTA_EVIDENCE',
+      quotaHealth: messengerRateLimit.state,
       lastVerifiedAt: maxIso(
         messengerIntegration?.last_checked_at,
+        messengerRateLimit.observedAt,
         messengerEvent?.createdAt,
         messengerAcceptance,
         ...messengerBindings.map((row) => row.last_verified_at),
@@ -382,7 +467,7 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
       lastEventAt: messengerEvent?.createdAt ?? null,
       lastAcceptanceAt: messengerAcceptance,
       controlState: pauseState(controls, 'FACEBOOK_MESSENGER'),
-      evidenceSources: ['integration_connections', 'communication_channel_bindings', 'facebook_messenger_events', 'facebook_messenger_activation_readiness', 'facebook_messenger_activation_acceptance_receipts'],
+      evidenceSources: ['integration_connections', 'communication_channel_bindings', 'facebook_messenger_events', 'facebook_messenger_activation_readiness', 'facebook_messenger_activation_acceptance_receipts', 'audit_logs:CHANNEL_PROVIDER_RATE_LIMIT_OBSERVED'],
     },
     {
       channel: 'WEB_CHAT',
@@ -477,8 +562,8 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
       connectionStatus: whatsappState.connectionStatus,
       credentialHealth: whatsappCredential,
       webhookHealth: whatsappEvent ? 'EVIDENCE_PRESENT' : 'NO_EVENT_EVIDENCE',
-      quotaHealth: 'NO_PROVIDER_QUOTA_EVIDENCE',
-      lastVerifiedAt: maxIso(whatsappIntegration?.last_checked_at, whatsappEvent?.createdAt),
+      quotaHealth: whatsappRateLimit.state,
+      lastVerifiedAt: maxIso(whatsappIntegration?.last_checked_at, whatsappEvent?.createdAt, whatsappRateLimit.observedAt),
       supportedCapabilities: ['VOICE_NOTE_INBOUND', 'TRANSCRIPTION'],
       incidentState: 'PARTIAL_TELEPHONY_PENDING',
       blockers: ['VOICE_REPLY_AND_TELEPHONY_ACCEPTANCE_PENDING'],

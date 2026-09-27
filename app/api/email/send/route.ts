@@ -5,6 +5,7 @@ import { assertCanonicalSendAllowed } from '@/lib/outreach/canonical-send-gate';
 import { evaluateMailboxHealth } from '@/lib/outreach/mailbox-health';
 import { countMailboxSendsLast24Hours } from '@/lib/outreach/mailbox-usage';
 import { ResendEmailProvider } from '@/lib/outreach/resend-provider';
+import { rateLimitEvidenceFromError, recordProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
 
 function serviceClient() {
@@ -109,14 +110,40 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Final canonical safety block' }, { status: 409 });
   }
 
-  const result = await provider.sendEmail({
-    mailboxId: body.mailboxId,
-    to: body.to,
-    subject: body.subject,
-    text: body.text,
-    html: body.html,
-    idempotencyKey: body.idempotencyKey,
+  let result: Awaited<ReturnType<ResendEmailProvider['sendEmail']>>;
+  try {
+    result = await provider.sendEmail({
+      mailboxId: body.mailboxId,
+      to: body.to,
+      subject: body.subject,
+      text: body.text,
+      html: body.html,
+      idempotencyKey: body.idempotencyKey,
+    });
+  } catch (error) {
+    const failedRateLimitAudit = await recordProviderRateLimitEvidence({
+      service: supabase,
+      organizationId: body.organizationId,
+      provider: 'RESEND',
+      channel: 'EMAIL',
+      evidence: rateLimitEvidenceFromError(error),
+    });
+    if (!failedRateLimitAudit.recorded && failedRateLimitAudit.reason === 'AUDIT_PERSISTENCE_FAILED') {
+      console.error('Failed email provider quota telemetry persistence failed', failedRateLimitAudit.error);
+    }
+    throw error;
+  }
+
+  const rateLimitAudit = await recordProviderRateLimitEvidence({
+    service: supabase,
+    organizationId: body.organizationId,
+    provider: 'RESEND',
+    channel: 'EMAIL',
+    evidence: result.rateLimit,
   });
+  if (!rateLimitAudit.recorded && rateLimitAudit.reason === 'AUDIT_PERSISTENCE_FAILED') {
+    console.error('Email provider rate-limit telemetry persistence failed', rateLimitAudit.error);
+  }
 
   const { error: upsertError } = await supabase.from('outreach_messages').upsert({
     organization_id: body.organizationId,
@@ -155,5 +182,9 @@ export async function POST(request: Request) {
     },
   });
 
-  return NextResponse.json({ ...result, duplicate: false, mailboxHealth });
+  return NextResponse.json({
+    providerMessageId: result.providerMessageId,
+    duplicate: false,
+    mailboxHealth,
+  });
 }

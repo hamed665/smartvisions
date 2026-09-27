@@ -4,6 +4,7 @@ import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { assertCanonicalSendAllowed } from '@/lib/outreach/canonical-send-gate';
 import { resolveMetaWhatsAppProvider } from '@/lib/whatsapp/tenant-routing';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
+import { rateLimitEvidenceFromError, recordProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -87,9 +88,39 @@ export async function POST(request: Request) {
     branchId: body.branchId ?? null,
   });
   const provider = tenantProvider.provider;
-  const result = whatsappPolicy.mode === 'TEMPLATE'
-    ? await provider.sendTemplate({ to: body.to, templateName: body.templateName!, languageCode: body.templateLanguageCode!, bodyParameters: body.templateBodyParameters })
-    : await provider.sendText({ to: body.to, text: body.text!, replyToMessageId: body.replyToMessageId });
+  let result: Awaited<ReturnType<typeof provider.sendText>>;
+  try {
+    result = whatsappPolicy.mode === 'TEMPLATE'
+      ? await provider.sendTemplate({ to: body.to, templateName: body.templateName!, languageCode: body.templateLanguageCode!, bodyParameters: body.templateBodyParameters })
+      : await provider.sendText({ to: body.to, text: body.text!, replyToMessageId: body.replyToMessageId });
+  } catch (error) {
+    const failedRateLimitAudit = await recordProviderRateLimitEvidence({
+      service: supabase,
+      organizationId: body.organizationId,
+      provider: 'META',
+      channel: 'WHATSAPP',
+      evidence: rateLimitEvidenceFromError(error),
+      tenantBusinessId: body.tenantBusinessId,
+      branchId: body.branchId ?? null,
+    });
+    if (!failedRateLimitAudit.recorded && failedRateLimitAudit.reason === 'AUDIT_PERSISTENCE_FAILED') {
+      console.error('Failed WhatsApp provider quota telemetry persistence failed', failedRateLimitAudit.error);
+    }
+    throw error;
+  }
+
+  const rateLimitAudit = await recordProviderRateLimitEvidence({
+    service: supabase,
+    organizationId: body.organizationId,
+    provider: 'META',
+    channel: 'WHATSAPP',
+    evidence: result.rateLimit,
+    tenantBusinessId: body.tenantBusinessId,
+    branchId: body.branchId ?? null,
+  });
+  if (!rateLimitAudit.recorded && rateLimitAudit.reason === 'AUDIT_PERSISTENCE_FAILED') {
+    console.error('WhatsApp provider rate-limit telemetry persistence failed', rateLimitAudit.error);
+  }
 
   const pricingStatus = whatsappPolicy.mode === 'FREEFORM'
     ? 'FINAL_FREE_SERVICE_WINDOW'
@@ -114,5 +145,9 @@ export async function POST(request: Request) {
       } : {}),
     },
   });
-  return NextResponse.json({ ...result, whatsappPolicy });
+  return NextResponse.json({
+    providerMessageId: result.providerMessageId,
+    status: result.status,
+    whatsappPolicy,
+  });
 }
