@@ -182,5 +182,9 @@ export async function POST(request: Request) {
     },
   });
 
-  return NextResponse.json({ ...result, duplicate: false, mailboxHealth });
+  return NextResponse.json({
+    providerMessageId: result.providerMessageId,
+    duplicate: false,
+    mailboxHealth,
+  });
 }
