@@ -114,6 +114,15 @@ describe('OMNI-CHANNEL-HEALTH provider quota evidence', () => {
     });
   });
 
+  it('keeps quota telemetry out of direct API response payloads', () => {
+    const emailRoute = readFileSync('app/api/email/send/route.ts', 'utf8');
+    const whatsappRoute = readFileSync('app/api/whatsapp/send/route.ts', 'utf8');
+    expect(emailRoute).not.toContain("return NextResponse.json({ ...result");
+    expect(whatsappRoute).not.toContain("return NextResponse.json({ ...result");
+    expect(emailRoute).toContain('providerMessageId: result.providerMessageId');
+    expect(whatsappRoute).toContain('providerMessageId: result.providerMessageId');
+  });
+
   it('wires provider boundaries and health aggregation to bounded audit evidence', () => {
     const emailProvider = readFileSync('lib/outreach/resend-provider.ts', 'utf8');
     const whatsappProvider = readFileSync('lib/whatsapp/meta-cloud.ts', 'utf8');
@@ -123,6 +132,7 @@ describe('OMNI-CHANNEL-HEALTH provider quota evidence', () => {
     const whatsappRoute = readFileSync('app/api/whatsapp/send/route.ts', 'utf8');
     const approvedRoute = readFileSync('app/api/outreach/approved-send/route-core.ts', 'utf8');
     const health = readFileSync('lib/omnichannel/health.ts', 'utf8');
+    const migration = readFileSync('supabase/migrations/0121_omnichannel_channel_rate_limit_evidence_index.sql', 'utf8');
 
     for (const source of [emailProvider, whatsappProvider, instagramProvider, messengerProvider]) {
       expect(source).toContain('extractProviderRateLimitEvidence(response.headers)');
@@ -135,5 +145,10 @@ describe('OMNI-CHANNEL-HEALTH provider quota evidence', () => {
     expect(health).toContain("'RATE_LIMITED'");
     expect(health).toContain("'NEAR_LIMIT'");
     expect(health).toContain("'EVIDENCE_PRESENT'");
+    expect(health).toContain("after_data->>channel");
+    expect(health).not.toContain(".limit(100)");
+    expect(migration).toContain("audit_logs_channel_rate_limit_health_idx");
+    expect(migration).toContain("(after_data->>'channel')");
+    expect(migration).toContain("where action='CHANNEL_PROVIDER_RATE_LIMIT_OBSERVED'");
   });
 });
