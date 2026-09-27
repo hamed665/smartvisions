@@ -145,5 +145,9 @@ export async function POST(request: Request) {
       } : {}),
     },
   });
-  return NextResponse.json({ ...result, whatsappPolicy });
+  return NextResponse.json({
+    providerMessageId: result.providerMessageId,
+    status: result.status,
+    whatsappPolicy,
+  });
 }
