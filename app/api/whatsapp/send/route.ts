@@ -4,6 +4,7 @@ import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { assertCanonicalSendAllowed } from '@/lib/outreach/canonical-send-gate';
 import { resolveMetaWhatsAppProvider } from '@/lib/whatsapp/tenant-routing';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
+import { recordProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
