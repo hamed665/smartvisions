@@ -10,7 +10,7 @@ import {
   assertCanonicalSendAllowed,
   normalizeCanonicalPhone,
 } from '@/lib/outreach/canonical-send-gate';
-import { MetaCloudWhatsAppProvider } from '@/lib/whatsapp/meta-cloud';
+import { resolveMetaWhatsAppProvider } from '@/lib/whatsapp/tenant-routing';
 import {
   assertPaidOperationAllowed,
   getCostGuardState,
@@ -228,8 +228,28 @@ export async function POST(
     const finalCostState = await getCostGuardState(organizationId);
     assertPaidOperationAllowed(finalCostState, 'NORMAL');
 
-    const provider = new MetaCloudWhatsAppProvider();
-    const result = await provider.sendText({ to: recipient, text });
+    const { data: projection, error: projectionError } = await supabase
+      .from('unified_inbox_conversation_projections')
+      .select('tenant_business_id,branch_id,communication_channel_binding_id,lifecycle_status')
+      .eq('organization_id', organizationId)
+      .eq('conversation_id', conversationId)
+      .in('lifecycle_status', ['ACTIVE', 'DEGRADED'])
+      .maybeSingle();
+    if (projectionError || !projection) {
+      throw new Error(projectionError?.message ?? 'Owner reply has no canonical tenant communication projection');
+    }
+
+    const tenantProvider = await resolveMetaWhatsAppProvider({
+      service: supabase,
+      organizationId,
+      tenantBusinessId: projection.tenant_business_id,
+      branchId: projection.branch_id,
+    });
+    if (tenantProvider.bindingId !== projection.communication_channel_binding_id) {
+      throw new Error('Owner reply tenant credential does not match the conversation channel binding');
+    }
+
+    const result = await tenantProvider.provider.sendText({ to: recipient, text });
     providerAccepted = true;
     providerMessageId = result.providerMessageId;
 
@@ -293,6 +313,9 @@ export async function POST(
         provider_message_id: providerMessageId,
         character_count: text.length,
         owner_request_id: requestId,
+        tenant_business_id: projection.tenant_business_id,
+        branch_id: projection.branch_id,
+        communication_channel_binding_id: tenantProvider.bindingId,
       },
     });
 
@@ -309,6 +332,9 @@ export async function POST(
           source: 'OWNER_MANUAL_REPLY',
           pricing_status: 'PENDING_RECONCILIATION',
           canonical_last_inbound_at: finalGate.lastInboundAt,
+          tenant_business_id: projection.tenant_business_id,
+          branch_id: projection.branch_id,
+          communication_channel_binding_id: tenantProvider.bindingId,
         },
       });
     } catch (error) {
