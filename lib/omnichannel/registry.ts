@@ -13,11 +13,8 @@ export function getChannelDescriptor(value: unknown): ChannelCapabilityDescripto
 
 export function getChannelIntegrationIdentity(value: unknown): {
   provider: 'EMAIL_PROVIDER' | 'META';
-  channel: ActiveOmnichannelChannel | 'INSTAGRAM';
+  channel: ActiveOmnichannelChannel;
 } | null {
-  // Instagram provider readiness may use the shared integration lookup before
-  // semantic-adapter activation. This does not register Instagram as ACTIVE.
-  if (value === 'INSTAGRAM') return { provider: 'META', channel: 'INSTAGRAM' };
   const descriptor = getChannelDescriptor(value);
   if (!descriptor) return null;
   return { provider: descriptor.integrationProvider, channel: descriptor.channel };
