@@ -1,11 +1,24 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export type CrmIdentityType = 'EMAIL' | 'PHONE' | 'WHATSAPP' | 'INSTAGRAM' | 'INSTAGRAM_PROVIDER_USER';
+export type CrmIdentityType =
+  | 'EMAIL'
+  | 'PHONE'
+  | 'WHATSAPP'
+  | 'INSTAGRAM'
+  | 'INSTAGRAM_PROVIDER_USER'
+  | 'FACEBOOK_MESSENGER_PROVIDER_USER'
+  | 'WEBCHAT_SESSION'
+  | 'TELEGRAM_PROVIDER_USER'
+  | 'TIKTOK_PROVIDER_USER';
 export type CrmIdentitySourceType =
   | 'BUSINESS_FIELD'
   | 'EMAIL_INBOUND'
   | 'WHATSAPP_INBOUND'
   | 'INSTAGRAM_INBOUND'
+  | 'FACEBOOK_MESSENGER_INBOUND'
+  | 'WEB_CHAT_VERIFIED'
+  | 'TELEGRAM_INBOUND'
+  | 'TIKTOK_INBOUND'
   | 'MANUAL'
   | 'IMPORT';
 
@@ -71,7 +84,13 @@ export function normalizeCrmIdentity(
     return digits.length >= 8 && digits.length <= 32 ? digits : null;
   }
 
-  if (identityType === 'INSTAGRAM_PROVIDER_USER') {
+  if (
+    identityType === 'INSTAGRAM_PROVIDER_USER'
+    || identityType === 'FACEBOOK_MESSENGER_PROVIDER_USER'
+    || identityType === 'WEBCHAT_SESSION'
+    || identityType === 'TELEGRAM_PROVIDER_USER'
+    || identityType === 'TIKTOK_PROVIDER_USER'
+  ) {
     return raw.length <= 512 ? raw : null;
   }
 
