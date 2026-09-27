@@ -1,7 +1,15 @@
 import 'server-only';
 
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { ensureChatwootPublicConversationProjection } from '@/lib/chatwoot/public-conversation-projection';
+import {
+  createChatwootPublicIncomingMessage,
+  ensureChatwootPublicConversationProjection,
+  type ChatwootPublicIncomingAttachment,
+} from '@/lib/chatwoot/public-conversation-projection';
+import {
+  claimWebChatChatwootSync,
+  finalizeWebChatChatwootSync,
+} from '@/lib/web-chat/chatwoot-inbound-sync';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
 
 export type PublicWebChatErrorCode =
@@ -11,6 +19,7 @@ export type PublicWebChatErrorCode =
   | 'SESSION_UNAVAILABLE'
   | 'MESSAGE_INVALID'
   | 'RATE_LIMITED'
+  | 'RECONCILIATION_REQUIRED'
   | 'SERVICE_UNAVAILABLE';
 
 export class PublicWebChatError extends Error {
@@ -38,6 +47,7 @@ function mapRpcError(message: string): PublicWebChatError {
   if (/rate limit|message limit/i.test(message)) return new PublicWebChatError('RATE_LIMITED');
   if (/message (identity|length)|provider message scope/i.test(message)) return new PublicWebChatError('MESSAGE_INVALID');
   if (/widget unavailable/i.test(message)) return new PublicWebChatError('WIDGET_UNAVAILABLE');
+  if (/reconciliation/i.test(message)) return new PublicWebChatError('RECONCILIATION_REQUIRED');
   return new PublicWebChatError('SERVICE_UNAVAILABLE');
 }
 
@@ -104,9 +114,12 @@ export async function persistPublicWebChatMessage(input: {
   sessionToken: string;
   clientMessageId: string;
   text: string;
+  attachments?: ChatwootPublicIncomingAttachment[];
 }) {
   const origin = normalizeOrigin(input.origin);
   if (!origin) throw new PublicWebChatError('ORIGIN_NOT_ALLOWED');
+  const attachments = input.attachments ?? [];
+  const journalText = input.text.trim() || (attachments.length ? '[Attachment]' : '');
   const service = createSupabaseServiceClient();
 
   const { data, error } = await service.rpc('journal_web_chat_inbound_message', {
@@ -115,7 +128,7 @@ export async function persistPublicWebChatMessage(input: {
     p_token_hash: hashWebChatToken(input.sessionToken),
     p_origin: origin,
     p_client_message_id: input.clientMessageId,
-    p_text: input.text,
+    p_text: journalText,
   });
   if (error) throw mapRpcError(error.message);
   const journal = Array.isArray(data) ? data[0] : data;
@@ -123,12 +136,18 @@ export async function persistPublicWebChatMessage(input: {
     throw new PublicWebChatError('SERVICE_UNAVAILABLE');
   }
 
+  const organizationId = String(journal.organization_id);
+  const tenantBusinessId = String(journal.tenant_business_id);
+  const bindingId = String(journal.binding_id);
+  const identityId = String(journal.identity_id);
+  const providerMessageId = String(journal.provider_message_id);
+
   const external = await ensureChatwootPublicConversationProjection({
     service,
-    organizationId: String(journal.organization_id),
-    tenantBusinessId: String(journal.tenant_business_id),
-    bindingId: String(journal.binding_id),
-    canonicalIdentityId: String(journal.identity_id),
+    organizationId,
+    tenantBusinessId,
+    bindingId,
+    canonicalIdentityId: identityId,
     contactDisplayName: 'Website visitor',
   });
   const displayId = Number(external.conversation.id);
@@ -137,25 +156,96 @@ export async function persistPublicWebChatMessage(input: {
     throw new PublicWebChatError('SERVICE_UNAVAILABLE');
   }
 
+  const claim = await claimWebChatChatwootSync({
+    service,
+    organizationId,
+    sessionId: input.sessionId,
+    providerMessageId,
+  });
+
+  if (claim.claimed) {
+    let acceptedMessageId: number | null = null;
+    try {
+      const accepted = await createChatwootPublicIncomingMessage({
+        service,
+        organizationId,
+        tenantBusinessId,
+        bindingId,
+        canonicalIdentityId: identityId,
+        conversationDisplayId: displayId,
+        requestId: `webchat:${input.clientMessageId}`.slice(0, 160),
+        content: input.text.trim() || null,
+        attachments,
+      });
+      acceptedMessageId = accepted.chatwootMessageId;
+    } catch {
+      try {
+        await finalizeWebChatChatwootSync({
+          service,
+          eventId: claim.eventId,
+          status: 'RECONCILIATION_REQUIRED',
+        });
+      } catch {
+        // PROCESSING remains fail-closed: later requests never cross the provider boundary again.
+      }
+      throw new PublicWebChatError('RECONCILIATION_REQUIRED');
+    }
+
+    try {
+      await finalizeWebChatChatwootSync({
+        service,
+        eventId: claim.eventId,
+        status: 'ACCEPTED',
+        chatwootMessageId: acceptedMessageId,
+      });
+    } catch {
+      // Chatwoot accepted the side effect; never retry the provider call automatically.
+      throw new PublicWebChatError('RECONCILIATION_REQUIRED');
+    }
+  } else if (claim.syncStatus !== 'ACCEPTED') {
+    throw new PublicWebChatError('RECONCILIATION_REQUIRED');
+  }
+
   const conversationUuid = typeof external.conversation.uuid === 'string' && external.conversation.uuid.trim()
     ? external.conversation.uuid.trim()
     : null;
 
   const projection = await service.rpc('project_web_chat_inbound_message', {
-    p_organization_id: String(journal.organization_id),
+    p_organization_id: organizationId,
     p_session_id: input.sessionId,
-    p_provider_message_id: String(journal.provider_message_id),
-    p_message_text: String(journal.message_text ?? input.text),
+    p_provider_message_id: providerMessageId,
+    p_message_text: String(journal.message_text ?? journalText),
     p_chatwoot_conversation_display_id: displayId,
     p_chatwoot_conversation_uuid: conversationUuid,
     p_chatwoot_contact_id: contactId,
     p_occurred_at: new Date().toISOString(),
-    p_request_key: `webchat:${String(journal.provider_message_id)}`.slice(0, 200),
+    p_request_key: `webchat:${providerMessageId}`.slice(0, 200),
   });
   if (projection.error) throw new PublicWebChatError('SERVICE_UNAVAILABLE');
   const projected = Array.isArray(projection.data) ? projection.data[0] : projection.data;
   if (!projected?.conversation_id || !projected?.message_id || !projected?.projection_id) {
     throw new PublicWebChatError('SERVICE_UNAVAILABLE');
+  }
+
+  if (attachments.length > 0) {
+    const mediaType = attachments.length === 1
+      ? attachments[0].contentType.startsWith('image/') ? 'IMAGE'
+        : attachments[0].contentType.startsWith('video/') ? 'VIDEO'
+          : attachments[0].contentType.startsWith('audio/') ? 'AUDIO'
+            : 'DOCUMENT'
+      : 'OTHER';
+    const metadata = attachments.map((attachment) => ({
+      name: attachment.filename.slice(0, 180),
+      contentType: attachment.contentType.slice(0, 120),
+      size: attachment.blob.size,
+    }));
+    const annotation = await service.rpc('annotate_web_chat_message_media', {
+      p_organization_id: organizationId,
+      p_message_id: String(projected.message_id),
+      p_media_type: mediaType,
+      p_attachments: metadata,
+    });
+    if (annotation.error) throw new PublicWebChatError('SERVICE_UNAVAILABLE');
   }
 
   return {
@@ -165,7 +255,6 @@ export async function persistPublicWebChatMessage(input: {
     messageInserted: Boolean(projected.message_inserted),
   };
 }
-
 
 export async function getPublicWebChatConfig(input: {
   publicKey: string;
