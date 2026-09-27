@@ -29,6 +29,27 @@ describe('WhatsApp webhook normalization', () => {
     expect(events[1]).toMatchObject({ providerMessageId: 'wamid.voice', mediaId: 'media-1', mimeType: 'audio/ogg', voice: true });
   });
 
+  it('normalizes image, video, document and sticker media without inventing storage URLs', () => {
+    const events = extractWhatsAppInbound({
+      entry: [{ id: 'waba-media', changes: [{ value: {
+        metadata: { phone_number_id: 'phone-media' },
+        messages: [
+          { id: 'wamid.image', from: '96890000000', type: 'image', image: { id: 'img-1', mime_type: 'image/jpeg', caption: 'front view' } },
+          { id: 'wamid.video', from: '96890000000', type: 'video', video: { id: 'vid-1', mime_type: 'video/mp4', caption: 'walkaround' } },
+          { id: 'wamid.doc', from: '96890000000', type: 'document', document: { id: 'doc-1', mime_type: 'application/pdf', filename: 'quote.pdf', caption: 'quote' } },
+          { id: 'wamid.sticker', from: '96890000000', type: 'sticker', sticker: { id: 'sticker-1', mime_type: 'image/webp', animated: false } },
+        ],
+      } }] }],
+    });
+
+    expect(events).toEqual([
+      expect.objectContaining({ providerMessageId: 'wamid.image', type: 'image', mediaId: 'img-1', mimeType: 'image/jpeg', caption: 'front view' }),
+      expect.objectContaining({ providerMessageId: 'wamid.video', type: 'video', mediaId: 'vid-1', mimeType: 'video/mp4', caption: 'walkaround' }),
+      expect.objectContaining({ providerMessageId: 'wamid.doc', type: 'document', mediaId: 'doc-1', mimeType: 'application/pdf', filename: 'quote.pdf', caption: 'quote' }),
+      expect.objectContaining({ providerMessageId: 'wamid.sticker', type: 'sticker', mediaId: 'sticker-1', mimeType: 'image/webp' }),
+    ]);
+  });
+
   it('keeps destination context on status events for tenant routing', () => {
     const statuses = extractWhatsAppStatuses({
       entry: [{
