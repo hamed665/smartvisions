@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { assertCanonicalSendAllowed } from '@/lib/outreach/canonical-send-gate';
-import { MetaCloudWhatsAppProvider } from '@/lib/whatsapp/meta-cloud';
+import { resolveMetaWhatsAppProvider } from '@/lib/whatsapp/tenant-routing';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
 
 function serviceClient() {
@@ -27,10 +27,12 @@ export async function POST(request: Request) {
     templateName?: string;
     templateLanguageCode?: string;
     templateBodyParameters?: string[];
+    tenantBusinessId?: string;
+    branchId?: string | null;
   };
 
-  if (!body.organizationId || !body.leadId || !body.conversationId || !body.to) {
-    return NextResponse.json({ error: 'organizationId, leadId, conversationId and to are required' }, { status: 400 });
+  if (!body.organizationId || !body.leadId || !body.conversationId || !body.to || !body.tenantBusinessId) {
+    return NextResponse.json({ error: 'organizationId, tenantBusinessId, leadId, conversationId and to are required' }, { status: 400 });
   }
 
   const supabase = serviceClient();
@@ -78,7 +80,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'templateName and templateLanguageCode are required for template sends' }, { status: 400 });
   }
 
-  const provider = new MetaCloudWhatsAppProvider();
+  const tenantProvider = await resolveMetaWhatsAppProvider({
+    service: supabase,
+    organizationId: body.organizationId,
+    tenantBusinessId: body.tenantBusinessId,
+    branchId: body.branchId ?? null,
+  });
+  const provider = tenantProvider.provider;
   const result = whatsappPolicy.mode === 'TEMPLATE'
     ? await provider.sendTemplate({ to: body.to, templateName: body.templateName!, languageCode: body.templateLanguageCode!, bodyParameters: body.templateBodyParameters })
     : await provider.sendText({ to: body.to, text: body.text!, replyToMessageId: body.replyToMessageId });
@@ -97,6 +105,9 @@ export async function POST(request: Request) {
       pricing_status: pricingStatus,
       whatsapp_mode: whatsappPolicy.mode,
       canonical_last_inbound_at: finalGate.lastInboundAt,
+      tenant_business_id: body.tenantBusinessId,
+      branch_id: body.branchId ?? null,
+      communication_channel_binding_id: tenantProvider.bindingId,
       ...(whatsappPolicy.mode === 'TEMPLATE' ? {
         pricing_note: 'Template charge depends on Meta template category and destination market; zero is not asserted as final invoice cost',
         template_name: body.templateName,
