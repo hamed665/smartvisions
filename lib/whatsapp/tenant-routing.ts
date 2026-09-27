@@ -86,6 +86,7 @@ export async function resolveMetaWhatsAppProvider(input: {
     integrationConnectionId: row.integration_connection_id,
     phoneNumberId: row.phone_number_id,
     wabaId: row.waba_id,
+    accessToken: row.access_token,
     provider: new MetaCloudWhatsAppProvider({
       token: row.access_token,
       phoneNumberId: row.phone_number_id,
