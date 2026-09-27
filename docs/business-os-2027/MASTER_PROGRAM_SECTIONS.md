@@ -283,6 +283,19 @@ Communication section is complete when Chatwoot source is truly deployed and use
 - file/media support;
 - Chatwoot inbox projection.
 
+### Current evidence checkpoint — 2026-09-27
+
+- **Embeddable website chat — IMPLEMENTED / PRODUCTION_VERIFIED (runtime path):** the Smart Core widget is deployed on Cloudflare; exact-main CI #1423 and Production Deploy #903 are green.
+- **Tenant/business configuration — IMPLEMENTED / PRODUCTION_VERIFIED (schema/runtime boundary):** canonical WEB_CHAT binding and widget configuration use the existing tenant/business/Branch authority. Production contains no fabricated real-tenant activation row.
+- **Anonymous-to-known identity transition — IMPLEMENTED / PRODUCTION_VERIFIED (foundation):** anonymous sessions remain anonymous until evidence justifies canonical identity linkage; no fake Lead/Business identity is created for convenience.
+- **Consent/session rules — IMPLEMENTED / PRODUCTION_VERIFIED (security path):** raw session token remains browser-only, DB stores SHA-256 hash, token is header-bound for polling/download, expiry/explicit close are enforced, and exact HTTPS Origin/public key are required.
+- **File/media support — IMPLEMENTED / PRODUCTION_VERIFIED (infrastructure and fail-closed paths):** customer → Chatwoot media and operator → visitor attachment delivery reuse Chatwoot storage and canonical messages. The visitor never receives Chatwoot storage credentials/URLs. Real tenant media happy-path acceptance remains GAP-09.
+- **Chatwoot inbox projection — IMPLEMENTED / PRODUCTION_VERIFIED (projection path):** inbound Web Chat creates actual Chatwoot API-Inbox messages and signed Chatwoot outgoing events reconcile back to canonical Smart Core messages. No second Conversation store or Chatwoot integration exists.
+- Production migrations: `0118_web_chat_outbound_attachments_readiness` and `0119_web_chat_acceptance_fk_index_hardening`.
+- Real tenant/browser end-to-end acceptance receipt count remains intentionally zero. **Disposition for that acceptance edge: BLOCKED_EXTERNAL / GAP-09.**
+- This checkpoint does not mark the whole OMNICHANNEL section complete. `OMNI-CHANNEL-HEALTH` has only a Web Chat-specific canonical slice so far and requires a separate cross-channel audit.
+
+
 ## OMNI-TIKTOK
 
 Implement only against an actually supported and contractually available messaging API.
