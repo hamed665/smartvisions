@@ -274,6 +274,20 @@ Communication section is complete when Chatwoot source is truly deployed and use
 - inbound/outbound reconciliation;
 - media support.
 
+### Current evidence checkpoint — 2026-09-27
+
+- **Customer Telegram messaging — IMPLEMENTED / PRODUCTION_VERIFIED (controlled path):** PR #298 extends the existing tenant/business/Branch communication binding, Vault credential, CRM identity and canonical conversation/projection authorities; it does not introduce a second CRM, Conversation store, queue, Chatwoot integration or Owner Bot authority.
+- **Owner/customer separation — IMPLEMENTED / PRODUCTION_VERIFIED:** customer routing and provider code use binding-scoped tenant credentials and never reuse the Owner Assistant's global Bot credential, owner authorization or owner command journal.
+- **Inbound/replay/reconciliation — IMPLEMENTED / PRODUCTION_VERIFIED (fail-closed path):** binding-scoped secret-token webhook authentication, `update_id` idempotency, canonical identity resolution, Chatwoot projection and explicit reconciliation states are deployed. Unknown/missing binding evidence fails closed.
+- **Outbound safety/reconciliation — IMPLEMENTED / PRODUCTION_VERIFIED (controlled path):** Telegram customer outbound is admitted only through the existing canonical approved-send/safety gate and remains subject to system controls; no Production smoke invoked a provider send.
+- **Media support — IMPLEMENTED / PRODUCTION_VERIFIED (infrastructure path):** Telegram photo/document/audio/voice/video/video-note/sticker normalization/download boundaries are implemented and bounded. Real tenant media happy-path acceptance is still external-evidence gated.
+- Production migrations: `0122_omni_telegram_customer_foundation` version `20260927171724` and `0123_telegram_activation_acceptance_fk_index_hardening` version `20260927172358`.
+- Exact-main CI #1452 and Cloudflare Production Deploy #932 succeeded on `6532693d7cc653e6611af0fea3ba4eea432d6feb`; Production Worker version `0c1a6d02-de44-4603-804f-81e807a1f672`.
+- Production remains `NOT_CONFIGURED + disabled` for customer Telegram with `telegram_ai_paused=true` and 0 bindings/events/acceptance receipts. No synthetic tenant/Bot evidence exists.
+- Post-`0123` advisor evidence has no Telegram activation-receipt unindexed-FK finding.
+- Real tenant Bot authorization plus real inbound/outbound/media end-to-end acceptance remains **BLOCKED_EXTERNAL**. This checkpoint does not authorize activation.
+- CI migration-chain coverage past `0101` remains a separate repository hardening gap; Production application + post-apply verification are the direct SQL evidence for `0122/0123`.
+
 ## OMNI-WEBCHAT
 
 - embeddable website chat;
