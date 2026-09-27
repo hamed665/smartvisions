@@ -176,7 +176,8 @@ begin
     raise exception 'organization_id is immutable for CRM Person records';
   end if;
   if tg_table_name = 'crm_people'
-     and new.created_from_identity_id is distinct from old.created_from_identity_id then
+     and (to_jsonb(new) ->> 'created_from_identity_id')
+         is distinct from (to_jsonb(old) ->> 'created_from_identity_id') then
     raise exception 'created_from_identity_id is immutable for CRM Person records';
   end if;
   return new;
