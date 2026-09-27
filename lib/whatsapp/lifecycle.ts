@@ -297,7 +297,7 @@ export async function applyWhatsAppInboundLifecycle(organizationId: string, even
 
   const receivedAt = event.timestamp ? new Date(Number(event.timestamp) * 1000).toISOString() : new Date().toISOString();
   const conversation = await getOrCreateConversation(organizationId, lead.id, receivedAt, scope);
-  const body = event.text?.trim() || (event.type === 'audio' ? '[WhatsApp voice message]' : `[WhatsApp ${event.type} message]`);
+  const body = event.text?.trim() || event.caption?.trim() || (event.type === 'audio' ? '[WhatsApp voice message]' : `[WhatsApp ${event.type} message]`);
   const idempotencyKey = `whatsapp:inbound:${event.providerMessageId}`;
   const acquisition = inboundAcquisitionMetadata(event);
 
@@ -335,6 +335,8 @@ export async function applyWhatsAppInboundLifecycle(organizationId: string, even
       type: event.type,
       media_id: event.mediaId ?? null,
       mime_type: event.mimeType ?? null,
+      filename: event.filename ?? null,
+      caption: event.caption ?? null,
       voice: Boolean(event.voice),
       tenant_business_id: scope.tenantBusinessId,
       branch_id: scope.branchId,
