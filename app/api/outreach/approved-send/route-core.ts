@@ -67,9 +67,7 @@ export async function POST(request: Request) {
     .maybeSingle();
   if (messageError || !message) return NextResponse.json({ error: messageError?.message ?? 'Approved message not found' }, { status: 404 });
 
-  const providerIdentity = message.channel === 'INSTAGRAM'
-    ? { provider: 'META' as const, channel: 'INSTAGRAM' as const }
-    : getChannelIntegrationIdentity(message.channel);
+  const providerIdentity = getChannelIntegrationIdentity(message.channel);
 
   const [{ data: controls, error: controlsError }, { data: lead, error: leadError }, providerConnectionResult] = await Promise.all([
     supabase.from('system_controls').select('global_kill_switch,email_paused,whatsapp_ai_paused,instagram_ai_paused,agents_paused,shadow_mode').eq('organization_id', body.organizationId).maybeSingle(),
