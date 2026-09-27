@@ -96,4 +96,16 @@ describe('OMNI-CHANNEL-HEALTH evidence aggregation', () => {
     expect(page).toContain('Capabilities');
     expect(page).toContain('Incident');
   });
+  it('surfaces voice reply foundations without pretending controlled or telephony acceptance', () => {
+    expect(health).toContain("'WHATSAPP_AUDIO_REPLY_PROVIDER_FOUNDATION'");
+    expect(health).toContain("'OPENAI_TTS_FOUNDATION'");
+    expect(health).toContain("'VOICE_REPLY_AI_DISCLOSURE_EVIDENCE_REQUIRED'");
+    expect(health).toContain("'VOICE_REPLY_USAGE_RECONCILIATION_REQUIRED'");
+    expect(health).toContain("'VOICE_REPLY_CONTROLLED_ACCEPTANCE_PENDING'");
+    expect(health).toContain("'TELEPHONY_ACCEPTANCE_PENDING'");
+    expect(health).toContain("'lib/voice/reply-policy'");
+    expect(health).toContain("'lib/voice/reply-synthesis'");
+    expect(types).toContain("ACTIVE_OMNICHANNEL_CHANNELS = ['EMAIL', 'WHATSAPP']");
+  });
+
 });
