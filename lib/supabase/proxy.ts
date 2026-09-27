@@ -14,6 +14,11 @@ const SESSION_BYPASS_PATHS = new Set([
   '/api/operations/tick',
   '/api/telegram/webhook',
   '/api/telegram/notify',
+  '/api/web-chat/session',
+  '/api/web-chat/message',
+  '/api/web-chat/config',
+  '/api/web-chat/messages',
+  '/api/web-chat/widget',
 ]);
 
 export function shouldBypassSession(pathname: string) {
