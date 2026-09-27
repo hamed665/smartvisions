@@ -1,5 +1,5 @@
 -- 0114: Runtime repair for social canonical identity schema alignment.
--- Production crm_identities/crm_identity_links use status, not historical identity_status/link_status.
+-- Align social projection predicates with the current production CRM identity status columns.
 
 create or replace function public.project_instagram_inbound_message(
   p_organization_id uuid,
