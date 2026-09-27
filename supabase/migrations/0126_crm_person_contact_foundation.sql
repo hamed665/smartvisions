@@ -13,8 +13,8 @@ create table if not exists public.crm_people (
   merged_into_person_id uuid,
   metadata jsonb not null default '{}'::jsonb
     check (jsonb_typeof(metadata) = 'object'),
-  created_by_user_id uuid not null,
-  updated_by_user_id uuid not null,
+  created_by_user_id uuid,
+  updated_by_user_id uuid,
   first_seen_at timestamptz not null default now(),
   last_seen_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
@@ -33,14 +33,14 @@ create table if not exists public.crm_people (
     foreign key (organization_id, created_from_identity_id)
     references public.crm_identities(organization_id, id)
     on delete restrict,
-  constraint crm_people_created_by_member_fk
-    foreign key (organization_id, created_by_user_id)
-    references public.organization_members(organization_id, user_id)
-    on delete restrict,
-  constraint crm_people_updated_by_member_fk
-    foreign key (organization_id, updated_by_user_id)
-    references public.organization_members(organization_id, user_id)
-    on delete restrict
+  constraint crm_people_created_by_user_fk
+    foreign key (created_by_user_id)
+    references auth.users(id)
+    on delete set null,
+  constraint crm_people_updated_by_user_fk
+    foreign key (updated_by_user_id)
+    references auth.users(id)
+    on delete set null
 );
 
 alter table public.crm_people
@@ -64,8 +64,8 @@ create table if not exists public.crm_person_identity_links (
     check (jsonb_typeof(evidence) = 'object' and evidence <> '{}'::jsonb),
   status text not null default 'ACTIVE'
     check (status in ('ACTIVE','CONFLICTED','RETIRED')),
-  created_by_user_id uuid not null,
-  updated_by_user_id uuid not null,
+  created_by_user_id uuid,
+  updated_by_user_id uuid,
   first_seen_at timestamptz not null default now(),
   last_seen_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
@@ -80,14 +80,14 @@ create table if not exists public.crm_person_identity_links (
     foreign key (organization_id, identity_id)
     references public.crm_identities(organization_id, id)
     on delete restrict,
-  constraint crm_person_identity_links_created_by_member_fk
-    foreign key (organization_id, created_by_user_id)
-    references public.organization_members(organization_id, user_id)
-    on delete restrict,
-  constraint crm_person_identity_links_updated_by_member_fk
-    foreign key (organization_id, updated_by_user_id)
-    references public.organization_members(organization_id, user_id)
-    on delete restrict
+  constraint crm_person_identity_links_created_by_user_fk
+    foreign key (created_by_user_id)
+    references auth.users(id)
+    on delete set null,
+  constraint crm_person_identity_links_updated_by_user_fk
+    foreign key (updated_by_user_id)
+    references auth.users(id)
+    on delete set null
 );
 
 create table if not exists public.crm_person_business_relationships (
@@ -106,8 +106,8 @@ create table if not exists public.crm_person_business_relationships (
     check (jsonb_typeof(evidence) = 'object' and evidence <> '{}'::jsonb),
   status text not null default 'ACTIVE'
     check (status in ('ACTIVE','RETIRED')),
-  created_by_user_id uuid not null,
-  updated_by_user_id uuid not null,
+  created_by_user_id uuid,
+  updated_by_user_id uuid,
   first_seen_at timestamptz not null default now(),
   last_seen_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
@@ -124,14 +124,14 @@ create table if not exists public.crm_person_business_relationships (
     foreign key (organization_id, business_id)
     references public.businesses(organization_id, id)
     on delete cascade,
-  constraint crm_person_business_relationships_created_by_member_fk
-    foreign key (organization_id, created_by_user_id)
-    references public.organization_members(organization_id, user_id)
-    on delete restrict,
-  constraint crm_person_business_relationships_updated_by_member_fk
-    foreign key (organization_id, updated_by_user_id)
-    references public.organization_members(organization_id, user_id)
-    on delete restrict
+  constraint crm_person_business_relationships_created_by_user_fk
+    foreign key (created_by_user_id)
+    references auth.users(id)
+    on delete set null,
+  constraint crm_person_business_relationships_updated_by_user_fk
+    foreign key (updated_by_user_id)
+    references auth.users(id)
+    on delete set null
 );
 
 create index if not exists crm_people_created_identity_idx
