@@ -1,3 +1,5 @@
+import type { ProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
+
 export interface OutboundMessage {
   mailboxId: string;
   to: string;
@@ -26,7 +28,7 @@ export interface InboundReply {
 }
 
 export interface EmailProvider {
-  sendEmail(input: OutboundMessage): Promise<{ providerMessageId: string }>;
+  sendEmail(input: OutboundMessage): Promise<{ providerMessageId: string; rateLimit?: ProviderRateLimitEvidence | null }>;
   fetchReplies(since: Date): Promise<InboundReply[]>;
   getDeliveryStatus(providerMessageId: string): Promise<DeliveryEvent[]>;
   getBounce(providerMessageId: string): Promise<DeliveryEvent | null>;
