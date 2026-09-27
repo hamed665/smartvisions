@@ -40,9 +40,6 @@ declare
   v_inserted boolean := false;
   v_now timestamptz := coalesce(p_occurred_at, now());
 begin
-  if coalesce(auth.role(), '') <> 'service_role' then
-    raise exception 'service role required';
-  end if;
   if p_provider_message_id is null or length(trim(p_provider_message_id)) not between 1 and 500 then
     raise exception 'provider message id required';
   end if;
