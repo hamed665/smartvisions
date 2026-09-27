@@ -217,7 +217,7 @@ export async function POST(request: Request) {
         .eq('id', lead.business_id)
         .maybeSingle(),
       supabase.from('sales_conversations')
-        .select('id,lead_id,channel')
+        .select('id,lead_id,channel,agent_mode,requires_human')
         .eq('organization_id', body.organizationId)
         .eq('id', message.conversation_id)
         .maybeSingle(),
