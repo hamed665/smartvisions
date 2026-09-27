@@ -1,4 +1,4 @@
-import { extractProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
+import { extractProviderRateLimitEvidence, ProviderHttpError } from '@/lib/omnichannel/rate-limit-evidence';
 import type { ProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
 
 export type MetaMessengerProviderConfig = {
@@ -44,7 +44,7 @@ export class MetaMessengerProvider {
     const rateLimit = extractProviderRateLimitEvidence(response.headers);
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`Meta Messenger send failed (${response.status}): ${detail.slice(0, 500)}`);
+      throw new ProviderHttpError(`Meta Messenger send failed (${response.status}): ${detail.slice(0, 500)}`, response.status, rateLimit);
     }
     const body = await response.json() as { message_id?: string };
     if (!body.message_id) throw new Error('Meta Messenger response did not include a message id');
