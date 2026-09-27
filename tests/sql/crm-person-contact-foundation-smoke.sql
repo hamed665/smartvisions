@@ -326,3 +326,17 @@ begin
   end if;
 end;
 $crm_person_security_contract$;
+
+do $crm_person_fk_indexes$
+begin
+  if to_regclass('public.crm_people_created_by_user_fk_idx') is null
+     or to_regclass('public.crm_people_updated_by_user_fk_idx') is null
+     or to_regclass('public.crm_person_identity_links_created_by_user_fk_idx') is null
+     or to_regclass('public.crm_person_identity_links_updated_by_user_fk_idx') is null
+     or to_regclass('public.crm_person_business_relationships_created_by_user_fk_idx') is null
+     or to_regclass('public.crm_person_business_relationships_updated_by_user_fk_idx') is null then
+    raise exception 'CRM Person FK hardening indexes are incomplete';
+  end if;
+end;
+$crm_person_fk_indexes$;
+
