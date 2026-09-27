@@ -5,6 +5,7 @@ import { assertCanonicalSendAllowed } from '@/lib/outreach/canonical-send-gate';
 import { evaluateMailboxHealth } from '@/lib/outreach/mailbox-health';
 import { countMailboxSendsLast24Hours } from '@/lib/outreach/mailbox-usage';
 import { ResendEmailProvider } from '@/lib/outreach/resend-provider';
+import { recordProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
 
 function serviceClient() {
@@ -117,6 +118,17 @@ export async function POST(request: Request) {
     html: body.html,
     idempotencyKey: body.idempotencyKey,
   });
+
+  const rateLimitAudit = await recordProviderRateLimitEvidence({
+    service: supabase,
+    organizationId: body.organizationId,
+    provider: 'RESEND',
+    channel: 'EMAIL',
+    evidence: result.rateLimit,
+  });
+  if (!rateLimitAudit.recorded && rateLimitAudit.reason === 'AUDIT_PERSISTENCE_FAILED') {
+    console.error('Email provider rate-limit telemetry persistence failed', rateLimitAudit.error);
+  }
 
   const { error: upsertError } = await supabase.from('outreach_messages').upsert({
     organization_id: body.organizationId,
