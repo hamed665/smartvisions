@@ -1,0 +1,6 @@
+import { NextResponse } from 'next/server';
+import { persistMessengerWebhookEvents } from '@/lib/facebook-messenger/persistence';
+import { extractMessengerEvents,verifyMetaSignature } from '@/lib/facebook-messenger/webhook';
+export const runtime='nodejs';
+export async function GET(request:Request){const u=new URL(request.url);const expected=process.env.META_WEBHOOK_VERIFY_TOKEN;if(u.searchParams.get('hub.mode')==='subscribe'&&expected&&u.searchParams.get('hub.verify_token')===expected&&u.searchParams.get('hub.challenge'))return new Response(u.searchParams.get('hub.challenge')!,{status:200});return NextResponse.json({error:'Webhook verification failed'},{status:403})}
+export async function POST(request:Request){const raw=await request.text();if(!verifyMetaSignature(raw,request.headers.get('x-hub-signature-256')))return NextResponse.json({error:'Invalid webhook signature'},{status:401});let payload:unknown;try{payload=JSON.parse(raw)}catch{return NextResponse.json({error:'Invalid JSON'},{status:400})}const events=extractMessengerEvents(payload);try{return NextResponse.json({accepted:true,eventCount:events.length,persistence:await persistMessengerWebhookEvents(events)})}catch(e){return NextResponse.json({error:e instanceof Error?e.message:'Messenger webhook persistence failed'},{status:503})}}
