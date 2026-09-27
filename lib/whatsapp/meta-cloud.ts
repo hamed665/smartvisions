@@ -1,5 +1,8 @@
 import { extractProviderRateLimitEvidence, ProviderHttpError } from '@/lib/omnichannel/rate-limit-evidence';
 import type {
+  WhatsAppAudioSendInput,
+  WhatsAppAudioUploadInput,
+  WhatsAppAudioUploadResult,
   WhatsAppCatalogProductSendInput,
   WhatsAppProvider,
   WhatsAppSendInput,
@@ -104,6 +107,64 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
           }],
         } : {}),
       },
+    });
+  }
+
+  async uploadAudio(input: WhatsAppAudioUploadInput): Promise<WhatsAppAudioUploadResult> {
+    this.assertConfigured();
+    if (!input.bytes.byteLength) throw new Error('WhatsApp audio upload cannot be empty');
+    if (input.bytes.byteLength > 16 * 1024 * 1024) {
+      throw new Error('WhatsApp audio upload exceeds the 16 MB Cloud API limit');
+    }
+
+    const allowedMimeTypes = new Set([
+      'audio/mpeg',
+      'audio/mp4',
+      'audio/aac',
+      'audio/amr',
+      'audio/ogg',
+    ]);
+    if (!allowedMimeTypes.has(input.mimeType)) {
+      throw new Error('WhatsApp audio upload MIME type is unsupported');
+    }
+
+    const form = new FormData();
+    form.set('messaging_product', 'whatsapp');
+    form.set(
+      'file',
+      new Blob([input.bytes], { type: input.mimeType }),
+      input.filename?.trim() || (input.mimeType === 'audio/mpeg' ? 'voice-reply.mp3' : 'voice-reply-audio'),
+    );
+
+    const response = await fetch(
+      `https://graph.facebook.com/${this.graphVersion}/${this.phoneNumberId}/media`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${this.token}` },
+        body: form,
+      },
+    );
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`Meta WhatsApp audio upload failed (${response.status}): ${detail.slice(0, 500)}`);
+    }
+
+    const body = await response.json() as { id?: string };
+    const mediaId = body.id?.trim();
+    if (!mediaId) throw new Error('Meta WhatsApp audio upload returned no media id');
+    return { mediaId };
+  }
+
+  async sendAudio(input: WhatsAppAudioSendInput): Promise<WhatsAppSendResult> {
+    const mediaId = input.mediaId.trim();
+    if (!mediaId) throw new Error('WhatsApp audio media id is required');
+    return this.sendPayload({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: input.to,
+      type: 'audio',
+      audio: { id: mediaId },
+      ...(input.replyToMessageId ? { context: { message_id: input.replyToMessageId } } : {}),
     });
   }
 
