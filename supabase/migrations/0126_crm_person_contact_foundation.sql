@@ -242,11 +242,14 @@ begin
     raise exception 'CRM Person mutation requires an authorized Organization member';
   end if;
 
+  -- Serialize Person resolution on the canonical identity row so concurrent
+  -- verified requests cannot manufacture duplicate People for one identity.
   select i.status
     into v_identity_status
   from public.crm_identities i
   where i.organization_id = p_organization_id
-    and i.id = p_identity_id;
+    and i.id = p_identity_id
+  for update;
 
   if v_identity_status is null or v_identity_status <> 'ACTIVE' then
     raise exception 'CRM Person requires an active canonical identity in the same Organization';
