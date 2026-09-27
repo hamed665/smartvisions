@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { NormalizedMessengerEvent } from './webhook';
 import { resolveMetaMessengerDestination } from './tenant-routing';
 import { projectMatchedMessengerInbound, resolveMessengerInboundBusiness } from './lifecycle';
+import { reconcileMessengerReceipt } from './reconciliation';
 function service(){const u=process.env.NEXT_PUBLIC_SUPABASE_URL;const k=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!u||!k)throw new Error('Supabase service configuration is missing');return createClient(u,k,{auth:{persistSession:false,autoRefreshToken:false}})}
 export async function persistMessengerWebhookEvents(events:NormalizedMessengerEvent[]){
  if(events.length===0)return{inserted:0,routed:0};
