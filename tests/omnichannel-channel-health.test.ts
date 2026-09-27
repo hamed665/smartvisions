@@ -32,8 +32,10 @@ describe('OMNI-CHANNEL-HEALTH evidence aggregation', () => {
   });
 
   it('keeps provider quota evidence explicit instead of inventing green status', () => {
-    expect(health).toContain("quotaHealth: 'NO_PROVIDER_QUOTA_EVIDENCE'");
+    expect(health).toContain("'NO_PROVIDER_QUOTA_EVIDENCE'");
     expect(health).toContain("quotaHealth: 'NOT_APPLICABLE_BUILT_IN'");
+    expect(health).toContain('quotaHealth: emailRateLimit.state');
+    expect(health).toContain('quotaHealth: whatsappRateLimit.state');
     expect(health).not.toContain("quotaHealth: 'HEALTHY'");
   });
 
