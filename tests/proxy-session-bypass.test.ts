@@ -6,6 +6,11 @@ describe('session proxy bypass paths', () => {
     expect(shouldBypassSession('/api/email/webhook')).toBe(true);
     expect(shouldBypassSession('/api/whatsapp/webhook')).toBe(true);
     expect(shouldBypassSession('/api/telegram/webhook')).toBe(true);
+    expect(shouldBypassSession('/api/web-chat/session')).toBe(true);
+    expect(shouldBypassSession('/api/web-chat/message')).toBe(true);
+    expect(shouldBypassSession('/api/web-chat/config')).toBe(true);
+    expect(shouldBypassSession('/api/web-chat/messages')).toBe(true);
+    expect(shouldBypassSession('/api/web-chat/widget')).toBe(true);
   });
 
   it('bypasses session auth only for exact internal-key-protected server endpoints', () => {
@@ -29,5 +34,6 @@ describe('session proxy bypass paths', () => {
     expect(shouldBypassSession('/api/operations/telegram-daily-digest/extra')).toBe(false);
     expect(shouldBypassSession('/api/telegram/webhook/extra')).toBe(false);
     expect(shouldBypassSession('/api/telegram/notify/extra')).toBe(false);
+    expect(shouldBypassSession('/api/web-chat/widget/extra')).toBe(false);
   });
 });
