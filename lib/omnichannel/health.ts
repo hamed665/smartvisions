@@ -239,6 +239,7 @@ function pauseState(controls: Record<string, unknown> | null, channel: CustomerC
   if (channel === 'FACEBOOK_MESSENGER' && controls.facebook_messenger_ai_paused === true) return 'AI_PAUSED';
   if (channel === 'WEB_CHAT' && controls.web_chat_ai_paused === true) return 'AI_PAUSED';
   if (channel === 'TELEGRAM' && controls.telegram_ai_paused === true) return 'AI_PAUSED';
+  if (channel === 'TIKTOK' && controls.tiktok_ai_paused === true) return 'AI_PAUSED';
   return 'RUNNING';
 }
 
@@ -273,10 +274,10 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
       .from('communication_channel_bindings')
       .select('id,channel,tenant_business_id,branch_id,status,last_verified_at,last_error_code,provider_destination_id,provider_secret_ref')
       .eq('organization_id', organizationId)
-      .in('channel', ['EMAIL', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK_MESSENGER', 'WEB_CHAT', 'TELEGRAM']),
+      .in('channel', ['EMAIL', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK_MESSENGER', 'WEB_CHAT', 'TELEGRAM', 'TIKTOK']),
     service
       .from('system_controls')
-      .select('shadow_mode,global_kill_switch,email_paused,whatsapp_ai_paused,instagram_ai_paused,facebook_messenger_ai_paused,web_chat_ai_paused,telegram_ai_paused,agents_paused')
+      .select('shadow_mode,global_kill_switch,email_paused,whatsapp_ai_paused,instagram_ai_paused,facebook_messenger_ai_paused,web_chat_ai_paused,telegram_ai_paused,tiktok_ai_paused,agents_paused')
       .eq('organization_id', organizationId)
       .maybeSingle(),
     latestEvent('email_events', organizationId),
@@ -357,6 +358,9 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
   ));
   const telegramBlockers = [...new Set(telegramReadiness.flatMap((row) => row.blockers))];
   const telegramIntegration = integration('TELEGRAM', 'TELEGRAM');
+
+  const tiktokBindings = channelBindings('TIKTOK');
+  const tiktokIntegration = integration('TIKTOK', 'TIKTOK');
 
   const webChatBindingCount = webChatHealth.length;
   const webChatBlockers = [...new Set(webChatHealth.flatMap((row) => row.blockers))];
@@ -588,20 +592,35 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
     {
       channel: 'TIKTOK',
       provider: 'TIKTOK',
-      implementationState: 'NOT_IMPLEMENTED',
-      connectionStatus: 'CAPABILITY_NOT_ACTIVATED',
-      credentialHealth: 'NOT_EVALUATED',
-      webhookHealth: 'NOT_IMPLEMENTED',
-      quotaHealth: 'NOT_EVALUATED',
-      lastVerifiedAt: null,
+      implementationState: 'INTERNAL_READY',
+      connectionStatus: tiktokIntegration?.status ?? 'ROW_MISSING',
+      credentialHealth: tiktokBindings.length === 0 ? 'NOT_BOUND' : 'PROVIDER_EXECUTION_NOT_IMPLEMENTED',
+      webhookHealth: 'PROVIDER_CONTRACT_PENDING',
+      quotaHealth: 'NO_PROVIDER_QUOTA_EVIDENCE',
+      lastVerifiedAt: maxIso(
+        tiktokIntegration?.last_checked_at,
+        ...tiktokBindings.map((row) => row.last_verified_at),
+      ),
       supportedCapabilities: [],
-      incidentState: 'API_CAPABILITY_REQUIRES_REVALIDATION',
-      blockers: ['OMNI_TIKTOK_PENDING_SUPPORTED_API'],
-      bindingCount: 0,
+      incidentState: tiktokIntegration?.enabled || tiktokIntegration?.status === 'CONNECTED'
+        ? 'PROVIDER_EXECUTION_NOT_IMPLEMENTED'
+        : 'CAPABILITY_NOT_ACTIVATED',
+      blockers: [
+        ...(tiktokIntegration ? [] : ['INTEGRATION_ROW_MISSING']),
+        ...(!tiktokIntegration?.enabled || tiktokIntegration?.status !== 'CONNECTED' ? ['INTEGRATION_NOT_CONFIGURED'] : []),
+        ...(tiktokBindings.length === 0 ? ['REAL_BINDING_MISSING'] : []),
+        'PROVIDER_CONTRACT_EXECUTION_PENDING',
+      ],
+      bindingCount: tiktokBindings.length,
       lastEventAt: null,
       lastAcceptanceAt: null,
-      controlState: 'NOT_APPLICABLE',
-      evidenceSources: ['MASTER_PROGRAM_SECTIONS'],
+      controlState: pauseState(controls, 'TIKTOK'),
+      evidenceSources: [
+        'integration_connections',
+        'communication_channel_bindings',
+        'system_controls',
+        '0124_omni_tiktok_capability_foundation',
+      ],
     },
     {
       channel: 'SMS_RCS',
