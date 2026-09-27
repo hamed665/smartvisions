@@ -91,6 +91,19 @@ export async function POST(request: Request) {
     ? await provider.sendTemplate({ to: body.to, templateName: body.templateName!, languageCode: body.templateLanguageCode!, bodyParameters: body.templateBodyParameters })
     : await provider.sendText({ to: body.to, text: body.text!, replyToMessageId: body.replyToMessageId });
 
+  const rateLimitAudit = await recordProviderRateLimitEvidence({
+    service: supabase,
+    organizationId: body.organizationId,
+    provider: 'META',
+    channel: 'WHATSAPP',
+    evidence: result.rateLimit,
+    tenantBusinessId: body.tenantBusinessId,
+    branchId: body.branchId ?? null,
+  });
+  if (!rateLimitAudit.recorded && rateLimitAudit.reason === 'AUDIT_PERSISTENCE_FAILED') {
+    console.error('WhatsApp provider rate-limit telemetry persistence failed', rateLimitAudit.error);
+  }
+
   const pricingStatus = whatsappPolicy.mode === 'FREEFORM'
     ? 'FINAL_FREE_SERVICE_WINDOW'
     : 'PENDING_TEMPLATE_CATEGORY_RECONCILIATION';
