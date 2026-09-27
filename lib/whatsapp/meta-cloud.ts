@@ -70,7 +70,7 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
     const body = await response.json() as { messages?: Array<{ id: string }> };
     const providerMessageId = body.messages?.[0]?.id;
     if (!providerMessageId) throw new Error('Meta WhatsApp response did not include a message id');
-    return { providerMessageId, status: 'accepted', rateLimit };
+    return { providerMessageId, status: 'accepted', ...(rateLimit ? { rateLimit } : {}) };
   }
 
   async sendText(input: WhatsAppSendInput): Promise<WhatsAppSendResult> {
