@@ -52,6 +52,6 @@ export class MetaInstagramProvider {
     const body = await response.json() as { message_id?: string; messageId?: string };
     const providerMessageId = body.message_id ?? body.messageId;
     if (!providerMessageId) throw new Error('Meta Instagram response did not include a message id');
-    return { providerMessageId, status: 'accepted', rateLimit };
+    return { providerMessageId, status: 'accepted', ...(rateLimit ? { rateLimit } : {}) };
   }
 }
