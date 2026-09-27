@@ -12,7 +12,7 @@ export async function OPTIONS(request:Request){
 export async function GET(request:Request){
   const u=new URL(request.url);const key=u.searchParams.get('key')?.trim()??'';const origin=request.headers.get('origin');
   const cors=await webChatCorsHeaders(key,origin);if(!cors)return NextResponse.json({error:'ORIGIN_NOT_ALLOWED'},{status:403});
-  const sessionId=u.searchParams.get('sessionId')?.trim()??'';const sessionToken=u.searchParams.get('sessionToken')?.trim()??'';
+  const sessionId=request.headers.get('x-web-chat-session-id')?.trim()??'';const sessionToken=request.headers.get('x-web-chat-session-token')?.trim()??'';
   if(!sessionId||!sessionToken||sessionToken.length>256)return NextResponse.json({error:'SESSION_UNAVAILABLE'},{status:401,headers:cors});
   try{
     const result=await readPublicWebChatMessages({publicKey:key,origin:origin??'',sessionId,sessionToken,after:u.searchParams.get('after'),limit:Number(u.searchParams.get('limit')??50)});
