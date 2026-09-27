@@ -1,5 +1,30 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## Latest continuation checkpoint — OMNI-WEBCHAT — 2026-09-27
+
+Always re-read runtime/current main before mutation. The evidence-backed baseline before this documentation reconciliation is:
+
+- canonical main: `e8c2f127c7d7483e6095d7f5d07aa69cc7c9daa4`;
+- PR #292 merged the bounded OMNI-WEBCHAT attachment-delivery/readiness/Connection-Center slice;
+- PR #293 merged Web Chat acceptance-receipt FK index hardening only;
+- exact-main CI #1423: SUCCESS;
+- Cloudflare Production Deploy #903: SUCCESS on the same SHA, Production Worker `55ddcf6d-6893-4fc9-94a0-66ddbf0ced11`;
+- Production Supabase head: `0119_web_chat_acceptance_fk_index_hardening` version `20260927144538`;
+- `0118_web_chat_outbound_attachments_readiness` version `20260927144031` is live;
+- Chatwoot Production remains `https://inbox.smartvisionsai.com` on the OVH VPS; Smart Core remains Cloudflare + Supabase;
+- signed Chatwoot public outgoing messages now reconcile attachment metadata into the existing canonical `conversation_messages` store;
+- visitor attachment bytes are delivered only through a session/origin/public-key/conversation/message/account-bound Smart Core proxy with no direct Chatwoot storage URL in the browser;
+- Web Chat readiness and acceptance use evidence-derived service-only contracts; no caller-provided success boolean exists;
+- Web Chat Connection Center health is derived from canonical binding/widget/inbox/evidence/control state, not from a second integration truth;
+- Production fake-origin/key/session attachment and upload probes fail closed with HTTP 403;
+- Production still has no real Web Chat binding/widget/session/event/message/acceptance receipt. No synthetic activation evidence was created;
+- Shadow Mode remains ON, Web Chat AI pause remains ON and Global Kill Switch remains OFF;
+- post-0119 advisor evidence has no Web Chat acceptance-receipt unindexed-FK defect; the service-only RLS/no-policy INFO is intentional.
+
+`OMNI-WEBCHAT` is internally implemented/deployed and Production-verified for the directly observable infrastructure/security paths above. Real tenant end-to-end happy-path acceptance remains `BLOCKED_EXTERNAL / GAP-09`.
+
+Do not reopen OMNI-WEBCHAT by inventing another Web Chat store, Chatwoot integration or health authority. Before selecting the next Work Package, re-read current `MASTER_PROGRAM_SECTIONS.md`, compare current runtime gaps, and follow the closest verified dependency. The current Web Chat work has already established a partial `OMNI-CHANNEL-HEALTH` slice, but the whole cross-channel health Work Package must be audited before it can be selected or declared complete.
+
 ## Product completeness and customer connection requirements
 
 Read [PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE.md](PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE.md) before selecting or closing a Business OS delivery package. It preserves the owner-requested full-product scope, simple official customer connection journey, verified multi-business WhatsApp gaps, detailed acceptance gates and the complete Work Package coverage index. It extends acceptance under this roadmap; it does not replace architecture, renumber Work Packages or authorize provider activation. Keep its requirement dispositions and this handoff traceable to implementation and Production evidence.
