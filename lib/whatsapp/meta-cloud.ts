@@ -1,4 +1,4 @@
-import { extractProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
+import { extractProviderRateLimitEvidence, ProviderHttpError } from '@/lib/omnichannel/rate-limit-evidence';
 import type {
   WhatsAppCatalogProductSendInput,
   WhatsAppProvider,
@@ -64,7 +64,7 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
 
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`Meta WhatsApp send failed (${response.status}): ${detail.slice(0, 500)}`);
+      throw new ProviderHttpError(`Meta WhatsApp send failed (${response.status}): ${detail.slice(0, 500)}`, response.status, rateLimit);
     }
 
     const body = await response.json() as { messages?: Array<{ id: string }> };
