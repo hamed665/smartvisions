@@ -1,10 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export type CrmIdentityType = 'EMAIL' | 'PHONE' | 'WHATSAPP' | 'INSTAGRAM';
+export type CrmIdentityType = 'EMAIL' | 'PHONE' | 'WHATSAPP' | 'INSTAGRAM' | 'INSTAGRAM_PROVIDER_USER';
 export type CrmIdentitySourceType =
   | 'BUSINESS_FIELD'
   | 'EMAIL_INBOUND'
   | 'WHATSAPP_INBOUND'
+  | 'INSTAGRAM_INBOUND'
   | 'MANUAL'
   | 'IMPORT';
 
@@ -68,6 +69,10 @@ export function normalizeCrmIdentity(
   if (identityType === 'PHONE' || identityType === 'WHATSAPP') {
     const digits = raw.replace(/\D/g, '');
     return digits.length >= 8 && digits.length <= 32 ? digits : null;
+  }
+
+  if (identityType === 'INSTAGRAM_PROVIDER_USER') {
+    return raw.length <= 512 ? raw : null;
   }
 
   const instagram = normalizeInstagram(raw);
