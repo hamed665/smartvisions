@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 
 import {
   createOrResolveCrmPerson,
+  type CrmPersonRelationshipType,
+  type CrmPersonVerificationMethod,
   isCrmPersonMutationRole,
   isCrmPersonRelationshipType,
   isCrmPersonVerificationMethod,
@@ -123,9 +125,9 @@ export async function POST(request: Request) {
 
   let normalizedRelationship: {
     businessId: string;
-    relationshipType: Parameters<typeof isCrmPersonRelationshipType>[0] & string;
+    relationshipType: CrmPersonRelationshipType;
     jobTitle: string | null;
-    verificationMethod: Parameters<typeof isCrmPersonVerificationMethod>[0] & string;
+    verificationMethod: CrmPersonVerificationMethod;
     sourceRef: string;
     evidence: Record<string, unknown>;
   } | null = null;
