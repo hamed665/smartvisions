@@ -23,6 +23,11 @@ describe('CRM-PERSON-CONTACT canonical foundation', () => {
     expect(migration).not.toContain('create table if not exists public.crm_accounts');
   });
 
+  it('serializes Person creation on the canonical identity to prevent duplicate races', () => {
+    expect(migration).toContain('verified requests cannot manufacture duplicate People');
+    expect(migration).toContain('for update;');
+  });
+
   it('requires verified identity evidence and forbids display-name-only creation', () => {
     expect(CRM_PERSON_VERIFICATION_METHODS).toEqual([
       'MANUAL_CONFIRMED',
