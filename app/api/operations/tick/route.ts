@@ -255,6 +255,10 @@ export async function POST(request: Request) {
   const supabase = serviceClient();
   const now = new Date();
   const stuckBefore = new Date(now.getTime() - STUCK_MINUTES * 60_000).toISOString();
+  const webChatExpiry = await supabase.rpc('expire_web_chat_sessions', { p_limit: 500 });
+  const webChatExpired = webChatExpiry.error
+    ? null
+    : Number((Array.isArray(webChatExpiry.data) ? webChatExpiry.data[0]?.expired_count : webChatExpiry.data?.expired_count) ?? 0);
 
   const [controlsResult, inboundResult, firstTouchSentResult, followupResult, stuckResult, failedSendResult] = await Promise.all([
     supabase.from('system_controls').select('organization_id,global_kill_switch,email_paused,whatsapp_ai_paused,agents_paused,shadow_mode'),
@@ -490,6 +494,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     generatedAt: now.toISOString(),
+    webChatExpired,
     agentTasks,
     followupReconciliation,
     followups: followupResults,
