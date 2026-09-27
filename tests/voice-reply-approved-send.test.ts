@@ -24,7 +24,7 @@ describe('controlled voice reply approved-send contract', () => {
     expect(approvedSend).toContain('controlledVoiceReplyPilot?: boolean');
     expect(approvedSend).toContain('Controlled voice reply must use the existing controlled shadow pilot boundary');
     expect(approvedSend).toContain("message.media_type ?? '').toUpperCase() !== 'AUDIO'");
-    expect(approvedSend).toContain("provider: 'OPENAI'");
+    expect(execution).toContain("provider: 'OPENAI'");
     expect(approvedSend).toContain(".eq('channel', 'AI')");
     expect(approvedSend).toContain('prepareControlledVoiceReplyAudio');
     expect(approvedSend).toContain('provider.sendAudio');
