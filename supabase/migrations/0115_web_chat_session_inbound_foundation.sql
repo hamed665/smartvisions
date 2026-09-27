@@ -192,6 +192,7 @@ begin
  if not found then raise exception 'Web Chat widget unavailable';end if;
  if not (v_origin=any(w.allowed_origins)) then raise exception 'Web Chat origin not allowed';end if;
  if w.consent_required and not coalesce(p_consent_accepted,false) then raise exception 'Web Chat consent required';end if;
+ if (select count(*) from public.web_chat_sessions s where s.widget_config_id=w.id and s.origin=v_origin and s.created_at>now()-interval '5 minutes')>=100 then raise exception 'Web Chat session rate limit';end if;
  select * into b from public.communication_channel_bindings where organization_id=w.organization_id and id=w.communication_channel_binding_id and tenant_business_id=w.tenant_business_id and branch_id=w.branch_id and channel='WEB_CHAT' and provider='SMART_VISIONS' and provider_destination_id=w.public_key and status='ACTIVE';
  if not found then raise exception 'Web Chat binding unavailable';end if;
  if not exists(select 1 from public.integration_connections ic where ic.organization_id=w.organization_id and ic.id=b.integration_connection_id and ic.provider='SMART_VISIONS' and ic.channel='WEB_CHAT' and ic.enabled=true and ic.status='CONNECTED') then raise exception 'Web Chat integration unavailable';end if;
@@ -224,6 +225,8 @@ begin
  if not found or not (s.origin=any(w.allowed_origins)) then raise exception 'Web Chat widget unavailable';end if;
  if w.consent_required and s.consent_accepted_at is null then raise exception 'Web Chat consent required';end if;
  if length(v_text) not between 1 and w.max_message_chars then raise exception 'Web Chat message length invalid';end if;
+ if (select count(*) from public.web_chat_events e where e.organization_id=s.organization_id and e.session_id=s.id and e.event_type='MESSAGE' and e.created_at>now()-interval '1 minute')>=20 then raise exception 'Web Chat message rate limit';end if;
+ if (select count(*) from public.web_chat_events e where e.organization_id=s.organization_id and e.session_id=s.id and e.event_type='MESSAGE')>=500 then raise exception 'Web Chat session message limit';end if;
  if not exists(select 1 from public.communication_channel_bindings b where b.organization_id=s.organization_id and b.id=s.communication_channel_binding_id and b.status='ACTIVE' and b.channel='WEB_CHAT') then raise exception 'Web Chat binding unavailable';end if;
  v_provider_id:=s.id::text||':'||v_client;
  insert into public.web_chat_events(organization_id,session_id,event_id,event_type,payload)
