@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export type CommunicationChannel = 'EMAIL' | 'WHATSAPP' | 'INSTAGRAM';
+export type CommunicationChannel = 'EMAIL' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK_MESSENGER';
 export type CommunicationBindingStatus = 'ACTIVE' | 'ARCHIVED';
 export type ChatwootAccountMappingStatus =
   | 'PROVISIONING'
