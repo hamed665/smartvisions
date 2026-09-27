@@ -46,6 +46,8 @@ export type NormalizedWhatsAppInbound = {
   contactName?: string;
   mediaId?: string;
   mimeType?: string;
+  filename?: string;
+  caption?: string;
   voice?: boolean;
   referral?: WhatsAppReferralContext;
 };
@@ -76,6 +78,10 @@ type WhatsAppWebhookRoot = {
           type?: string;
           text?: { body?: string };
           audio?: { id?: string; mime_type?: string; voice?: boolean };
+          image?: { id?: string; mime_type?: string; caption?: string };
+          video?: { id?: string; mime_type?: string; caption?: string };
+          document?: { id?: string; mime_type?: string; filename?: string; caption?: string };
+          sticker?: { id?: string; mime_type?: string; animated?: boolean };
           referral?: RawWhatsAppReferral;
         }>;
         statuses?: Array<{
@@ -137,6 +143,8 @@ export function extractWhatsAppInbound(payload: unknown): NormalizedWhatsAppInbo
       const contactName = value?.contacts?.[0]?.profile?.name;
       for (const message of value?.messages ?? []) {
         if (!message.id || !message.from || !message.type) continue;
+        const media = message.audio ?? message.image ?? message.video ?? message.document ?? message.sticker;
+        const caption = clean(message.image?.caption ?? message.video?.caption ?? message.document?.caption);
         events.push({
           providerMessageId: message.id,
           destination,
@@ -145,8 +153,10 @@ export function extractWhatsAppInbound(payload: unknown): NormalizedWhatsAppInbo
           type: message.type,
           text: message.text?.body,
           contactName,
-          mediaId: message.audio?.id,
-          mimeType: message.audio?.mime_type,
+          mediaId: clean(media?.id),
+          mimeType: clean(media?.mime_type),
+          filename: clean(message.document?.filename),
+          caption,
           voice: message.audio?.voice,
           referral: referralContext(message.referral),
         });
