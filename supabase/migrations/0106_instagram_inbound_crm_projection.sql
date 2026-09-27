@@ -35,6 +35,7 @@ declare
   v_conversation_id uuid;
   v_message_id uuid;
   v_projection_id uuid;
+  v_projected_chatwoot_id integer;
   v_mapping_id uuid;
   v_brand_id uuid;
   v_inserted boolean := false;
@@ -96,7 +97,7 @@ begin
   do update set updated_at=excluded.updated_at
   returning id into v_lead_id;
 
-  select p.conversation_id,p.id into v_conversation_id,v_projection_id
+  select p.conversation_id,p.id,p.chatwoot_conversation_display_id into v_conversation_id,v_projection_id,v_projected_chatwoot_id
     from public.unified_inbox_conversation_projections p
     join public.sales_conversations sc
       on sc.organization_id=p.organization_id and sc.id=p.conversation_id
@@ -107,6 +108,10 @@ begin
      and sc.lead_id=v_lead_id and sc.channel='INSTAGRAM'
      and p.lifecycle_status in ('ACTIVE','DEGRADED')
    order by p.updated_at desc limit 1;
+
+  if v_conversation_id is not null and v_projected_chatwoot_id <> p_chatwoot_conversation_display_id then
+    raise exception 'Chatwoot conversation does not match canonical Unified Inbox projection';
+  end if;
 
   if v_conversation_id is null then
     insert into public.sales_conversations (
