@@ -333,6 +333,21 @@ Unified per-channel:
 - supported capabilities;
 - incident state.
 
+### Current evidence checkpoint — 2026-09-27
+
+- **Connection status — IMPLEMENTED / PRODUCTION_VERIFIED (read-model path):** derived from canonical integration/binding/readiness evidence; pending/unimplemented channels remain explicitly non-green.
+- **Credential health — IMPLEMENTED / PRODUCTION_VERIFIED (boundary):** active/configured rows, tenant bindings and readiness contracts are reused. Built-in Web Chat is explicitly credentialless; inactive Meta channels are not treated as authenticated.
+- **Webhook health — IMPLEMENTED / PRODUCTION_VERIFIED (evidence model):** per-channel journal/event evidence is surfaced separately from configuration state.
+- **Provider rate limit/quota — IMPLEMENTED / PRODUCTION_VERIFIED (telemetry path):** Resend + Meta provider response evidence is bounded and written to existing audit logs. `EVIDENCE_PRESENT / NEAR_LIMIT / RATE_LIMITED` require observed provider evidence; otherwise health remains `NO_PROVIDER_QUOTA_EVIDENCE`.
+- **Last verified evidence — IMPLEMENTED / PRODUCTION_VERIFIED:** existing integration checks, binding verification, events, acceptance receipts and quota observations feed the health surface.
+- **Supported capabilities — IMPLEMENTED / PRODUCTION_VERIFIED (declared-evidence path):** active Email/WhatsApp descriptor capabilities plus internally implemented/pending channel states are visible without widening the active adapter registry.
+- **Incident state — IMPLEMENTED / PRODUCTION_VERIFIED:** pauses, missing configuration/binding, reconciliation conditions, credential gaps and pending Work Packages remain explicit blockers.
+- Production migrations: `0120_omnichannel_health_messenger_bootstrap`, `0121_omnichannel_channel_rate_limit_evidence_index`.
+- Exact-main CI #1441 and Production Deploy #921 succeeded on `8e857ae9cc68310e53ce89dac2c39399871f8f1b`.
+- Current real provider quota observation count is zero. **Do not interpret an empty evidence stream as healthy provider quota.**
+- `CONN-02` remains broader than this Work Package. Reconnect/disconnect, guided provider authorization, retention explanation and real customer acceptance stay open under their existing owners.
+
+
 ---
 
 # SECTION IDENTITY_CRM — Customer identity, CRM and service truth

@@ -1,5 +1,35 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## Latest continuation checkpoint — OMNI-CHANNEL-HEALTH — 2026-09-27
+
+Always re-read runtime/current main before mutation. The verified baseline before this documentation reconciliation is:
+
+- canonical runtime main: `8e857ae9cc68310e53ce89dac2c39399871f8f1b`;
+- PR #295 merged the evidence-derived unified channel-health aggregator + Connection Center surface and the disabled/NOT_CONFIGURED Messenger bootstrap;
+- PR #296 merged bounded provider quota/rate evidence for Resend + Meta provider boundaries;
+- exact-main CI #1441: SUCCESS;
+- Cloudflare Production Deploy #921: SUCCESS on the same SHA; Production Worker `0ece4443-c100-48c4-8da4-e86b12be3c92`;
+- Production Supabase is live through `0121_omnichannel_channel_rate_limit_evidence_index` version `20260927155456`;
+- `0120_omnichannel_health_messenger_bootstrap` is live and Messenger remains disabled + NOT_CONFIGURED;
+- unified health reads existing integration/binding/event/readiness/acceptance/control authorities; no channel-health table or second source of truth was added;
+- quota evidence uses existing `audit_logs`, persists bounded summaries only, and never stores raw provider headers/tokens/business IDs;
+- telemetry failure is non-authoritative and cannot cause resend after provider acceptance;
+- real quota evidence count is still 0, so provider quota health correctly remains unknown until real provider responses are observed;
+- independent Production smoke: Chatwoot 200, Smart Core login 200, unauthenticated integrations 307, invalid Owner Telegram webhook secret 401;
+- Shadow Mode remains ON; Global Kill Switch OFF; Instagram/Messenger/Web Chat AI pauses remain ON.
+
+`OMNI-CHANNEL-HEALTH` is internally implemented/deployed and Production-verified for the controlled infrastructure/read-model/security paths above. Do not mark provider-specific live quota/real-tenant acceptance green without evidence.
+
+Dependency audit selected the next bounded Work Package as `SECTION OMNICHANNEL / OMNI-TELEGRAM`. Important boundary: the existing Telegram Owner Assistant is an owner control plane and MUST remain separate from customer Telegram messaging. Do not reuse its global `TELEGRAM_BOT_TOKEN`, owner webhook journal or owner authorization as customer-channel authority.
+
+For customer Telegram:
+- extend the existing canonical communication/identity/channel constraints; do not create a second CRM, Conversation store, queue or Telegram inbox;
+- use a tenant/business/Branch channel binding and a tenant-specific server-side/Vault bot credential contract;
+- use the official Telegram webhook `secret_token` / `X-Telegram-Bot-Api-Secret-Token` authenticity mechanism and `update_id` for replay/idempotency evidence;
+- reuse canonical CRM identity, Chatwoot projection, send safety, DNC/suppression, human takeover, audit and reconciliation;
+- keep the customer adapter inactive until evidence-backed readiness/acceptance exists;
+- do not fabricate a Telegram tenant or Bot token for Production acceptance.
+
 ## Latest continuation checkpoint — OMNI-WEBCHAT — 2026-09-27
 
 Always re-read runtime/current main before mutation. The evidence-backed baseline before this documentation reconciliation is:
