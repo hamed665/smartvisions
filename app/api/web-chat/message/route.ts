@@ -14,6 +14,7 @@ function errorStatus(error: unknown) {
   if (error.code === 'MESSAGE_INVALID') return 400;
   if (error.code === 'RATE_LIMITED') return 429;
   if (error.code === 'WIDGET_UNAVAILABLE') return 404;
+  if (error.code === 'RECONCILIATION_REQUIRED') return 409;
   return 503;
 }
 
