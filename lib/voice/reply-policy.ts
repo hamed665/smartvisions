@@ -5,6 +5,7 @@ export type VoiceReplyFoundationBlocker =
   | 'AGENTS_PAUSED'
   | 'WHATSAPP_PAUSED'
   | 'WHATSAPP_PROVIDER_NOT_CONNECTED'
+  | 'OPENAI_PROVIDER_NOT_CONNECTED'
   | 'WHATSAPP_FREEFORM_WINDOW_REQUIRED'
   | 'HUMAN_TAKEOVER'
   | 'AI_VOICE_DISCLOSURE_REQUIRED'
@@ -19,6 +20,7 @@ export type VoiceReplyFoundationInput = {
   agentsPaused: boolean;
   whatsappPaused: boolean;
   whatsappProviderConnected: boolean;
+  openAiProviderConnected: boolean;
   whatsappFreeformWindowOpen: boolean;
   humanTakeover: boolean;
   aiVoiceDisclosureConfigured: boolean;
@@ -38,6 +40,7 @@ export function evaluateVoiceReplyFoundation(input: VoiceReplyFoundationInput) {
   if (input.agentsPaused) blockers.push('AGENTS_PAUSED');
   if (input.whatsappPaused) blockers.push('WHATSAPP_PAUSED');
   if (!input.whatsappProviderConnected) blockers.push('WHATSAPP_PROVIDER_NOT_CONNECTED');
+  if (!input.openAiProviderConnected) blockers.push('OPENAI_PROVIDER_NOT_CONNECTED');
   if (!input.whatsappFreeformWindowOpen) blockers.push('WHATSAPP_FREEFORM_WINDOW_REQUIRED');
   if (input.humanTakeover) blockers.push('HUMAN_TAKEOVER');
   if (!input.aiVoiceDisclosureConfigured) blockers.push('AI_VOICE_DISCLOSURE_REQUIRED');

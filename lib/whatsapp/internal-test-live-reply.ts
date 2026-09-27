@@ -274,6 +274,7 @@ export async function runInternalTestLiveReply(input: {
     persianTranslation: stringValue(secretary.operator_persian_translation),
     persianSummary: stringValue(secretary.operator_persian_summary),
     rememberCustomerLanguage: true,
+    deliveryMode: policy.deliveryMode,
   });
   if (queued.duplicate) {
     return { attempted: true, sent: false, reason: 'CONTROLLED_DRAFT_ALREADY_EXISTS', messageId: String(queued.messageId), runId: stringValue(payload.runId) };
@@ -328,6 +329,7 @@ export async function runInternalTestLiveReply(input: {
     messageId: approved.id,
     priority: 'LOW',
     controlledShadowPilot: true,
+    controlledVoiceReplyPilot: policy.deliveryMode === 'VOICE_REPLY',
   }));
   const sendPayload = await sendResponse.json().catch(() => ({})) as Record<string, unknown>;
   if (!sendResponse.ok) {
