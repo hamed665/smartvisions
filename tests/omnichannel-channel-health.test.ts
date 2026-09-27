@@ -5,6 +5,7 @@ describe('OMNI-CHANNEL-HEALTH evidence aggregation', () => {
   const health = readFileSync('lib/omnichannel/health.ts', 'utf8');
   const page = readFileSync('app/integrations/page.tsx', 'utf8');
   const types = readFileSync('lib/omnichannel/types.ts', 'utf8');
+  const bootstrap = readFileSync('supabase/migrations/0120_omnichannel_health_messenger_bootstrap.sql', 'utf8');
 
   it('does not activate deferred channels through the active adapter registry', () => {
     expect(types).toContain("ACTIVE_OMNICHANNEL_CHANNELS = ['EMAIL', 'WHATSAPP']");
@@ -40,6 +41,15 @@ describe('OMNI-CHANNEL-HEALTH evidence aggregation', () => {
     expect(health).toContain("'INTEGRATION_ROW_MISSING'");
     expect(health).toContain("'REAL_BINDING_MISSING'");
     expect(health).toContain("'AWAITING_REAL_BINDING'");
+  });
+
+  it('bootstraps Messenger configuration without activating the provider', () => {
+    expect(bootstrap).toContain("'FACEBOOK_MESSENGER'");
+    expect(bootstrap).toContain('false');
+    expect(bootstrap).toContain("'NOT_CONFIGURED'");
+    expect(bootstrap).toContain('on conflict (organization_id,provider,channel) do nothing');
+    expect(bootstrap).not.toContain("'CONNECTED'");
+    expect(bootstrap).not.toContain('provider_secret_ref');
   });
 
   it('renders the unified health dimensions in Connection Center', () => {
