@@ -1,4 +1,4 @@
-export type ApprovedSendChannel = 'EMAIL' | 'WHATSAPP';
+export type ApprovedSendChannel = 'EMAIL' | 'WHATSAPP' | 'INSTAGRAM';
 
 export type ApprovedSendPolicyInput = {
   messageStatus: string;
@@ -25,7 +25,7 @@ export function evaluateApprovedSendPolicy(input: ApprovedSendPolicyInput) {
   if (input.doNotContact) blocks.push('DO_NOT_CONTACT');
   if (input.agentMode === 'HUMAN') blocks.push('HUMAN_TAKEOVER');
   if (input.agentMode === 'PAUSED') blocks.push('AGENT_PAUSED');
-  if (input.messageChannel !== 'EMAIL' && input.messageChannel !== 'WHATSAPP') blocks.push('UNSUPPORTED_CHANNEL');
+  if (!['EMAIL', 'WHATSAPP', 'INSTAGRAM'].includes(input.messageChannel)) blocks.push('UNSUPPORTED_CHANNEL');
 
   return {
     allowed: blocks.length === 0,
