@@ -96,6 +96,7 @@ function helpText() {
     '/hunt OM Muscat "dental clinic" 5  اجرای Discovery کم‌هزینه',
     '/market OM on  فعال/غیرفعال‌کردن بازار',
     '/pause whatsapp  یا /resume whatsapp',
+    '/pause telegram  یا /resume telegram  (Customer Telegram فقط؛ Owner Assistant جداست)',
     '/approve <message-id>  و /reject <message-id>',
     '/revert  برگرداندن آخرین تغییر قابل برگشت',
     '',
@@ -114,7 +115,7 @@ export async function executeReadCommand(input: {
 
   if (command.type === 'SHOW_STATUS') {
     const [controls, costGuard, integrations, hotLeads, approvals, runningCampaigns] = await Promise.all([
-      supabase.from('system_controls').select('global_kill_switch,email_paused,whatsapp_ai_paused,agents_paused,shadow_mode').eq('organization_id', organizationId).maybeSingle(),
+      supabase.from('system_controls').select('global_kill_switch,email_paused,whatsapp_ai_paused,telegram_ai_paused,agents_paused,shadow_mode').eq('organization_id', organizationId).maybeSingle(),
       supabase.from('cost_guard_settings').select('monthly_total_budget_usd').eq('organization_id', organizationId).maybeSingle(),
       supabase.from('integration_connections').select('provider,channel,status,enabled').eq('organization_id', organizationId).order('provider'),
       supabase.from('leads').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId).in('status', ['INTERESTED','HOT','HUMAN']),
@@ -132,6 +133,7 @@ export async function executeReadCommand(input: {
         `Global Kill Switch: ${c?.global_kill_switch ? 'ON ⛔️' : 'OFF ✅'}`,
         `Agents: ${c?.agents_paused ? 'PAUSED' : 'ACTIVE'}`,
         `WhatsApp AI: ${c?.whatsapp_ai_paused ? 'PAUSED' : 'ACTIVE'}`,
+        `Telegram customer AI: ${c?.telegram_ai_paused ? 'PAUSED' : 'ACTIVE'}`,
         `Email: ${c?.email_paused ? 'PAUSED' : 'ACTIVE'}`,
         `Connected: ${connected.join(', ') || 'none'}`,
         `Hot / interested / human lead records (all-time inventory): ${hotLeads.count ?? 0}`,
@@ -254,7 +256,13 @@ export async function prepareMutation(input: {
     const { data, error } = await supabase.from('system_controls').select('organization_id,agents_paused,email_paused,whatsapp_ai_paused,global_kill_switch,shadow_mode').eq('organization_id', organizationId).maybeSingle();
     if (error) throw new Error(`System control lookup failed: ${error.message}`);
     if (!data) throw new Error('System controls پیدا نشد.');
-    const column = command.target === 'AGENTS' ? 'agents_paused' : command.target === 'EMAIL' ? 'email_paused' : 'whatsapp_ai_paused';
+    const column = command.target === 'AGENTS'
+      ? 'agents_paused'
+      : command.target === 'EMAIL'
+        ? 'email_paused'
+        : command.target === 'TELEGRAM'
+          ? 'telegram_ai_paused'
+          : 'whatsapp_ai_paused';
     const before = { target: command.target, paused: Boolean(data[column]) };
     const after = { target: command.target, paused: command.paused };
     return { command, preview: { title: 'تغییر Pause', text: `${command.target}\nBefore: ${before.paused ? 'PAUSED' : 'ACTIVE'}\nAfter: ${after.paused ? 'PAUSED' : 'ACTIVE'}\nShadow Mode بدون تغییر می‌ماند.`, before, after, entityType: 'system_controls', entityId: organizationId, requiresConfirmation: true } };
@@ -320,9 +328,15 @@ async function assertCurrentMatches(supabase: SupabaseClient, organizationId: st
     if (error || !data) throw new Error(error?.message ?? 'Market not found');
     if (!jsonEqual({ countryCode: data.country_code, enabled: data.enabled }, expected)) throw new Error('وضعیت بازار بعد از preview تغییر کرده؛ دوباره دستور را صادر کن.');
   } else if (command.type === 'SET_PAUSE') {
-    const { data, error } = await supabase.from('system_controls').select('agents_paused,email_paused,whatsapp_ai_paused').eq('organization_id', organizationId).maybeSingle();
+    const { data, error } = await supabase.from('system_controls').select('agents_paused,email_paused,whatsapp_ai_paused,telegram_ai_paused').eq('organization_id', organizationId).maybeSingle();
     if (error || !data) throw new Error(error?.message ?? 'System controls not found');
-    const paused = command.target === 'AGENTS' ? data.agents_paused : command.target === 'EMAIL' ? data.email_paused : data.whatsapp_ai_paused;
+    const paused = command.target === 'AGENTS'
+      ? data.agents_paused
+      : command.target === 'EMAIL'
+        ? data.email_paused
+        : command.target === 'TELEGRAM'
+          ? data.telegram_ai_paused
+          : data.whatsapp_ai_paused;
     if (!jsonEqual({ target: command.target, paused: Boolean(paused) }, expected)) throw new Error('Pause state بعد از preview تغییر کرده؛ دوباره دستور را صادر کن.');
   } else if (command.type === 'APPROVE_MESSAGE' || command.type === 'REJECT_MESSAGE') {
     const { data, error } = await supabase.from('conversation_messages').select('id,status,requires_approval,approval_reason').eq('organization_id', organizationId).eq('id', command.messageId).maybeSingle();
@@ -357,7 +371,13 @@ async function restoreOriginalChange(input: { supabase: SupabaseClient; organiza
     const { error: updateError } = await input.supabase.from('market_settings').update({ enabled: before.enabled, updated_at: now() }).eq('organization_id', input.organizationId).eq('country_code', command.countryCode);
     if (updateError) throw updateError;
   } else if (command.type === 'SET_PAUSE') {
-    const column = command.target === 'AGENTS' ? 'agents_paused' : command.target === 'EMAIL' ? 'email_paused' : 'whatsapp_ai_paused';
+    const column = command.target === 'AGENTS'
+      ? 'agents_paused'
+      : command.target === 'EMAIL'
+        ? 'email_paused'
+        : command.target === 'TELEGRAM'
+          ? 'telegram_ai_paused'
+          : 'whatsapp_ai_paused';
     const { error: updateError } = await input.supabase.from('system_controls').update({ [column]: before.paused, updated_at: now() }).eq('organization_id', input.organizationId);
     if (updateError) throw updateError;
   } else {
@@ -409,7 +429,13 @@ export async function executePreparedMutation(input: {
     if (error) throw new Error(`Market update failed: ${error.message}`);
     text = `بازار ${command.countryCode} ${command.enabled ? 'فعال' : 'غیرفعال'} شد.`;
   } else if (command.type === 'SET_PAUSE') {
-    const column = command.target === 'AGENTS' ? 'agents_paused' : command.target === 'EMAIL' ? 'email_paused' : 'whatsapp_ai_paused';
+    const column = command.target === 'AGENTS'
+      ? 'agents_paused'
+      : command.target === 'EMAIL'
+        ? 'email_paused'
+        : command.target === 'TELEGRAM'
+          ? 'telegram_ai_paused'
+          : 'whatsapp_ai_paused';
     const { error } = await supabase.from('system_controls').update({ [column]: command.paused, updated_at: now() }).eq('organization_id', organizationId);
     if (error) throw new Error(`Pause update failed: ${error.message}`);
     text = `${command.target} ${command.paused ? 'PAUSED' : 'ACTIVE'} شد. Shadow Mode دست‌نخورده ماند.`;
