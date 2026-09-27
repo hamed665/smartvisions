@@ -128,9 +128,9 @@ export async function ensureChatwootPublicConversationProjection(input: {
   fetchImpl?: typeof fetch;
 }) {
   const ctx = await context(input);
-  await createOrReconcileContact(ctx, input.fetchImpl);
+  const contact = await createOrReconcileContact(ctx, input.fetchImpl);
   const existing = activeConversation(await conversations(ctx, input.fetchImpl));
-  if (existing) return { contactSourceId: ctx.sourceId, conversation: existing, outcome: 'RECONCILED_EXISTING' as const };
+  if (existing) return { contactSourceId: ctx.sourceId, contact, conversation: existing, outcome: 'RECONCILED_EXISTING' as const };
 
   try {
     const created = await request<PublicConversation>(
@@ -143,11 +143,11 @@ export async function ensureChatwootPublicConversationProjection(input: {
       input.fetchImpl,
     );
     if (!Number.isInteger(created.id) || Number(created.id) <= 0) throw new Error('Chatwoot conversation response is invalid');
-    return { contactSourceId: ctx.sourceId, conversation: created, outcome: 'CREATED' as const };
+    return { contactSourceId: ctx.sourceId, contact, conversation: created, outcome: 'CREATED' as const };
   } catch (error) {
     const reconciled = activeConversation(await conversations(ctx, input.fetchImpl));
     if (reconciled && Number.isInteger(reconciled.id) && Number(reconciled.id) > 0) {
-      return { contactSourceId: ctx.sourceId, conversation: reconciled, outcome: 'RECONCILED_AFTER_AMBIGUOUS_CREATE' as const };
+      return { contactSourceId: ctx.sourceId, contact, conversation: reconciled, outcome: 'RECONCILED_AFTER_AMBIGUOUS_CREATE' as const };
     }
     throw error;
   }
