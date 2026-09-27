@@ -1,5 +1,10 @@
 -- 0112: Facebook Messenger inbound canonical CRM + Unified Inbox projection.
 -- Smart Core remains CRM authority; Chatwoot remains Communication Plane.
+
+alter table public.sales_conversations drop constraint if exists sales_conversations_channel_check;
+alter table public.sales_conversations add constraint sales_conversations_channel_check check (channel in ('EMAIL','WHATSAPP','INSTAGRAM','FACEBOOK_MESSENGER','WEB','OTHER'));
+alter table public.conversation_messages drop constraint if exists conversation_messages_channel_check;
+alter table public.conversation_messages add constraint conversation_messages_channel_check check (channel in ('EMAIL','WHATSAPP','INSTAGRAM','FACEBOOK_MESSENGER','WEB','OTHER'));
 -- This command is service-only and runs after the external Chatwoot conversation
 -- has been created/reconciled. It is retry-safe and serializes per business.
 
