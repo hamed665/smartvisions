@@ -430,6 +430,7 @@ export async function POST(request: Request) {
         direction: 'OUTBOUND',
         status: 'SENT',
         provider_message_id: providerMessageId,
+        provider_delivery_status: 'ACCEPTED',
         subject: sendContext.subject,
         body: message.original_text,
         idempotency_key: idempotencyKey,
