@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/chatwoot/vault', () => ({
@@ -16,10 +17,12 @@ function service() {
     hmac_token_ref: 'vault://token',
     status: 'ACTIVE',
   }, error: null };
-  const chain: any = {
-    select: () => chain, eq: () => chain, single: async () => result,
+  const chain = {
+    select() { return this; },
+    eq() { return this; },
+    single: async () => result,
   };
-  return { from: () => chain } as any;
+  return { from: () => chain } as unknown as SupabaseClient;
 }
 
 describe('Chatwoot public conversation projection', () => {
@@ -34,7 +37,7 @@ describe('Chatwoot public conversation projection', () => {
 
     const result = await ensureChatwootPublicConversationProjection({
       service: service(), organizationId: 'org', tenantBusinessId: 'biz',
-      bindingId: 'binding', canonicalIdentityId: 'identity', fetchImpl: fetchImpl as any,
+      bindingId: 'binding', canonicalIdentityId: 'identity', fetchImpl: fetchImpl as unknown as typeof fetch,
     });
 
     expect(result.outcome).toBe('RECONCILED_EXISTING');
@@ -51,7 +54,7 @@ describe('Chatwoot public conversation projection', () => {
 
     const result = await ensureChatwootPublicConversationProjection({
       service: service(), organizationId: 'org', tenantBusinessId: 'biz',
-      bindingId: 'binding', canonicalIdentityId: 'identity', fetchImpl: fetchImpl as any,
+      bindingId: 'binding', canonicalIdentityId: 'identity', fetchImpl: fetchImpl as unknown as typeof fetch,
     });
 
     expect(result.outcome).toBe('RECONCILED_AFTER_AMBIGUOUS_CREATE');
@@ -66,7 +69,7 @@ describe('Chatwoot public conversation projection', () => {
 
     await expect(ensureChatwootPublicConversationProjection({
       service: service(), organizationId: 'org', tenantBusinessId: 'biz',
-      bindingId: 'binding', canonicalIdentityId: 'identity', fetchImpl: fetchImpl as any,
+      bindingId: 'binding', canonicalIdentityId: 'identity', fetchImpl: fetchImpl as unknown as typeof fetch,
     })).rejects.toThrow('Multiple active Chatwoot conversations');
   });
 });
