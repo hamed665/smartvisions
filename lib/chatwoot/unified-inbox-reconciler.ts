@@ -49,12 +49,14 @@ export async function reconcileChatwootWebhookEvent(
   supabase: SupabaseClient,
   event: ChatwootWebhookJournalEvent,
 ) {
-  const webChat = await reconcileWebChatChatwootOutboundEvent(supabase, event.id);
-  if (webChat.handled) {
-    return {
-      action: webChat.outcome === 'INSERTED' ? 'WEB_CHAT_OUTBOUND_SYNCED' as const : 'WEB_CHAT_OUTBOUND_REPLAY' as const,
-      messageId: webChat.messageId,
-    };
+  if (String(event.event_type ?? '').trim().toLowerCase() === 'message_created') {
+    const webChat = await reconcileWebChatChatwootOutboundEvent(supabase, event.id);
+    if (webChat.handled) {
+      return {
+        action: webChat.outcome === 'INSERTED' ? 'WEB_CHAT_OUTBOUND_SYNCED' as const : 'WEB_CHAT_OUTBOUND_REPLAY' as const,
+        messageId: webChat.messageId,
+      };
+    }
   }
 
   const decision = parseChatwootUnifiedInboxEvent(event);
