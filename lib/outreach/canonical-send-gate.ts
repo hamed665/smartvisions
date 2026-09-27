@@ -152,10 +152,10 @@ export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllow
       .select('identity_id,crm_identities!inner(identity_type,normalized_value,identity_status)')
       .eq('organization_id', organizationId)
       .eq('business_id', lead.business_id)
-      .eq('link_status', 'ACTIVE')
+      .eq('status', 'ACTIVE')
       .eq('crm_identities.identity_type', channel === 'INSTAGRAM' ? 'INSTAGRAM_PROVIDER_USER' : 'FACEBOOK_MESSENGER_PROVIDER_USER')
       .eq('crm_identities.normalized_value', normalizedProviderIdentity)
-      .eq('crm_identities.identity_status', 'ACTIVE')
+      .eq('crm_identities.status', 'ACTIVE')
       .limit(2);
     if (identityError) throw new Error(`CANONICAL_SOCIAL_IDENTITY_UNAVAILABLE:${identityError.message}`);
     if ((identityLinks ?? []).length > 1) throw new Error('CANONICAL_SOCIAL_IDENTITY_AMBIGUOUS');
