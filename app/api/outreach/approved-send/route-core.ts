@@ -21,7 +21,7 @@ import { verifyLiveTestMarketWindowException } from '@/lib/whatsapp/live-test-ma
 import type { WhatsAppSendResult } from '@/lib/whatsapp/provider';
 import { ResendEmailProvider } from '@/lib/outreach/resend-provider';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
-import { recordProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
+import { rateLimitEvidenceFromError, recordProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -647,6 +647,19 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ sent: true, channel: message.channel, providerMessageId, idempotencyKey, controlledShadowPilot: Boolean(body.controlledShadowPilot), controlledEmailPilot: Boolean(body.controlledEmailPilot) });
   } catch (error) {
+    const providerErrorEvidence = rateLimitEvidenceFromError(error);
+    if (providerErrorEvidence) {
+      const providerErrorAudit = await recordProviderRateLimitEvidence({
+        service: supabase,
+        organizationId: body.organizationId,
+        provider: message.channel === 'EMAIL' ? 'RESEND' : 'META',
+        channel: message.channel,
+        evidence: providerErrorEvidence,
+      });
+      if (!providerErrorAudit.recorded && providerErrorAudit.reason === 'AUDIT_PERSISTENCE_FAILED') {
+        console.error('Approved-send provider quota error telemetry persistence failed', providerErrorAudit.error);
+      }
+    }
     const errorMessage = error instanceof Error ? error.message : 'Approved send failed';
     const disposition = approvedSendFailureDisposition(providerAccepted);
     if (disposition.markFailed) {
