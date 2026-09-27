@@ -115,6 +115,7 @@ export async function POST(request: Request) {
       || !isUuid(identityId)
       || (displayName !== null && typeof displayName !== 'string')
       || !isCrmPersonVerificationMethod(verificationMethod)
+      || verificationMethod !== 'MANUAL_CONFIRMED'
       || typeof sourceRef !== 'string'
       || !sourceRef.trim()
       || !isObject(evidence)
@@ -144,6 +145,7 @@ export async function POST(request: Request) {
         || !isCrmPersonRelationshipType(relationshipType)
         || (jobTitle !== null && typeof jobTitle !== 'string')
         || !isCrmPersonVerificationMethod(relationshipVerificationMethod)
+        || relationshipVerificationMethod !== 'MANUAL_CONFIRMED'
         || typeof relationshipSourceRef !== 'string'
         || !relationshipSourceRef.trim()
         || !isObject(relationshipEvidence)
