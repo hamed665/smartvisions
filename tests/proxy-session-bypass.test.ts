@@ -6,6 +6,7 @@ describe('session proxy bypass paths', () => {
     expect(shouldBypassSession('/api/email/webhook')).toBe(true);
     expect(shouldBypassSession('/api/whatsapp/webhook')).toBe(true);
     expect(shouldBypassSession('/api/telegram/webhook')).toBe(true);
+    expect(shouldBypassSession('/api/telegram/customer/webhook/00000000-0000-4000-8000-000000000001')).toBe(true);
     expect(shouldBypassSession('/api/web-chat/session')).toBe(true);
     expect(shouldBypassSession('/api/web-chat/message')).toBe(true);
     expect(shouldBypassSession('/api/web-chat/config')).toBe(true);
@@ -35,6 +36,8 @@ describe('session proxy bypass paths', () => {
     expect(shouldBypassSession('/api/operations/report/extra')).toBe(false);
     expect(shouldBypassSession('/api/operations/telegram-daily-digest/extra')).toBe(false);
     expect(shouldBypassSession('/api/telegram/webhook/extra')).toBe(false);
+    expect(shouldBypassSession('/api/telegram/customer/webhook/not-a-uuid')).toBe(false);
+    expect(shouldBypassSession('/api/telegram/customer/webhook/00000000-0000-4000-8000-000000000001/extra')).toBe(false);
     expect(shouldBypassSession('/api/telegram/notify/extra')).toBe(false);
     expect(shouldBypassSession('/api/web-chat/widget/extra')).toBe(false);
     expect(shouldBypassSession('/api/web-chat/upload/extra')).toBe(false);
