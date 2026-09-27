@@ -80,16 +80,16 @@ No blanket completion percentage until all applicable acceptance items have evid
 
 | ID | Evidence | Gap / consequence | Existing owners |
 |---|---|---|---|
-| GAP-01 | lib/whatsapp/persistence.ts: resolveWhatsAppOrganizationId requires exactly one META/WHATSAPP integration | Multiple integration rows fail closed; real multi-business inbound routing is not complete | DEV-INTEGRATIONS; COMM-RECONCILIATION; COMM-TENANT-BRIDGE |
-| GAP-02 | lib/whatsapp/meta-cloud.ts defaults to environment token and phone-number ID | Default send path needs verified tenant-specific credential selection and binding; do not claim every possible injected caller is global | DEV-INTEGRATIONS; COMM-ACTION-BRIDGE |
-| GAP-03 | lib/whatsapp/webhook.ts normalized inbound omits destination WABA/phone-number binding context | Preserve trusted destination context through verified webhook ingestion for tenant routing | COMM-RECONCILIATION |
-| GAP-04 | app/integrations/page.tsx offers status/verification; reviewed paths contain no completed customer Embedded Signup flow | Self-service connection is not proven | UX-BUSINESS-WEB; DEV-INTEGRATIONS |
+| GAP-01 | Superseded by PR #264 exact destination routing and PR #267 lifecycle scope enforcement | **IMPLEMENTED / PRODUCTION_DEPLOYED**; real first-tenant acceptance remains under GAP-09 | DEV-INTEGRATIONS; COMM-RECONCILIATION; COMM-TENANT-BRIDGE |
+| GAP-02 | Superseded by PR #264 Vault-backed tenant resolver, PR #266 outbound binding enforcement and PR #268 tenant-bound voice media credential | **IMPLEMENTED / PRODUCTION_DEPLOYED** for reviewed production paths; real tenant send acceptance remains GAP-09 | DEV-INTEGRATIONS; COMM-ACTION-BRIDGE |
+| GAP-03 | Superseded by PR #264 destination WABA/phone context preservation and exact binding resolution | **IMPLEMENTED / PRODUCTION_DEPLOYED** | COMM-RECONCILIATION |
+| GAP-04 | PR #265 implements tenant-bound Meta WhatsApp Embedded Signup code exchange and Vault persistence | **IMPLEMENTED / PRODUCTION_DEPLOYED; BLOCKED_EXTERNAL** for live Meta app/customer acceptance | UX-BUSINESS-WEB; DEV-INTEGRATIONS |
 | GAP-05 | lib/omnichannel/adapters.ts ACTIVE_CHANNEL_ADAPTERS includes EMAIL and WHATSAPP only | Other customer channels require implementation and acceptance | OMNI-META-SOCIAL; OMNI-TELEGRAM; OMNI-WEBCHAT; OMNI-TIKTOK; OMNI-SMS-RCS |
 | GAP-06 | Email/WhatsApp descriptors mark nativeProviderActivity UNPROVEN | Native-app coexistence must not be advertised as proven | COMM-HUMAN-AI; COMM-RECONCILIATION |
-| GAP-07 | WhatsApp extraction maps audio media in the reviewed path | Full image/document/video/media support is not established | OMNI-VOICE; AI-VOICE-VISION; COMM-UNIFIED-INBOX |
-| GAP-08A | PR #260 + Production migration 0098 | Governed status/labels/assignee/Team backend actions are implemented and deployed; operator UI controls and real-tenant activation acceptance remain pending | COMM-UNIFIED-INBOX |
-| GAP-08B | Current source/runtime review | Internal-note behavior is not yet complete | COMM-UNIFIED-INBOX |
-| GAP-08C | Current source + OVH S3 evidence | Attachment storage is proven, but scoped attachment authorization/read/download bounds remain incomplete | COMM-UNIFIED-INBOX |
+| GAP-07 | PR #268 normalizes audio/image/video/document/sticker media and tenant-binds voice media download | **IMPLEMENTED / PRODUCTION_DEPLOYED** for normalization and reviewed download path; real customer media acceptance remains GAP-09 | OMNI-VOICE; AI-VOICE-VISION; COMM-UNIFIED-INBOX |
+| GAP-08A | PR #263 added operator UI over the governed action bridge | **IMPLEMENTED / PRODUCTION_DEPLOYED**; real-tenant activation acceptance remains GAP-09 | COMM-UNIFIED-INBOX |
+| GAP-08B | PR #263 added scoped private internal notes with idempotent/reconciled Chatwoot action evidence | **IMPLEMENTED / PRODUCTION_DEPLOYED**; real-tenant acceptance remains GAP-09 | COMM-UNIFIED-INBOX |
+| GAP-08C | PR #263 added scoped attachment listing and bounded authenticated proxy download | **IMPLEMENTED / PRODUCTION_DEPLOYED**; real-tenant attachment acceptance remains GAP-09 | COMM-UNIFIED-INBOX |
 | GAP-09 | Activation gate + earlier empty tenant/projection evidence | A real first tenant and end-to-end production acceptance remain gated | COMM-TENANT-BRIDGE; FINAL-E2E |
 
 Revalidate each gap before changing code. A later fix supersedes the finding through evidence, not deletion.

@@ -199,6 +199,8 @@ export const whatsappSemanticAdapter: ChannelSemanticAdapter<
         contactName: event.contactName ?? null,
         mediaId: event.mediaId ?? null,
         mimeType: event.mimeType ?? null,
+        filename: event.filename ?? null,
+        caption: event.caption ?? null,
         voice: Boolean(event.voice),
         referral: event.referral ?? null,
       },

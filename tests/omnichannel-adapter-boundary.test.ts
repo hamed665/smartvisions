@@ -192,6 +192,28 @@ describe('Business OS omnichannel semantic boundary', () => {
     expect(withoutTimestamp.contentType).toBe('AUDIO');
   });
 
+  it('preserves WhatsApp media metadata at the semantic boundary', () => {
+    const normalized = whatsappSemanticAdapter.normalizeInbound({
+      providerMessageId: 'wamid.media',
+      destination: { phoneNumberId: 'phone-1', wabaId: 'waba-1' },
+      from: '96890000000',
+      type: 'document',
+      mediaId: 'doc-1',
+      mimeType: 'application/pdf',
+      filename: 'quote.pdf',
+      caption: 'signed quote',
+    });
+    expect(normalized).toMatchObject({
+      contentType: 'MEDIA',
+      metadata: {
+        mediaId: 'doc-1',
+        mimeType: 'application/pdf',
+        filename: 'quote.pdf',
+        caption: 'signed quote',
+      },
+    });
+  });
+
   it('maps WhatsApp delivery/read evidence to canonical statuses', () => {
     const cases = [
       ['sent', 'SENT'],
