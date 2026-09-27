@@ -15,7 +15,8 @@ export type CustomerChannel =
   | 'WEB_CHAT'
   | 'TELEGRAM'
   | 'TIKTOK'
-  | 'SMS_RCS'
+  | 'SMS'
+  | 'RCS'
   | 'VOICE';
 
 export type ChannelHealthSnapshot = {
@@ -240,6 +241,8 @@ function pauseState(controls: Record<string, unknown> | null, channel: CustomerC
   if (channel === 'WEB_CHAT' && controls.web_chat_ai_paused === true) return 'AI_PAUSED';
   if (channel === 'TELEGRAM' && controls.telegram_ai_paused === true) return 'AI_PAUSED';
   if (channel === 'TIKTOK' && controls.tiktok_ai_paused === true) return 'AI_PAUSED';
+  if (channel === 'SMS' && controls.sms_ai_paused === true) return 'AI_PAUSED';
+  if (channel === 'RCS' && controls.rcs_ai_paused === true) return 'AI_PAUSED';
   return 'RUNNING';
 }
 
@@ -274,10 +277,10 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
       .from('communication_channel_bindings')
       .select('id,channel,tenant_business_id,branch_id,status,last_verified_at,last_error_code,provider_destination_id,provider_secret_ref')
       .eq('organization_id', organizationId)
-      .in('channel', ['EMAIL', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK_MESSENGER', 'WEB_CHAT', 'TELEGRAM', 'TIKTOK']),
+      .in('channel', ['EMAIL', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK_MESSENGER', 'WEB_CHAT', 'TELEGRAM', 'TIKTOK', 'SMS', 'RCS']),
     service
       .from('system_controls')
-      .select('shadow_mode,global_kill_switch,email_paused,whatsapp_ai_paused,instagram_ai_paused,facebook_messenger_ai_paused,web_chat_ai_paused,telegram_ai_paused,tiktok_ai_paused,agents_paused')
+      .select('shadow_mode,global_kill_switch,email_paused,whatsapp_ai_paused,instagram_ai_paused,facebook_messenger_ai_paused,web_chat_ai_paused,telegram_ai_paused,tiktok_ai_paused,sms_ai_paused,rcs_ai_paused,agents_paused')
       .eq('organization_id', organizationId)
       .maybeSingle(),
     latestEvent('email_events', organizationId),
@@ -361,6 +364,8 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
 
   const tiktokBindings = channelBindings('TIKTOK');
   const tiktokIntegration = integration('TIKTOK', 'TIKTOK');
+  const smsBindings = channelBindings('SMS');
+  const rcsBindings = channelBindings('RCS');
 
   const webChatBindingCount = webChatHealth.length;
   const webChatBlockers = [...new Set(webChatHealth.flatMap((row) => row.blockers))];
@@ -623,22 +628,64 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
       ],
     },
     {
-      channel: 'SMS_RCS',
+      channel: 'SMS',
       provider: 'UNSELECTED',
-      implementationState: 'NOT_IMPLEMENTED',
+      implementationState: 'INTERNAL_READY',
       connectionStatus: 'PROVIDER_NOT_SELECTED',
-      credentialHealth: 'NOT_EVALUATED',
-      webhookHealth: 'NOT_IMPLEMENTED',
-      quotaHealth: 'NOT_EVALUATED',
-      lastVerifiedAt: null,
+      credentialHealth: 'PROVIDER_NOT_SELECTED',
+      webhookHealth: 'PROVIDER_NOT_SELECTED',
+      quotaHealth: 'NO_PROVIDER_QUOTA_EVIDENCE',
+      lastVerifiedAt: maxIso(...smsBindings.map((row) => row.last_verified_at)),
       supportedCapabilities: [],
-      incidentState: 'WORK_PACKAGE_PENDING',
-      blockers: ['OMNI_SMS_RCS_PENDING'],
-      bindingCount: 0,
+      incidentState: pauseState(controls, 'SMS') !== 'RUNNING'
+        ? pauseState(controls, 'SMS')
+        : 'PROVIDER_NOT_SELECTED',
+      blockers: [
+        'PROVIDER_ADAPTER_NOT_SELECTED',
+        'CANONICAL_PERMISSION_AUTHORITY_PENDING',
+        'COUNTRY_CAPABILITY_EVIDENCE_REQUIRED',
+        'PRICING_USAGE_EVIDENCE_REQUIRED',
+      ],
+      bindingCount: smsBindings.length,
       lastEventAt: null,
       lastAcceptanceAt: null,
-      controlState: 'NOT_APPLICABLE',
-      evidenceSources: ['MASTER_PROGRAM_SECTIONS'],
+      controlState: pauseState(controls, 'SMS'),
+      evidenceSources: [
+        'communication_channel_bindings',
+        'system_controls',
+        '0125_omni_sms_rcs_capability_foundation',
+        'lib/sms-rcs/capability-policy',
+      ],
+    },
+    {
+      channel: 'RCS',
+      provider: 'UNSELECTED',
+      implementationState: 'INTERNAL_READY',
+      connectionStatus: 'PROVIDER_NOT_SELECTED',
+      credentialHealth: 'PROVIDER_NOT_SELECTED',
+      webhookHealth: 'PROVIDER_NOT_SELECTED',
+      quotaHealth: 'NO_PROVIDER_QUOTA_EVIDENCE',
+      lastVerifiedAt: maxIso(...rcsBindings.map((row) => row.last_verified_at)),
+      supportedCapabilities: [],
+      incidentState: pauseState(controls, 'RCS') !== 'RUNNING'
+        ? pauseState(controls, 'RCS')
+        : 'PROVIDER_NOT_SELECTED',
+      blockers: [
+        'PROVIDER_ADAPTER_NOT_SELECTED',
+        'CANONICAL_PERMISSION_AUTHORITY_PENDING',
+        'COUNTRY_CAPABILITY_EVIDENCE_REQUIRED',
+        'PRICING_USAGE_EVIDENCE_REQUIRED',
+      ],
+      bindingCount: rcsBindings.length,
+      lastEventAt: null,
+      lastAcceptanceAt: null,
+      controlState: pauseState(controls, 'RCS'),
+      evidenceSources: [
+        'communication_channel_bindings',
+        'system_controls',
+        '0125_omni_sms_rcs_capability_foundation',
+        'lib/sms-rcs/capability-policy',
+      ],
     },
     {
       channel: 'VOICE',
