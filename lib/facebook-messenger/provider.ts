@@ -48,6 +48,6 @@ export class MetaMessengerProvider {
     }
     const body = await response.json() as { message_id?: string };
     if (!body.message_id) throw new Error('Meta Messenger response did not include a message id');
-    return { providerMessageId: body.message_id, status: 'accepted', rateLimit };
+    return { providerMessageId: body.message_id, status: 'accepted', ...(rateLimit ? { rateLimit } : {}) };
   }
 }
