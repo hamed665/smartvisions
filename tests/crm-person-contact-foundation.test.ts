@@ -37,6 +37,12 @@ describe('CRM-PERSON-CONTACT canonical foundation', () => {
     expect(migration).toContain('Deliberately performs no Production backfill');
   });
 
+  it('prevents authenticated callers from self-asserting provider or import verification', () => {
+    expect(route).toContain("verificationMethod !== 'MANUAL_CONFIRMED'");
+    expect(route).toContain("relationshipVerificationMethod !== 'MANUAL_CONFIRMED'");
+    expect(route).toContain('createSupabaseServiceClient()');
+  });
+
   it('keeps direct authenticated mutation closed and uses the server-only trusted command', () => {
     expect(migration).toContain('grant select on public.crm_people to authenticated');
     expect(migration).not.toContain('grant insert on public.crm_people to authenticated');
