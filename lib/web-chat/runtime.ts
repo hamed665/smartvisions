@@ -59,7 +59,7 @@ export async function webChatCorsHeaders(publicKey: string, requestOrigin: strin
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type,X-WebChat-Session-Id,X-WebChat-Session-Token',
     'Access-Control-Max-Age': '600',
     'Vary': 'Origin',
   };
