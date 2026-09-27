@@ -58,7 +58,7 @@ export async function webChatCorsHeaders(publicKey: string, requestOrigin: strin
   if (error || !data || !Array.isArray(data.allowed_origins) || !data.allowed_origins.includes(origin)) return null;
   return {
     'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Methods': 'POST,OPTIONS',
+    'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type,X-WebChat-Session-Id,X-WebChat-Session-Token',
     'Access-Control-Max-Age': '600',
     'Vary': 'Origin',
@@ -282,4 +282,26 @@ export async function readPublicWebChatMessages(input: {
     })),
     hasMore,
   };
+}
+
+
+export async function closePublicWebChatSession(input:{
+  publicKey:string;
+  origin:string;
+  sessionId:string;
+  sessionToken:string;
+}){
+  const origin=normalizeOrigin(input.origin);
+  if(!origin) throw new PublicWebChatError('ORIGIN_NOT_ALLOWED');
+  const service=createSupabaseServiceClient();
+  const {data,error}=await service.rpc('close_web_chat_session',{
+    p_widget_public_key:input.publicKey,
+    p_session_id:input.sessionId,
+    p_token_hash:hashWebChatToken(input.sessionToken),
+    p_origin:origin,
+  });
+  if(error) throw mapRpcError(error.message);
+  const row=Array.isArray(data)?data[0]:data;
+  if(!row||typeof row.session_status!=='string') throw new PublicWebChatError('SERVICE_UNAVAILABLE');
+  return {closed:Boolean(row.closed),status:String(row.session_status)};
 }
