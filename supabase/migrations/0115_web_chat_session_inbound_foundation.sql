@@ -168,11 +168,16 @@ begin
  values(p_organization_id,b.tenant_business_id,b.branch_id,b.id,p_public_key,p_enabled,p_allowed_origins,p_consent_required,p_session_ttl_minutes,p_max_message_chars,coalesce(p_config,'{}'::jsonb))
  on conflict(organization_id,communication_channel_binding_id) do update set public_key=excluded.public_key,enabled=excluded.enabled,allowed_origins=excluded.allowed_origins,consent_required=excluded.consent_required,session_ttl_minutes=excluded.session_ttl_minutes,max_message_chars=excluded.max_message_chars,config=excluded.config,version=public.web_chat_widget_configs.version+1,updated_at=now()
  returning * into w;
+ perform set_config('smartvisions.chatwoot_bridge_command','1',true);
  update public.communication_channel_bindings set provider='SMART_VISIONS',provider_account_id=b.tenant_business_id::text,provider_destination_id=p_public_key,provider_destination_label='Web Chat',version=version+1,last_request_key=trim(p_request_key),updated_by_user_id=v_actor
  where organization_id=p_organization_id and id=p_binding_id and version=p_expected_binding_version;
  if not found then raise exception 'Web Chat binding configuration lost optimistic lock';end if;
+ perform set_config('smartvisions.chatwoot_bridge_command','0',true);
  return w;
-end $$;
+exception when others then
+ perform set_config('smartvisions.chatwoot_bridge_command','0',true);
+ raise;
+end $;
 
 create or replace function public.create_web_chat_session(
  p_widget_public_key text,p_session_id uuid,p_token_hash text,p_origin text,p_consent_accepted boolean
@@ -204,7 +209,7 @@ begin
 end $$;
 
 create or replace function public.journal_web_chat_inbound_message(
- p_session_id uuid,p_token_hash text,p_origin text,p_client_message_id text,p_text text
+ p_widget_public_key text,p_session_id uuid,p_token_hash text,p_origin text,p_client_message_id text,p_text text
 )
 returns table(organization_id uuid,tenant_business_id uuid,branch_id uuid,binding_id uuid,identity_id uuid,provider_message_id text,message_text text,event_inserted boolean)
 language plpgsql security definer set search_path=public,pg_catalog
@@ -215,7 +220,7 @@ begin
  select * into s from public.web_chat_sessions where id=p_session_id and token_hash=p_token_hash for update;
  if not found or s.status<>'ACTIVE' or s.expires_at<=now() then raise exception 'Web Chat session unavailable';end if;
  if s.origin<>trim(coalesce(p_origin,'')) then raise exception 'Web Chat origin mismatch';end if;
- select * into w from public.web_chat_widget_configs where organization_id=s.organization_id and id=s.widget_config_id and enabled=true;
+ select * into w from public.web_chat_widget_configs where organization_id=s.organization_id and id=s.widget_config_id and public_key=trim(p_widget_public_key) and enabled=true;
  if not found or not (s.origin=any(w.allowed_origins)) then raise exception 'Web Chat widget unavailable';end if;
  if w.consent_required and s.consent_accepted_at is null then raise exception 'Web Chat consent required';end if;
  if length(v_text) not between 1 and w.max_message_chars then raise exception 'Web Chat message length invalid';end if;
@@ -300,8 +305,8 @@ revoke all on function public.configure_web_chat_widget(uuid,uuid,integer,text,t
 grant execute on function public.configure_web_chat_widget(uuid,uuid,integer,text,text[],boolean,integer,integer,boolean,jsonb,text) to authenticated;
 revoke all on function public.create_web_chat_session(text,uuid,text,text,boolean) from public,anon,authenticated,service_role;
 grant execute on function public.create_web_chat_session(text,uuid,text,text,boolean) to service_role;
-revoke all on function public.journal_web_chat_inbound_message(uuid,text,text,text,text) from public,anon,authenticated,service_role;
-grant execute on function public.journal_web_chat_inbound_message(uuid,text,text,text,text) to service_role;
+revoke all on function public.journal_web_chat_inbound_message(text,uuid,text,text,text,text) from public,anon,authenticated,service_role;
+grant execute on function public.journal_web_chat_inbound_message(text,uuid,text,text,text,text) to service_role;
 revoke all on function public.project_web_chat_inbound_message(uuid,uuid,text,text,integer,uuid,bigint,timestamptz,text) from public,anon,authenticated,service_role;
 grant execute on function public.project_web_chat_inbound_message(uuid,uuid,text,text,integer,uuid,bigint,timestamptz,text) to service_role;
 revoke all on function public.link_web_chat_session_verified_business(uuid,uuid,uuid,uuid,text) from public,anon,authenticated,service_role;
