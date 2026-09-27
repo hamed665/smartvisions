@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import {
+  closePublicWebChatSession,
   createPublicWebChatSession,
   PublicWebChatError,
   webChatCorsHeaders,
@@ -63,5 +64,26 @@ export async function POST(request: Request) {
       status: errorStatus(error),
       headers: { ...cors, 'Cache-Control': 'no-store' },
     });
+  }
+}
+
+
+export async function DELETE(request:Request){
+  const url=new URL(request.url);
+  const key=url.searchParams.get('key')?.trim()??'';
+  const origin=request.headers.get('origin');
+  const cors=await webChatCorsHeaders(key,origin);
+  if(!cors)return NextResponse.json({error:'ORIGIN_NOT_ALLOWED'},{status:403});
+  let body:{sessionId?:unknown;sessionToken?:unknown};
+  try{body=await request.json() as typeof body}catch{return NextResponse.json({error:'INVALID_JSON'},{status:400,headers:cors})}
+  if(typeof body.sessionId!=='string'||typeof body.sessionToken!=='string'||body.sessionToken.length>256){
+    return NextResponse.json({error:'SESSION_UNAVAILABLE'},{status:401,headers:cors});
+  }
+  try{
+    const result=await closePublicWebChatSession({publicKey:key,origin:origin??'',sessionId:body.sessionId,sessionToken:body.sessionToken});
+    return NextResponse.json(result,{headers:{...cors,'Cache-Control':'no-store'}});
+  }catch(error){
+    const code=error instanceof PublicWebChatError?error.code:'SERVICE_UNAVAILABLE';
+    return NextResponse.json({error:code},{status:errorStatus(error),headers:{...cors,'Cache-Control':'no-store'}});
   }
 }
