@@ -76,7 +76,7 @@ export class ResendEmailProvider implements EmailProvider {
     }
     const body = await response.json() as { id?: string };
     if (!body.id) throw new Error('Resend response did not include an email id');
-    return { providerMessageId: body.id, rateLimit };
+    return { providerMessageId: body.id, ...(rateLimit ? { rateLimit } : {}) };
   }
 
   async fetchReplies(since: Date): Promise<InboundReply[]> {
