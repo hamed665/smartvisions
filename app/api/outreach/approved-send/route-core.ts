@@ -14,6 +14,7 @@ import { countMailboxSendsLast24Hours } from '@/lib/outreach/mailbox-usage';
 import { resolveMetaWhatsAppProvider } from '@/lib/whatsapp/tenant-routing';
 import { resolveMetaInstagramProvider } from '@/lib/instagram/tenant-routing';
 import { resolveMetaMessengerProvider } from '@/lib/facebook-messenger/tenant-routing';
+import { resolveTelegramCustomerProvider } from '@/lib/telegram/customer-routing';
 import { assertSmartVisionsCatalogContentId } from '@/lib/whatsapp/catalog';
 import { getWhatsAppMarketingPermission } from '@/lib/whatsapp/marketing-opt-in';
 import { SMART_VISIONS_BUSINESS_INTRO_OM } from '@/lib/whatsapp/business-intro-template';
@@ -76,10 +77,12 @@ export async function POST(request: Request) {
     ? { provider: 'META' as const, channel: 'INSTAGRAM' as const }
     : message.channel === 'FACEBOOK_MESSENGER'
       ? { provider: 'META' as const, channel: 'FACEBOOK_MESSENGER' as const }
-      : null);
+      : message.channel === 'TELEGRAM'
+        ? { provider: 'TELEGRAM' as const, channel: 'TELEGRAM' as const }
+        : null);
 
   const [{ data: controls, error: controlsError }, { data: lead, error: leadError }, providerConnectionResult] = await Promise.all([
-    supabase.from('system_controls').select('global_kill_switch,email_paused,whatsapp_ai_paused,instagram_ai_paused,facebook_messenger_ai_paused,agents_paused,shadow_mode').eq('organization_id', body.organizationId).maybeSingle(),
+    supabase.from('system_controls').select('global_kill_switch,email_paused,whatsapp_ai_paused,instagram_ai_paused,facebook_messenger_ai_paused,telegram_ai_paused,agents_paused,shadow_mode').eq('organization_id', body.organizationId).maybeSingle(),
     message.lead_id ? supabase.from('leads').select('id,business_id,status,agent_mode').eq('organization_id', body.organizationId).eq('id', message.lead_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
     providerLookupIdentity
       ? supabase.from('integration_connections')
@@ -309,7 +312,15 @@ export async function POST(request: Request) {
     shadowMode: Boolean(controls.shadow_mode),
     shadowModeExceptionVerified,
     globalKillSwitch: Boolean(controls.global_kill_switch),
-    channelPaused: message.channel === 'EMAIL' ? Boolean(controls.email_paused) : message.channel === 'WHATSAPP' ? Boolean(controls.whatsapp_ai_paused) : message.channel === 'INSTAGRAM' ? Boolean(controls.instagram_ai_paused) : Boolean(controls.facebook_messenger_ai_paused),
+    channelPaused: message.channel === 'EMAIL'
+      ? Boolean(controls.email_paused)
+      : message.channel === 'WHATSAPP'
+        ? Boolean(controls.whatsapp_ai_paused)
+        : message.channel === 'INSTAGRAM'
+          ? Boolean(controls.instagram_ai_paused)
+          : message.channel === 'FACEBOOK_MESSENGER'
+            ? Boolean(controls.facebook_messenger_ai_paused)
+            : Boolean(controls.telegram_ai_paused),
     agentsPaused: Boolean(controls.agents_paused),
     doNotContact: lead?.status === 'DO_NOT_CONTACT',
     agentMode: lead?.agent_mode ?? null,
@@ -360,7 +371,7 @@ export async function POST(request: Request) {
   let providerMessageId: string | null = null;
   try {
     if (!message.lead_id || !message.conversation_id) throw new Error('Approved send is missing canonical lead/conversation linkage');
-    if (!['EMAIL', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK_MESSENGER'].includes(message.channel)) throw new Error('Approved send channel is unsupported');
+    if (!['EMAIL', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK_MESSENGER', 'TELEGRAM'].includes(message.channel)) throw new Error('Approved send channel is unsupported');
 
     const assertFinalProviderBoundary = async () => {
       const gate = await assertCanonicalSendAllowed({
@@ -368,7 +379,7 @@ export async function POST(request: Request) {
         organizationId: body.organizationId!,
         leadId: message.lead_id!,
         conversationId: message.conversation_id!,
-        channel: message.channel as 'EMAIL' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK_MESSENGER',
+        channel: message.channel as 'EMAIL' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK_MESSENGER' | 'TELEGRAM',
         recipient: sendContext.to!,
         templateName: sendContext.template_name,
         shadowModeExceptionVerified,
@@ -624,6 +635,94 @@ export async function POST(request: Request) {
           communication_channel_binding_id: tenantProvider.bindingId,
         },
       });
+    } else if (message.channel === 'TELEGRAM') {
+      await assertFinalProviderBoundary();
+      const { data: projection, error: projectionError } = await supabase
+        .from('unified_inbox_conversation_projections')
+        .select('tenant_business_id,branch_id,communication_channel_binding_id,lifecycle_status')
+        .eq('organization_id', body.organizationId)
+        .eq('conversation_id', message.conversation_id)
+        .in('lifecycle_status', ['ACTIVE', 'DEGRADED'])
+        .maybeSingle();
+      if (projectionError || !projection) {
+        throw new Error(projectionError?.message ?? 'Approved Telegram send has no canonical tenant communication projection');
+      }
+      const tenantProvider = await resolveTelegramCustomerProvider({
+        service: supabase,
+        organizationId: body.organizationId,
+        tenantBusinessId: projection.tenant_business_id,
+        branchId: projection.branch_id,
+      });
+      if (tenantProvider.bindingId !== projection.communication_channel_binding_id) {
+        throw new Error('Approved Telegram tenant credential does not match the conversation channel binding');
+      }
+      const result = await tenantProvider.provider.sendText({
+        chatId: sendContext.to,
+        text: message.original_text,
+      });
+      providerMessageId = result.providerMessageId;
+      providerAccepted = true;
+
+      const telegramRateLimitAudit = await recordProviderRateLimitEvidence({
+        service: supabase,
+        organizationId: body.organizationId,
+        provider: 'TELEGRAM',
+        channel: 'TELEGRAM',
+        evidence: result.rateLimit,
+        tenantBusinessId: projection.tenant_business_id,
+        branchId: projection.branch_id,
+        integrationConnectionId: tenantProvider.integrationConnectionId,
+      });
+      if (!telegramRateLimitAudit.recorded && telegramRateLimitAudit.reason === 'AUDIT_PERSISTENCE_FAILED') {
+        console.error('Approved Telegram rate-limit telemetry persistence failed', telegramRateLimitAudit.error);
+      }
+
+      const accepted = await supabase.from('conversation_messages').update({
+        status: 'SENT',
+        provider_message_id: providerMessageId,
+        provider_delivery_status: 'ACCEPTED',
+        sent_at: new Date().toISOString(),
+        processed_at: new Date().toISOString(),
+        approval_reason: null,
+      }).eq('organization_id', body.organizationId).eq('id', body.messageId).eq('status', 'PROCESSING');
+      if (accepted.error) throw new Error(`Provider-accepted Telegram reconciliation failed: ${accepted.error.message}`);
+
+      const audit = await supabase.from('audit_logs').insert({
+        organization_id: body.organizationId,
+        actor_type: 'SYSTEM',
+        actor_id: 'approved-send',
+        action: 'TELEGRAM_CUSTOMER_OUTBOUND_ACCEPTED',
+        entity_type: 'conversation_message',
+        entity_id: body.messageId,
+        tenant_business_id: projection.tenant_business_id,
+        branch_id: projection.branch_id,
+        after_data: {
+          provider: 'TELEGRAM',
+          channel: 'TELEGRAM',
+          providerMessageId,
+          bindingId: tenantProvider.bindingId,
+          source: 'APPROVED_SHADOW_DRAFT',
+          providerAccepted: true,
+          rawTokenPersisted: false,
+        },
+      });
+      if (audit.error) throw new Error(`Telegram outbound audit reconciliation failed: ${audit.error.message}`);
+
+      await recordUsage({
+        organizationId: body.organizationId,
+        provider: 'TELEGRAM',
+        operation: 'SEND_TEXT',
+        costUsd: 0,
+        units: 1,
+        leadId: message.lead_id ?? undefined,
+        metadata: {
+          source: 'APPROVED_SHADOW_DRAFT',
+          pricing_status: 'PENDING_RECONCILIATION',
+          tenant_business_id: projection.tenant_business_id,
+          branch_id: projection.branch_id,
+          communication_channel_binding_id: tenantProvider.bindingId,
+        },
+      });
     } else {
       await assertFinalProviderBoundary();
       const { data: projection, error: projectionError } = await supabase.from('unified_inbox_conversation_projections').select('tenant_business_id,branch_id,communication_channel_binding_id,lifecycle_status').eq('organization_id', body.organizationId).eq('conversation_id', message.conversation_id).in('lifecycle_status', ['ACTIVE','DEGRADED']).maybeSingle();
@@ -652,7 +751,7 @@ export async function POST(request: Request) {
       const providerErrorAudit = await recordProviderRateLimitEvidence({
         service: supabase,
         organizationId: body.organizationId,
-        provider: message.channel === 'EMAIL' ? 'RESEND' : 'META',
+        provider: message.channel === 'EMAIL' ? 'RESEND' : message.channel === 'TELEGRAM' ? 'TELEGRAM' : 'META',
         channel: message.channel,
         evidence: providerErrorEvidence,
       });
