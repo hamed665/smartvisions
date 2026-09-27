@@ -10,6 +10,7 @@ import {
   claimWebChatChatwootSync,
   finalizeWebChatChatwootSync,
 } from '@/lib/web-chat/chatwoot-inbound-sync';
+import { isSafeChatwootAttachmentUrl } from '@/lib/chatwoot/conversation-actions';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
 
 export type PublicWebChatErrorCode =
@@ -20,12 +21,113 @@ export type PublicWebChatErrorCode =
   | 'MESSAGE_INVALID'
   | 'RATE_LIMITED'
   | 'RECONCILIATION_REQUIRED'
+  | 'ATTACHMENT_UNAVAILABLE'
   | 'SERVICE_UNAVAILABLE';
 
 export class PublicWebChatError extends Error {
   constructor(readonly code: PublicWebChatErrorCode) {
     super(code);
   }
+}
+
+const MAX_PUBLIC_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const SAFE_INLINE_ATTACHMENT_TYPES = new Set([
+  'image/jpeg','image/png','image/webp','image/gif',
+  'audio/mpeg','audio/ogg','audio/wav','audio/webm',
+  'video/mp4','video/webm',
+]);
+
+function webChatObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function positiveChatwootId(value: unknown) {
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 && id <= 2147483647 ? id : null;
+}
+
+function safeAttachmentExtension(value: unknown) {
+  if (typeof value !== 'string') return null;
+  const extension = value.trim().toLowerCase();
+  return /^[a-z0-9]{1,12}$/.test(extension) ? extension : null;
+}
+
+type PublicWebChatAttachment = {
+  id: number | null;
+  messageId: number | null;
+  name: string;
+  contentType: string | null;
+  fileSize: number | null;
+  downloadable: boolean;
+};
+
+function publicAttachmentMetadata(direction: unknown, metadata: unknown) {
+  const record = webChatObject(metadata);
+  const raw = Array.isArray(record?.attachments) ? record.attachments : [];
+  return raw.slice(0, 10).flatMap<PublicWebChatAttachment>((value) => {
+    const attachment = webChatObject(value);
+    if (!attachment) return [];
+    const contentType = typeof attachment.contentType === 'string'
+      ? attachment.contentType.trim().slice(0, 120)
+      : null;
+    const rawSize = Number(attachment.size);
+    const fileSize = Number.isSafeInteger(rawSize) && rawSize >= 0 ? rawSize : null;
+
+    if (direction === 'OUTBOUND') {
+      const id = positiveChatwootId(attachment.id);
+      const messageId = positiveChatwootId(attachment.messageId);
+      if (id === null || messageId === null) return [];
+      const extension = safeAttachmentExtension(attachment.extension);
+      return [{
+        id,
+        messageId,
+        name: `attachment-${id}${extension ? `.${extension}` : ''}`,
+        contentType,
+        fileSize,
+        downloadable: fileSize === null || fileSize <= MAX_PUBLIC_ATTACHMENT_BYTES,
+      }];
+    }
+
+    const name = typeof attachment.name === 'string'
+      ? attachment.name.trim().slice(0, 180)
+      : 'attachment';
+    return [{
+      id: null,
+      messageId: null,
+      name: name || 'attachment',
+      contentType,
+      fileSize,
+      downloadable: false,
+    }];
+  });
+}
+
+function boundedPublicAttachmentStream(body: ReadableStream<Uint8Array>) {
+  const reader = body.getReader();
+  let total = 0;
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) {
+        controller.close();
+        reader.releaseLock();
+        return;
+      }
+      if (!value) return;
+      total += value.byteLength;
+      if (total > MAX_PUBLIC_ATTACHMENT_BYTES) {
+        await reader.cancel();
+        controller.error(new Error('Web Chat attachment exceeded the safe download limit'));
+        return;
+      }
+      controller.enqueue(value);
+    },
+    async cancel(reason) {
+      await reader.cancel(reason);
+    },
+  });
 }
 
 function normalizeOrigin(value: string | null | undefined) {
@@ -341,7 +443,7 @@ export async function readPublicWebChatMessages(input: {
 
   let query = service
     .from('conversation_messages')
-    .select('id,direction,original_text,status,created_at,sent_at')
+    .select('id,direction,media_type,original_text,status,metadata,created_at,sent_at')
     .eq('organization_id', session.data.organization_id)
     .eq('conversation_id', session.data.conversation_id)
     .eq('channel', 'WEB_CHAT')
@@ -368,9 +470,251 @@ export async function readPublicWebChatMessages(input: {
       status: String(row.status ?? ''),
       createdAt: String(row.created_at),
       sentAt: row.sent_at ? String(row.sent_at) : null,
+      mediaType: String(row.media_type ?? 'TEXT'),
+      attachments: publicAttachmentMetadata(row.direction, row.metadata),
     })),
     hasMore,
   };
+}
+
+
+export async function downloadPublicWebChatAttachment(input: {
+  publicKey: string;
+  origin: string;
+  sessionId: string;
+  sessionToken: string;
+  attachmentId: number;
+  messageId: number;
+  fetchImpl?: typeof fetch;
+}) {
+  const origin = normalizeOrigin(input.origin);
+  const attachmentId = positiveChatwootId(input.attachmentId);
+  const messageId = positiveChatwootId(input.messageId);
+  if (!origin) throw new PublicWebChatError('ORIGIN_NOT_ALLOWED');
+  if (attachmentId === null || messageId === null) throw new PublicWebChatError('MESSAGE_INVALID');
+
+  const service = createSupabaseServiceClient();
+  const session = await service
+    .from('web_chat_sessions')
+    .select('id,organization_id,tenant_business_id,branch_id,communication_channel_binding_id,widget_config_id,conversation_id,origin,status,expires_at')
+    .eq('id', input.sessionId)
+    .eq('token_hash', hashWebChatToken(input.sessionToken))
+    .maybeSingle();
+  if (session.error || !session.data) throw new PublicWebChatError('SESSION_UNAVAILABLE');
+  if (
+    session.data.status !== 'ACTIVE'
+    || session.data.origin !== origin
+    || new Date(String(session.data.expires_at)).getTime() <= Date.now()
+    || !session.data.conversation_id
+  ) {
+    throw new PublicWebChatError('SESSION_UNAVAILABLE');
+  }
+
+  const widget = await service
+    .from('web_chat_widget_configs')
+    .select('id,public_key,enabled,allowed_origins')
+    .eq('organization_id', session.data.organization_id)
+    .eq('id', session.data.widget_config_id)
+    .eq('public_key', input.publicKey)
+    .eq('enabled', true)
+    .maybeSingle();
+  if (
+    widget.error
+    || !widget.data
+    || !Array.isArray(widget.data.allowed_origins)
+    || !widget.data.allowed_origins.includes(origin)
+  ) {
+    throw new PublicWebChatError('WIDGET_UNAVAILABLE');
+  }
+
+  const projection = await service
+    .from('unified_inbox_conversation_projections')
+    .select('id,brand_id,tenant_business_id,branch_id,department_id,team_id,communication_channel_binding_id,chatwoot_inbox_mapping_id,chatwoot_conversation_display_id,lifecycle_status')
+    .eq('organization_id', session.data.organization_id)
+    .eq('tenant_business_id', session.data.tenant_business_id)
+    .eq('branch_id', session.data.branch_id)
+    .eq('communication_channel_binding_id', session.data.communication_channel_binding_id)
+    .eq('conversation_id', session.data.conversation_id)
+    .in('lifecycle_status', ['ACTIVE', 'DEGRADED'])
+    .maybeSingle();
+  if (projection.error || !projection.data) throw new PublicWebChatError('ATTACHMENT_UNAVAILABLE');
+
+  const inbox = await service
+    .from('chatwoot_inbox_mappings')
+    .select('id,chatwoot_account_mapping_id,status')
+    .eq('organization_id', session.data.organization_id)
+    .eq('tenant_business_id', session.data.tenant_business_id)
+    .eq('id', projection.data.chatwoot_inbox_mapping_id)
+    .eq('communication_channel_binding_id', session.data.communication_channel_binding_id)
+    .eq('status', 'ACTIVE')
+    .maybeSingle();
+  if (inbox.error || !inbox.data) throw new PublicWebChatError('ATTACHMENT_UNAVAILABLE');
+
+  const account = await service
+    .from('chatwoot_account_mappings')
+    .select('id,chatwoot_account_id,status')
+    .eq('organization_id', session.data.organization_id)
+    .eq('tenant_business_id', session.data.tenant_business_id)
+    .eq('id', inbox.data.chatwoot_account_mapping_id)
+    .eq('status', 'ACTIVE')
+    .maybeSingle();
+  const accountId = positiveChatwootId(account.data?.chatwoot_account_id);
+  if (account.error || !account.data || accountId === null) {
+    throw new PublicWebChatError('ATTACHMENT_UNAVAILABLE');
+  }
+
+  const canonical = await service
+    .from('conversation_messages')
+    .select('id,metadata')
+    .eq('organization_id', session.data.organization_id)
+    .eq('conversation_id', session.data.conversation_id)
+    .eq('channel', 'WEB_CHAT')
+    .eq('direction', 'OUTBOUND')
+    .eq('provider_message_id', `chatwoot:${messageId}`)
+    .maybeSingle();
+  const canonicalMetadata = webChatObject(canonical.data?.metadata);
+  if (
+    canonical.error
+    || !canonical.data
+    || canonicalMetadata?.source !== 'CHATWOOT_SIGNED_WEBHOOK'
+    || typeof canonicalMetadata.chatwoot_event_id !== 'string'
+  ) {
+    throw new PublicWebChatError('ATTACHMENT_UNAVAILABLE');
+  }
+
+  const projectedAttachment = (Array.isArray(canonicalMetadata.attachments)
+    ? canonicalMetadata.attachments
+    : [])
+    .map(webChatObject)
+    .find((value) => (
+      value
+      && positiveChatwootId(value.id) === attachmentId
+      && positiveChatwootId(value.messageId) === messageId
+      && positiveChatwootId(value.accountId) === accountId
+    ));
+  if (!projectedAttachment) throw new PublicWebChatError('ATTACHMENT_UNAVAILABLE');
+  const projectedSize = Number(projectedAttachment.size);
+  if (Number.isFinite(projectedSize) && projectedSize > MAX_PUBLIC_ATTACHMENT_BYTES) {
+    throw new PublicWebChatError('ATTACHMENT_UNAVAILABLE');
+  }
+
+  const journal = await service
+    .from('chatwoot_webhook_events')
+    .select('id,payload,status,event_type')
+    .eq('id', canonicalMetadata.chatwoot_event_id)
+    .eq('organization_id', session.data.organization_id)
+    .eq('tenant_business_id', session.data.tenant_business_id)
+    .eq('chatwoot_inbox_mapping_id', projection.data.chatwoot_inbox_mapping_id)
+    .eq('event_type', 'message_created')
+    .eq('status', 'PROCESSED')
+    .maybeSingle();
+  const payload = webChatObject(journal.data?.payload);
+  const payloadConversation = webChatObject(payload?.conversation);
+  if (
+    journal.error
+    || !journal.data
+    || !payload
+    || String(payload.message_type ?? '').toLowerCase() !== 'outgoing'
+    || payload.private === true
+    || positiveChatwootId(payload.id) !== messageId
+    || positiveChatwootId(payloadConversation?.id) !== Number(projection.data.chatwoot_conversation_display_id)
+  ) {
+    throw new PublicWebChatError('ATTACHMENT_UNAVAILABLE');
+  }
+
+  const rawAttachment = (Array.isArray(payload.attachments) ? payload.attachments : [])
+    .map(webChatObject)
+    .find((value) => (
+      value
+      && positiveChatwootId(value.id) === attachmentId
+      && positiveChatwootId(value.message_id) === messageId
+      && positiveChatwootId(value.account_id) === accountId
+    ));
+  if (!rawAttachment || !isSafeChatwootAttachmentUrl(rawAttachment.data_url)) {
+    throw new PublicWebChatError('ATTACHMENT_UNAVAILABLE');
+  }
+
+  const rawSize = Number(rawAttachment.file_size);
+  if (Number.isFinite(rawSize) && rawSize > MAX_PUBLIC_ATTACHMENT_BYTES) {
+    throw new PublicWebChatError('ATTACHMENT_UNAVAILABLE');
+  }
+  const sourceUrl = new URL(String(rawAttachment.data_url), String(process.env.CHATWOOT_BASE_URL));
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const response = await fetchImpl(sourceUrl.toString(), {
+      method: 'GET',
+      cache: 'no-store',
+      redirect: 'follow',
+      signal: controller.signal,
+      headers: { Accept: '*/*' },
+    });
+    if (!response.ok || !response.body) throw new PublicWebChatError('SERVICE_UNAVAILABLE');
+
+    const rawLength = response.headers.get('content-length');
+    const contentLength = rawLength ? Number(rawLength) : Number.NaN;
+    if (Number.isFinite(contentLength) && contentLength > MAX_PUBLIC_ATTACHMENT_BYTES) {
+      await response.body.cancel();
+      throw new PublicWebChatError('ATTACHMENT_UNAVAILABLE');
+    }
+
+    const declaredType = typeof rawAttachment.content_type === 'string'
+      ? rawAttachment.content_type.trim().toLowerCase().slice(0, 120)
+      : '';
+    const upstreamType = (response.headers.get('content-type') ?? '').split(';', 1)[0].trim().toLowerCase();
+    const contentType = declaredType && declaredType === upstreamType
+      ? declaredType
+      : SAFE_INLINE_ATTACHMENT_TYPES.has(declaredType) && !upstreamType
+        ? declaredType
+        : 'application/octet-stream';
+    const extension = safeAttachmentExtension(rawAttachment.extension);
+    const filename = `attachment-${attachmentId}${extension ? `.${extension}` : ''}`;
+
+    const audit = await service.from('audit_logs').insert({
+      organization_id: session.data.organization_id,
+      actor_type: 'PUBLIC_SESSION',
+      actor_id: session.data.id,
+      action: 'WEB_CHAT_ATTACHMENT_DOWNLOAD_AUTHORIZED',
+      entity_type: 'web_chat_session',
+      entity_id: session.data.id,
+      brand_id: projection.data.brand_id,
+      tenant_business_id: projection.data.tenant_business_id,
+      branch_id: projection.data.branch_id,
+      department_id: projection.data.department_id,
+      team_id: projection.data.team_id,
+      correlation_id: globalThis.crypto.randomUUID(),
+      after_data: {
+        canonical_message_id: canonical.data.id,
+        chatwoot_event_id: journal.data.id,
+        chatwoot_message_id: messageId,
+        attachment_id: attachmentId,
+        chatwoot_account_id_verified: true,
+        conversation_scope_verified: true,
+        session_scope_verified: true,
+        direct_storage_url_exposed: false,
+      },
+    });
+    if (audit.error) {
+      await response.body.cancel();
+      throw new PublicWebChatError('SERVICE_UNAVAILABLE');
+    }
+
+    return {
+      body: boundedPublicAttachmentStream(response.body),
+      contentType,
+      contentLength: Number.isFinite(contentLength) && contentLength >= 0
+        ? contentLength
+        : Number.isFinite(rawSize) && rawSize >= 0 ? rawSize : null,
+      filename,
+      inline: SAFE_INLINE_ATTACHMENT_TYPES.has(contentType),
+    };
+  } catch (error) {
+    if (error instanceof PublicWebChatError) throw error;
+    throw new PublicWebChatError('SERVICE_UNAVAILABLE');
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 

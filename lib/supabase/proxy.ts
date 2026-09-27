@@ -23,7 +23,9 @@ const SESSION_BYPASS_PATHS = new Set([
 ]);
 
 export function shouldBypassSession(pathname: string) {
-  return SESSION_BYPASS_PATHS.has(pathname) || pathname.startsWith('/p/');
+  return SESSION_BYPASS_PATHS.has(pathname)
+    || /^\/api\/web-chat\/attachments\/[1-9][0-9]*$/.test(pathname)
+    || pathname.startsWith('/p/');
 }
 
 export async function updateSession(request: NextRequest) {
