@@ -578,12 +578,14 @@ begin
   if not found then raise exception 'canonical Web Chat outbound projection evidence required'; end if;
 
   v_media_verified :=
-    (jsonb_typeof(v_inbound_message.metadata->'attachments')='array'
-      and jsonb_array_length(v_inbound_message.metadata->'attachments')>0)
+    (case when jsonb_typeof(v_inbound_message.metadata->'attachments')='array'
+      then jsonb_array_length(v_inbound_message.metadata->'attachments')>0 else false end)
     or
-    (jsonb_typeof(v_outbound_message.metadata->'attachments')='array'
-      and jsonb_array_length(v_outbound_message.metadata->'attachments')>0);
-  if not v_media_verified then raise exception 'real Web Chat media evidence required'; end if;
+    (case when jsonb_typeof(v_outbound_message.metadata->'attachments')='array'
+      then jsonb_array_length(v_outbound_message.metadata->'attachments')>0 else false end);
+  if coalesce(v_media_verified,false)=false then
+    raise exception 'real Web Chat media evidence required';
+  end if;
 
   if exists(
     select 1
