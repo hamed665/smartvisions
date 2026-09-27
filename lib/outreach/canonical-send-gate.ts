@@ -149,7 +149,7 @@ export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllow
   if ((channel === 'INSTAGRAM' || channel === 'FACEBOOK_MESSENGER') && instagramBindingId && input.recipient.trim()) {
     const normalizedProviderIdentity = `${instagramBindingId}:${input.recipient.trim()}`;
     const { data: identityLinks, error: identityError } = await supabase.from('crm_identity_links')
-      .select('identity_id,crm_identities!inner(identity_type,normalized_value,identity_status)')
+      .select('identity_id,crm_identities!inner(identity_type,normalized_value,status)')
       .eq('organization_id', organizationId)
       .eq('business_id', lead.business_id)
       .eq('status', 'ACTIVE')
