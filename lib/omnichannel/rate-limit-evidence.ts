@@ -81,9 +81,10 @@ function maxNumericByKey(value: unknown, keys: Set<string>, depth = 0): number |
 }
 
 export function extractProviderRateLimitEvidence(
-  headers: Headers,
+  headers: Headers | null | undefined,
   observedAt = new Date().toISOString(),
 ): ProviderRateLimitEvidence | null {
+  if (!headers || typeof headers.get !== 'function') return null;
   const limit = finiteNumber(headers.get('ratelimit-limit'));
   const remaining = finiteNumber(headers.get('ratelimit-remaining'));
   const resetSeconds = finiteNumber(headers.get('ratelimit-reset'));
