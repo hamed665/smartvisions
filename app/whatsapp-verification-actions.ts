@@ -8,6 +8,7 @@ import { getCurrentOrganization } from '@/lib/supabase/org';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
 import { verifyControlledWhatsAppVoicePilot } from '@/lib/voice/controlled-pilot';
 import { transcribeWhatsAppVoiceOnce } from '@/lib/voice/transcription';
+import { resolveMetaWhatsAppProvider } from '@/lib/whatsapp/tenant-routing';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -259,6 +260,18 @@ export async function transcribeLatestWhatsAppVoicePilot() {
     });
     if (!verification.verified) throw new Error(`Controlled voice pilot blocked: ${verification.reason}`);
 
+    const tenantBusinessId = typeof metadata.tenant_business_id === 'string' ? metadata.tenant_business_id : null;
+    const branchId = typeof metadata.branch_id === 'string' ? metadata.branch_id : null;
+    const bindingId = typeof metadata.communication_channel_binding_id === 'string' ? metadata.communication_channel_binding_id : null;
+    if (!tenantBusinessId || !bindingId) throw new Error('Controlled voice evidence is missing canonical tenant communication scope');
+    const tenantProvider = await resolveMetaWhatsAppProvider({
+      service: db,
+      organizationId: ctx.organizationId,
+      tenantBusinessId,
+      branchId,
+    });
+    if (tenantProvider.bindingId !== bindingId) throw new Error('Controlled voice tenant credential does not match inbound binding');
+
     const result = await transcribeWhatsAppVoiceOnce({
       organizationId: ctx.organizationId,
       providerMessageId,
@@ -267,6 +280,7 @@ export async function transcribeLatestWhatsAppVoicePilot() {
       leadId: pilotLead.id,
       conversationId,
       priority: 'NORMAL',
+      metaAccessToken: tenantProvider.accessToken,
     });
 
     const { error: auditError } = await db.from('audit_logs').insert({
