@@ -129,30 +129,38 @@ export async function recordProviderRateLimitEvidence(input: {
   integrationConnectionId?: string | null;
 }) {
   if (!input.evidence) return { recorded: false as const, reason: 'NO_EVIDENCE' as const };
-  const result = await input.service.from('audit_logs').insert({
-    organization_id: input.organizationId,
-    actor_type: 'SYSTEM',
-    actor_id: 'provider-boundary',
-    action: 'CHANNEL_PROVIDER_RATE_LIMIT_OBSERVED',
-    entity_type: 'integration_connection',
-    entity_id: input.integrationConnectionId ?? null,
-    tenant_business_id: input.tenantBusinessId ?? null,
-    branch_id: input.branchId ?? null,
-    correlation_id: globalThis.crypto.randomUUID(),
-    after_data: {
-      provider: input.provider,
-      channel: input.channel,
-      observed_at: input.evidence.observedAt,
-      rate_limit: input.evidence,
-      raw_headers_persisted: false,
-    },
-  });
-  if (result.error) {
+  try {
+    const result = await input.service.from('audit_logs').insert({
+      organization_id: input.organizationId,
+      actor_type: 'SYSTEM',
+      actor_id: 'provider-boundary',
+      action: 'CHANNEL_PROVIDER_RATE_LIMIT_OBSERVED',
+      entity_type: 'integration_connection',
+      entity_id: input.integrationConnectionId ?? null,
+      tenant_business_id: input.tenantBusinessId ?? null,
+      branch_id: input.branchId ?? null,
+      correlation_id: globalThis.crypto.randomUUID(),
+      after_data: {
+        provider: input.provider,
+        channel: input.channel,
+        observed_at: input.evidence.observedAt,
+        rate_limit: input.evidence,
+        raw_headers_persisted: false,
+      },
+    });
+    if (result.error) {
+      return {
+        recorded: false as const,
+        reason: 'AUDIT_PERSISTENCE_FAILED' as const,
+        error: result.error.message.slice(0, 300),
+      };
+    }
+    return { recorded: true as const };
+  } catch (error) {
     return {
       recorded: false as const,
       reason: 'AUDIT_PERSISTENCE_FAILED' as const,
-      error: result.error.message.slice(0, 300),
+      error: error instanceof Error ? error.message.slice(0, 300) : 'unknown telemetry persistence error',
     };
   }
-  return { recorded: true as const };
 }
