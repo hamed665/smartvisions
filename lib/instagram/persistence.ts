@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { resolveMetaInstagramDestination } from './tenant-routing';
 import type { NormalizedInstagramEvent } from './webhook';
 import { projectMatchedInstagramInbound, resolveInstagramInboundBusiness } from './lifecycle';
+import { reconcileInstagramReceipt } from './reconciliation';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -53,6 +54,8 @@ export async function persistInstagramWebhookEvents(events: NormalizedInstagramE
   }).select('id');
   if (error) throw new Error(`Instagram event persistence failed: ${error.message}`);
 
+  const receipts = await Promise.all(resolved.map(item => reconcileInstagramReceipt({ service: supabase, route: item.route, event: item.event })));
+
   const lifecycle = await Promise.all(resolved.map(async (item) => {
     if (item.identity.status !== 'MATCH') return { projected: false as const, reason: 'NO_CANONICAL_IDENTITY' as const };
     return projectMatchedInstagramInbound({
@@ -68,5 +71,7 @@ export async function persistInstagramWebhookEvents(events: NormalizedInstagramE
     duplicates: Math.max(0, rows.length - (data?.length ?? 0)),
     organizationIds: Array.from(new Set(resolved.map(item => item.route.organizationId))),
     projectedMessages: lifecycle.filter(item => item.projected).length,
+    reconciledReceipts: receipts.reduce((sum, item) => sum + item.reconciled, 0),
+    unmatchedReceipts: receipts.reduce((sum, item) => sum + item.unmatched, 0),
   };
 }
