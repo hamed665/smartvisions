@@ -23,6 +23,10 @@ import type { WhatsAppSendResult } from '@/lib/whatsapp/provider';
 import { ResendEmailProvider } from '@/lib/outreach/resend-provider';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
 import { rateLimitEvidenceFromError, recordProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
+import { evaluateVoiceReplyFoundation } from '@/lib/voice/reply-policy';
+import { resolveVoiceReplyRuntimeConfig, type VoiceReplyRuntimeConfig } from '@/lib/voice/reply-config';
+import { resolveVoiceReplySynthesisConfig } from '@/lib/voice/reply-synthesis';
+import { prepareControlledVoiceReplyAudio } from '@/lib/voice/reply-execution';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -43,6 +47,7 @@ type SendContext = {
   template_language_code?: string | null;
   template_body_parameters?: string[] | null;
   catalog_content_id?: string | null;
+  voice_reply?: boolean | null;
 };
 
 export async function POST(request: Request) {
@@ -56,6 +61,7 @@ export async function POST(request: Request) {
     controlledShadowPilot?: boolean;
     controlledEmailPilot?: boolean;
     controlledWhatsAppOptInPilot?: boolean;
+    controlledVoiceReplyPilot?: boolean;
   };
   if (!body.organizationId || !body.messageId) {
     return NextResponse.json({ error: 'organizationId and messageId are required' }, { status: 400 });
@@ -64,7 +70,7 @@ export async function POST(request: Request) {
   const supabase = serviceClient();
   const { data: message, error: messageError } = await supabase
     .from('conversation_messages')
-    .select('id,organization_id,conversation_id,lead_id,channel,original_text,status,requires_approval,metadata,provider_message_id')
+    .select('id,organization_id,conversation_id,lead_id,channel,media_type,original_text,status,requires_approval,metadata,provider_message_id')
     .eq('organization_id', body.organizationId)
     .eq('id', body.messageId)
     .maybeSingle();
@@ -105,6 +111,18 @@ export async function POST(request: Request) {
 
   let shadowModeExceptionVerified = false;
   let liveTestMarketWindowExceptionVerified = false;
+  let voiceReplyContext: {
+    config: VoiceReplyRuntimeConfig;
+    businessCategory: string | null;
+    humanTakeover: boolean;
+    openAiProviderConnected: boolean;
+  } | null = null;
+
+  if (body.controlledVoiceReplyPilot && !body.controlledShadowPilot) {
+    return NextResponse.json({
+      error: 'Controlled voice reply must use the existing controlled shadow pilot boundary',
+    }, { status: 409 });
+  }
 
   if (body.controlledWhatsAppOptInPilot) {
     if (!controls.shadow_mode) {
@@ -121,7 +139,7 @@ export async function POST(request: Request) {
         .eq('id', lead.business_id)
         .maybeSingle(),
       supabase.from('sales_conversations')
-        .select('id,lead_id,channel')
+        .select('id,lead_id,channel,agent_mode,requires_human')
         .eq('organization_id', body.organizationId)
         .eq('id', message.conversation_id)
         .maybeSingle(),
@@ -230,6 +248,59 @@ export async function POST(request: Request) {
     if (!verification.verified) {
       return NextResponse.json({ error: 'Controlled shadow pilot evidence failed closed', reason: verification.reason }, { status: 409 });
     }
+
+    if (body.controlledVoiceReplyPilot) {
+      if (
+        message.channel !== 'WHATSAPP'
+        || String(message.media_type ?? '').toUpperCase() !== 'AUDIO'
+        || sendContext.voice_reply !== true
+        || sendContext.catalog_content_id
+        || sendContext.template_name
+      ) {
+        return NextResponse.json({
+          error: 'Controlled voice reply artifact failed closed',
+        }, { status: 409 });
+      }
+
+      const [{ data: orgSettings, error: orgSettingsError }, { data: openAiConnection, error: openAiConnectionError }] = await Promise.all([
+        supabase.from('organization_settings')
+          .select('config')
+          .eq('organization_id', body.organizationId)
+          .maybeSingle(),
+        supabase.from('integration_connections')
+          .select('enabled,status')
+          .eq('organization_id', body.organizationId)
+          .eq('provider', 'OPENAI')
+          .eq('channel', 'AI')
+          .maybeSingle(),
+      ]);
+      if (orgSettingsError || openAiConnectionError || !orgSettings) {
+        return NextResponse.json({
+          error: 'Controlled voice reply canonical configuration is unavailable',
+        }, { status: 409 });
+      }
+
+      const runtimeConfig = resolveVoiceReplyRuntimeConfig(orgSettings.config);
+      if (!runtimeConfig.ready) {
+        return NextResponse.json({
+          error: 'Controlled voice reply runtime configuration blocks sending',
+          reason: runtimeConfig.reason,
+        }, { status: 409 });
+      }
+
+      const humanTakeover = Boolean(conversation.requires_human)
+        || ['HUMAN', 'PAUSED'].includes(String(conversation.agent_mode ?? '').toUpperCase())
+        || ['HUMAN', 'PAUSED'].includes(String(lead?.agent_mode ?? '').toUpperCase());
+
+      voiceReplyContext = {
+        config: runtimeConfig.config,
+        businessCategory: business.category ?? null,
+        humanTakeover,
+        openAiProviderConnected: Boolean(openAiConnection?.enabled)
+          && openAiConnection?.status === 'CONNECTED',
+      };
+    }
+
     shadowModeExceptionVerified = true;
     liveTestMarketWindowExceptionVerified = await verifyLiveTestMarketWindowException({
       supabase,
@@ -492,11 +563,61 @@ export async function POST(request: Request) {
       }
       const provider = tenantProvider.provider;
       const catalogContentId = sendContext.catalog_content_id?.trim() || null;
-      let whatsappOperation: 'SEND_TEMPLATE' | 'SEND_TEXT' | 'SEND_PRODUCT';
-      let whatsappEventType: 'TEMPLATE_SENT' | 'TEXT_SENT' | 'PRODUCT_SENT';
+      let whatsappOperation: 'SEND_TEMPLATE' | 'SEND_TEXT' | 'SEND_PRODUCT' | 'SEND_AUDIO';
+      let whatsappEventType: 'TEMPLATE_SENT' | 'TEXT_SENT' | 'PRODUCT_SENT' | 'AUDIO_SENT';
       let result: WhatsAppSendResult;
+      let voiceReplyAccounting: { reservationKey: string; replayed: boolean } | null = null;
 
-      if (catalogContentId) {
+      if (body.controlledVoiceReplyPilot) {
+        if (!voiceReplyContext || sendContext.voice_reply !== true) {
+          throw new Error('Controlled voice reply preflight evidence is unavailable');
+        }
+        if (whatsappPolicy.mode !== 'FREEFORM') {
+          throw new Error('Controlled voice reply requires an open 24-hour customer service window');
+        }
+
+        const synthesis = resolveVoiceReplySynthesisConfig();
+        const voicePolicy = evaluateVoiceReplyFoundation({
+          businessCategory: voiceReplyContext.businessCategory,
+          shadowMode: Boolean(controls.shadow_mode),
+          globalKillSwitch: Boolean(controls.global_kill_switch),
+          agentsPaused: Boolean(controls.agents_paused),
+          whatsappPaused: Boolean(controls.whatsapp_ai_paused),
+          whatsappProviderConnected: Boolean(providerConnection.enabled)
+            && providerConnection.status === 'CONNECTED',
+          openAiProviderConnected: voiceReplyContext.openAiProviderConnected,
+          whatsappFreeformWindowOpen: true,
+          humanTakeover: voiceReplyContext.humanTakeover,
+          aiVoiceDisclosureConfigured: Boolean(voiceReplyContext.config.aiGeneratedDisclosureText),
+          usageReconciliationReady:
+            voiceReplyContext.config.pricingStatus === 'CONSERVATIVE_CONFIGURED_RESERVE',
+          ttsModel: synthesis.model,
+          audioMimeType: 'audio/mpeg',
+        });
+        if (!voicePolicy.allowed) {
+          throw new Error(`Controlled voice reply policy blocks sending: ${voicePolicy.blockers.join(',')}`);
+        }
+
+        const prepared = await prepareControlledVoiceReplyAudio({
+          service: supabase,
+          provider,
+          organizationId: body.organizationId,
+          messageId: String(message.id),
+          leadId: message.lead_id,
+          replyText: message.original_text,
+          config: voiceReplyContext.config,
+        });
+        voiceReplyAccounting = {
+          reservationKey: prepared.reservationKey,
+          replayed: prepared.replayed,
+        };
+        result = await provider.sendAudio({
+          to: sendContext.to,
+          mediaId: prepared.mediaId,
+        });
+        whatsappOperation = 'SEND_AUDIO';
+        whatsappEventType = 'AUDIO_SENT';
+      } else if (catalogContentId) {
         if (whatsappPolicy.mode !== 'FREEFORM') throw new Error('WhatsApp catalog product messages require an open 24-hour customer service window');
         assertSmartVisionsCatalogContentId(catalogContentId);
         result = await provider.sendCatalogProduct({
@@ -549,10 +670,36 @@ export async function POST(request: Request) {
         provider_message_id: providerMessageId,
         direction: 'OUTBOUND',
         event_type: whatsappEventType,
-        payload: { source: 'APPROVED_SHADOW_DRAFT', tenant_business_id: projection.tenant_business_id, branch_id: projection.branch_id, communication_channel_binding_id: tenantProvider.bindingId, ...(catalogContentId ? { catalog_content_id: catalogContentId } : {}) },
+        payload: {
+          source: 'APPROVED_SHADOW_DRAFT',
+          tenant_business_id: projection.tenant_business_id,
+          branch_id: projection.branch_id,
+          communication_channel_binding_id: tenantProvider.bindingId,
+          ...(catalogContentId ? { catalog_content_id: catalogContentId } : {}),
+          ...(voiceReplyAccounting ? {
+            voice_reply: true,
+            tts_reservation_key: voiceReplyAccounting.reservationKey,
+            tts_replayed: voiceReplyAccounting.replayed,
+            ai_generated_disclosure_present: true,
+          } : {}),
+        },
       }, { onConflict: 'organization_id,provider_message_id,direction,event_type', ignoreDuplicates: true });
       if (eventWrite.error) throw new Error(`WhatsApp event reconciliation failed: ${eventWrite.error.message}`);
-      await recordUsage({ organizationId: body.organizationId, provider: 'WHATSAPP', operation: whatsappOperation, costUsd: 0, units: 1, leadId: message.lead_id ?? undefined, metadata: { source: 'APPROVED_SHADOW_DRAFT', pricing_status: 'PENDING_RECONCILIATION', canonical_last_inbound_at: finalGate.lastInboundAt, tenant_business_id: projection.tenant_business_id, branch_id: projection.branch_id, communication_channel_binding_id: tenantProvider.bindingId, ...(catalogContentId ? { catalog_content_id: catalogContentId } : {}) } });
+      await recordUsage({ organizationId: body.organizationId, provider: 'WHATSAPP', operation: whatsappOperation, costUsd: 0, units: 1, leadId: message.lead_id ?? undefined, metadata: {
+        source: 'APPROVED_SHADOW_DRAFT',
+        pricing_status: 'PENDING_RECONCILIATION',
+        canonical_last_inbound_at: finalGate.lastInboundAt,
+        tenant_business_id: projection.tenant_business_id,
+        branch_id: projection.branch_id,
+        communication_channel_binding_id: tenantProvider.bindingId,
+        ...(catalogContentId ? { catalog_content_id: catalogContentId } : {}),
+        ...(voiceReplyAccounting ? {
+          voice_reply: true,
+          tts_reservation_key: voiceReplyAccounting.reservationKey,
+          tts_replayed: voiceReplyAccounting.replayed,
+          ai_generated_disclosure_present: true,
+        } : {}),
+      } });
     } else if (message.channel === 'INSTAGRAM') {
       await assertFinalProviderBoundary();
       const { data: projection, error: projectionError } = await supabase
@@ -744,7 +891,7 @@ export async function POST(request: Request) {
     const conversationUpdate = await supabase.from('sales_conversations').update({ last_outbound_at: new Date().toISOString(), last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('organization_id', body.organizationId).eq('id', message.conversation_id);
     if (conversationUpdate.error) throw new Error(`Conversation reconciliation failed: ${conversationUpdate.error.message}`);
 
-    return NextResponse.json({ sent: true, channel: message.channel, providerMessageId, idempotencyKey, controlledShadowPilot: Boolean(body.controlledShadowPilot), controlledEmailPilot: Boolean(body.controlledEmailPilot) });
+    return NextResponse.json({ sent: true, channel: message.channel, providerMessageId, idempotencyKey, controlledShadowPilot: Boolean(body.controlledShadowPilot), controlledEmailPilot: Boolean(body.controlledEmailPilot), controlledVoiceReplyPilot: Boolean(body.controlledVoiceReplyPilot) });
   } catch (error) {
     const providerErrorEvidence = rateLimitEvidenceFromError(error);
     if (providerErrorEvidence) {
