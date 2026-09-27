@@ -123,6 +123,12 @@ describe('canonical send safety', () => {
     expect(result.blocks).toContain('WHATSAPP_24H_POLICY');
   });
 
+  it('applies shared safety blocks to Instagram without a channel-specific bypass', () => {
+    const result = evaluateCanonicalSendSafety({ ...base, channel: 'INSTAGRAM', channelPaused: true, suppressed: true });
+    expect(result.allowed).toBe(false);
+    expect(result.blocks).toEqual(expect.arrayContaining(['CHANNEL_PAUSED', 'SUPPRESSED_RECIPIENT']));
+  });
+
   it('normalizes recipients before canonical comparison', () => {
     expect(normalizeCanonicalEmail(' Sales@Example.COM ')).toBe('sales@example.com');
     expect(normalizeCanonicalPhone('+968 9123-4567')).toBe('96891234567');

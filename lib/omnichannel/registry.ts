@@ -17,8 +17,5 @@ export function getChannelIntegrationIdentity(value: unknown): {
 } | null {
   const descriptor = getChannelDescriptor(value);
   if (!descriptor) return null;
-  return {
-    provider: descriptor.integrationProvider,
-    channel: descriptor.channel,
-  };
+  return { provider: descriptor.integrationProvider, channel: descriptor.channel };
 }

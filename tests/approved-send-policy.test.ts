@@ -89,3 +89,38 @@ describe('approved send policy', () => {
     });
   });
 });
+
+
+describe('Instagram approved-send readiness', () => {
+  it('admits Instagram only when the shared safety policy is clear', () => {
+    const result = evaluateApprovedSendPolicy({
+      messageStatus: 'APPROVED',
+      requiresApproval: false,
+      shadowMode: false,
+      globalKillSwitch: false,
+      channelPaused: false,
+      agentsPaused: false,
+      doNotContact: false,
+      agentMode: 'AUTO',
+      messageChannel: 'INSTAGRAM',
+    });
+    expect(result.allowed).toBe(true);
+    expect(result.channel).toBe('INSTAGRAM');
+  });
+
+  it('keeps Instagram fail-closed behind its channel pause', () => {
+    const result = evaluateApprovedSendPolicy({
+      messageStatus: 'APPROVED',
+      requiresApproval: false,
+      shadowMode: false,
+      globalKillSwitch: false,
+      channelPaused: true,
+      agentsPaused: false,
+      doNotContact: false,
+      agentMode: 'AUTO',
+      messageChannel: 'INSTAGRAM',
+    });
+    expect(result.allowed).toBe(false);
+    expect(result.blocks).toContain('CHANNEL_PAUSED');
+  });
+});
