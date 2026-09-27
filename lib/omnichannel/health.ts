@@ -151,6 +151,24 @@ type RateLimitAuditRow = {
   after_data: unknown;
 };
 
+async function latestRateLimitAudit(
+  service: ReturnType<typeof createSupabaseServiceClient>,
+  organizationId: string,
+  channel: 'EMAIL' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK_MESSENGER',
+): Promise<RateLimitAuditRow | null> {
+  const result = await service
+    .from('audit_logs')
+    .select('created_at,after_data')
+    .eq('organization_id', organizationId)
+    .eq('action', 'CHANNEL_PROVIDER_RATE_LIMIT_OBSERVED')
+    .eq('after_data->>channel', channel)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (result.error) throw new Error(`${channel} provider rate-limit health lookup failed`);
+  return result.data ? result.data as RateLimitAuditRow : null;
+}
+
 function healthObject(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -163,13 +181,8 @@ function numericEvidence(value: unknown) {
 }
 
 function rateLimitHealth(
-  rows: RateLimitAuditRow[],
-  channel: CustomerChannel,
+  row: RateLimitAuditRow | null,
 ): { state: string; observedAt: string | null } {
-  const row = rows.find((candidate) => {
-    const after = healthObject(candidate.after_data);
-    return String(after?.channel ?? '') === channel;
-  });
   if (!row) return { state: 'NO_PROVIDER_QUOTA_EVIDENCE', observedAt: null };
 
   const after = healthObject(row.after_data);
@@ -241,7 +254,10 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
     messengerAcceptance,
     webChatAcceptance,
     webChatHealth,
-    rateLimitAuditsResult,
+    emailRateLimitAudit,
+    whatsappRateLimitAudit,
+    instagramRateLimitAudit,
+    messengerRateLimitAudit,
   ] = await Promise.all([
     service
       .from('integration_connections')
@@ -265,28 +281,23 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
     latestAcceptance('facebook_messenger_activation_acceptance_receipts', organizationId),
     latestAcceptance('web_chat_activation_acceptance_receipts', organizationId),
     getWebChatConnectionHealth(organizationId),
-    service
-      .from('audit_logs')
-      .select('created_at,after_data')
-      .eq('organization_id', organizationId)
-      .eq('action', 'CHANNEL_PROVIDER_RATE_LIMIT_OBSERVED')
-      .order('created_at', { ascending: false })
-      .limit(100),
+    latestRateLimitAudit(service, organizationId, 'EMAIL'),
+    latestRateLimitAudit(service, organizationId, 'WHATSAPP'),
+    latestRateLimitAudit(service, organizationId, 'INSTAGRAM'),
+    latestRateLimitAudit(service, organizationId, 'FACEBOOK_MESSENGER'),
   ]);
 
   if (integrationsResult.error) throw new Error('Integration connection health lookup failed');
   if (bindingsResult.error) throw new Error('Channel binding health lookup failed');
   if (controlsResult.error) throw new Error('System control health lookup failed');
-  if (rateLimitAuditsResult.error) throw new Error('Provider rate-limit health lookup failed');
 
   const integrations = (integrationsResult.data ?? []) as IntegrationRow[];
   const bindings = (bindingsResult.data ?? []) as BindingRow[];
   const controls = controlsResult.data ? controlsResult.data as Record<string, unknown> : null;
-  const rateLimitAudits = (rateLimitAuditsResult.data ?? []) as RateLimitAuditRow[];
-  const emailRateLimit = rateLimitHealth(rateLimitAudits, 'EMAIL');
-  const whatsappRateLimit = rateLimitHealth(rateLimitAudits, 'WHATSAPP');
-  const instagramRateLimit = rateLimitHealth(rateLimitAudits, 'INSTAGRAM');
-  const messengerRateLimit = rateLimitHealth(rateLimitAudits, 'FACEBOOK_MESSENGER');
+  const emailRateLimit = rateLimitHealth(emailRateLimitAudit);
+  const whatsappRateLimit = rateLimitHealth(whatsappRateLimitAudit);
+  const instagramRateLimit = rateLimitHealth(instagramRateLimitAudit);
+  const messengerRateLimit = rateLimitHealth(messengerRateLimitAudit);
 
   const integration = (provider: string, channel: string) =>
     integrations.find((row) => row.provider === provider && row.channel === channel);
