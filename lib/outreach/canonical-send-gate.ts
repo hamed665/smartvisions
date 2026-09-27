@@ -3,7 +3,7 @@ import { evaluateCanonicalMarketWindow } from '@/lib/outreach/canonical-market-w
 import { evaluateWhatsAppSendPolicy } from '@/lib/whatsapp/policy';
 import { getWhatsAppMarketingPermission } from '@/lib/whatsapp/marketing-opt-in';
 
-export type CanonicalSendChannel = 'EMAIL' | 'WHATSAPP' | 'INSTAGRAM';
+export type CanonicalSendChannel = 'EMAIL' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK_MESSENGER';
 
 export type CanonicalSendSafetySnapshot = {
   channel: CanonicalSendChannel;
@@ -87,7 +87,7 @@ export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllow
 
   const [{ data: controls, error: controlsError }, { data: lead, error: leadError }, { data: conversation, error: conversationError }] = await Promise.all([
     supabase.from('system_controls')
-      .select('global_kill_switch,email_paused,whatsapp_ai_paused,instagram_ai_paused,agents_paused,shadow_mode')
+      .select('global_kill_switch,email_paused,whatsapp_ai_paused,instagram_ai_paused,facebook_messenger_ai_paused,agents_paused,shadow_mode')
       .eq('organization_id', organizationId)
       .maybeSingle(),
     supabase.from('leads')
@@ -126,7 +126,7 @@ export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllow
   if (marketError || !market) throw new Error(`CANONICAL_MARKET_UNAVAILABLE:${marketError?.message ?? 'not found'}`);
 
   let instagramBindingId: string | null = null;
-  if (channel === 'INSTAGRAM') {
+  if (channel === 'INSTAGRAM' || channel === 'FACEBOOK_MESSENGER') {
     const { data: projection, error: projectionError } = await supabase.from('unified_inbox_conversation_projections')
       .select('communication_channel_binding_id,lifecycle_status')
       .eq('organization_id', organizationId)
@@ -146,19 +146,19 @@ export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllow
     : channel === 'WHATSAPP'
       ? recipientPhone.length >= 8 && businessPhones.includes(recipientPhone)
       : false;
-  if (channel === 'INSTAGRAM' && instagramBindingId && input.recipient.trim()) {
+  if ((channel === 'INSTAGRAM' || channel === 'FACEBOOK_MESSENGER') && instagramBindingId && input.recipient.trim()) {
     const normalizedProviderIdentity = `${instagramBindingId}:${input.recipient.trim()}`;
     const { data: identityLinks, error: identityError } = await supabase.from('crm_identity_links')
       .select('identity_id,crm_identities!inner(identity_type,normalized_value,identity_status)')
       .eq('organization_id', organizationId)
       .eq('business_id', lead.business_id)
       .eq('link_status', 'ACTIVE')
-      .eq('crm_identities.identity_type', 'INSTAGRAM_PROVIDER_USER')
+      .eq('crm_identities.identity_type', channel === 'INSTAGRAM' ? 'INSTAGRAM_PROVIDER_USER' : 'FACEBOOK_MESSENGER_PROVIDER_USER')
       .eq('crm_identities.normalized_value', normalizedProviderIdentity)
       .eq('crm_identities.identity_status', 'ACTIVE')
       .limit(2);
-    if (identityError) throw new Error(`CANONICAL_INSTAGRAM_IDENTITY_UNAVAILABLE:${identityError.message}`);
-    if ((identityLinks ?? []).length > 1) throw new Error('CANONICAL_INSTAGRAM_IDENTITY_AMBIGUOUS');
+    if (identityError) throw new Error(`CANONICAL_SOCIAL_IDENTITY_UNAVAILABLE:${identityError.message}`);
+    if ((identityLinks ?? []).length > 1) throw new Error('CANONICAL_SOCIAL_IDENTITY_AMBIGUOUS');
     recipientMatchesCanonicalBusiness = (identityLinks ?? []).length === 1;
   }
 
@@ -173,7 +173,7 @@ export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllow
     ]);
     if (emailSuppressionError || domainSuppressionError) throw new Error(`CANONICAL_SUPPRESSION_UNAVAILABLE:${emailSuppressionError?.message ?? domainSuppressionError?.message}`);
     suppressed = Boolean(emailSuppression || domainSuppression);
-  } else if (channel === 'INSTAGRAM' && instagramBindingId && input.recipient.trim()) {
+  } else if ((channel === 'INSTAGRAM' || channel === 'FACEBOOK_MESSENGER') && instagramBindingId && input.recipient.trim()) {
     const providerIdentityKey = `${instagramBindingId}:${input.recipient.trim()}`;
     const { data: identitySuppression, error: identitySuppressionError } = await supabase.from('suppression_list')
       .select('id')
@@ -256,7 +256,7 @@ export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllow
   const safety = evaluateCanonicalSendSafety({
     channel,
     globalKillSwitch: Boolean(controls.global_kill_switch),
-    channelPaused: channel === 'EMAIL' ? Boolean(controls.email_paused) : channel === 'WHATSAPP' ? Boolean(controls.whatsapp_ai_paused) : Boolean(controls.instagram_ai_paused),
+    channelPaused: channel === 'EMAIL' ? Boolean(controls.email_paused) : channel === 'WHATSAPP' ? Boolean(controls.whatsapp_ai_paused) : channel === 'INSTAGRAM' ? Boolean(controls.instagram_ai_paused) : Boolean(controls.facebook_messenger_ai_paused),
     agentsPaused: Boolean(controls.agents_paused),
     shadowMode: Boolean(controls.shadow_mode),
     shadowModeExceptionVerified: input.shadowModeExceptionVerified,

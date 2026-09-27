@@ -13,6 +13,7 @@ import { evaluateMailboxHealth } from '@/lib/outreach/mailbox-health';
 import { countMailboxSendsLast24Hours } from '@/lib/outreach/mailbox-usage';
 import { resolveMetaWhatsAppProvider } from '@/lib/whatsapp/tenant-routing';
 import { resolveMetaInstagramProvider } from '@/lib/instagram/tenant-routing';
+import { resolveMetaMessengerProvider } from '@/lib/facebook-messenger/tenant-routing';
 import { assertSmartVisionsCatalogContentId } from '@/lib/whatsapp/catalog';
 import { getWhatsAppMarketingPermission } from '@/lib/whatsapp/marketing-opt-in';
 import { SMART_VISIONS_BUSINESS_INTRO_OM } from '@/lib/whatsapp/business-intro-template';
@@ -72,10 +73,12 @@ export async function POST(request: Request) {
   // Readiness still verifies the canonical META/INSTAGRAM integration connection.
   const providerLookupIdentity = providerIdentity ?? (message.channel === 'INSTAGRAM'
     ? { provider: 'META' as const, channel: 'INSTAGRAM' as const }
-    : null);
+    : message.channel === 'FACEBOOK_MESSENGER'
+      ? { provider: 'META' as const, channel: 'FACEBOOK_MESSENGER' as const }
+      : null);
 
   const [{ data: controls, error: controlsError }, { data: lead, error: leadError }, providerConnectionResult] = await Promise.all([
-    supabase.from('system_controls').select('global_kill_switch,email_paused,whatsapp_ai_paused,instagram_ai_paused,agents_paused,shadow_mode').eq('organization_id', body.organizationId).maybeSingle(),
+    supabase.from('system_controls').select('global_kill_switch,email_paused,whatsapp_ai_paused,instagram_ai_paused,facebook_messenger_ai_paused,agents_paused,shadow_mode').eq('organization_id', body.organizationId).maybeSingle(),
     message.lead_id ? supabase.from('leads').select('id,business_id,status,agent_mode').eq('organization_id', body.organizationId).eq('id', message.lead_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
     providerLookupIdentity
       ? supabase.from('integration_connections')
@@ -305,7 +308,7 @@ export async function POST(request: Request) {
     shadowMode: Boolean(controls.shadow_mode),
     shadowModeExceptionVerified,
     globalKillSwitch: Boolean(controls.global_kill_switch),
-    channelPaused: message.channel === 'EMAIL' ? Boolean(controls.email_paused) : message.channel === 'WHATSAPP' ? Boolean(controls.whatsapp_ai_paused) : Boolean(controls.instagram_ai_paused),
+    channelPaused: message.channel === 'EMAIL' ? Boolean(controls.email_paused) : message.channel === 'WHATSAPP' ? Boolean(controls.whatsapp_ai_paused) : message.channel === 'INSTAGRAM' ? Boolean(controls.instagram_ai_paused) : Boolean(controls.facebook_messenger_ai_paused),
     agentsPaused: Boolean(controls.agents_paused),
     doNotContact: lead?.status === 'DO_NOT_CONTACT',
     agentMode: lead?.agent_mode ?? null,
@@ -356,7 +359,7 @@ export async function POST(request: Request) {
   let providerMessageId: string | null = null;
   try {
     if (!message.lead_id || !message.conversation_id) throw new Error('Approved send is missing canonical lead/conversation linkage');
-    if (!['EMAIL', 'WHATSAPP', 'INSTAGRAM'].includes(message.channel)) throw new Error('Approved send channel is unsupported');
+    if (!['EMAIL', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK_MESSENGER'].includes(message.channel)) throw new Error('Approved send channel is unsupported');
 
     const assertFinalProviderBoundary = async () => {
       const gate = await assertCanonicalSendAllowed({
@@ -364,7 +367,7 @@ export async function POST(request: Request) {
         organizationId: body.organizationId!,
         leadId: message.lead_id!,
         conversationId: message.conversation_id!,
-        channel: message.channel as 'EMAIL' | 'WHATSAPP' | 'INSTAGRAM',
+        channel: message.channel as 'EMAIL' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK_MESSENGER',
         recipient: sendContext.to!,
         templateName: sendContext.template_name,
         shadowModeExceptionVerified,
@@ -516,7 +519,7 @@ export async function POST(request: Request) {
       }, { onConflict: 'organization_id,provider_message_id,direction,event_type', ignoreDuplicates: true });
       if (eventWrite.error) throw new Error(`WhatsApp event reconciliation failed: ${eventWrite.error.message}`);
       await recordUsage({ organizationId: body.organizationId, provider: 'WHATSAPP', operation: whatsappOperation, costUsd: 0, units: 1, leadId: message.lead_id ?? undefined, metadata: { source: 'APPROVED_SHADOW_DRAFT', pricing_status: 'PENDING_RECONCILIATION', canonical_last_inbound_at: finalGate.lastInboundAt, tenant_business_id: projection.tenant_business_id, branch_id: projection.branch_id, communication_channel_binding_id: tenantProvider.bindingId, ...(catalogContentId ? { catalog_content_id: catalogContentId } : {}) } });
-    } else {
+    } else if (message.channel === 'INSTAGRAM') {
       await assertFinalProviderBoundary();
       const { data: projection, error: projectionError } = await supabase
         .from('unified_inbox_conversation_projections')
@@ -586,6 +589,20 @@ export async function POST(request: Request) {
           communication_channel_binding_id: tenantProvider.bindingId,
         },
       });
+    } else {
+      await assertFinalProviderBoundary();
+      const { data: projection, error: projectionError } = await supabase.from('unified_inbox_conversation_projections').select('tenant_business_id,branch_id,communication_channel_binding_id,lifecycle_status').eq('organization_id', body.organizationId).eq('conversation_id', message.conversation_id).in('lifecycle_status', ['ACTIVE','DEGRADED']).maybeSingle();
+      if (projectionError || !projection) throw new Error(projectionError?.message ?? 'Approved Messenger send has no canonical tenant communication projection');
+      const tenantProvider = await resolveMetaMessengerProvider({service:supabase,organizationId:body.organizationId,tenantBusinessId:projection.tenant_business_id,branchId:projection.branch_id});
+      if (tenantProvider.bindingId !== projection.communication_channel_binding_id) throw new Error('Approved Messenger tenant credential does not match the conversation channel binding');
+      const result = await tenantProvider.provider.sendText({recipientId:sendContext.to,text:message.original_text});
+      providerMessageId=result.providerMessageId;providerAccepted=true;
+      const accepted=await supabase.from('conversation_messages').update({status:'SENT',provider_message_id:providerMessageId,provider_delivery_status:'ACCEPTED',sent_at:new Date().toISOString(),processed_at:new Date().toISOString(),approval_reason:null}).eq('organization_id',body.organizationId).eq('id',body.messageId).eq('status','PROCESSING');
+      if(accepted.error)throw new Error(`Provider-accepted Messenger reconciliation failed: ${accepted.error.message}`);
+      const eventWrite=await supabase.from('facebook_messenger_events').upsert({organization_id:body.organizationId,provider_event_id:providerMessageId,provider_destination_id:tenantProvider.destinationId,event_type:'MESSAGE',payload:{providerMessageId,direction:'OUTBOUND',source:'APPROVED_SHADOW_DRAFT',leadId:message.lead_id,conversationId:message.conversation_id,tenantBusinessId:projection.tenant_business_id,branchId:projection.branch_id,bindingId:tenantProvider.bindingId,outboundAccepted:true}},{onConflict:'organization_id,provider_event_id,event_type',ignoreDuplicates:true});
+      if(eventWrite.error)throw new Error(`Messenger event reconciliation failed: ${eventWrite.error.message}`);
+      await recordUsage({organizationId:body.organizationId,provider:'FACEBOOK_MESSENGER',operation:'SEND_TEXT',costUsd:0,units:1,leadId:message.lead_id??undefined,metadata:{source:'APPROVED_SHADOW_DRAFT',pricing_status:'PENDING_RECONCILIATION',tenant_business_id:projection.tenant_business_id,branch_id:projection.branch_id,communication_channel_binding_id:tenantProvider.bindingId}});
+
     }
 
     const conversationUpdate = await supabase.from('sales_conversations').update({ last_outbound_at: new Date().toISOString(), last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('organization_id', body.organizationId).eq('id', message.conversation_id);
