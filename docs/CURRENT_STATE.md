@@ -1,5 +1,27 @@
 # Smart Visions Growth OS — Current Production State
 
+## Superseding OMNI-TELEGRAM Production checkpoint — 2026-09-27
+
+This checkpoint supersedes older Telegram-customer continuation notes where they conflict with the evidence below.
+
+- Canonical runtime main before this documentation reconciliation: `6532693d7cc653e6611af0fea3ba4eea432d6feb`.
+- PR #298 implemented the tenant/business/Branch-bound customer Telegram channel without reusing the existing Owner Assistant identity, global Owner Bot credential, Owner command journal, CRM truth, Conversation truth, queue or Chatwoot integration.
+- Customer Telegram uses the existing canonical communication binding, Vault-backed tenant credential, CRM identity graph (`TELEGRAM_PROVIDER_USER` / `TELEGRAM_INBOUND`), Unified Inbox/Chatwoot projection, governed outbound send gate, system controls, audit and reconciliation boundaries.
+- The customer webhook is binding-scoped, requires Telegram's secret-token header, journals `update_id` for replay/idempotency, normalizes private messages/callbacks/media and fails closed when binding/credential evidence is absent.
+- PR #299 added only the three Production-advisor-requested covering indexes for Telegram activation-acceptance composite foreign keys.
+- Production migration `0122_omni_telegram_customer_foundation` is live as version `20260927171724`.
+- Production migration `0123_telegram_activation_acceptance_fk_index_hardening` is live as version `20260927172358`.
+- Exact-main CI #1452 succeeded on `6532693d7cc653e6611af0fea3ba4eea432d6feb`.
+- Cloudflare Production Deploy #932 succeeded on that exact SHA. Candidate Worker version: `f1d716c9-dfe7-43b5-8b52-2e83435570c8`; Production Worker version: `0c1a6d02-de44-4603-804f-81e807a1f672`. Candidate smoke, controlled SSR load, Production promotion, Worker Route verification, routed Production smoke and safe API/webhook rejection smoke all passed. No outbound provider send was invoked by smoke.
+- The Chatwoot Platform token GitHub secret remains unconfigured and Production Chatwoot provisioning remains disabled.
+- Independent smoke from the OVH Production host after Deploy #932: Chatwoot HTTP 200; Smart Core login HTTP 200; unauthenticated `/integrations` HTTP 307; invalid Owner Telegram secret HTTP 401; nonexistent customer-Telegram binding HTTP 404.
+- Production safety remains fail-closed: Shadow Mode ON, Global Kill Switch OFF, `telegram_ai_paused=true`.
+- Production Telegram customer state intentionally has one organization-level `TELEGRAM / TELEGRAM` integration row as `NOT_CONFIGURED + disabled`, with 0 customer Telegram bindings, 0 customer events and 0 activation-acceptance receipts. No synthetic Bot token, tenant or acceptance evidence was created.
+- Sensitive Telegram customer resolver/reconciliation/acceptance RPCs remain service-role-only. Owner Assistant and customer-channel authority remain separate.
+- Post-`0123` Supabase advisors no longer report Telegram activation-receipt unindexed-foreign-key findings. New Telegram indexes report only expected `unused_index` INFO while the real evidence stream is empty. Service-only Telegram journal/receipt tables retain RLS-enabled/no-policy INFO by design.
+- `OMNI-TELEGRAM` disposition: internally controlled customer-channel schema, credential boundary, webhook/replay handling, canonical identity/projection, media path, outbound safety/reconciliation, pause/readiness/health surfaces and Production deployment are **PRODUCTION_VERIFIED** where directly observed above. Real tenant Bot authorization, real inbound/outbound/media happy-path and activation receipt remain **BLOCKED_EXTERNAL** until a real consented tenant credential is available.
+- Verification caveat: the current CI workflow's named PostgreSQL migration-chain step still explicitly enumerates migrations only through `0101`; do not misstate CI #1452 as direct execution proof for `0122/0123`. Their current proof is successful Production migration application plus post-migration runtime/schema/advisor verification. CI chain coverage for later migrations is a separate repository hardening gap.
+
 ## Superseding OMNI-CHANNEL-HEALTH Production checkpoint — 2026-09-27
 
 This checkpoint supersedes older Omnichannel health notes where they conflict with the evidence below.
