@@ -20,6 +20,22 @@ export type ProviderRateLimitEvidence = {
   } | null;
 };
 
+export class ProviderHttpError extends Error {
+  readonly status: number;
+  readonly rateLimit: ProviderRateLimitEvidence | null;
+
+  constructor(message: string, status: number, rateLimit: ProviderRateLimitEvidence | null) {
+    super(message);
+    this.name = 'ProviderHttpError';
+    this.status = status;
+    this.rateLimit = rateLimit;
+  }
+}
+
+export function rateLimitEvidenceFromError(error: unknown) {
+  return error instanceof ProviderHttpError ? error.rateLimit : null;
+}
+
 function finiteNumber(value: string | null | undefined) {
   if (!value) return null;
   const parsed = Number(value);
