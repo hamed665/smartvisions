@@ -84,13 +84,13 @@ No blanket completion percentage until all applicable acceptance items have evid
 | GAP-02 | Superseded by PR #264 Vault-backed tenant resolver, PR #266 outbound binding enforcement and PR #268 tenant-bound voice media credential | **IMPLEMENTED / PRODUCTION_DEPLOYED** for reviewed production paths; real tenant send acceptance remains GAP-09 | DEV-INTEGRATIONS; COMM-ACTION-BRIDGE |
 | GAP-03 | Superseded by PR #264 destination WABA/phone context preservation and exact binding resolution | **IMPLEMENTED / PRODUCTION_DEPLOYED** | COMM-RECONCILIATION |
 | GAP-04 | PR #265 implements tenant-bound Meta WhatsApp Embedded Signup code exchange and Vault persistence | **IMPLEMENTED / PRODUCTION_DEPLOYED; BLOCKED_EXTERNAL** for live Meta app/customer acceptance | UX-BUSINESS-WEB; DEV-INTEGRATIONS |
-| GAP-05 | Active runtime adapters remain EMAIL and WHATSAPP only. Instagram already has an organization-level META/INSTAGRAM integration row; migration 0102 adds governed tenant/Branch binding readiness without activating a provider adapter. | Instagram tenant binding, signed webhook journal/exact routing, Vault-backed credential authority and tenant-injected provider transport are implemented. Canonical Instagram identity/lifecycle + send-gate/reconciliation activation and all other customer channels still require implementation/acceptance. | OMNI-META-SOCIAL; OMNI-TELEGRAM; OMNI-WEBCHAT; OMNI-TIKTOK; OMNI-SMS-RCS |
+| GAP-05 | Active provider-adapter registry remains evidence-gated. Instagram/Messenger are internally implemented but not live-active; Web Chat is a built-in Smart Core channel rather than an external provider adapter. PR #292 + migrations 0118/0119 complete the internally controlled Web Chat message/media/readiness/health paths and Deploy #903 Production-verifies the routed runtime. | **WEB CHAT: IMPLEMENTED / PRODUCTION_VERIFIED for observed infrastructure/security paths; BLOCKED_EXTERNAL under GAP-09 for first real-tenant happy-path acceptance.** Instagram/Messenger still require real external activation evidence. Telegram/TikTok/SMS-RCS remain separate Work Packages. | OMNI-META-SOCIAL; OMNI-TELEGRAM; OMNI-WEBCHAT; OMNI-TIKTOK; OMNI-SMS-RCS |
 | GAP-06 | Email/WhatsApp descriptors mark nativeProviderActivity UNPROVEN | Native-app coexistence must not be advertised as proven | COMM-HUMAN-AI; COMM-RECONCILIATION |
 | GAP-07 | PR #268 normalizes audio/image/video/document/sticker media and tenant-binds voice media download | **IMPLEMENTED / PRODUCTION_DEPLOYED** for normalization and reviewed download path; real customer media acceptance remains GAP-09 | OMNI-VOICE; AI-VOICE-VISION; COMM-UNIFIED-INBOX |
 | GAP-08A | PR #263 added operator UI over the governed action bridge | **IMPLEMENTED / PRODUCTION_DEPLOYED**; real-tenant activation acceptance remains GAP-09 | COMM-UNIFIED-INBOX |
 | GAP-08B | PR #263 added scoped private internal notes with idempotent/reconciled Chatwoot action evidence | **IMPLEMENTED / PRODUCTION_DEPLOYED**; real-tenant acceptance remains GAP-09 | COMM-UNIFIED-INBOX |
 | GAP-08C | PR #263 added scoped attachment listing and bounded authenticated proxy download | **IMPLEMENTED / PRODUCTION_DEPLOYED**; real-tenant attachment acceptance remains GAP-09 | COMM-UNIFIED-INBOX |
-| GAP-09 | Activation gate + earlier empty tenant/projection evidence | A real first tenant and end-to-end production acceptance remain gated | COMM-TENANT-BRIDGE; FINAL-E2E |
+| GAP-09 | Production still has no evidence-backed first Web Chat tenant/widget/session/event/message/acceptance receipt. Web Chat acceptance now requires derived real inbound + outbound + media + session evidence rather than a caller boolean. | **BLOCKED_EXTERNAL:** a real consented first tenant and end-to-end Production acceptance remain gated. Do not create synthetic tenant/session/media evidence to close this. | COMM-TENANT-BRIDGE; OMNI-WEBCHAT; FINAL-E2E |
 
 Revalidate each gap before changing code. A later fix supersedes the finding through evidence, not deletion.
 
@@ -140,6 +140,8 @@ Per channel show:
 - customer-facing errors translated into clear actions, with a safe support correlation ID.
 
 Do not expose access tokens, secrets, full upstream error payloads or unnecessary personal data. A configured token is not proof of a healthy integration.
+
+Current Web Chat evidence: the Connection Center now derives Web Chat widget/origin/inbound/outbound/Chatwoot-inbox/reconciliation/control state from canonical binding, widget, projection, signed-event and acceptance evidence. The existing built-in integration row is configuration/bootstrap state only. This satisfies the internally controlled Web Chat health slice, but real tenant UI/happy-path acceptance is still GAP-09 and the full multi-channel `OMNI-CHANNEL-HEALTH` contract remains open pending cross-channel audit.
 
 ### CONN-03 — Multi-business routing and credential isolation
 
@@ -367,6 +369,14 @@ Measure before setting contractual targets. Do not invent SLO numbers or promise
 Every metric needs definition, source, window, dimensions, freshness and owner under DATA-EVENT-METRICS. Published promises require measured evidence.
 
 ## 9. Dependency order and next-session instructions
+
+### Superseding dependency checkpoint — 2026-09-27
+
+The older baseline text below is historical where it still names COMM-UNIFIED-INBOX as the current cursor. Governed Unified Inbox actions/notes/attachment bounds have already progressed beyond that checkpoint, and the current completed bounded unit is `SECTION OMNICHANNEL / OMNI-WEBCHAT`.
+
+Evidence: PR #292 + Production migration 0118 + exact-main CI/Deploy; PR #293 + Production migration 0119; Production fail-closed Web Chat attachment/upload probes; zero fabricated real-tenant acceptance data.
+
+Before the next mutation, re-audit `MASTER_PROGRAM_SECTIONS.md` and runtime dependencies. A Web Chat-specific Connection Center/health slice now exists, but `OMNI-CHANNEL-HEALTH` is not complete merely because Web Chat health is implemented. Cross-channel connection, credential/webhook, quota/capability, last-evidence and incident semantics must be audited against each channel authority before selecting/closing that Work Package.
 
 Do not replace the current cursor. At this baseline it remains COMMUNICATION / COMM-UNIFIED-INBOX governed operations.
 
