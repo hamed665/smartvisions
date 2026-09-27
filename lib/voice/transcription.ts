@@ -125,8 +125,9 @@ async function reclaimCached(row: VoiceTranscriptionRow) {
   return (data as VoiceTranscriptionRow | null) ?? null;
 }
 
-async function downloadMetaVoice(mediaId: string, fallbackMimeType?: string) {
-  const { token, graphVersion } = resolveMetaVoiceConfig();
+async function downloadMetaVoice(mediaId: string, fallbackMimeType?: string, accessToken?: string) {
+  const { token: globalToken, graphVersion } = resolveMetaVoiceConfig();
+  const token = accessToken?.trim() || globalToken;
   if (!token) throw new Error('Meta WhatsApp media credentials are not configured');
 
   const metadataResponse = await fetch(`https://graph.facebook.com/${graphVersion}/${encodeURIComponent(mediaId)}`, {
@@ -182,6 +183,7 @@ export async function transcribeWhatsAppVoiceOnce(input: {
   leadId?: string;
   conversationId?: string;
   priority?: 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
+  metaAccessToken?: string;
 }): Promise<VoiceTranscriptionResult> {
   const cached = await findCached(input.organizationId, input.providerMessageId, input.mediaId);
   let row: VoiceTranscriptionRow | null = null;
@@ -235,7 +237,7 @@ export async function transcribeWhatsAppVoiceOnce(input: {
 
   let providerAccepted = false;
   try {
-    const media = await downloadMetaVoice(input.mediaId, input.mimeType);
+    const media = await downloadMetaVoice(input.mediaId, input.mimeType, input.metaAccessToken);
     const transcription = await transcribeWithOpenAI(media.bytes, media.mimeType);
     providerAccepted = true;
 
