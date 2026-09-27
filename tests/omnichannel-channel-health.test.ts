@@ -6,6 +6,7 @@ describe('OMNI-CHANNEL-HEALTH evidence aggregation', () => {
   const page = readFileSync('app/integrations/page.tsx', 'utf8');
   const types = readFileSync('lib/omnichannel/types.ts', 'utf8');
   const bootstrap = readFileSync('supabase/migrations/0120_omnichannel_health_messenger_bootstrap.sql', 'utf8');
+  const tiktokFoundation = readFileSync('supabase/migrations/0124_omni_tiktok_capability_foundation.sql', 'utf8');
 
   it('does not activate deferred channels through the active adapter registry', () => {
     expect(types).toContain("ACTIVE_OMNICHANNEL_CHANNELS = ['EMAIL', 'WHATSAPP']");
@@ -52,6 +53,18 @@ describe('OMNI-CHANNEL-HEALTH evidence aggregation', () => {
     expect(bootstrap).toContain('on conflict (organization_id,provider,channel) do nothing');
     expect(bootstrap).not.toContain("'CONNECTED'");
     expect(bootstrap).not.toContain('provider_secret_ref');
+  });
+
+  it('surfaces TikTok foundation readiness without pretending provider execution is active', () => {
+    expect(health).toContain("const tiktokIntegration = integration('TIKTOK', 'TIKTOK')");
+    expect(health).toContain("const tiktokBindings = channelBindings('TIKTOK')");
+    expect(health).toContain("pauseState(controls, 'TIKTOK')");
+    expect(health).toContain("'PROVIDER_CONTRACT_EXECUTION_PENDING'");
+    expect(health).toContain("webhookHealth: 'PROVIDER_CONTRACT_PENDING'");
+    expect(tiktokFoundation).toContain('tiktok_ai_paused boolean not null default true');
+    expect(tiktokFoundation).toContain("'NOT_CONFIGURED'");
+    expect(tiktokFoundation).toContain("'FOUNDATION_ONLY'");
+    expect(tiktokFoundation).not.toContain("'CONNECTED'");
   });
 
   it('renders the unified health dimensions in Connection Center', () => {
