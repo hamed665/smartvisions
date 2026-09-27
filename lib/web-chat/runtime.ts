@@ -54,10 +54,19 @@ function safeAttachmentExtension(value: unknown) {
   return /^[a-z0-9]{1,12}$/.test(extension) ? extension : null;
 }
 
+type PublicWebChatAttachment = {
+  id: number | null;
+  messageId: number | null;
+  name: string;
+  contentType: string | null;
+  fileSize: number | null;
+  downloadable: boolean;
+};
+
 function publicAttachmentMetadata(direction: unknown, metadata: unknown) {
   const record = webChatObject(metadata);
   const raw = Array.isArray(record?.attachments) ? record.attachments : [];
-  return raw.slice(0, 10).flatMap((value) => {
+  return raw.slice(0, 10).flatMap<PublicWebChatAttachment>((value) => {
     const attachment = webChatObject(value);
     if (!attachment) return [];
     const contentType = typeof attachment.contentType === 'string'
