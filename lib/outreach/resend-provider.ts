@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { extractProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
 import type { DeliveryEvent, EmailProvider, InboundReply, OutboundMessage } from './provider';
 
 function serviceClient() {
@@ -67,13 +68,15 @@ export class ResendEmailProvider implements EmailProvider {
       }),
     });
 
+    const rateLimit = extractProviderRateLimitEvidence(response.headers);
+
     if (!response.ok) {
       const detail = await response.text();
       throw new Error(`Resend send failed (${response.status}): ${detail.slice(0, 500)}`);
     }
     const body = await response.json() as { id?: string };
     if (!body.id) throw new Error('Resend response did not include an email id');
-    return { providerMessageId: body.id };
+    return { providerMessageId: body.id, rateLimit };
   }
 
   async fetchReplies(since: Date): Promise<InboundReply[]> {
