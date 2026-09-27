@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { resolveMetaInstagramDestination } from './tenant-routing';
 import type { NormalizedInstagramEvent } from './webhook';
+import { resolveInstagramInboundBusiness } from './lifecycle';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -18,7 +19,13 @@ export async function persistInstagramWebhookEvents(events: NormalizedInstagramE
     route: await resolveMetaInstagramDestination({ service: supabase, destinationId: event.destinationId }),
   })));
 
-  const rows = routed.map(({ event, route }) => ({
+  const resolved = await Promise.all(routed.map(async ({ event, route }) => ({
+    event,
+    route,
+    identity: await resolveInstagramInboundBusiness({ service: supabase, route, event }),
+  })));
+
+  const rows = resolved.map(({ event, route, identity }) => ({
     organization_id: route.organizationId,
     provider_event_id: event.providerEventId,
     provider_destination_id: route.destinationId,
@@ -32,6 +39,11 @@ export async function persistInstagramWebhookEvents(events: NormalizedInstagramE
         integrationConnectionId: route.integrationConnectionId,
         providerAccountId: route.providerAccountId,
       },
+      canonicalIdentity: identity.status === 'MATCH' ? {
+        businessId: identity.businessId,
+        identityId: identity.identityId,
+        resolution: 'MATCH',
+      } : { resolution: 'NO_MATCH' },
     },
   }));
 
@@ -44,6 +56,6 @@ export async function persistInstagramWebhookEvents(events: NormalizedInstagramE
   return {
     inserted: data?.length ?? 0,
     duplicates: Math.max(0, rows.length - (data?.length ?? 0)),
-    organizationIds: Array.from(new Set(routed.map(item => item.route.organizationId))),
+    organizationIds: Array.from(new Set(resolved.map(item => item.route.organizationId))),
   };
 }
