@@ -10,6 +10,7 @@ export type PublicWebChatErrorCode =
   | 'CONSENT_REQUIRED'
   | 'SESSION_UNAVAILABLE'
   | 'MESSAGE_INVALID'
+  | 'RATE_LIMITED'
   | 'SERVICE_UNAVAILABLE';
 
 export class PublicWebChatError extends Error {
@@ -34,6 +35,7 @@ function mapRpcError(message: string): PublicWebChatError {
   if (/origin not allowed|origin mismatch/i.test(message)) return new PublicWebChatError('ORIGIN_NOT_ALLOWED');
   if (/consent required/i.test(message)) return new PublicWebChatError('CONSENT_REQUIRED');
   if (/session unavailable|session request/i.test(message)) return new PublicWebChatError('SESSION_UNAVAILABLE');
+  if (/rate limit|message limit/i.test(message)) return new PublicWebChatError('RATE_LIMITED');
   if (/message (identity|length)|provider message scope/i.test(message)) return new PublicWebChatError('MESSAGE_INVALID');
   if (/widget unavailable/i.test(message)) return new PublicWebChatError('WIDGET_UNAVAILABLE');
   return new PublicWebChatError('SERVICE_UNAVAILABLE');
