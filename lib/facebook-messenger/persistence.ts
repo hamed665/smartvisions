@@ -12,6 +12,7 @@ export async function persistMessengerWebhookEvents(events:NormalizedMessengerEv
   const identity=await resolveMessengerInboundBusiness({service:db,route,event});
   const {error}=await db.from('facebook_messenger_events').upsert({organization_id:route.organizationId,provider_event_id:event.providerEventId,provider_destination_id:event.destinationId,event_type:event.eventType,payload:{...event.payload,senderId:event.senderId??null,occurredAt:event.occurredAt??null,routing:{tenantBusinessId:route.tenantBusinessId,branchId:route.branchId,bindingId:route.bindingId,integrationConnectionId:route.integrationConnectionId},canonicalIdentity:identity}},{onConflict:'organization_id,provider_event_id,event_type',ignoreDuplicates:true});
   if(error)throw new Error(`Messenger event persistence failed: ${error.message}`);inserted+=1;
+  await reconcileMessengerReceipt({service:db,route,event});
   if(identity.status==='MATCH')await projectMatchedMessengerInbound({service:db,route,event,identity});
  }
  return{inserted,routed:events.length};
