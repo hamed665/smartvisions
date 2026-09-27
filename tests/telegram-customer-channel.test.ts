@@ -129,6 +129,16 @@ describe('OMNI-TELEGRAM customer channel', () => {
     expect(provider).not.toContain('requireTelegramRuntimeConfig');
   });
 
+  it('covers Telegram acceptance receipt composite foreign keys', () => {
+    const hardening = readFileSync('supabase/migrations/0123_telegram_activation_acceptance_fk_index_hardening.sql', 'utf8');
+    expect(hardening).toContain('telegram_acceptance_org_binding_fk_idx');
+    expect(hardening).toContain('organization_id,communication_channel_binding_id');
+    expect(hardening).toContain('telegram_acceptance_org_event_fk_idx');
+    expect(hardening).toContain('organization_id,inbound_event_id');
+    expect(hardening).toContain('telegram_acceptance_org_branch_fk_idx');
+    expect(hardening).toContain('organization_id,branch_id');
+  });
+
   it('extends canonical stores instead of creating a second conversation truth', () => {
     const migration = readFileSync('supabase/migrations/0122_omni_telegram_customer_foundation.sql', 'utf8');
     expect(migration).toContain("check (channel in ('EMAIL','WHATSAPP','INSTAGRAM','FACEBOOK_MESSENGER','WEB_CHAT','TELEGRAM'))");
