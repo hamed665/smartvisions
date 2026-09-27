@@ -7,6 +7,7 @@ describe('OMNI-CHANNEL-HEALTH evidence aggregation', () => {
   const types = readFileSync('lib/omnichannel/types.ts', 'utf8');
   const bootstrap = readFileSync('supabase/migrations/0120_omnichannel_health_messenger_bootstrap.sql', 'utf8');
   const tiktokFoundation = readFileSync('supabase/migrations/0124_omni_tiktok_capability_foundation.sql', 'utf8');
+  const smsRcsFoundation = readFileSync('supabase/migrations/0125_omni_sms_rcs_capability_foundation.sql', 'utf8');
 
   it('does not activate deferred channels through the active adapter registry', () => {
     expect(types).toContain("ACTIVE_OMNICHANNEL_CHANNELS = ['EMAIL', 'WHATSAPP']");
@@ -15,7 +16,9 @@ describe('OMNI-CHANNEL-HEALTH evidence aggregation', () => {
     expect(health).toContain("channel: 'WEB_CHAT'");
     expect(health).toContain("channel: 'TELEGRAM'");
     expect(health).toContain("channel: 'TIKTOK'");
-    expect(health).toContain("channel: 'SMS_RCS'");
+    expect(health).toContain("channel: 'SMS'");
+    expect(health).toContain("channel: 'RCS'");
+    expect(health).not.toContain("channel: 'SMS_RCS'");
   });
 
   it('derives health from existing authorities rather than a new health table', () => {
@@ -65,6 +68,23 @@ describe('OMNI-CHANNEL-HEALTH evidence aggregation', () => {
     expect(tiktokFoundation).toContain("false,\n  'NOT_CONFIGURED'");
     expect(tiktokFoundation).toContain("'FOUNDATION_ONLY'");
     expect(tiktokFoundation).toContain("v_ic.status<>'CONNECTED'");
+  });
+
+  it('surfaces SMS and RCS foundation readiness without activating a provider', () => {
+    expect(health).toContain("const smsBindings = channelBindings('SMS')");
+    expect(health).toContain("const rcsBindings = channelBindings('RCS')");
+    expect(health).toContain("pauseState(controls, 'SMS')");
+    expect(health).toContain("pauseState(controls, 'RCS')");
+    expect(health).toContain("'PROVIDER_ADAPTER_NOT_SELECTED'");
+    expect(health).toContain("'CANONICAL_PERMISSION_AUTHORITY_PENDING'");
+    expect(health).toContain("'COUNTRY_CAPABILITY_EVIDENCE_REQUIRED'");
+    expect(health).toContain("'PRICING_USAGE_EVIDENCE_REQUIRED'");
+    expect(health).toContain("quotaHealth: 'NO_PROVIDER_QUOTA_EVIDENCE'");
+    expect(smsRcsFoundation).toContain('sms_ai_paused boolean not null default true');
+    expect(smsRcsFoundation).toContain('rcs_ai_paused boolean not null default true');
+    expect(smsRcsFoundation).toContain("'SMS','RCS'");
+    expect(smsRcsFoundation).toContain("v_ic.status<>'CONNECTED'");
+    expect(smsRcsFoundation).not.toContain('insert into public.integration_connections');
   });
 
   it('renders the unified health dimensions in Connection Center', () => {
