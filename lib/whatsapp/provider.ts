@@ -1,3 +1,5 @@
+import type { ProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
+
 import type { SmartVisionsCatalogContentId } from './catalog';
 
 export type WhatsAppSendInput = {
@@ -23,6 +25,7 @@ export type WhatsAppCatalogProductSendInput = {
 export type WhatsAppSendResult = {
   providerMessageId: string;
   status: 'accepted';
+  rateLimit?: ProviderRateLimitEvidence | null;
 };
 
 export interface WhatsAppProvider {
