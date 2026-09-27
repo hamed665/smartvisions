@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   extractProviderRateLimitEvidence,
+  ProviderHttpError,
+  rateLimitEvidenceFromError,
   recordProviderRateLimitEvidence,
 } from '@/lib/omnichannel/rate-limit-evidence';
 
@@ -64,6 +66,24 @@ describe('OMNI-CHANNEL-HEALTH provider quota evidence', () => {
     expect(extractProviderRateLimitEvidence(headers)).toBeNull();
   });
 
+  it('retains only bounded quota evidence on provider HTTP failures', () => {
+    const evidence = extractProviderRateLimitEvidence(new Headers({
+      'ratelimit-limit': '10',
+      'ratelimit-remaining': '0',
+      'retry-after': '2',
+      'authorization': 'Bearer must-not-survive',
+    }));
+    const error = new ProviderHttpError('provider rejected request', 429, evidence);
+    expect(error.status).toBe(429);
+    expect(rateLimitEvidenceFromError(error)).toMatchObject({
+      limit: 10,
+      remaining: 0,
+      retryAfterSeconds: 2,
+    });
+    expect(JSON.stringify(rateLimitEvidenceFromError(error))).not.toContain('Bearer');
+    expect(rateLimitEvidenceFromError(new Error('ordinary'))).toBeNull();
+  });
+
   it('never turns telemetry persistence failure into a provider-send exception', async () => {
     const service = {
       from() {
@@ -110,6 +130,7 @@ describe('OMNI-CHANNEL-HEALTH provider quota evidence', () => {
     expect(emailRoute).toContain('recordProviderRateLimitEvidence');
     expect(whatsappRoute).toContain('recordProviderRateLimitEvidence');
     expect(approvedRoute).toContain('recordProviderRateLimitEvidence');
+    expect(approvedRoute).toContain('rateLimitEvidenceFromError');
     expect(health).toContain("CHANNEL_PROVIDER_RATE_LIMIT_OBSERVED");
     expect(health).toContain("'RATE_LIMITED'");
     expect(health).toContain("'NEAR_LIMIT'");
