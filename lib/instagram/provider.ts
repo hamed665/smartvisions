@@ -1,3 +1,6 @@
+import { extractProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
+import type { ProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
+
 export type MetaInstagramProviderConfig = {
   token: string;
   destinationId: string;
@@ -7,6 +10,7 @@ export type MetaInstagramProviderConfig = {
 export type InstagramSendResult = {
   providerMessageId: string;
   status: 'accepted';
+  rateLimit?: ProviderRateLimitEvidence | null;
 };
 
 export class MetaInstagramProvider {
@@ -40,6 +44,7 @@ export class MetaInstagramProvider {
         }),
       },
     );
+    const rateLimit = extractProviderRateLimitEvidence(response.headers);
     if (!response.ok) {
       const detail = await response.text();
       throw new Error(`Meta Instagram send failed (${response.status}): ${detail.slice(0, 500)}`);
@@ -47,6 +52,6 @@ export class MetaInstagramProvider {
     const body = await response.json() as { message_id?: string; messageId?: string };
     const providerMessageId = body.message_id ?? body.messageId;
     if (!providerMessageId) throw new Error('Meta Instagram response did not include a message id');
-    return { providerMessageId, status: 'accepted' };
+    return { providerMessageId, status: 'accepted', rateLimit };
   }
 }
