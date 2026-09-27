@@ -29,6 +29,7 @@ export type ShadowDraftInput = {
   persianTranslation?: string;
   persianSummary?: string;
   rememberCustomerLanguage?: boolean;
+  deliveryMode?: 'TEXT' | 'VOICE_REPLY';
 };
 
 function serviceClient() {
@@ -87,6 +88,12 @@ export async function queueShadowDraft(input: ShadowDraftInput) {
   if (input.catalogContentId) {
     if (input.channel !== 'WHATSAPP') throw new Error('Catalog products can only be attached to WhatsApp drafts');
     assertSmartVisionsCatalogContentId(input.catalogContentId);
+  }
+  if (input.deliveryMode === 'VOICE_REPLY') {
+    if (input.channel !== 'WHATSAPP') throw new Error('Voice replies can only be queued for WhatsApp');
+    if (input.catalogContentId || input.templateName || input.templateLanguageCode || (input.templateBodyParameters?.length ?? 0) > 0) {
+      throw new Error('Voice replies cannot be combined with catalog or template delivery');
+    }
   }
 
   const controls = await getRuntimeControls(input.organizationId);
@@ -164,7 +171,7 @@ export async function queueShadowDraft(input: ShadowDraftInput) {
     provider_message_id: providerMessageId,
     channel: input.channel,
     direction: 'OUTBOUND',
-    media_type: 'TEXT',
+    media_type: input.deliveryMode === 'VOICE_REPLY' ? 'AUDIO' : 'TEXT',
     original_text: input.draft.trim(),
     persian_translation: input.persianTranslation ?? null,
     persian_summary: input.persianSummary ?? null,
@@ -188,6 +195,7 @@ export async function queueShadowDraft(input: ShadowDraftInput) {
         template_language_code: resolvedTemplateLanguageCode ?? null,
         template_body_parameters: resolvedTemplateBodyParameters.length ? resolvedTemplateBodyParameters : null,
         catalog_content_id: input.catalogContentId ?? null,
+        voice_reply: input.deliveryMode === 'VOICE_REPLY',
       },
     },
   };
