@@ -1,5 +1,5 @@
 import type { NormalizedInstagramEvent } from './webhook';
-import type { InstagramTenantRoute } from './tenant-routing';
+import type { MetaInstagramRoute } from './tenant-routing';
 
 type ServiceClient = {
   rpc: (name: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
@@ -19,7 +19,7 @@ function receiptMessageIds(event: NormalizedInstagramEvent) {
 
 export async function reconcileInstagramReceipt(input: {
   service: ServiceClient;
-  route: InstagramTenantRoute;
+  route: MetaInstagramRoute;
   event: NormalizedInstagramEvent;
 }) {
   if (input.event.eventType !== 'DELIVERY' && input.event.eventType !== 'READ') {
