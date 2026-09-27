@@ -1,5 +1,28 @@
 # Smart Visions Growth OS — Current Production State
 
+## Superseding OMNI-WEBCHAT Production checkpoint — 2026-09-27
+
+This checkpoint supersedes older Web Chat and Omnichannel continuation notes where they conflict with the evidence below.
+
+- Canonical repository main before this documentation reconciliation: `e8c2f127c7d7483e6095d7f5d07aa69cc7c9daa4`.
+- PR #292 completed the internally controlled `SECTION OMNICHANNEL / OMNI-WEBCHAT` gaps for operator-to-visitor attachment delivery, evidence-backed activation/readiness and canonical Connection Center health without introducing a second message store, attachment store, queue, tenant model or integration authority.
+- PR #293 added only targeted covering indexes for the new Web Chat acceptance-receipt foreign keys surfaced by the Production performance advisor.
+- Exact-main CI #1423 succeeded on `e8c2f127c7d7483e6095d7f5d07aa69cc7c9daa4`.
+- Cloudflare Production Deploy #903 succeeded on that exact main. Release-candidate smoke, controlled SSR load, Production promotion, Worker Route verification, routed Production smoke and safe API/webhook rejection smoke all passed. Production Worker version: `55ddcf6d-6893-4fc9-94a0-66ddbf0ced11`. No provider send was invoked by smoke.
+- Production Supabase is live through `0119_web_chat_acceptance_fk_index_hardening` as version `20260927144538`; `0118_web_chat_outbound_attachments_readiness` is live as version `20260927144031`.
+- Signed Chatwoot outgoing `message_created` events can now project text and attachment metadata into canonical `conversation_messages`. Direct Chatwoot Active Storage URLs are not persisted into browser-facing message metadata.
+- Browser attachment delivery is Smart-Core proxied and revalidates exact public key, HTTPS Origin, active/unexpired session token hash, tenant/business/Branch/channel binding, canonical conversation, Chatwoot inbox/account, signed webhook event, message ID and attachment ID. Public delivery is bounded to 10 MiB and uses private/no-store, nosniff, no-referrer and sandboxed content headers.
+- The embeddable widget now consumes operator attachments only through the Smart Core session-bound route. It never receives Chatwoot credentials or a Chatwoot storage URL.
+- Web Chat readiness is derived from canonical binding/widget/origin/Chatwoot inbox mappings, unresolved reconciliation, system controls and an immutable acceptance receipt. There is no caller-supplied `ready=true` or synthetic success flag.
+- A Web Chat acceptance receipt requires real scoped session evidence, accepted inbound Chatwoot sync, canonical inbound projection, signed processed Chatwoot outbound evidence, canonical outbound projection and real media evidence. GAP-09 is therefore preserved rather than bypassed.
+- Connection Center now has a Web Chat canonical health panel for connection/readiness, widget/origin, inbound/outbound evidence, Chatwoot inbox verification, reconciliation incident state, AI pause and Shadow Mode. The existing `integration_connections` Web Chat row remains bootstrap/configuration state only and is not promoted into a second health source of truth.
+- Production fail-closed smoke from the OVH VPS after deployment: Chatwoot HTTP 200, Smart Core login HTTP 200, fake-origin/key/session Web Chat attachment request HTTP 403, and fake Web Chat upload request HTTP 403.
+- Production Web Chat activation data intentionally remains empty: no real Web Chat widget, binding, session, event, canonical Web Chat message or acceptance receipt was fabricated to make the gate green.
+- Safety remains fail-closed: Shadow Mode ON; Web Chat AI pause ON; Global Kill Switch OFF. External/native Chatwoot provisioning remains disabled.
+- Supabase post-0119 performance advisor has no unindexed-foreign-key finding for `web_chat_activation_acceptance_receipts`. Its unused-index findings are expected while the real-tenant receipt table is empty. The table's RLS-enabled/no-policy INFO remains intentional service-role-only isolation.
+- `OMNI-WEBCHAT` disposition: internally controlled implementation, deployment and Production security/fail-closed evidence are **PRODUCTION_VERIFIED** where observed above. Real tenant browser ↔ Smart Core ↔ Chatwoot happy-path acceptance remains **BLOCKED_EXTERNAL / GAP-09** until a real consented tenant/session exists.
+- All six Work Package requirements now have an implemented Production path: embeddable chat, tenant/business configuration, anonymous-to-known transition foundation, consent/session rules, file/media support and Chatwoot inbox projection. None of this is evidence that a real first tenant has completed end-to-end acceptance.
+
 ## Requirements preservation note — 2026-09-26
 
 The owner-requested [product completeness and customer connection acceptance](business-os-2027/PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE.md) companion records full scope and audited integration gaps at `542ef8bf33b394918404990fdb97b9b7df1e7f8e`. It adds requirements/traceability only. It does not change runtime readiness, Production migration state, provider permissions, tenant activation or the current Unified Inbox continuation below.
