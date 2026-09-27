@@ -1,5 +1,25 @@
 # Smart Visions Growth OS — Current Production State
 
+## Superseding OMNI-CHANNEL-HEALTH Production checkpoint — 2026-09-27
+
+This checkpoint supersedes older Omnichannel health notes where they conflict with the evidence below.
+
+- Canonical runtime main before this documentation reconciliation: `8e857ae9cc68310e53ce89dac2c39399871f8f1b`.
+- PR #295 implemented the unified evidence-derived customer-channel health read model and Connection Center surface across Email, WhatsApp, Instagram, Facebook Messenger, Web Chat, Telegram/TikTok/SMS-RCS pending states and the partial Voice boundary without creating a second health source of truth.
+- PR #295 also added Production migration `0120_omnichannel_health_messenger_bootstrap`, which creates only the missing organization-level `META / FACEBOOK_MESSENGER` configuration row as `disabled + NOT_CONFIGURED`; it does not create a tenant binding, credential, adapter activation or provider side effect.
+- PR #296 implemented bounded provider quota/rate-limit evidence for Resend and Meta provider boundaries. Summaries are written only to existing `audit_logs` under `CHANNEL_PROVIDER_RATE_LIMIT_OBSERVED`; raw headers, tokens, provider business/account identifiers and arbitrary provider JSON are not persisted.
+- Provider quota telemetry is non-authoritative. A telemetry persistence failure never converts an already accepted provider send into a retry/failure path.
+- Quota health can become `EVIDENCE_PRESENT`, `NEAR_LIMIT` or `RATE_LIMITED` only when real provider response evidence exists. With no provider evidence it remains `NO_PROVIDER_QUOTA_EVIDENCE`; no green value is fabricated.
+- Production migration `0121_omnichannel_channel_rate_limit_evidence_index` is live as version `20260927155456`; the targeted partial index `audit_logs_channel_rate_limit_health_idx` exists.
+- Exact-main CI #1441: SUCCESS on `8e857ae9cc68310e53ce89dac2c39399871f8f1b`.
+- Cloudflare Production Deploy #921: SUCCESS on the same SHA. Production Worker version: `0ece4443-c100-48c4-8da4-e86b12be3c92`. Candidate smoke, controlled SSR load, Production promotion, Worker Route verification, routed Production smoke and safe API/webhook rejection smoke all passed. No outbound provider send was invoked by smoke.
+- Independent Production smoke from the OVH VPS after Deploy #921: Chatwoot HTTP 200; Smart Core login HTTP 200; unauthenticated `/integrations` redirected with HTTP 307; Owner Telegram webhook with an invalid Telegram secret failed closed with HTTP 401.
+- Production safety remained unchanged: Shadow Mode ON; Global Kill Switch OFF; Instagram AI pause ON; Facebook Messenger AI pause ON; Web Chat AI pause ON.
+- The Production Messenger bootstrap row is `NOT_CONFIGURED + disabled`. Instagram remains `NOT_CONFIGURED + disabled`. Email and WhatsApp remain configured according to existing Production state.
+- Current provider quota evidence count is intentionally zero because no real provider response carrying rate/quota evidence has been observed since this capability was introduced. The new partial index therefore appears as `unused_index` INFO only; this is expected while the evidence stream is empty.
+- `OMNI-CHANNEL-HEALTH` disposition: the internally controlled health aggregator, Connection Center health dimensions, inactive/pending channel states, bounded quota telemetry, failure isolation and Production deployment are **PRODUCTION_VERIFIED** where directly observed above. Channel-specific live quota evidence and first-real-tenant acceptance remain evidence-dependent and must stay unclaimed until real provider/tenant activity exists.
+- This does **not** mark the broader customer connection journey (`CONN-01..05`) complete. Guided connect/reconnect/disconnect, provider-hosted authorization and real customer acceptance remain owned by their existing Work Packages and external gates.
+
 ## Superseding OMNI-WEBCHAT Production checkpoint — 2026-09-27
 
 This checkpoint supersedes older Web Chat and Omnichannel continuation notes where they conflict with the evidence below.
