@@ -55,7 +55,7 @@ function requestKey(parts: string[]) {
 }
 
 function isEligibleChannel(value: unknown): value is CommunicationChannel {
-  return value === 'EMAIL' || value === 'WHATSAPP';
+  return value === 'EMAIL' || value === 'WHATSAPP' || value === 'INSTAGRAM';
 }
 
 async function loadTenantBusiness(input: {
@@ -100,7 +100,7 @@ async function loadEligibleIntegrations(input: {
     .from('integration_connections')
     .select('id,channel,enabled,status')
     .eq('organization_id', input.organizationId)
-    .in('channel', ['EMAIL', 'WHATSAPP'])
+    .in('channel', ['EMAIL', 'WHATSAPP', 'INSTAGRAM'])
     .eq('enabled', true)
     .eq('status', 'CONNECTED');
 
@@ -123,7 +123,7 @@ async function loadEligibleIntegrations(input: {
   if (integrations.length === 0) {
     throw new ChatwootTenantProjectionPreparationError(
       'NOT_FOUND',
-      'At least one connected Email or WhatsApp integration is required',
+      'At least one connected Email, WhatsApp, or Instagram integration is required',
     );
   }
 
