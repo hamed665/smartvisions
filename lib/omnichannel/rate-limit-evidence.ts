@@ -128,7 +128,7 @@ export async function recordProviderRateLimitEvidence(input: {
   branchId?: string | null;
   integrationConnectionId?: string | null;
 }) {
-  if (!input.evidence) return;
+  if (!input.evidence) return { recorded: false as const, reason: 'NO_EVIDENCE' as const };
   const result = await input.service.from('audit_logs').insert({
     organization_id: input.organizationId,
     actor_type: 'SYSTEM',
@@ -148,6 +148,11 @@ export async function recordProviderRateLimitEvidence(input: {
     },
   });
   if (result.error) {
-    throw new Error(`Provider rate-limit evidence persistence failed: ${result.error.message}`);
+    return {
+      recorded: false as const,
+      reason: 'AUDIT_PERSISTENCE_FAILED' as const,
+      error: result.error.message.slice(0, 300),
+    };
   }
+  return { recorded: true as const };
 }
