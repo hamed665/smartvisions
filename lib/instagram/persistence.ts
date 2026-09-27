@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { resolveMetaInstagramDestination } from './tenant-routing';
 import type { NormalizedInstagramEvent } from './webhook';
-import { resolveInstagramInboundBusiness } from './lifecycle';
+import { projectMatchedInstagramInbound, resolveInstagramInboundBusiness } from './lifecycle';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -53,9 +53,20 @@ export async function persistInstagramWebhookEvents(events: NormalizedInstagramE
   }).select('id');
   if (error) throw new Error(`Instagram event persistence failed: ${error.message}`);
 
+  const lifecycle = await Promise.all(resolved.map(async (item) => {
+    if (item.identity.status !== 'MATCH') return { projected: false as const, reason: 'NO_CANONICAL_IDENTITY' as const };
+    return projectMatchedInstagramInbound({
+      service: supabase,
+      route: item.route,
+      event: item.event,
+      identity: item.identity,
+    });
+  }));
+
   return {
     inserted: data?.length ?? 0,
     duplicates: Math.max(0, rows.length - (data?.length ?? 0)),
     organizationIds: Array.from(new Set(resolved.map(item => item.route.organizationId))),
+    projectedMessages: lifecycle.filter(item => item.projected).length,
   };
 }
