@@ -9,6 +9,7 @@ function baseInput() {
     agentsPaused: false,
     whatsappPaused: false,
     whatsappProviderConnected: true,
+    openAiProviderConnected: true,
     whatsappFreeformWindowOpen: true,
     humanTakeover: false,
     aiVoiceDisclosureConfigured: true,
@@ -39,6 +40,7 @@ describe('OMNI-VOICE reply foundation policy', () => {
       agentsPaused: true,
       whatsappPaused: true,
       whatsappProviderConnected: false,
+      openAiProviderConnected: false,
       whatsappFreeformWindowOpen: false,
       humanTakeover: true,
     });
@@ -48,6 +50,7 @@ describe('OMNI-VOICE reply foundation policy', () => {
       'AGENTS_PAUSED',
       'WHATSAPP_PAUSED',
       'WHATSAPP_PROVIDER_NOT_CONNECTED',
+      'OPENAI_PROVIDER_NOT_CONNECTED',
       'WHATSAPP_FREEFORM_WINDOW_REQUIRED',
       'HUMAN_TAKEOVER',
     ]));
