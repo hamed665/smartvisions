@@ -138,7 +138,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
         <p className="muted">Connection state and health freshness are separate. Merely having credentials or an old CONNECTED result does not claim that a provider was checked recently.</p>
       </div>
       <div>
-        <span className="status">{rows.filter((r) => credentialReady(String(r.provider), String(r.channel))).length}/{rows.length} credentials present</span>
+        <span className="status">{rows.filter((r) => credentialReady(String(r.provider), String(r.channel))).length}/{rows.length} credentials or built-ins configured</span>
         {budget ? <span className={`status ${budget.mode === 'CRITICAL' || budget.mode === 'HARD_STOP' ? 'dangerStatus' : ''}`}>Budget {budget.mode}</span> : null}
       </div>
     </div>
@@ -206,7 +206,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           <div>
             <strong>{provider}</strong>
             <span className="muted smallText">{channel} · Connection {displayedStatus} · Health {displayedFreshness}</span>
-            <span className={`smallText ${credential ? 'credentialReady' : 'credentialMissing'}`}>{credential ? (status === 'CONNECTED' ? 'Credential present · prior production verification exists' : 'Credential present · not production verified') : 'Credential missing'}</span>
+            <span className={`smallText ${credential ? 'credentialReady' : 'credentialMissing'}`}>{isBuiltInWebChat ? 'Built-in channel · no external credential' : credential ? (status === 'CONNECTED' ? 'Credential present · prior production verification exists' : 'Credential present · not production verified') : 'Credential missing'}</span>
             {provider === 'GOOGLE_PLACES' ? <Link className="textLink smallText" href="/hunters/google-places">Controlled discovery test →</Link> : null}
             {provider === 'CRAWL4AI' ? <span className="muted smallText">Smoke test uses one fixed example.com audit only when you click Verify.</span> : null}
             {provider === 'EMAIL_PROVIDER' ? <span className="muted smallText">Verification sends one owner-triggered email only. No background health check sends provider traffic.</span> : null}
