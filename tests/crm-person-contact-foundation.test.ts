@@ -23,6 +23,11 @@ describe('CRM-PERSON-CONTACT canonical foundation', () => {
     expect(migration).not.toContain('create table if not exists public.crm_accounts');
   });
 
+  it('keeps the shared tenant guard valid across Person/link/relationship row shapes', () => {
+    expect(migration).toContain("(to_jsonb(new) ->> 'created_from_identity_id')");
+    expect(migration).not.toContain('new.created_from_identity_id is distinct from old.created_from_identity_id');
+  });
+
   it('serializes Person creation on the canonical identity to prevent duplicate races', () => {
     expect(migration).toContain('verified requests cannot manufacture duplicate People');
     expect(migration).toContain('for update;');
