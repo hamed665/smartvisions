@@ -112,6 +112,28 @@ jobs:
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/supabase/migrations/0101_meta_whatsapp_tenant_routing.sql
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/tests/sql/meta-whatsapp-tenant-routing-smoke.sql
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/tests/sql/control-plane-foundation-smoke.sql
+
+          # Keep every numbered migration after the explicit foundational chain under PostgreSQL 17.
+          # This closes the gap where 0102+ files existed but were never executed by CI.
+          late_count=0
+          while IFS= read -r migration; do
+            prefix="${migration%%_*}"
+            if [[ ! "$prefix" =~ ^[0-9]{4}$ ]] || (( 10#$prefix < 102 )); then
+              continue
+            fi
+            late_count=$((late_count + 1))
+            echo "::group::PostgreSQL 17 migration $migration"
+            docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
+              psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+              -f "/work/supabase/migrations/$migration"
+            echo "::endgroup::"
+          done < <(find supabase/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' | sort)
+
+          if [ "$late_count" -eq 0 ]; then
+            echo "::error::No late Business OS migrations (0102+) were discovered"
+            exit 1
+          fi
+          echo "Verified $late_count late Business OS migrations on PostgreSQL 17."
       - run: npm run build
       - run: npm run build:vinext
       - run: npm run verify:cloudflare-scheduled

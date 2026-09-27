@@ -65,6 +65,33 @@ create table public.businesses (
   updated_at timestamptz not null default now()
 );
 
+create table public.system_controls (
+  organization_id uuid primary key references public.organizations(id) on delete cascade,
+  global_kill_switch boolean not null default false,
+  email_paused boolean not null default false,
+  whatsapp_ai_paused boolean not null default false,
+  agents_paused boolean not null default false,
+  shadow_mode boolean not null default true,
+  monthly_budget_usd numeric,
+  updated_at timestamptz not null default now()
+);
+
+create table public.suppression_list (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  email text,
+  phone text,
+  domain text,
+  reason text not null,
+  source text,
+  created_at timestamptz not null default now(),
+  check (email is not null or phone is not null or domain is not null)
+);
+
+create index suppression_email_idx
+  on public.suppression_list(organization_id, lower(email))
+  where email is not null;
+
 create table public.usage_events (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
@@ -128,6 +155,8 @@ revoke all on function public.is_org_owner(uuid) from public;
 grant execute on function public.is_org_member(uuid), public.is_org_owner(uuid) to authenticated, service_role;
 
 alter table public.organization_members enable row level security;
+alter table public.system_controls enable row level security;
+alter table public.suppression_list enable row level security;
 alter table public.businesses enable row level security;
 create policy organization_members_self_read
   on public.organization_members
@@ -140,6 +169,18 @@ create policy businesses_member_read
   for select
   to authenticated
   using (public.is_org_member(organization_id));
+
+create policy org_member_controls
+  on public.system_controls
+  for all
+  using (public.is_org_member(organization_id))
+  with check (public.is_org_member(organization_id));
+
+create policy org_member_suppression
+  on public.suppression_list
+  for all
+  using (public.is_org_member(organization_id))
+  with check (public.is_org_member(organization_id));
 
 alter table public.usage_events enable row level security;
 create policy usage_events_member_read
@@ -168,6 +209,8 @@ create policy org_member_audit_insert
   );
 
 grant select on public.organization_members to authenticated;
+grant select, insert, update, delete on public.system_controls to authenticated, service_role;
+grant select, insert, update, delete on public.suppression_list to authenticated, service_role;
 grant select on public.businesses to authenticated, service_role;
 grant select, insert on public.usage_events to authenticated;
 grant select, insert on public.usage_events to service_role;
