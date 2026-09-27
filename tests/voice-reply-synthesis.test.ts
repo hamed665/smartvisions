@@ -14,22 +14,25 @@ describe('OMNI-VOICE reply synthesis contract', () => {
 
   it('accepts a pinned GPT-4o Mini TTS snapshot but rejects other models', () => {
     expect(resolveVoiceReplySynthesisConfig({
+      NODE_ENV: 'test',
       OPENAI_TTS_MODEL: 'gpt-4o-mini-tts-2025-12-15',
       OPENAI_TTS_VOICE: 'cedar',
-    } as NodeJS.ProcessEnv)).toEqual({
+    })).toEqual({
       model: 'gpt-4o-mini-tts-2025-12-15',
       voice: 'cedar',
     });
 
     expect(() => resolveVoiceReplySynthesisConfig({
+      NODE_ENV: 'test',
       OPENAI_TTS_MODEL: 'custom-voice-clone',
-    } as NodeJS.ProcessEnv)).toThrow('approved GPT-4o Mini TTS model family');
+    })).toThrow('approved GPT-4o Mini TTS model family');
   });
 
   it('rejects custom or unknown voice identifiers', () => {
     expect(() => resolveVoiceReplySynthesisConfig({
+      NODE_ENV: 'test',
       OPENAI_TTS_VOICE: 'voice_custom_123',
-    } as NodeJS.ProcessEnv)).toThrow('approved built-in TTS voice');
+    })).toThrow('approved built-in TTS voice');
   });
 
   it('bounds and normalizes synthesis text', () => {
