@@ -17,6 +17,8 @@ describe('internal live WhatsApp reply invariants', () => {
     expect(helper).toContain("POST as approvedSendPost");
     expect(helper).toContain("POST as channelGuardPost");
     expect(helper).toContain('controlledShadowPilot: true');
+    expect(helper).toContain("controlledVoiceReplyPilot: policy.deliveryMode === 'VOICE_REPLY'");
+    expect(helper).toContain('deliveryMode: policy.deliveryMode');
     expect(helper).not.toContain('app.smartvisionsai.com');
     expect(helper).not.toMatch(/\bfetch\s*\(/);
   });
