@@ -58,6 +58,9 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
   'app/intelligence-actions.ts': {
     refreshGoogleBusinessIntelligence:'google.refresh',
   },
+  'app/telegram-customer-actions.ts': {
+    connectTelegramCustomerChannel:'SPECIALIZED:TELEGRAM_CUSTOMER_CHANNEL_CONNECT',
+  },
   'app/versioned-intelligence-actions.ts': {
     createKnowledge:'knowledge.publish', createPromptVersion:'prompt.publish',
   },
