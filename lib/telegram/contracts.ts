@@ -54,7 +54,7 @@ export type TelegramOwnerCommand =
   | { type: 'SET_AGENT_THRESHOLD'; agentQuery: string; threshold: number }
   | { type: 'SET_COST_LIMIT'; key: TelegramCostLimitKey; value: number }
   | { type: 'ACTIVATE_KILL_SWITCH' }
-  | { type: 'SET_PAUSE'; target: 'AGENTS' | 'EMAIL' | 'WHATSAPP'; paused: boolean }
+  | { type: 'SET_PAUSE'; target: 'AGENTS' | 'EMAIL' | 'WHATSAPP' | 'TELEGRAM'; paused: boolean }
   | { type: 'APPROVE_MESSAGE'; messageId: string }
   | { type: 'REJECT_MESSAGE'; messageId: string; reason?: string }
   | PanelParityCommand
