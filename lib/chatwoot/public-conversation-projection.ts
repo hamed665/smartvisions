@@ -80,14 +80,14 @@ async function getContact(ctx: ProjectionContext, fetchImpl?: typeof fetch) {
   }
 }
 
-async function createOrReconcileContact(ctx: ProjectionContext, fetchImpl?: typeof fetch) {
+async function createOrReconcileContact(ctx: ProjectionContext, contactDisplayName: string, fetchImpl?: typeof fetch) {
   const existing = await getContact(ctx, fetchImpl);
   if (existing?.source_id === ctx.sourceId) return existing;
   const body = {
     source_id: ctx.sourceId,
     identifier: ctx.sourceId,
     identifier_hash: hmac(ctx.hmacToken, ctx.sourceId),
-    name: 'Instagram customer',
+    name: contactDisplayName,
   };
   try {
     const created = await request<PublicContact>(
@@ -126,9 +126,11 @@ export async function ensureChatwootPublicConversationProjection(input: {
   bindingId: string;
   canonicalIdentityId: string;
   fetchImpl?: typeof fetch;
+  contactDisplayName?: string;
 }) {
   const ctx = await context(input);
-  const contact = await createOrReconcileContact(ctx, input.fetchImpl);
+  const contactDisplayName = input.contactDisplayName?.trim().slice(0, 120) || 'Customer';
+  const contact = await createOrReconcileContact(ctx, contactDisplayName, input.fetchImpl);
   const existing = activeConversation(await conversations(ctx, input.fetchImpl));
   if (existing) return { contactSourceId: ctx.sourceId, contact, conversation: existing, outcome: 'RECONCILED_EXISTING' as const };
 
