@@ -11,7 +11,7 @@ import { evidencePipelineTargetMatches } from '@/lib/operations/evidence-pipelin
 import { evaluateLocalWindow, type MarketCode } from '@/lib/outreach/scheduler';
 import { evaluateMailboxHealth } from '@/lib/outreach/mailbox-health';
 import { countMailboxSendsLast24Hours } from '@/lib/outreach/mailbox-usage';
-import { MetaCloudWhatsAppProvider } from '@/lib/whatsapp/meta-cloud';
+import { resolveMetaWhatsAppProvider } from '@/lib/whatsapp/tenant-routing';
 import { assertSmartVisionsCatalogContentId } from '@/lib/whatsapp/catalog';
 import { getWhatsAppMarketingPermission } from '@/lib/whatsapp/marketing-opt-in';
 import { SMART_VISIONS_BUSINESS_INTRO_OM } from '@/lib/whatsapp/business-intro-template';
@@ -439,7 +439,26 @@ export async function POST(request: Request) {
       const finalGate = await assertFinalProviderBoundary();
       const whatsappPolicy = finalGate.whatsappPolicy;
       if (!whatsappPolicy?.allowed) throw new Error('WhatsApp canonical 24-hour policy blocks this approved send');
-      const provider = new MetaCloudWhatsAppProvider();
+      const { data: projection, error: projectionError } = await supabase
+        .from('unified_inbox_conversation_projections')
+        .select('tenant_business_id,branch_id,communication_channel_binding_id,lifecycle_status')
+        .eq('organization_id', body.organizationId)
+        .eq('conversation_id', message.conversation_id)
+        .in('lifecycle_status', ['ACTIVE', 'DEGRADED'])
+        .maybeSingle();
+      if (projectionError || !projection) {
+        throw new Error(projectionError?.message ?? 'Approved WhatsApp send has no canonical tenant communication projection');
+      }
+      const tenantProvider = await resolveMetaWhatsAppProvider({
+        service: supabase,
+        organizationId: body.organizationId,
+        tenantBusinessId: projection.tenant_business_id,
+        branchId: projection.branch_id,
+      });
+      if (tenantProvider.bindingId !== projection.communication_channel_binding_id) {
+        throw new Error('Approved WhatsApp tenant credential does not match the conversation channel binding');
+      }
+      const provider = tenantProvider.provider;
       const catalogContentId = sendContext.catalog_content_id?.trim() || null;
       let whatsappOperation: 'SEND_TEMPLATE' | 'SEND_TEXT' | 'SEND_PRODUCT';
       let whatsappEventType: 'TEMPLATE_SENT' | 'TEXT_SENT' | 'PRODUCT_SENT';
@@ -486,10 +505,10 @@ export async function POST(request: Request) {
         provider_message_id: providerMessageId,
         direction: 'OUTBOUND',
         event_type: whatsappEventType,
-        payload: { source: 'APPROVED_SHADOW_DRAFT', ...(catalogContentId ? { catalog_content_id: catalogContentId } : {}) },
+        payload: { source: 'APPROVED_SHADOW_DRAFT', tenant_business_id: projection.tenant_business_id, branch_id: projection.branch_id, communication_channel_binding_id: tenantProvider.bindingId, ...(catalogContentId ? { catalog_content_id: catalogContentId } : {}) },
       }, { onConflict: 'organization_id,provider_message_id,direction,event_type', ignoreDuplicates: true });
       if (eventWrite.error) throw new Error(`WhatsApp event reconciliation failed: ${eventWrite.error.message}`);
-      await recordUsage({ organizationId: body.organizationId, provider: 'WHATSAPP', operation: whatsappOperation, costUsd: 0, units: 1, leadId: message.lead_id ?? undefined, metadata: { source: 'APPROVED_SHADOW_DRAFT', pricing_status: 'PENDING_RECONCILIATION', canonical_last_inbound_at: finalGate.lastInboundAt, ...(catalogContentId ? { catalog_content_id: catalogContentId } : {}) } });
+      await recordUsage({ organizationId: body.organizationId, provider: 'WHATSAPP', operation: whatsappOperation, costUsd: 0, units: 1, leadId: message.lead_id ?? undefined, metadata: { source: 'APPROVED_SHADOW_DRAFT', pricing_status: 'PENDING_RECONCILIATION', canonical_last_inbound_at: finalGate.lastInboundAt, tenant_business_id: projection.tenant_business_id, branch_id: projection.branch_id, communication_channel_binding_id: tenantProvider.bindingId, ...(catalogContentId ? { catalog_content_id: catalogContentId } : {}) } });
     }
 
     const conversationUpdate = await supabase.from('sales_conversations').update({ last_outbound_at: new Date().toISOString(), last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('organization_id', body.organizationId).eq('id', message.conversation_id);
