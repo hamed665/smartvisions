@@ -216,8 +216,8 @@ describe('public Web Chat runtime', () => {
     expect(createIncoming).toHaveBeenCalledTimes(1);
     expect(finalizeSync).toHaveBeenCalledWith(expect.objectContaining({
       status: 'RECONCILIATION_REQUIRED',
-      chatwootMessageId: undefined,
     }));
+    expect(finalizeSync.mock.calls[0]?.[0]).not.toHaveProperty('chatwootMessageId');
 
     claimSync.mockResolvedValueOnce({
       eventId: '00000000-0000-4000-8000-000000001117',
