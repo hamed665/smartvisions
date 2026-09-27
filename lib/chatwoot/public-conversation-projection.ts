@@ -154,3 +154,91 @@ export async function ensureChatwootPublicConversationProjection(input: {
     throw error;
   }
 }
+
+
+export type ChatwootPublicIncomingAttachment = {
+  filename: string;
+  contentType: string;
+  blob: Blob;
+};
+
+export async function createChatwootPublicIncomingMessage(input: {
+  service: SupabaseClient;
+  organizationId: string;
+  tenantBusinessId: string;
+  bindingId: string;
+  canonicalIdentityId: string;
+  conversationDisplayId: number;
+  requestId: string;
+  content?: string | null;
+  attachments?: ChatwootPublicIncomingAttachment[];
+  fetchImpl?: typeof fetch;
+}) {
+  if (!Number.isSafeInteger(input.conversationDisplayId) || input.conversationDisplayId <= 0) {
+    throw new Error('Chatwoot public incoming message requires a valid conversation');
+  }
+  const requestId = input.requestId.trim();
+  if (!/^[A-Za-z0-9:_-]{8,160}$/.test(requestId)) {
+    throw new Error('Chatwoot public incoming message request id is invalid');
+  }
+  const content = input.content?.trim() ?? '';
+  const attachments = input.attachments ?? [];
+  if (!content && attachments.length === 0) {
+    throw new Error('Chatwoot public incoming message requires content or attachment');
+  }
+  if (attachments.length > 4) {
+    throw new Error('Chatwoot public incoming message attachment limit exceeded');
+  }
+
+  const ctx = await context(input);
+  const form = new FormData();
+  if (content) form.append('content', content);
+  form.append('echo_id', requestId);
+  for (const attachment of attachments) {
+    const filename = attachment.filename.trim().slice(0, 180);
+    const contentType = attachment.contentType.trim().slice(0, 120);
+    if (!filename || !contentType || attachment.blob.size < 1 || attachment.blob.size > 10 * 1024 * 1024) {
+      throw new Error('Chatwoot public incoming attachment is invalid');
+    }
+    form.append(
+      'attachments[]',
+      attachment.blob.type === contentType
+        ? attachment.blob
+        : new Blob([attachment.blob], { type: contentType }),
+      filename,
+    );
+  }
+
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const path = `/public/api/v1/inboxes/${encodeURIComponent(ctx.inboxIdentifier)}/contacts/${encodeURIComponent(ctx.sourceId)}/conversations/${input.conversationDisplayId}/messages`;
+  const response = await fetchImpl(new URL(path, baseUrl()), {
+    method: 'POST',
+    headers: { Accept: 'application/json' },
+    body: form,
+    cache: 'no-store',
+    redirect: 'error',
+  });
+  if (!response.ok) throw new PublicProjectionHttpError(response.status);
+  const body = await response.json() as {
+    id?: number;
+    conversation_id?: number;
+    message_type?: number;
+    content?: string | null;
+    attachments?: unknown[];
+  };
+  if (
+    !Number.isSafeInteger(body.id)
+    || Number(body.id) <= 0
+    || Number(body.conversation_id) !== input.conversationDisplayId
+    || Number(body.message_type) !== 0
+  ) {
+    throw new Error('Chatwoot public incoming message response is invalid');
+  }
+
+  return {
+    chatwootMessageId: Number(body.id),
+    conversationDisplayId: Number(body.conversation_id),
+    content: typeof body.content === 'string' ? body.content : null,
+    attachmentCount: Array.isArray(body.attachments) ? body.attachments.length : 0,
+  };
+}
