@@ -88,7 +88,7 @@ export async function POST(request: Request) {
     branchId: body.branchId ?? null,
   });
   const provider = tenantProvider.provider;
-  let result;
+  let result: Awaited<ReturnType<typeof provider.sendText>>;
   try {
     result = whatsappPolicy.mode === 'TEMPLATE'
       ? await provider.sendTemplate({ to: body.to, templateName: body.templateName!, languageCode: body.templateLanguageCode!, bodyParameters: body.templateBodyParameters })
