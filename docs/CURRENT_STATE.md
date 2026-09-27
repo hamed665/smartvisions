@@ -1,5 +1,22 @@
 # Smart Visions Growth OS — Current Production State
 
+## Superseding OMNICHANNEL TikTok / SMS-RCS / controlled Voice checkpoint — 2026-09-28
+
+This checkpoint supersedes older TikTok, SMS/RCS and partial Voice continuation notes where they conflict with the evidence below.
+
+- Canonical runtime main at verification: `70a83c0a94d1a1e6613c222a6688ce3c450a4df0` after PR #307.
+- PR #302 added the fail-closed TikTok capability foundation; PR #303 added its canonical health surface. Production migration `0124_omni_tiktok_capability_foundation` is live as version `20260927201116`.
+- Production TikTok remains deliberately inactive: the organization-level `TIKTOK / TIKTOK` integration is `NOT_CONFIGURED + disabled`, `tiktok_ai_paused=true`, and there are zero TikTok bindings. Provider send/webhook execution is not fabricated while exact provider-contract execution evidence is unavailable.
+- PR #304 added the provider-neutral SMS/RCS capability foundation; PR #305 added fail-closed readiness/routing policy without activating an adapter. Production migration `0125_omni_sms_rcs_capability_foundation` is live as version `20260927212408`.
+- Production SMS/RCS remains deliberately inactive: `sms_ai_paused=true`, `rcs_ai_paused=true`, and there are zero SMS/RCS bindings. No provider credential, consent source, billing ledger, webhook journal, send path or acceptance receipt was fabricated.
+- SMS/RCS readiness requires evidence-backed provider connection, exact country/channel capability, canonical permission/suppression state, pricing evidence and sender-registration readiness. RCS -> SMS fallback is permitted only when provider capability evidence explicitly declares and supports it.
+- PR #306 added the fail-closed WhatsApp audio-reply foundation; PR #307 wired controlled WhatsApp AI audio replies through the existing Shadow artifact + approved-send boundary, existing Meta tenant provider, OpenAI TTS, Cost Guard/`usage_events`, 24-hour freeform-window check, human-takeover check and canonical reconciliation semantics.
+- The controlled voice-reply path is restricted to `INTERNAL_TEST` businesses, requires Shadow Mode ON, Global Kill Switch OFF, WhatsApp/OpenAI CONNECTED, WhatsApp AI/Agents unpaused, AI-voice disclosure, conservative cost reserve and approved `gpt-4o-mini-tts*` MP3 output. Telephony and voice cloning remain disabled.
+- Exact-main CI run `36356555098` succeeded on `70a83c0a94d1a1e6613c222a6688ce3c450a4df0`; Cloudflare Production Deploy run `36356705964` succeeded on the same SHA, including release-candidate smoke, controlled SSR load, exact-bundle promotion, Worker Route verification, routed Production smoke and safe API/webhook rejection smoke.
+- Fresh Production verification after deployment: `voiceReply` runtime config is still null, Shadow Mode ON, Global Kill Switch OFF, WhatsApp AI pause OFF, Agents pause OFF, and there have been zero `VOICE_REPLY_TTS` usage events and zero `AUDIO_SENT` WhatsApp events since the #307 merge. No outbound voice side effect was introduced by deployment.
+- `OMNI-TIKTOK` and `OMNI-SMS-RCS` are internally fail-closed/readiness-ready but real provider activation remains evidence-gated. The controlled WhatsApp voice-reply slice of `OMNI-VOICE` is implemented/deployed/Production-verified for the directly observed safe path; broader telephony/voice-agent, recording-retention/consent and call-outcome scope is not declared complete by this checkpoint.
+- With the current Omnichannel internal slices exhausted to their present provider/evidence boundaries, the next safe code-first continuation is `SECTION IDENTITY_CRM / CRM-PERSON-CONTACT`, while deferred provider-gated Omnichannel acceptance remains explicitly open.
+
 ## Superseding OMNI-TELEGRAM Production checkpoint — 2026-09-27
 
 This checkpoint supersedes older Telegram-customer continuation notes where they conflict with the evidence below.

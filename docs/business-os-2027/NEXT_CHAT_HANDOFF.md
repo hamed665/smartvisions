@@ -1,5 +1,38 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## Latest continuation checkpoint — TikTok / SMS-RCS / controlled Voice — 2026-09-28
+
+Always re-read runtime/current main before mutation. The verified baseline before this documentation reconciliation is:
+
+- canonical runtime main: `70a83c0a94d1a1e6613c222a6688ce3c450a4df0` after PR #307;
+- PR #302/#303: TikTok fail-closed capability + health foundation; Production migration `0124_omni_tiktok_capability_foundation` live as `20260927201116`;
+- PR #304/#305: SMS/RCS fail-closed capability + readiness/routing policy; Production migration `0125_omni_sms_rcs_capability_foundation` live as `20260927212408`;
+- PR #306/#307: controlled WhatsApp AI audio-reply foundation + execution through the existing approved-send boundary;
+- exact-main CI run `36356555098`: SUCCESS;
+- Cloudflare Production Deploy run `36356705964`: SUCCESS on the same SHA, including candidate smoke, controlled SSR load, exact-bundle promotion, Worker Route verification, routed smoke and safe rejection smoke;
+- Production TikTok: one disabled + `NOT_CONFIGURED` organization integration, `tiktok_ai_paused=true`, zero bindings;
+- Production SMS/RCS: zero bindings, `sms_ai_paused=true`, `rcs_ai_paused=true`; no provider was selected or fabricated;
+- Production Voice safety: Shadow Mode ON, Global Kill Switch OFF, WhatsApp AI pause OFF, Agents pause OFF, `voiceReply` runtime config null;
+- post-#307 Production verification: zero `VOICE_REPLY_TTS` usage events and zero `AUDIO_SENT` WhatsApp events since merge;
+- controlled voice reply remains `INTERNAL_TEST` only and requires the existing Meta/OpenAI connection, 24-hour service window, no human takeover, disclosure, conservative Cost Guard reserve and approved MP3 TTS model;
+- voice cloning and telephony are not activated.
+
+Disposition:
+
+- `OMNI-TIKTOK`: internal fail-closed foundation/health deployed; real provider webhook/send execution remains evidence-gated.
+- `OMNI-SMS-RCS`: internal capability/readiness policy deployed; provider/country/permission/pricing/real-send acceptance remains evidence/configuration-gated.
+- `OMNI-VOICE`: controlled WhatsApp audio-reply slice is Production-verified for the safe no-send/default path; broader telephony/voice-agent, recording-retention/consent and call-outcome scope remains open and must not be reported complete.
+
+Next safe code-first Work Package: `SECTION IDENTITY_CRM / CRM-PERSON-CONTACT`.
+
+For that continuation:
+1. re-read `AGENTS.md`, current main/open PRs, Production Supabase, current Cloudflare Production and the current master/completeness docs;
+2. audit existing `leads`, `crm_identity_links`, `crm_customer_timeline` and related APIs before adding schema;
+3. extend canonical CRM truth rather than creating a second customer/identity store;
+4. create Person/Contact only from sufficient evidence; never fabricate a person from a provider display name;
+5. preserve tenant/business scope, merge/split evidence, no-cross-tenant guarantees and existing channel identity links;
+6. keep provider-gated Omnichannel activation blocked until real supported credentials/contracts/evidence exist.
+
 ## Latest continuation checkpoint — OMNI-TELEGRAM — 2026-09-27
 
 Always re-read runtime/current main before mutation. The verified baseline before this documentation reconciliation is:

@@ -326,6 +326,14 @@ Implement only against an actually supported and contractually available messagi
 - delivery/failure evidence;
 - pricing/usage accounting.
 
+### Current evidence checkpoint — 2026-09-28
+
+- **Capability foundation — IMPLEMENTED / PRODUCTION_VERIFIED:** PR #304 extended the existing canonical channel/binding/control constraints for SMS and RCS without selecting or fabricating a provider. Production migration `0125_omni_sms_rcs_capability_foundation` is live as version `20260927212408`.
+- **Readiness/routing policy — IMPLEMENTED / DEPLOYED:** PR #305 added provider-neutral, fail-closed route evaluation for provider connection, canonical permission/suppression, pricing evidence, exact country/channel capability, sender registration and evidence freshness.
+- **Fallback — EVIDENCE-GATED:** RCS -> SMS fallback is available only when exact provider capability evidence explicitly declares the fallback and the fallback route independently passes readiness checks.
+- **Runtime activation — BLOCKED_EXTERNAL / CONFIGURATION-GATED:** Production currently has zero SMS/RCS bindings, `sms_ai_paused=true` and `rcs_ai_paused=true`. No provider credential, webhook/send adapter, acceptance receipt or fake evidence exists.
+- Active channel adapters remain unchanged until a real supported provider contract and country capability are verified. Consent and usage/cost must continue to reuse canonical authorities rather than creating parallel truth.
+
 ## OMNI-VOICE
 
 - voice notes;
@@ -334,6 +342,15 @@ Implement only against an actually supported and contractually available messagi
 - later telephony/voice-agent boundary;
 - recordings/retention/consent;
 - call outcome evidence.
+
+### Current evidence checkpoint — 2026-09-28
+
+- **Voice-note/transcription foundation — EXISTING CANONICAL PATH:** reuse the existing voice transcription/cache and media evidence primitives; do not create a second voice store.
+- **Controlled WhatsApp audio reply — IMPLEMENTED / PRODUCTION_VERIFIED (fail-closed path):** PR #306 added the policy/synthesis foundation and PR #307 executes AI audio replies only through the existing Shadow artifact + approved-send boundary, Meta tenant provider, OpenAI TTS, Cost Guard/`usage_events` and canonical reconciliation semantics.
+- **Safety boundary — VERIFIED:** the path is restricted to `INTERNAL_TEST` businesses; requires Shadow Mode ON, Kill Switch OFF, WhatsApp/OpenAI CONNECTED, open WhatsApp freeform window, no human takeover, disclosure + conservative reserve, approved `gpt-4o-mini-tts*` MP3 output; telephony and voice cloning are disabled.
+- Exact-main CI run `36356555098` and Cloudflare Production Deploy run `36356705964` succeeded on `main@70a83c0a94d1a1e6613c222a6688ce3c450a4df0`.
+- Production remains intentionally fail-closed: `organization_settings.config.voiceReply` is null and post-merge verification observed zero `VOICE_REPLY_TTS` usage events and zero `AUDIO_SENT` WhatsApp events.
+- **Still open:** later telephony/voice-agent provider boundary, recording retention/consent and call outcome evidence. Do not mark the whole `OMNI-VOICE` package complete from the controlled WhatsApp reply slice alone.
 
 ## OMNI-CHANNEL-HEALTH
 
