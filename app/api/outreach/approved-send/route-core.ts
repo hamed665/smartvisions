@@ -21,6 +21,7 @@ import { verifyLiveTestMarketWindowException } from '@/lib/whatsapp/live-test-ma
 import type { WhatsAppSendResult } from '@/lib/whatsapp/provider';
 import { ResendEmailProvider } from '@/lib/outreach/resend-provider';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
+import { recordProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -419,6 +420,16 @@ export async function POST(request: Request) {
       });
       providerMessageId = result.providerMessageId;
       providerAccepted = true;
+      const emailRateLimitAudit = await recordProviderRateLimitEvidence({
+        service: supabase,
+        organizationId: body.organizationId,
+        provider: 'RESEND',
+        channel: 'EMAIL',
+        evidence: result.rateLimit,
+      });
+      if (!emailRateLimitAudit.recorded && emailRateLimitAudit.reason === 'AUDIT_PERSISTENCE_FAILED') {
+        console.error('Approved email rate-limit telemetry persistence failed', emailRateLimitAudit.error);
+      }
 
       const accepted = await supabase.from('conversation_messages').update({
         status: 'SENT', provider_message_id: providerMessageId, sent_at: new Date().toISOString(), processed_at: new Date().toISOString(), approval_reason: null,
@@ -502,6 +513,18 @@ export async function POST(request: Request) {
       }
       providerMessageId = result.providerMessageId;
       providerAccepted = true;
+      const whatsappRateLimitAudit = await recordProviderRateLimitEvidence({
+        service: supabase,
+        organizationId: body.organizationId,
+        provider: 'META',
+        channel: 'WHATSAPP',
+        evidence: result.rateLimit,
+        tenantBusinessId: projection.tenant_business_id,
+        branchId: projection.branch_id,
+      });
+      if (!whatsappRateLimitAudit.recorded && whatsappRateLimitAudit.reason === 'AUDIT_PERSISTENCE_FAILED') {
+        console.error('Approved WhatsApp rate-limit telemetry persistence failed', whatsappRateLimitAudit.error);
+      }
 
       const accepted = await supabase.from('conversation_messages').update({
         status: 'SENT', provider_message_id: providerMessageId, sent_at: new Date().toISOString(), processed_at: new Date().toISOString(), approval_reason: null,
@@ -546,6 +569,18 @@ export async function POST(request: Request) {
       });
       providerMessageId = result.providerMessageId;
       providerAccepted = true;
+      const instagramRateLimitAudit = await recordProviderRateLimitEvidence({
+        service: supabase,
+        organizationId: body.organizationId,
+        provider: 'META',
+        channel: 'INSTAGRAM',
+        evidence: result.rateLimit,
+        tenantBusinessId: projection.tenant_business_id,
+        branchId: projection.branch_id,
+      });
+      if (!instagramRateLimitAudit.recorded && instagramRateLimitAudit.reason === 'AUDIT_PERSISTENCE_FAILED') {
+        console.error('Approved Instagram rate-limit telemetry persistence failed', instagramRateLimitAudit.error);
+      }
 
       const accepted = await supabase.from('conversation_messages').update({
         status: 'SENT',
@@ -597,6 +632,8 @@ export async function POST(request: Request) {
       if (tenantProvider.bindingId !== projection.communication_channel_binding_id) throw new Error('Approved Messenger tenant credential does not match the conversation channel binding');
       const result = await tenantProvider.provider.sendText({recipientId:sendContext.to,text:message.original_text});
       providerMessageId=result.providerMessageId;providerAccepted=true;
+      const messengerRateLimitAudit=await recordProviderRateLimitEvidence({service:supabase,organizationId:body.organizationId,provider:'META',channel:'FACEBOOK_MESSENGER',evidence:result.rateLimit,tenantBusinessId:projection.tenant_business_id,branchId:projection.branch_id});
+      if(!messengerRateLimitAudit.recorded&&messengerRateLimitAudit.reason==='AUDIT_PERSISTENCE_FAILED')console.error('Approved Messenger rate-limit telemetry persistence failed',messengerRateLimitAudit.error);
       const accepted=await supabase.from('conversation_messages').update({status:'SENT',provider_message_id:providerMessageId,provider_delivery_status:'ACCEPTED',sent_at:new Date().toISOString(),processed_at:new Date().toISOString(),approval_reason:null}).eq('organization_id',body.organizationId).eq('id',body.messageId).eq('status','PROCESSING');
       if(accepted.error)throw new Error(`Provider-accepted Messenger reconciliation failed: ${accepted.error.message}`);
       const eventWrite=await supabase.from('facebook_messenger_events').upsert({organization_id:body.organizationId,provider_event_id:providerMessageId,provider_destination_id:tenantProvider.destinationId,event_type:'MESSAGE',payload:{providerMessageId,direction:'OUTBOUND',source:'APPROVED_SHADOW_DRAFT',leadId:message.lead_id,conversationId:message.conversation_id,tenantBusinessId:projection.tenant_business_id,branchId:projection.branch_id,bindingId:tenantProvider.bindingId,outboundAccepted:true}},{onConflict:'organization_id,provider_event_id,event_type',ignoreDuplicates:true});
