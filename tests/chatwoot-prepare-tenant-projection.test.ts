@@ -28,6 +28,7 @@ const BUSINESS = '00000000-0000-4000-8000-000000000302';
 const OTHER_BUSINESS = '00000000-0000-4000-8000-000000000303';
 const EMAIL = '00000000-0000-4000-8000-000000000304';
 const WHATSAPP = '00000000-0000-4000-8000-000000000305';
+const INSTAGRAM = '00000000-0000-4000-8000-000000000306';
 
 function queryResult(input: {
   business?: Record<string, unknown> | null;
@@ -67,7 +68,7 @@ function queryResult(input: {
 function binding(input: {
   id: string;
   integrationConnectionId: string;
-  channel: 'EMAIL' | 'WHATSAPP';
+  channel: 'EMAIL' | 'WHATSAPP' | 'INSTAGRAM';
   tenantBusinessId?: string;
 }) {
   return {
@@ -175,6 +176,32 @@ describe('Chatwoot tenant projection preparation', () => {
       tenantBusinessId: BUSINESS,
       requestKey: `comm-tenant-bridge:${BUSINESS}:account-mapping:v1`,
     });
+  });
+
+  it('prepares Instagram through the same canonical binding and Account projection contract', async () => {
+    const supabase = queryResult({
+      business: { id: BUSINESS, organization_id: ORG, name: 'Smart Visions', status: 'ACTIVE' },
+      integrations: [{ id: INSTAGRAM, channel: 'INSTAGRAM', enabled: true, status: 'CONNECTED' }],
+      bindings: [],
+      accountMapping: null,
+    });
+    createCommunicationChannelBinding.mockResolvedValueOnce(binding({
+      id: '00000000-0000-4000-8000-000000000313',
+      integrationConnectionId: INSTAGRAM,
+      channel: 'INSTAGRAM',
+    }));
+    createChatwootAccountMapping.mockResolvedValue(accountMapping());
+
+    const result = await prepareChatwootTenantProjection({ supabase, organizationId: ORG, tenantBusinessId: BUSINESS });
+
+    expect(result.createdBindingCount).toBe(1);
+    expect(createCommunicationChannelBinding).toHaveBeenCalledWith(expect.objectContaining({
+      organizationId: ORG,
+      tenantBusinessId: BUSINESS,
+      integrationConnectionId: INSTAGRAM,
+      channel: 'INSTAGRAM',
+      requestKey: `comm-tenant-bridge:${BUSINESS}:instagram:${INSTAGRAM}:v1`,
+    }));
   });
 
   it('reuses an already prepared exact projection without creating duplicate rows', async () => {
