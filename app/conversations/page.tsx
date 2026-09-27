@@ -179,11 +179,6 @@ export default async function ConversationsPage({
             <option value="">All channels</option>
             <option value="WHATSAPP">WhatsApp</option>
             <option value="EMAIL">Email</option>
-            <option value="INSTAGRAM">Instagram</option>
-            <option value="TELEGRAM">Telegram</option>
-            <option value="WEB_CHAT">Web Chat</option>
-            <option value="FACEBOOK">Facebook</option>
-            <option value="TIKTOK">TikTok</option>
           </select>
         </label>
 
