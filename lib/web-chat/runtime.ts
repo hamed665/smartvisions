@@ -165,3 +165,121 @@ export async function persistPublicWebChatMessage(input: {
     messageInserted: Boolean(projected.message_inserted),
   };
 }
+
+
+export async function getPublicWebChatConfig(input: {
+  publicKey: string;
+  origin: string;
+}) {
+  const origin = normalizeOrigin(input.origin);
+  if (!origin) throw new PublicWebChatError('ORIGIN_NOT_ALLOWED');
+  const service = createSupabaseServiceClient();
+  const { data, error } = await service
+    .from('web_chat_widget_configs')
+    .select('public_key,allowed_origins,enabled,consent_required,max_message_chars,config')
+    .eq('public_key', input.publicKey)
+    .eq('enabled', true)
+    .maybeSingle();
+  if (error || !data) throw new PublicWebChatError('WIDGET_UNAVAILABLE');
+  if (!Array.isArray(data.allowed_origins) || !data.allowed_origins.includes(origin)) {
+    throw new PublicWebChatError('ORIGIN_NOT_ALLOWED');
+  }
+  const config = data.config && typeof data.config === 'object' && !Array.isArray(data.config)
+    ? data.config as Record<string, unknown>
+    : {};
+  return {
+    consentRequired: Boolean(data.consent_required),
+    maxMessageChars: Number(data.max_message_chars ?? 4000),
+    title: typeof config.title === 'string' ? config.title.trim().slice(0, 80) : 'Chat with us',
+    welcomeMessage: typeof config.welcomeMessage === 'string'
+      ? config.welcomeMessage.trim().slice(0, 500)
+      : 'How can we help?',
+    consentText: typeof config.consentText === 'string'
+      ? config.consentText.trim().slice(0, 500)
+      : 'I agree to use this chat to contact this business.',
+  };
+}
+
+export async function readPublicWebChatMessages(input: {
+  publicKey: string;
+  origin: string;
+  sessionId: string;
+  sessionToken: string;
+  after?: string | null;
+  limit?: number;
+}) {
+  const origin = normalizeOrigin(input.origin);
+  if (!origin) throw new PublicWebChatError('ORIGIN_NOT_ALLOWED');
+  const limit = Math.min(100, Math.max(1, Math.trunc(input.limit ?? 50)));
+  const service = createSupabaseServiceClient();
+  const tokenHash = hashWebChatToken(input.sessionToken);
+
+  const session = await service
+    .from('web_chat_sessions')
+    .select('id,organization_id,widget_config_id,conversation_id,origin,status,expires_at')
+    .eq('id', input.sessionId)
+    .eq('token_hash', tokenHash)
+    .maybeSingle();
+  if (session.error || !session.data) throw new PublicWebChatError('SESSION_UNAVAILABLE');
+  if (
+    session.data.status !== 'ACTIVE'
+    || session.data.origin !== origin
+    || new Date(String(session.data.expires_at)).getTime() <= Date.now()
+  ) {
+    throw new PublicWebChatError('SESSION_UNAVAILABLE');
+  }
+
+  const widget = await service
+    .from('web_chat_widget_configs')
+    .select('id,public_key,enabled,allowed_origins')
+    .eq('organization_id', session.data.organization_id)
+    .eq('id', session.data.widget_config_id)
+    .eq('public_key', input.publicKey)
+    .eq('enabled', true)
+    .maybeSingle();
+  if (
+    widget.error
+    || !widget.data
+    || !Array.isArray(widget.data.allowed_origins)
+    || !widget.data.allowed_origins.includes(origin)
+  ) {
+    throw new PublicWebChatError('WIDGET_UNAVAILABLE');
+  }
+
+  if (!session.data.conversation_id) {
+    return { messages: [], hasMore: false };
+  }
+
+  let query = service
+    .from('conversation_messages')
+    .select('id,direction,original_text,status,created_at,sent_at')
+    .eq('organization_id', session.data.organization_id)
+    .eq('conversation_id', session.data.conversation_id)
+    .eq('channel', 'WEB_CHAT')
+    .in('direction', ['INBOUND', 'OUTBOUND'])
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+    .limit(limit + 1);
+
+  if (input.after) {
+    const afterDate = new Date(input.after);
+    if (!Number.isFinite(afterDate.getTime())) throw new PublicWebChatError('MESSAGE_INVALID');
+    query = query.gt('created_at', afterDate.toISOString());
+  }
+
+  const result = await query;
+  if (result.error) throw new PublicWebChatError('SERVICE_UNAVAILABLE');
+  const rows = result.data ?? [];
+  const hasMore = rows.length > limit;
+  return {
+    messages: rows.slice(0, limit).map((row) => ({
+      id: String(row.id),
+      direction: row.direction === 'OUTBOUND' ? 'OUTBOUND' : 'INBOUND',
+      text: String(row.original_text ?? ''),
+      status: String(row.status ?? ''),
+      createdAt: String(row.created_at),
+      sentAt: row.sent_at ? String(row.sent_at) : null,
+    })),
+    hasMore,
+  };
+}
