@@ -62,9 +62,9 @@ describe('OMNI-CHANNEL-HEALTH evidence aggregation', () => {
     expect(health).toContain("'PROVIDER_CONTRACT_EXECUTION_PENDING'");
     expect(health).toContain("webhookHealth: 'PROVIDER_CONTRACT_PENDING'");
     expect(tiktokFoundation).toContain('tiktok_ai_paused boolean not null default true');
-    expect(tiktokFoundation).toContain("'NOT_CONFIGURED'");
+    expect(tiktokFoundation).toContain("false,\n  'NOT_CONFIGURED'");
     expect(tiktokFoundation).toContain("'FOUNDATION_ONLY'");
-    expect(tiktokFoundation).not.toContain("'CONNECTED'");
+    expect(tiktokFoundation).toContain("v_ic.status<>'CONNECTED'");
   });
 
   it('renders the unified health dimensions in Connection Center', () => {
