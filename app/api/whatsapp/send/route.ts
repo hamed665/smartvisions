@@ -4,7 +4,7 @@ import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { assertCanonicalSendAllowed } from '@/lib/outreach/canonical-send-gate';
 import { resolveMetaWhatsAppProvider } from '@/lib/whatsapp/tenant-routing';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
-import { recordProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
+import { rateLimitEvidenceFromError, recordProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -88,9 +88,26 @@ export async function POST(request: Request) {
     branchId: body.branchId ?? null,
   });
   const provider = tenantProvider.provider;
-  const result = whatsappPolicy.mode === 'TEMPLATE'
-    ? await provider.sendTemplate({ to: body.to, templateName: body.templateName!, languageCode: body.templateLanguageCode!, bodyParameters: body.templateBodyParameters })
-    : await provider.sendText({ to: body.to, text: body.text!, replyToMessageId: body.replyToMessageId });
+  let result;
+  try {
+    result = whatsappPolicy.mode === 'TEMPLATE'
+      ? await provider.sendTemplate({ to: body.to, templateName: body.templateName!, languageCode: body.templateLanguageCode!, bodyParameters: body.templateBodyParameters })
+      : await provider.sendText({ to: body.to, text: body.text!, replyToMessageId: body.replyToMessageId });
+  } catch (error) {
+    const failedRateLimitAudit = await recordProviderRateLimitEvidence({
+      service: supabase,
+      organizationId: body.organizationId,
+      provider: 'META',
+      channel: 'WHATSAPP',
+      evidence: rateLimitEvidenceFromError(error),
+      tenantBusinessId: body.tenantBusinessId,
+      branchId: body.branchId ?? null,
+    });
+    if (!failedRateLimitAudit.recorded && failedRateLimitAudit.reason === 'AUDIT_PERSISTENCE_FAILED') {
+      console.error('Failed WhatsApp provider quota telemetry persistence failed', failedRateLimitAudit.error);
+    }
+    throw error;
+  }
 
   const rateLimitAudit = await recordProviderRateLimitEvidence({
     service: supabase,
