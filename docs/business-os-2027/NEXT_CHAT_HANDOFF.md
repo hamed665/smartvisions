@@ -1,5 +1,32 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## Latest continuation checkpoint — OMNI-TELEGRAM — 2026-09-27
+
+Always re-read runtime/current main before mutation. The verified baseline before this documentation reconciliation is:
+
+- canonical runtime main: `6532693d7cc653e6611af0fea3ba4eea432d6feb`;
+- PR #298 merged tenant-bound customer Telegram messaging while preserving the existing Owner Assistant as a separate control plane;
+- PR #299 merged only Telegram activation-receipt FK index hardening surfaced by the Production advisor;
+- Production Supabase is live through `0123_telegram_activation_acceptance_fk_index_hardening` version `20260927172358`; `0122_omni_telegram_customer_foundation` is live as version `20260927171724`;
+- exact-main CI #1452: SUCCESS;
+- Cloudflare Production Deploy #932: SUCCESS on the same SHA;
+- Candidate Worker: `f1d716c9-dfe7-43b5-8b52-2e83435570c8`;
+- Production Worker: `0c1a6d02-de44-4603-804f-81e807a1f672`;
+- Production deployment smoke invoked no outbound provider send;
+- Chatwoot Platform token remains unconfigured; Production provisioning remains disabled;
+- independent OVH smoke: Chatwoot 200, Smart Core login 200, unauthenticated integrations 307, invalid Owner Telegram secret 401, nonexistent customer binding 404;
+- Shadow Mode remains ON, Global Kill Switch OFF, Telegram customer AI pause ON;
+- Telegram customer integration is disabled + NOT_CONFIGURED with 0 bindings, 0 events and 0 acceptance receipts;
+- no fake tenant, Bot token or activation evidence was created;
+- service-only Telegram customer journals/resolvers/reconciliation/acceptance remain fail-closed and separate from Owner Assistant authority;
+- post-0123 advisors have no Telegram activation-receipt unindexed-FK finding; unused-index INFO is expected before real traffic.
+
+`OMNI-TELEGRAM` is internally implemented/deployed and **PRODUCTION_VERIFIED** for the controlled schema/security/runtime paths above. Real tenant Bot connection plus real inbound/outbound/media acceptance remains **BLOCKED_EXTERNAL**.
+
+Important verification caveat: the current CI PostgreSQL migration-chain command still explicitly enumerates migrations only through `0101`. CI #1452 is valid for lint/typecheck/tests/build/Vinext/scheduled verification, but it must not be cited as direct SQL execution evidence for migrations `0122/0123`. Those migrations are proven by successful Production application and post-apply runtime/schema/advisor verification. Close the CI chain-coverage gap without redesigning the migration architecture.
+
+The next bounded Omnichannel Work Package after Telegram reconciliation is `SECTION OMNICHANNEL / OMNI-TIKTOK`. Before implementation, revalidate current official TikTok Business Messaging API access, authentication, webhook signature/event contract, supported message/media capabilities and tenant eligibility. Do not create a fake TikTok adapter if exact official provider contracts are unavailable. Reuse canonical tenant bindings, Vault authority, CRM identity, Chatwoot projection, send safety, reconciliation and health; do not create another channel truth.
+
 ## Latest continuation checkpoint — OMNI-CHANNEL-HEALTH — 2026-09-27
 
 Always re-read runtime/current main before mutation. The verified baseline before this documentation reconciliation is:
