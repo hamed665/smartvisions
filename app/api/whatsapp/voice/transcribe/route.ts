@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { transcribeWhatsAppVoiceOnce } from '@/lib/voice/transcription';
+import { createSupabaseServiceClient } from '@/lib/supabase/service';
+import { resolveMetaWhatsAppProvider } from '@/lib/whatsapp/tenant-routing';
 
 export async function POST(request: Request) {
   const denied = requireInternalApiKey(request);
@@ -14,6 +16,8 @@ export async function POST(request: Request) {
     leadId?: string;
     conversationId?: string;
     priority?: 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
+    tenantBusinessId?: string;
+    branchId?: string | null;
   };
   try {
     body = await request.json();
@@ -21,11 +25,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  if (!body.organizationId || !body.providerMessageId || !body.mediaId) {
-    return NextResponse.json({ error: 'organizationId, providerMessageId and mediaId are required' }, { status: 400 });
+  if (!body.organizationId || !body.providerMessageId || !body.mediaId || !body.tenantBusinessId) {
+    return NextResponse.json({ error: 'organizationId, tenantBusinessId, providerMessageId and mediaId are required' }, { status: 400 });
   }
 
   try {
+    const service = createSupabaseServiceClient();
+    const tenantProvider = await resolveMetaWhatsAppProvider({
+      service,
+      organizationId: body.organizationId,
+      tenantBusinessId: body.tenantBusinessId,
+      branchId: body.branchId ?? null,
+    });
     const result = await transcribeWhatsAppVoiceOnce({
       organizationId: body.organizationId,
       providerMessageId: body.providerMessageId,
@@ -34,6 +45,7 @@ export async function POST(request: Request) {
       leadId: body.leadId,
       conversationId: body.conversationId,
       priority: body.priority,
+      metaAccessToken: tenantProvider.accessToken,
     });
     return NextResponse.json(result);
   } catch (error) {
