@@ -241,7 +241,13 @@ async function resolveOrCreateVerifiedInboundLead(organizationId: string, event:
   return getOrCreateLeadForBusiness(organizationId, businessId);
 }
 
-async function getOrCreateConversation(organizationId: string, leadId: string, receivedAt: string) {
+type WhatsAppTenantScope = {
+  tenantBusinessId: string;
+  branchId: string | null;
+  bindingId: string;
+};
+
+async function getOrCreateConversation(organizationId: string, leadId: string, receivedAt: string, scope: WhatsAppTenantScope) {
   const supabase = serviceClient();
   const { data: existing, error: existingError } = await supabase
     .from('sales_conversations')
@@ -254,9 +260,23 @@ async function getOrCreateConversation(organizationId: string, leadId: string, r
     .maybeSingle();
   if (existingError) throw new Error(`WhatsApp conversation lookup failed: ${existingError.message}`);
   if (existing) {
-    const { error } = await supabase.from('sales_conversations').update({ last_message_at: receivedAt, updated_at: new Date().toISOString() }).eq('id', existing.id).eq('organization_id', organizationId);
-    if (error) throw new Error(`WhatsApp conversation update failed: ${error.message}`);
-    return existing;
+    const { data: projection, error: projectionError } = await supabase
+      .from('unified_inbox_conversation_projections')
+      .select('tenant_business_id,branch_id,communication_channel_binding_id,lifecycle_status')
+      .eq('organization_id', organizationId)
+      .eq('conversation_id', existing.id)
+      .in('lifecycle_status', ['ACTIVE', 'DEGRADED'])
+      .maybeSingle();
+    if (projectionError) throw new Error(`WhatsApp conversation scope lookup failed: ${projectionError.message}`);
+    const sameScope = projection
+      && projection.tenant_business_id === scope.tenantBusinessId
+      && (projection.branch_id ?? null) === scope.branchId
+      && projection.communication_channel_binding_id === scope.bindingId;
+    if (sameScope) {
+      const { error } = await supabase.from('sales_conversations').update({ last_message_at: receivedAt, updated_at: new Date().toISOString() }).eq('id', existing.id).eq('organization_id', organizationId);
+      if (error) throw new Error(`WhatsApp conversation update failed: ${error.message}`);
+      return existing;
+    }
   }
 
   const { data, error } = await supabase.from('sales_conversations').insert({
@@ -270,13 +290,13 @@ async function getOrCreateConversation(organizationId: string, leadId: string, r
   return data;
 }
 
-export async function applyWhatsAppInboundLifecycle(organizationId: string, event: NormalizedWhatsAppInbound) {
+export async function applyWhatsAppInboundLifecycle(organizationId: string, event: NormalizedWhatsAppInbound, scope: WhatsAppTenantScope) {
   const supabase = serviceClient();
   const lead = await resolveOrCreateVerifiedInboundLead(organizationId, event);
   if (!lead) return { linked: false as const };
 
   const receivedAt = event.timestamp ? new Date(Number(event.timestamp) * 1000).toISOString() : new Date().toISOString();
-  const conversation = await getOrCreateConversation(organizationId, lead.id, receivedAt);
+  const conversation = await getOrCreateConversation(organizationId, lead.id, receivedAt, scope);
   const body = event.text?.trim() || (event.type === 'audio' ? '[WhatsApp voice message]' : `[WhatsApp ${event.type} message]`);
   const idempotencyKey = `whatsapp:inbound:${event.providerMessageId}`;
   const acquisition = inboundAcquisitionMetadata(event);
@@ -284,6 +304,16 @@ export async function applyWhatsAppInboundLifecycle(organizationId: string, even
   const { error: eventLinkError } = await supabase.from('whatsapp_events').update({
     lead_id: lead.id,
     conversation_id: conversation.id,
+    payload: {
+      ...event,
+      routing: {
+        tenantBusinessId: scope.tenantBusinessId,
+        branchId: scope.branchId,
+        bindingId: scope.bindingId,
+        phoneNumberId: event.destination.phoneNumberId,
+        wabaId: event.destination.wabaId ?? null,
+      },
+    },
   }).eq('organization_id', organizationId)
     .eq('provider_message_id', event.providerMessageId)
     .eq('direction', 'INBOUND')
@@ -306,6 +336,9 @@ export async function applyWhatsAppInboundLifecycle(organizationId: string, even
       media_id: event.mediaId ?? null,
       mime_type: event.mimeType ?? null,
       voice: Boolean(event.voice),
+      tenant_business_id: scope.tenantBusinessId,
+      branch_id: scope.branchId,
+      communication_channel_binding_id: scope.bindingId,
       ...acquisition,
     },
   });
@@ -344,12 +377,12 @@ export async function applyWhatsAppInboundLifecycle(organizationId: string, even
   return { linked: true as const, leadId: lead.id, conversationId: conversation.id, agentMode: lead.agent_mode, acquisitionSource: acquisition.acquisition_source };
 }
 
-export async function applyWhatsAppStatusLifecycle(organizationId: string, event: NormalizedWhatsAppStatus) {
+export async function applyWhatsAppStatusLifecycle(organizationId: string, event: NormalizedWhatsAppStatus, scope: WhatsAppTenantScope) {
   const supabase = serviceClient();
   const status = mapWhatsAppDeliveryStatus(event.status);
   const { data, error } = await supabase.from('outreach_messages').update({
     status,
-    metadata: { whatsapp_status: event.status, conversation_id: event.conversationId ?? null, pricing_category: event.pricingCategory ?? null, error_code: event.errorCode ?? null, error_title: event.errorTitle ?? null },
+    metadata: { whatsapp_status: event.status, conversation_id: event.conversationId ?? null, pricing_category: event.pricingCategory ?? null, error_code: event.errorCode ?? null, error_title: event.errorTitle ?? null, tenant_business_id: scope.tenantBusinessId, branch_id: scope.branchId, communication_channel_binding_id: scope.bindingId },
   }).eq('organization_id', organizationId).eq('provider_message_id', event.providerMessageId).eq('channel', 'WHATSAPP').select('id');
   if (error) throw new Error(`WhatsApp delivery status update failed: ${error.message}`);
   return { matched: data?.length ?? 0, status };

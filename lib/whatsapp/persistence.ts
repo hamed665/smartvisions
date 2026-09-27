@@ -82,13 +82,21 @@ export async function persistWhatsAppWebhookEvents(input: {
 
   let linkedInbound = 0;
   for (const { event, route } of routedInbound) {
-    const lifecycle = await applyWhatsAppInboundLifecycle(route.organizationId, event);
+    const lifecycle = await applyWhatsAppInboundLifecycle(route.organizationId, event, {
+      tenantBusinessId: route.tenantBusinessId,
+      branchId: route.branchId,
+      bindingId: route.bindingId,
+    });
     if (lifecycle.linked) linkedInbound += 1;
   }
 
   let statusUpdates = 0;
   for (const { event, route } of routedStatuses) {
-    const lifecycle = await applyWhatsAppStatusLifecycle(route.organizationId, event);
+    const lifecycle = await applyWhatsAppStatusLifecycle(route.organizationId, event, {
+      tenantBusinessId: route.tenantBusinessId,
+      branchId: route.branchId,
+      bindingId: route.bindingId,
+    });
     statusUpdates += lifecycle.matched;
   }
 
