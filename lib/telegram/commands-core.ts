@@ -253,7 +253,7 @@ export async function prepareMutation(input: {
   }
 
   if (command.type === 'SET_PAUSE') {
-    const { data, error } = await supabase.from('system_controls').select('organization_id,agents_paused,email_paused,whatsapp_ai_paused,global_kill_switch,shadow_mode').eq('organization_id', organizationId).maybeSingle();
+    const { data, error } = await supabase.from('system_controls').select('organization_id,agents_paused,email_paused,whatsapp_ai_paused,telegram_ai_paused,global_kill_switch,shadow_mode').eq('organization_id', organizationId).maybeSingle();
     if (error) throw new Error(`System control lookup failed: ${error.message}`);
     if (!data) throw new Error('System controls پیدا نشد.');
     const column = command.target === 'AGENTS'
