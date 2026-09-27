@@ -19,6 +19,7 @@ const SESSION_BYPASS_PATHS = new Set([
   '/api/web-chat/config',
   '/api/web-chat/messages',
   '/api/web-chat/widget',
+  '/api/web-chat/upload',
 ]);
 
 export function shouldBypassSession(pathname: string) {
