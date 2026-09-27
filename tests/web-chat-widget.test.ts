@@ -21,4 +21,18 @@ describe('embeddable Web Chat widget security contract', () => {
     expect(widget).toContain("credentials:'omit'");
     expect(widget).toContain("'Content-Type':'application/javascript; charset=utf-8'");
   });
+
+  it('uploads bounded media through Smart Core without exposing Chatwoot authority', () => {
+    const widget = readFileSync('app/api/web-chat/widget/route.ts', 'utf8');
+    const upload = readFileSync('app/api/web-chat/upload/route.ts', 'utf8');
+    expect(widget).toContain("new FormData()");
+    expect(widget).toContain("/api/web-chat/upload?key=");
+    expect(widget).toContain("files.length>4");
+    expect(upload).toContain('const MAX_FILE_BYTES=10*1024*1024');
+    expect(upload).toContain('const MAX_FILES=4');
+    expect(upload).toContain("origin:origin??''");
+    expect(widget).not.toContain('CHATWOOT_BASE_URL');
+    expect(widget).not.toContain('access_token');
+    expect(upload).not.toContain('CHATWOOT_BASE_URL');
+  });
 });
