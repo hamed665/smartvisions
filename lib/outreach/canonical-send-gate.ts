@@ -173,6 +173,16 @@ export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllow
     ]);
     if (emailSuppressionError || domainSuppressionError) throw new Error(`CANONICAL_SUPPRESSION_UNAVAILABLE:${emailSuppressionError?.message ?? domainSuppressionError?.message}`);
     suppressed = Boolean(emailSuppression || domainSuppression);
+  } else if (channel === 'INSTAGRAM' && instagramBindingId && input.recipient.trim()) {
+    const providerIdentityKey = `${instagramBindingId}:${input.recipient.trim()}`;
+    const { data: identitySuppression, error: identitySuppressionError } = await supabase.from('suppression_list')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .eq('provider_identity_key', providerIdentityKey)
+      .limit(1)
+      .maybeSingle();
+    if (identitySuppressionError) throw new Error(`CANONICAL_SUPPRESSION_UNAVAILABLE:${identitySuppressionError.message}`);
+    suppressed = Boolean(identitySuppression);
   } else if (channel === 'WHATSAPP' && recipientPhone) {
     const { data: phoneSuppressions, error: phoneSuppressionError } = await supabase.from('suppression_list')
       .select('phone')
