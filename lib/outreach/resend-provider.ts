@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { extractProviderRateLimitEvidence, ProviderHttpError } from '@/lib/omnichannel/rate-limit-evidence';
+import { extractProviderRateLimitEvidence, ProviderHttpError, type ProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
 import type { DeliveryEvent, EmailProvider, InboundReply, OutboundMessage } from './provider';
 
 function serviceClient() {
@@ -43,7 +43,7 @@ function statusFromEventType(eventType: string): DeliveryEvent['status'] | null 
 }
 
 export class ResendEmailProvider implements EmailProvider {
-  async sendEmail(input: OutboundMessage): Promise<{ providerMessageId: string }> {
+  async sendEmail(input: OutboundMessage): Promise<{ providerMessageId: string; rateLimit?: ProviderRateLimitEvidence | null }> {
     if (!input.subject?.trim()) throw new Error('Email subject is required');
     if (!input.idempotencyKey?.trim()) throw new Error('Email idempotency key is required');
 
