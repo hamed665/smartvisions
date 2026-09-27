@@ -20,6 +20,7 @@ export type InternalTestLiveReplyPolicy =
       startsAt: string;
       endsAt: string;
       maxReplies: number;
+      deliveryMode: 'TEXT' | 'VOICE_REPLY';
     }
   | { allowed: false; reason: string };
 
@@ -87,11 +88,22 @@ export function evaluateInternalTestLiveReplyPolicy(
   const maxReplies = Math.max(1, Math.min(20, Number(config.maxReplies ?? 10) || 10));
   if (input.claimedCount >= maxReplies) return { allowed: false, reason: 'LIVE_TEST_REPLY_CAP_REACHED' };
 
+  const configuredDeliveryMode = typeof config.deliveryMode === 'string'
+    ? config.deliveryMode.trim().toUpperCase()
+    : '';
+  if (configuredDeliveryMode && !['TEXT', 'VOICE_REPLY'].includes(configuredDeliveryMode)) {
+    return { allowed: false, reason: 'LIVE_TEST_DELIVERY_MODE_INVALID' };
+  }
+  const deliveryMode = configuredDeliveryMode === 'VOICE_REPLY'
+    ? 'VOICE_REPLY' as const
+    : 'TEXT' as const;
+
   return {
     allowed: true,
     recipient: businessRecipient,
     startsAt: new Date(startMs).toISOString(),
     endsAt: new Date(endMs).toISOString(),
     maxReplies,
+    deliveryMode,
   };
 }
