@@ -5,6 +5,7 @@ import { updateIntegration } from '@/app/management-actions';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { evaluateBudgetMode } from '@/lib/reliability/cost-guard';
 import { integrationFreshness } from '@/lib/reliability/operational-truth';
+import { MetaWhatsAppEmbeddedSignup } from './meta-whatsapp-embedded-signup';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +60,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
     { data: recentInbound },
     { data: voiceTranscriptions },
     { data: pilotBusinesses },
+    { data: whatsappBindings },
   ] = await Promise.all([
     supabase.from('integration_connections').select('*').eq('organization_id', organizationId).order('provider').order('channel'),
     supabase.from('audit_logs').select('action,after_data,created_at').eq('organization_id', organizationId).in('action', ['CRAWL4AI_CONTROLLED_SMOKE_TEST', 'CRAWL4AI_CONTROLLED_SMOKE_TEST_FAILED', 'GOOGLE_PLACES_CONTROLLED_TEST', 'EMAIL_PROVIDER_CONTROLLED_VERIFICATION_SENT', 'EMAIL_PROVIDER_CONTROLLED_VERIFICATION_FAILED', 'META_WHATSAPP_CONTROLLED_VERIFICATION_SENT', 'META_WHATSAPP_CONTROLLED_VERIFICATION_FAILED']).order('created_at', { ascending: false }).limit(50),
@@ -68,6 +70,11 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
     supabase.from('outreach_messages').select('id,lead_id,provider_message_id,received_at,metadata').eq('organization_id', organizationId).eq('channel', 'WHATSAPP').eq('direction', 'INBOUND').not('lead_id', 'is', null).gte('received_at', sinceVoice).order('received_at', { ascending: false }).limit(50),
     supabase.from('voice_transcriptions').select('provider_message_id,status,detected_language,error_message,updated_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(20),
     supabase.from('businesses').select('leads(id)').eq('organization_id', organizationId).eq('category', 'INTERNAL_TEST').not('whatsapp', 'is', null).limit(2),
+    supabase.from('communication_channel_bindings')
+      .select('id,version,tenant_business_id,branch_id,provider_destination_label,tenant_businesses!inner(name,status),branches(name,status)')
+      .eq('organization_id', organizationId)
+      .eq('channel', 'WHATSAPP')
+      .eq('status', 'ACTIVE'),
   ]);
 
   const rows = data ?? [];
@@ -192,6 +199,30 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
         </form>;
       })}
     </div>
+
+    <MetaWhatsAppEmbeddedSignup
+      appId={process.env.NEXT_PUBLIC_META_APP_ID?.trim() || null}
+      configurationId={process.env.NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID?.trim() || null}
+      graphVersion={process.env.META_GRAPH_VERSION?.trim() || 'v23.0'}
+      bindings={(whatsappBindings ?? [])
+        .filter((binding) => {
+          const business = Array.isArray(binding.tenant_businesses) ? binding.tenant_businesses[0] : binding.tenant_businesses;
+          const branch = Array.isArray(binding.branches) ? binding.branches[0] : binding.branches;
+          return business?.status === 'ACTIVE' && (!branch || branch.status === 'ACTIVE');
+        })
+        .map((binding) => {
+          const business = Array.isArray(binding.tenant_businesses) ? binding.tenant_businesses[0] : binding.tenant_businesses;
+          const branch = Array.isArray(binding.branches) ? binding.branches[0] : binding.branches;
+          return {
+            id: binding.id,
+            version: binding.version,
+            tenantBusinessId: binding.tenant_business_id,
+            businessName: business?.name ?? binding.tenant_business_id,
+            branchName: branch?.name ?? null,
+            destinationLabel: binding.provider_destination_label ?? null,
+          };
+        })}
+    />
 
     <section className="panel settingsCreate">
       <h2>Security and cost note</h2>
