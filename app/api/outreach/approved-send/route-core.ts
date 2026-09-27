@@ -68,16 +68,21 @@ export async function POST(request: Request) {
   if (messageError || !message) return NextResponse.json({ error: messageError?.message ?? 'Approved message not found' }, { status: 404 });
 
   const providerIdentity = getChannelIntegrationIdentity(message.channel);
+  // Instagram remains outside ACTIVE_CHANNEL_ADAPTERS until live acceptance.
+  // Readiness still verifies the canonical META/INSTAGRAM integration connection.
+  const providerLookupIdentity = providerIdentity ?? (message.channel === 'INSTAGRAM'
+    ? { provider: 'META' as const, channel: 'INSTAGRAM' as const }
+    : null);
 
   const [{ data: controls, error: controlsError }, { data: lead, error: leadError }, providerConnectionResult] = await Promise.all([
     supabase.from('system_controls').select('global_kill_switch,email_paused,whatsapp_ai_paused,instagram_ai_paused,agents_paused,shadow_mode').eq('organization_id', body.organizationId).maybeSingle(),
     message.lead_id ? supabase.from('leads').select('id,business_id,status,agent_mode').eq('organization_id', body.organizationId).eq('id', message.lead_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
-    providerIdentity
+    providerLookupIdentity
       ? supabase.from('integration_connections')
         .select('enabled,status,last_error')
         .eq('organization_id', body.organizationId)
-        .eq('provider', providerIdentity.provider)
-        .eq('channel', providerIdentity.channel)
+        .eq('provider', providerLookupIdentity.provider)
+        .eq('channel', providerLookupIdentity.channel)
         .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
   ]);
@@ -308,7 +313,7 @@ export async function POST(request: Request) {
   });
   if (!policy.allowed) return NextResponse.json({ error: 'Approved send blocked by safety policy', policy }, { status: 409 });
 
-  if (!providerIdentity) {
+  if (!providerLookupIdentity) {
     return NextResponse.json({ error: 'Approved send channel has no configured provider mapping' }, { status: 409 });
   }
   if (providerConnectionResult.error) {
@@ -318,7 +323,7 @@ export async function POST(request: Request) {
   if (!providerConnection || !providerConnection.enabled || providerConnection.status !== 'CONNECTED') {
     return NextResponse.json({
       error: 'Approved send blocked because provider is not production-verified CONNECTED',
-      provider: providerIdentity,
+      provider: providerLookupIdentity,
       providerStatus: providerConnection?.status ?? 'MISSING',
     }, { status: 409 });
   }
