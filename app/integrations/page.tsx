@@ -5,6 +5,7 @@ import { updateIntegration } from '@/app/management-actions';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { evaluateBudgetMode } from '@/lib/reliability/cost-guard';
 import { integrationFreshness } from '@/lib/reliability/operational-truth';
+import { getOmnichannelHealth } from '@/lib/omnichannel/health';
 import { getWebChatConnectionHealth } from '@/lib/web-chat/health';
 import { MetaWhatsAppEmbeddedSignup } from './meta-whatsapp-embedded-signup';
 
@@ -64,6 +65,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
     { data: pilotBusinesses },
     { data: whatsappBindings },
     webChatHealth,
+    omnichannelHealth,
   ] = await Promise.all([
     supabase.from('integration_connections').select('*').eq('organization_id', organizationId).order('provider').order('channel'),
     supabase.from('audit_logs').select('action,after_data,created_at').eq('organization_id', organizationId).in('action', ['CRAWL4AI_CONTROLLED_SMOKE_TEST', 'CRAWL4AI_CONTROLLED_SMOKE_TEST_FAILED', 'GOOGLE_PLACES_CONTROLLED_TEST', 'EMAIL_PROVIDER_CONTROLLED_VERIFICATION_SENT', 'EMAIL_PROVIDER_CONTROLLED_VERIFICATION_FAILED', 'META_WHATSAPP_CONTROLLED_VERIFICATION_SENT', 'META_WHATSAPP_CONTROLLED_VERIFICATION_FAILED']).order('created_at', { ascending: false }).limit(50),
@@ -79,6 +81,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
       .eq('channel', 'WHATSAPP')
       .eq('status', 'ACTIVE'),
     getWebChatConnectionHealth(organizationId),
+    getOmnichannelHealth(organizationId),
   ]);
 
   const rows = data ?? [];
@@ -147,6 +150,33 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
       <strong>Critical cost state</strong>
       <p className="muted">New paid provider operations are restricted by Cost Guard. Review <Link className="textLink" href="/cost-usage">Cost & Usage</Link> before running smoke tests.</p>
     </section> : null}
+
+    <section className="panel settingsCreate">
+      <h2>Unified customer channel health</h2>
+      <p className="muted">Evidence-derived view across active, internally ready and pending customer channels. A configured row is not treated as proof of credential, webhook, quota or live acceptance health.</p>
+      <div className="settingsList">
+        {omnichannelHealth.map((health) => <div className="settingsRow" key={health.channel}>
+          <div>
+            <strong>{health.channel}</strong>
+            <span className="muted smallText">{health.provider} · {health.implementationState} · Connection {health.connectionStatus}</span>
+            <span className="muted smallText">Bindings {health.bindingCount} · Control {health.controlState}</span>
+            {health.blockers.length ? <span className="muted smallText">Blockers: {health.blockers.join(', ')}</span> : null}
+          </div>
+          <div className="healthList compactHealth">
+            <span>Credential <strong>{health.credentialHealth}</strong></span>
+            <span>Webhook <strong>{health.webhookHealth}</strong></span>
+            <span>Quota/rate <strong>{health.quotaHealth}</strong></span>
+            <span>Incident <strong>{health.incidentState}</strong></span>
+          </div>
+          <div className="healthList compactHealth">
+            <span>Last verified evidence <strong>{health.lastVerifiedAt ? new Date(health.lastVerifiedAt).toLocaleString() : 'None'}</strong></span>
+            <span>Last channel event <strong>{health.lastEventAt ? new Date(health.lastEventAt).toLocaleString() : 'None'}</strong></span>
+            <span>Last acceptance <strong>{health.lastAcceptanceAt ? new Date(health.lastAcceptanceAt).toLocaleString() : 'None'}</strong></span>
+            <span>Capabilities <strong>{health.supportedCapabilities.length ? health.supportedCapabilities.join(', ') : 'None proven'}</strong></span>
+          </div>
+        </div>)}
+      </div>
+    </section>
 
     <section className="panel settingsCreate">
       <h2>Web Chat canonical connection health</h2>
