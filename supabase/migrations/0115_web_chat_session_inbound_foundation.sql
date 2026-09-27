@@ -177,7 +177,7 @@ begin
 exception when others then
  perform set_config('smartvisions.chatwoot_bridge_command','0',true);
  raise;
-end $;
+end $$;
 
 create or replace function public.create_web_chat_session(
  p_widget_public_key text,p_session_id uuid,p_token_hash text,p_origin text,p_consent_accepted boolean
