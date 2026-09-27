@@ -197,6 +197,7 @@ function parseSlashCommand(input: string): TelegramOwnerCommand | null {
   if ((name === '/pause' || name === '/resume') && parts[0]) {
     const targetRaw = token(parts[0]);
     const target = targetRaw.includes('whatsapp') || targetRaw.includes('واتساپ') ? 'WHATSAPP'
+      : targetRaw.includes('telegram') || targetRaw.includes('تلگرام') ? 'TELEGRAM'
       : targetRaw.includes('email') || targetRaw.includes('ایمیل') ? 'EMAIL'
       : targetRaw.includes('agent') || targetRaw.includes('ایجنت') ? 'AGENTS' : null;
     if (target) return { type: 'SET_PAUSE', target, paused: name === '/pause' };
@@ -320,7 +321,7 @@ export function parseTelegramOwnerCommand(rawInput: string): TelegramOwnerComman
   const serviceToggle = input.match(/(?:سرویس|خدمت)\s+(.+?)\s+(?:رو|را)?\s*(فعال|غیرفعال|روشن|خاموش)\s*(?:کن)?$/i);
   if (serviceToggle) return { type: 'SET_SERVICE_ENABLED', serviceQuery: serviceToggle[1].trim(), enabled: ['فعال','روشن'].includes(serviceToggle[2]) };
 
-  const pauseTarget = /(واتساپ|whatsapp|ایمیل|email|ایجنت|agent)/i.exec(input)?.[1] ?? '';
+  const pauseTarget = /(واتساپ|whatsapp|تلگرام|telegram|ایمیل|email|ایجنت|agent)/i.exec(input)?.[1] ?? '';
   if (pauseTarget && /(متوقف|pause|خاموش)/i.test(input)) {
     const target = /(واتساپ|whatsapp)/i.test(pauseTarget) ? 'WHATSAPP' : /(ایمیل|email)/i.test(pauseTarget) ? 'EMAIL' : 'AGENTS';
     return { type: 'SET_PAUSE', target, paused: true };

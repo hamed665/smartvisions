@@ -5,6 +5,7 @@ import { getInstagramActivationReadiness } from '@/lib/instagram/activation';
 import { EMAIL_CHANNEL_DESCRIPTOR, WHATSAPP_CHANNEL_DESCRIPTOR } from '@/lib/omnichannel/adapters';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
 import { getWebChatConnectionHealth } from '@/lib/web-chat/health';
+import { getTelegramActivationReadiness } from '@/lib/telegram/customer-activation';
 
 export type CustomerChannel =
   | 'EMAIL'
@@ -110,7 +111,7 @@ function envCredentialHealth(channel: 'EMAIL' | 'WHATSAPP') {
 }
 
 async function latestEvent(
-  table: 'email_events' | 'whatsapp_events' | 'instagram_events' | 'facebook_messenger_events',
+  table: 'email_events' | 'whatsapp_events' | 'instagram_events' | 'facebook_messenger_events' | 'telegram_customer_events',
   organizationId: string,
 ) {
   const service = createSupabaseServiceClient();
@@ -131,7 +132,8 @@ async function latestAcceptance(
   table:
     | 'instagram_activation_acceptance_receipts'
     | 'facebook_messenger_activation_acceptance_receipts'
-    | 'web_chat_activation_acceptance_receipts',
+    | 'web_chat_activation_acceptance_receipts'
+    | 'telegram_activation_acceptance_receipts',
   organizationId: string,
 ) {
   const service = createSupabaseServiceClient();
@@ -154,7 +156,7 @@ type RateLimitAuditRow = {
 async function latestRateLimitAudit(
   service: ReturnType<typeof createSupabaseServiceClient>,
   organizationId: string,
-  channel: 'EMAIL' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK_MESSENGER',
+  channel: 'EMAIL' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK_MESSENGER' | 'TELEGRAM',
 ): Promise<RateLimitAuditRow | null> {
   const result = await service
     .from('audit_logs')
@@ -236,6 +238,7 @@ function pauseState(controls: Record<string, unknown> | null, channel: CustomerC
   if (channel === 'INSTAGRAM' && controls.instagram_ai_paused === true) return 'AI_PAUSED';
   if (channel === 'FACEBOOK_MESSENGER' && controls.facebook_messenger_ai_paused === true) return 'AI_PAUSED';
   if (channel === 'WEB_CHAT' && controls.web_chat_ai_paused === true) return 'AI_PAUSED';
+  if (channel === 'TELEGRAM' && controls.telegram_ai_paused === true) return 'AI_PAUSED';
   return 'RUNNING';
 }
 
@@ -250,14 +253,17 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
     whatsappEvent,
     instagramEvent,
     messengerEvent,
+    telegramEvent,
     instagramAcceptance,
     messengerAcceptance,
     webChatAcceptance,
+    telegramAcceptance,
     webChatHealth,
     emailRateLimitAudit,
     whatsappRateLimitAudit,
     instagramRateLimitAudit,
     messengerRateLimitAudit,
+    telegramRateLimitAudit,
   ] = await Promise.all([
     service
       .from('integration_connections')
@@ -267,24 +273,27 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
       .from('communication_channel_bindings')
       .select('id,channel,tenant_business_id,branch_id,status,last_verified_at,last_error_code,provider_destination_id,provider_secret_ref')
       .eq('organization_id', organizationId)
-      .in('channel', ['EMAIL', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK_MESSENGER', 'WEB_CHAT']),
+      .in('channel', ['EMAIL', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK_MESSENGER', 'WEB_CHAT', 'TELEGRAM']),
     service
       .from('system_controls')
-      .select('shadow_mode,global_kill_switch,email_paused,whatsapp_ai_paused,instagram_ai_paused,facebook_messenger_ai_paused,web_chat_ai_paused,agents_paused')
+      .select('shadow_mode,global_kill_switch,email_paused,whatsapp_ai_paused,instagram_ai_paused,facebook_messenger_ai_paused,web_chat_ai_paused,telegram_ai_paused,agents_paused')
       .eq('organization_id', organizationId)
       .maybeSingle(),
     latestEvent('email_events', organizationId),
     latestEvent('whatsapp_events', organizationId),
     latestEvent('instagram_events', organizationId),
     latestEvent('facebook_messenger_events', organizationId),
+    latestEvent('telegram_customer_events', organizationId),
     latestAcceptance('instagram_activation_acceptance_receipts', organizationId),
     latestAcceptance('facebook_messenger_activation_acceptance_receipts', organizationId),
     latestAcceptance('web_chat_activation_acceptance_receipts', organizationId),
+    latestAcceptance('telegram_activation_acceptance_receipts', organizationId),
     getWebChatConnectionHealth(organizationId),
     latestRateLimitAudit(service, organizationId, 'EMAIL'),
     latestRateLimitAudit(service, organizationId, 'WHATSAPP'),
     latestRateLimitAudit(service, organizationId, 'INSTAGRAM'),
     latestRateLimitAudit(service, organizationId, 'FACEBOOK_MESSENGER'),
+    latestRateLimitAudit(service, organizationId, 'TELEGRAM'),
   ]);
 
   if (integrationsResult.error) throw new Error('Integration connection health lookup failed');
@@ -298,6 +307,7 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
   const whatsappRateLimit = rateLimitHealth(whatsappRateLimitAudit);
   const instagramRateLimit = rateLimitHealth(instagramRateLimitAudit);
   const messengerRateLimit = rateLimitHealth(messengerRateLimitAudit);
+  const telegramRateLimit = rateLimitHealth(telegramRateLimitAudit);
 
   const integration = (provider: string, channel: string) =>
     integrations.find((row) => row.provider === provider && row.channel === channel);
@@ -335,6 +345,18 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
   ));
   const messengerBlockers = [...new Set(messengerReadiness.flatMap((row) => row.blockers))];
   const messengerIntegration = integration('META', 'FACEBOOK_MESSENGER');
+
+  const telegramBindings = channelBindings('TELEGRAM');
+  const telegramReadiness = await Promise.all(telegramBindings.map((binding) =>
+    getTelegramActivationReadiness({
+      service,
+      organizationId,
+      tenantBusinessId: binding.tenant_business_id,
+      branchId: binding.branch_id,
+    }),
+  ));
+  const telegramBlockers = [...new Set(telegramReadiness.flatMap((row) => row.blockers))];
+  const telegramIntegration = integration('TELEGRAM', 'TELEGRAM');
 
   const webChatBindingCount = webChatHealth.length;
   const webChatBlockers = [...new Set(webChatHealth.flatMap((row) => row.blockers))];
@@ -504,20 +526,64 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
     {
       channel: 'TELEGRAM',
       provider: 'TELEGRAM',
-      implementationState: 'NOT_IMPLEMENTED',
-      connectionStatus: 'CUSTOMER_CHANNEL_NOT_ACTIVE',
-      credentialHealth: 'NOT_EVALUATED',
-      webhookHealth: 'OWNER_ASSISTANT_ONLY',
-      quotaHealth: 'NOT_EVALUATED',
-      lastVerifiedAt: null,
-      supportedCapabilities: [],
-      incidentState: 'CUSTOMER_CHANNEL_NOT_IMPLEMENTED',
-      blockers: ['OMNI_TELEGRAM_CUSTOMER_MESSAGING_PENDING'],
-      bindingCount: 0,
-      lastEventAt: null,
-      lastAcceptanceAt: null,
-      controlState: 'NOT_APPLICABLE',
-      evidenceSources: ['MASTER_PROGRAM_SECTIONS'],
+      implementationState: telegramBindings.length === 0
+        ? 'INTERNAL_READY'
+        : telegramReadiness.every((row) => row.ready) ? 'ACTIVE' : 'INTERNAL_READY',
+      connectionStatus: telegramBindings.length === 0
+        ? (telegramIntegration?.status ?? 'ROW_MISSING')
+        : telegramReadiness.every((row) => row.ready) ? 'READY' : 'BLOCKED',
+      credentialHealth: telegramBindings.length === 0
+        ? 'NOT_BOUND'
+        : telegramBlockers.some((value) => value.includes('CREDENTIAL') || value.includes('VAULT'))
+          ? 'MISSING_OR_INVALID'
+          : 'BOUND',
+      webhookHealth: telegramEvent ? 'EVIDENCE_PRESENT' : 'IMPLEMENTED_NO_LIVE_EVIDENCE',
+      quotaHealth: telegramRateLimit.state,
+      lastVerifiedAt: maxIso(
+        telegramIntegration?.last_checked_at,
+        telegramRateLimit.observedAt,
+        telegramEvent?.createdAt,
+        telegramAcceptance,
+        ...telegramBindings.map((row) => row.last_verified_at),
+      ),
+      supportedCapabilities: [
+        'INBOUND',
+        'OUTBOUND',
+        'TEXT',
+        'MEDIA',
+        'WEBHOOK_SECRET_TOKEN',
+        'CANONICAL_SEND_GATE',
+        'CHATWOOT_PROJECTION',
+        'DNC_SUPPRESSION',
+        'HUMAN_TAKEOVER',
+        'OWNER_ASSISTANT_SEPARATE',
+      ],
+      incidentState: pauseState(controls, 'TELEGRAM') !== 'RUNNING'
+        ? pauseState(controls, 'TELEGRAM')
+        : !telegramIntegration
+          ? 'INTEGRATION_ROW_MISSING'
+          : telegramBindings.length === 0
+            ? 'AWAITING_REAL_BINDING'
+            : telegramBlockers.length
+              ? 'BLOCKED'
+              : 'CLEAR',
+      blockers: [
+        ...(!telegramIntegration ? ['INTEGRATION_ROW_MISSING'] : []),
+        ...(telegramBindings.length === 0 ? ['REAL_BINDING_MISSING'] : telegramBlockers),
+      ],
+      bindingCount: telegramBindings.length,
+      lastEventAt: telegramEvent?.createdAt ?? null,
+      lastAcceptanceAt: telegramAcceptance,
+      controlState: pauseState(controls, 'TELEGRAM'),
+      evidenceSources: [
+        'integration_connections',
+        'communication_channel_bindings',
+        'telegram_customer_events',
+        'telegram_activation_readiness',
+        'telegram_activation_acceptance_receipts',
+        'audit_logs:CHANNEL_PROVIDER_RATE_LIMIT_OBSERVED',
+        'system_controls',
+      ],
     },
     {
       channel: 'TIKTOK',
