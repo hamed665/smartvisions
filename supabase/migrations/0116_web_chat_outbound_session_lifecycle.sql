@@ -179,6 +179,9 @@ begin
   if s.status='EXPIRED' or s.expires_at<=now() then
     update public.web_chat_sessions set status='EXPIRED',last_seen_at=now()
      where organization_id=s.organization_id and id=s.id;
+    insert into public.web_chat_events(organization_id,session_id,event_id,event_type,payload)
+    values(s.organization_id,s.id,'expire:'||s.id::text,'SESSION_CLOSED',jsonb_build_object('reason','EXPIRED'))
+    on conflict(organization_id,event_id) do nothing;
     return query select false,'EXPIRED'::text; return;
   end if;
 
@@ -211,21 +214,14 @@ begin
       from due
      where s.organization_id=due.organization_id and s.id=due.id
     returning s.organization_id,s.id
+  ), journaled as (
+    insert into public.web_chat_events(organization_id,session_id,event_id,event_type,payload)
+    select u.organization_id,u.id,'expire:'||u.id::text,'SESSION_CLOSED',jsonb_build_object('reason','EXPIRED')
+      from updated u
+    on conflict(organization_id,event_id) do nothing
+    returning 1
   )
   select count(*)::integer into v_count from updated;
-
-  insert into public.web_chat_events(organization_id,session_id,event_id,event_type,payload)
-  select s.organization_id,s.id,'expire:'||s.id::text,'SESSION_CLOSED',jsonb_build_object('reason','EXPIRED')
-    from public.web_chat_sessions s
-   where s.status='EXPIRED'
-     and not exists(
-       select 1 from public.web_chat_events e
-        where e.organization_id=s.organization_id and e.event_id='expire:'||s.id::text
-     )
-     and s.expires_at<=now()
-   order by s.expires_at desc
-   limit v_count
-  on conflict(organization_id,event_id) do nothing;
 
   return query select coalesce(v_count,0);
 end $$;
