@@ -37,6 +37,7 @@ describe('internal test live WhatsApp reply policy', () => {
       startsAt: '2026-09-05T13:30:00.000Z',
       endsAt: '2026-09-05T14:30:00.000Z',
       maxReplies: 10,
+      deliveryMode: 'TEXT',
     });
   });
 
@@ -60,6 +61,7 @@ describe('internal test live WhatsApp reply policy', () => {
       startsAt: '2026-09-05T13:30:00.000Z',
       endsAt: '2026-09-05T14:30:00.000Z',
       maxReplies: 20,
+      deliveryMode: 'TEXT',
     });
   });
 
@@ -111,4 +113,28 @@ describe('internal test live WhatsApp reply policy', () => {
   it('caps automatic replies and fails closed when the claim budget is consumed', () => {
     expect(evaluateInternalTestLiveReplyPolicy({ ...base(), claimedCount: 10 })).toEqual({ allowed: false, reason: 'LIVE_TEST_REPLY_CAP_REACHED' });
   });
+  it('requires an explicit VOICE_REPLY opt-in and rejects unknown delivery modes', () => {
+    const voice = evaluateInternalTestLiveReplyPolicy({
+      ...base(),
+      ruleConfig: {
+        internalTestLiveReply: {
+          ...config.internalTestLiveReply,
+          deliveryMode: 'VOICE_REPLY',
+        },
+      },
+    });
+    expect(voice.allowed).toBe(true);
+    if (voice.allowed) expect(voice.deliveryMode).toBe('VOICE_REPLY');
+
+    expect(evaluateInternalTestLiveReplyPolicy({
+      ...base(),
+      ruleConfig: {
+        internalTestLiveReply: {
+          ...config.internalTestLiveReply,
+          deliveryMode: 'SURPRISE_ME',
+        },
+      },
+    })).toEqual({ allowed: false, reason: 'LIVE_TEST_DELIVERY_MODE_INVALID' });
+  });
+
 });
