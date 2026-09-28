@@ -402,7 +402,7 @@ export class CrmSegmentMutationError extends Error {
 
 function mapMutationError(message: string) {
   if (/not found/i.test(message)) return new CrmSegmentMutationError('NOT_FOUND', message);
-  if (/version conflict|changed concurrently/i.test(message)) {
+  if (/version conflict|changed concurrently|request key conflict/i.test(message)) {
     return new CrmSegmentMutationError('VERSION_CONFLICT', message);
   }
   if (/not permitted|row-level security|permission denied/i.test(message)) {
