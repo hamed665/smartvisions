@@ -23,6 +23,24 @@ function isUuid(value: unknown): value is string {
 function optionalUuid(value: unknown) {
   return value === null || value === undefined || isUuid(value);
 }
+function validProbabilityBps(value: unknown) {
+  return value === null || value === undefined
+    || (Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 10000);
+}
+function validCloseEvidence(value: unknown) {
+  if (value === null || value === undefined) return true;
+  if (!isObject(value)) return false;
+  const keys = Object.keys(value);
+  const sourceType = value.sourceType;
+  const sourceRef = value.sourceRef;
+  return keys.length === 2
+    && keys.includes('sourceType')
+    && keys.includes('sourceRef')
+    && ['CUSTOMER_CONFIRMATION','PAYMENT','CONTRACT','OPERATOR_CONFIRMED','OTHER'].includes(String(sourceType))
+    && typeof sourceRef === 'string'
+    && sourceRef.trim().length >= 1
+    && sourceRef.trim().length <= 512;
+}
 function parseLimit(value: string | null) {
   if (!value) return 50;
   const parsed = Number.parseInt(value,10);
@@ -52,6 +70,7 @@ export async function GET(request: Request) {
   const pipelineId = url.searchParams.get('pipelineId');
   const businessId = url.searchParams.get('businessId');
   const ownerUserId = url.searchParams.get('ownerUserId');
+  const teamId = url.searchParams.get('teamId');
   const state = url.searchParams.get('state');
   const limit = parseLimit(url.searchParams.get('limit'));
   const beforeUpdatedAt = url.searchParams.get('beforeUpdatedAt');
@@ -61,6 +80,7 @@ export async function GET(request: Request) {
       || !optionalUuid(pipelineId)
       || !optionalUuid(businessId)
       || !optionalUuid(ownerUserId)
+      || !optionalUuid(teamId)
       || (state !== null && !STATES.includes(state as CrmDealState))
       || limit === null) {
     return NextResponse.json({ error: 'Invalid CRM Deal query parameters' }, { status: 400 });
@@ -94,6 +114,7 @@ export async function GET(request: Request) {
       pipelineId,
       businessId,
       ownerUserId,
+      teamId,
       state: state as CrmDealState | null,
       limit,
       cursor,
@@ -136,6 +157,8 @@ export async function POST(request: Request) {
     ? parseIso(body.expectedCloseAt)
     : null;
   const ownerUserId = body.ownerUserId;
+  const teamId = body.teamId;
+  const probabilityOverrideBps = body.probabilityOverrideBps;
   const requestKey = typeof body.requestKey === 'string' ? body.requestKey.trim() : '';
   const metadata = body.metadata ?? {};
 
@@ -150,6 +173,8 @@ export async function POST(request: Request) {
       || ((amount === null) !== (currency === null))
       || expectedCloseAt === undefined
       || !isUuid(ownerUserId)
+      || !optionalUuid(teamId)
+      || !validProbabilityBps(probabilityOverrideBps)
       || requestKey.length < 1
       || requestKey.length > 200
       || !isObject(metadata)
@@ -172,6 +197,8 @@ export async function POST(request: Request) {
         currency,
         expectedCloseAt,
         ownerUserId,
+        teamId: teamId as string | null | undefined,
+        probabilityOverrideBps: probabilityOverrideBps as number | null | undefined,
         requestKey,
         metadata,
       });
@@ -191,6 +218,8 @@ export async function POST(request: Request) {
       currency,
       expectedCloseAt,
       ownerUserId,
+      teamId: teamId as string | null | undefined,
+      probabilityOverrideBps: probabilityOverrideBps as number | null | undefined,
       requestKey,
       metadata,
     });
@@ -234,7 +263,7 @@ export async function PATCH(request: Request) {
 
   const allowed = new Set([
     'title','stageId','amount','currency','expectedCloseAt',
-    'ownerUserId','lostReason','metadata',
+    'ownerUserId','teamId','probabilityOverrideBps','lostReason','closeEvidence','metadata',
   ]);
   if (Object.keys(patch).some(key => !allowed.has(key))) {
     return NextResponse.json({ error: 'Unsupported CRM Deal patch field' }, { status: 400 });
@@ -256,6 +285,9 @@ export async function PATCH(request: Request) {
       || (currency !== undefined && currency !== null && !/^[A-Z]{3}$/.test(currency))
       || expectedCloseAt === undefined && Object.prototype.hasOwnProperty.call(patch,'expectedCloseAt')
       || (patch.ownerUserId !== undefined && !isUuid(patch.ownerUserId))
+      || (patch.teamId !== undefined && !optionalUuid(patch.teamId))
+      || !validProbabilityBps(patch.probabilityOverrideBps)
+      || !validCloseEvidence(patch.closeEvidence)
       || (patch.lostReason !== undefined && patch.lostReason !== null
         && (typeof patch.lostReason !== 'string' || patch.lostReason.length > 2000))
       || (patch.metadata !== undefined && !isObject(patch.metadata))) {
@@ -275,7 +307,10 @@ export async function PATCH(request: Request) {
         currency,
         expectedCloseAt,
         ownerUserId: patch.ownerUserId as string | undefined,
+        teamId: patch.teamId as string | null | undefined,
+        probabilityOverrideBps: patch.probabilityOverrideBps as number | null | undefined,
         lostReason: patch.lostReason as string | null | undefined,
+        closeEvidence: patch.closeEvidence as { sourceType: string; sourceRef: string } | null | undefined,
         metadata: patch.metadata as Record<string,unknown> | undefined,
       },
     });
