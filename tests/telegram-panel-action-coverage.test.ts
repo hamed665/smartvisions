@@ -20,6 +20,14 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
   'app/control-center-actions.ts': {
     updateService:'service.update', createService:'service.create', updatePrice:'price.update', updateMarket:'market.update', updateAgent:'agent.update', updateApprovalRule:'approval.require',
   },
+  'app/customer-success/customer-success-actions.ts': {
+    acceptCustomerSuccessTask:'SPECIALIZED:CUSTOMER_SUCCESS_GOVERNANCE',
+    recordCustomerLoyalty:'SPECIALIZED:CUSTOMER_SUCCESS_GOVERNANCE',
+    recordCustomerReferralAction:'SPECIALIZED:CUSTOMER_SUCCESS_GOVERNANCE',
+    transitionCustomerReferralAction:'SPECIALIZED:CUSTOMER_SUCCESS_GOVERNANCE',
+    rewardCustomerReferral:'SPECIALIZED:CUSTOMER_SUCCESS_GOVERNANCE',
+    classifyCustomerSuccessLifecycleCampaign:'SPECIALIZED:CUSTOMER_SUCCESS_GOVERNANCE',
+  },
   'app/daily-target-actions.ts': {
     setDailyOutreachTarget:'SPECIALIZED:DAILY_OUTREACH_TARGET',
   },
