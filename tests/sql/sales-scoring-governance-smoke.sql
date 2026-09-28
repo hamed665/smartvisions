@@ -46,7 +46,9 @@ begin
     where id='60000000-0000-0000-0000-000000000c01';
     raise exception 'Direct authenticated score UPDATE bypassed governance';
   exception when others then
-    if sqlerrm not like 'CRM Lead scoring fields require the governed scoring mutation boundary%' then raise; end if;
+    if sqlstate<>'42501'
+       and sqlerrm not like 'CRM Lead scoring fields require the governed scoring mutation boundary%'
+    then raise; end if;
   end;
 
   perform set_config('app.crm_lead_scoring_mutation','allowed',true);
@@ -56,7 +58,9 @@ begin
     where id='60000000-0000-0000-0000-000000000c01';
     raise exception 'Authenticated browser spoofed scoring mutation marker';
   exception when others then
-    if sqlerrm not like 'CRM Lead scoring fields require the governed scoring mutation boundary%' then raise; end if;
+    if sqlstate<>'42501'
+       and sqlerrm not like 'CRM Lead scoring fields require the governed scoring mutation boundary%'
+    then raise; end if;
   end;
 
   begin
@@ -73,7 +77,9 @@ begin
     );
     raise exception 'Authenticated browser created a scored Lead directly';
   exception when others then
-    if sqlerrm not like 'Scored CRM Lead creation requires the trusted server boundary%' then raise; end if;
+    if sqlstate<>'42501'
+       and sqlerrm not like 'Scored CRM Lead creation requires the trusted server boundary%'
+    then raise; end if;
   end;
 end;
 $scoring_direct_mutation_guard$;
@@ -273,6 +279,19 @@ begin
   end if;
 end;
 $scoring_clear_override$;
+
+do $scoring_service_direct_update_guard$
+begin
+  begin
+    update public.leads
+    set intent_score=99
+    where id='60000000-0000-0000-0000-000000000c01';
+    raise exception 'service_role directly mutated governed Lead scoring';
+  exception when others then
+    if sqlerrm not like 'CRM Lead scoring fields require the governed scoring mutation boundary%' then raise; end if;
+  end;
+end;
+$scoring_service_direct_update_guard$;
 
 do $scoring_actor_boundary$
 begin
