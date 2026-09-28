@@ -476,6 +476,12 @@ No arbitrary JSON/EAV free-for-all.
 - recurring human work where justified;
 - links to customer/deal/booking/order/case.
 
+**Current evidence checkpoint — PRODUCTION_VERIFIED for current justified scope (2026-09-28):**
+- PR #316 / migration `0131_crm_activity_task_v2` extends canonical `crm_tasks`; no second Task or Activity store exists.
+- Deal linkage, reminders, reminder acknowledgement, due/overdue reads and immutable audit-derived activity are live.
+- Production contains 0 CRM Tasks. Recurrence is `DEFERRED_WITH_REASON`; Booking/Order/Case links remain dependency-gated until those authorities exist.
+- Exact-main CI `36371693852` and Cloudflare Production Deploy `36371846971` succeeded on `main@11599810d8ffebd081e3571859c1bc3588a08ebe`.
+
 ## CRM-SUPPORT-CASE
 
 - ticket/case;
@@ -486,6 +492,12 @@ No arbitrary JSON/EAV free-for-all.
 - resolution;
 - CSAT;
 - linked conversation/customer/order/payment.
+
+**Current implementation checkpoint — ACTIVE / not yet Production evidence:**
+- Fresh audit found no canonical Support Case authority and selected this as the next justified CRM store.
+- PR #317 introduces one canonical Smart Core Case authority plus Smart Core SLA policy, with Account/Person/Conversation links to existing truth.
+- Order/Payment links remain REQUIRED but absent until those canonical modules exist; no placeholder foreign keys or fake records are allowed.
+- Production completion must not be claimed until exact-head CI, merge, migration, exact-main deploy and post-apply RLS/grant/advisor/no-backfill evidence are complete.
 
 ## CRM-DATA-QUALITY
 

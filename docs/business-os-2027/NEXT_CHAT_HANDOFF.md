@@ -1,5 +1,27 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+
+## Latest continuation checkpoint — CRM-ACTIVITY-TASK-V2 → CRM-SUPPORT-CASE — 2026-09-28
+
+Always re-read runtime/current main before mutation.
+
+Verified baseline:
+- main `11599810d8ffebd081e3571859c1bc3588a08ebe`, PR #316 merged;
+- exact-main CI `36371693852`: SUCCESS;
+- Cloudflare Production Deploy `36371846971`: SUCCESS;
+- Production migration `0131_crm_activity_task_v2` version `20260928025600`;
+- Production `crm_tasks=0`; no synthetic Task or recurrence evidence;
+- `CRM-ACTIVITY-TASK-V2` internally controlled current scope is Production-verified; recurrence and Booking/Order/Case links remain dependency/evidence gated.
+
+Fresh dependency audit:
+- `CRM-CUSTOM-OBJECTS`: defer until a real use case proves a typed object schema; existing custom-field governance is not permission to create arbitrary EAV objects.
+- `CRM-SUPPORT-CASE`: no canonical Case authority existed, while Omnichannel/Customer360 prove the use case. Selected as the next bounded Work Package.
+- `CRM-DATA-QUALITY`: remains required after Support Case; identity merge/split/conflict controls cover only part of it.
+
+Active implementation: PR #317 / branch `feat/crm-support-case`.
+The slice may create the first canonical Support Case + Smart Core SLA policy authority, link only to existing Account/Person/Conversation truth, keep Order/Payment links absent until those modules exist, use service-bound optimistic-versioned mutations, RLS reads, bounded audit and a real operator surface. It is not Production evidence until exact-head CI, merge, Production migration, exact-main deploy and post-apply verification succeed.
+
+
 ## Latest continuation checkpoint — CRM-ACCOUNT-V2 Production-verified — 2026-09-28
 
 Always re-read runtime/current main before mutation.
