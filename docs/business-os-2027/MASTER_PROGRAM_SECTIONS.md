@@ -493,11 +493,11 @@ No arbitrary JSON/EAV free-for-all.
 - CSAT;
 - linked conversation/customer/order/payment.
 
-**Current implementation checkpoint — ACTIVE / not yet Production evidence:**
-- Fresh audit found no canonical Support Case authority and selected this as the next justified CRM store.
-- PR #317 introduces one canonical Smart Core Case authority plus Smart Core SLA policy, with Account/Person/Conversation links to existing truth.
-- Order/Payment links remain REQUIRED but absent until those canonical modules exist; no placeholder foreign keys or fake records are allowed.
-- Production completion must not be claimed until exact-head CI, merge, migration, exact-main deploy and post-apply RLS/grant/advisor/no-backfill evidence are complete.
+**Current evidence checkpoint — PRODUCTION_VERIFIED for currently available dependencies (2026-09-28):**
+- PR #317 / migration `0132_crm_support_case` established one canonical Smart Core Support Case + SLA authority; PR #318 / `0133_crm_support_case_fk_index_hardening` closed its FK-index findings.
+- Account/Person/Conversation linkage, priority, SLA, assignment, escalation, resolution and CSAT are governed.
+- Production has 0 Cases and 0 SLA policies; no synthetic acceptance data exists.
+- Order/Payment links remain REQUIRED but dependency-gated until those canonical modules exist.
 
 ## CRM-DATA-QUALITY
 
@@ -509,6 +509,12 @@ No arbitrary JSON/EAV free-for-all.
 - retention;
 - audit;
 - bulk operations with safety limits.
+
+**Current implementation checkpoint — ACTIVE / not yet Production evidence:**
+- Reuse `CRM-IDENTITY-GRAPH` for deterministic exact conflict review and governed MERGE/SPLIT/UNLINK; no second dedupe engine.
+- Active slice adds read-only quality scanning plus bounded atomic verified Contact import into canonical Business/Identity/Person relationships.
+- Import is capped at 100 rows / 256 KiB, idempotent by request key + content hash, ambiguity-fail-closed and PII-minimized in receipt/audit evidence.
+- Destructive retention is `DEFERRED_WITH_REASON` until an Organization-approved retention contract exists; this slice must not silently delete CRM evidence.
 
 ---
 
