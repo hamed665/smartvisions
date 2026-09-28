@@ -66,8 +66,10 @@ export function TaskActions({
         event.preventDefault();
         const form = event.currentTarget;
         const data = new FormData(form);
-        const businessId = String(data.get('businessId') || '');
+        const selectedBusinessId = String(data.get('businessId') || '');
         const dealId = String(data.get('dealId') || '');
+        const selectedDeal = dealId ? deals.find((deal) => deal.id === dealId) : null;
+        const businessId = selectedDeal?.businessId || selectedBusinessId;
         const dueAt = String(data.get('dueAt') || '');
         const reminderAt = String(data.get('reminderAt') || '');
         const ok = await request('POST', {
