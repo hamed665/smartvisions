@@ -362,10 +362,12 @@ export function buildPrecisionLeadPersistenceRow(input: {
   organizationId: string;
   businessId: string;
   qualification: ReturnType<typeof buildServiceFitQualification>;
+  actorUserId?: string;
 }) {
   if (!input.qualification.shouldContact || !input.qualification.primaryServiceId) {
     throw new Error('Only Tier A, catalog-ready prospects may be promoted to Leads');
   }
+  const scoredAt = new Date().toISOString();
   return {
     organization_id: input.organizationId,
     business_id: input.businessId,
@@ -375,6 +377,23 @@ export function buildPrecisionLeadPersistenceRow(input: {
     agent_mode: 'AUTO' as const,
     recommended_offer: input.qualification.primaryServiceId,
     score_reasons: input.qualification.reasons,
-    updated_at: new Date().toISOString(),
+    fit_score: input.qualification.serviceFitScore,
+    engagement_score: null,
+    scoring_source: 'HUNTER_SERVICE_FIT_V1' as const,
+    scoring_policy_version: 'sales-scoring-v1',
+    scoring_evidence: {
+      evidenceType: 'HUNTER_SERVICE_FIT',
+      qualificationConfidence: input.qualification.qualificationConfidence,
+      contactabilityScore: input.qualification.contactabilityScore,
+      needScore: input.qualification.needScore,
+      serviceFitScore: input.qualification.serviceFitScore,
+      revenuePotentialScore: input.qualification.revenuePotentialScore,
+      prospectTier: input.qualification.prospectTier,
+      primaryOfferFamily: input.qualification.primaryOfferFamily,
+    },
+    scoring_revision: 1,
+    scoring_updated_at: scoredAt,
+    scoring_updated_by_user_id: input.actorUserId ?? null,
+    updated_at: scoredAt,
   };
 }
