@@ -283,7 +283,7 @@ Each row is REQUIRED for the applicable complete-product scope; partial foundati
 - Dynamic evaluation is not consent and does not invoke Campaign/Workflow/provider sends.
 - `SEGMENT-SNAPSHOT` is now **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** from PR #324 / migration `0137_segment_snapshot`, exact-main CI `36411781776` and Cloudflare Production Deploy `36411960392` on `main@0e5e4e61be1d30c2ba134ed66a4ad1b2457a7c98`. Production has 0 Snapshots/0 members; no synthetic audience evidence is claimed. Snapshot membership remains historical evidence only, never consent or send permission.
 
-`SALES-SCORING` is now **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** from PR #326 / migration `0138_sales_scoring_governance`, exact-main CI `36424607322` and Cloudflare Production Deploy `36424885898` on `main@f6b08675d8c3a83aa6dccd8790fe9b9077e1c7ea`. Canonical score truth remains on `public.leads`; pre-existing Production Leads were not synthetically rescored/backfilled, manual override preserves deterministic base truth, and model suggestions remain advisory-only. `SALES-PIPELINE-V2` and `SALES-NEXT-ACTION` remain separate required Work Packages and are not implied complete by this disposition.
+`SALES-SCORING` is now **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** from PR #326 / migration `0138_sales_scoring_governance`, exact-main CI `36424607322` and Cloudflare Production Deploy `36424885898` on `main@f6b08675d8c3a83aa6dccd8790fe9b9077e1c7ea`. Canonical score truth remains on `public.leads`; pre-existing Production Leads were not synthetically rescored/backfilled, manual override preserves deterministic base truth, and model suggestions remain advisory-only. `SALES-PIPELINE-V2` is separately Production-verified below; `SALES-NEXT-ACTION` remains the next required Sales Work Package.
 
 ### SALES-SCORING checkpoint — 2026-09-28
 
@@ -292,6 +292,19 @@ Each row is REQUIRED for the applicable complete-product scope; partial foundati
 - Model suggestions cannot silently overwrite deterministic accepted score; explicit manual override preserves the underlying deterministic base score and carries actor/reason/time/expiry/correction evidence.
 - Production remains free of synthetic scoring acceptance data: all 19 existing Leads retain their prior scores and have zero/NULL new governance evidence until real operator/runtime actions occur.
 - Scoring and Segment membership do not imply consent or send permission, and the scoring path does not trigger provider sends or workflows.
+
+### SALES-PIPELINE-V2 checkpoint — 2026-09-28
+
+**Current evidence checkpoint — PRODUCTION_VERIFIED (2026-09-28):**
+- PR #329 / Production migration `0139_sales_pipeline_v2` extends the existing canonical `crm_pipelines + crm_pipeline_stages + crm_deals` authority. No second CRM, Pipeline engine, Deal store, Team store, commercial-history store or persisted weighted-amount truth was created.
+- Stages now carry basis-point probability, typed forecast category and bounded policies for amount, expected-close and Deal probability overrides. Terminal WON/LOST semantics are fixed to 10000/0 bps and CLOSED_WON/CLOSED_LOST.
+- Deals can reference the canonical `public.teams`, carry a policy-gated probability override, and require bounded typed close evidence plus authenticated actor attribution before governed WON/LOST completion.
+- `crm_deal_forecast_rows` derives effective probability and weighted amount instead of persisting a second commercial truth; `get_crm_pipeline_forecast` exposes bounded owner/team/currency forecast summaries through SECURITY INVOKER/RLS.
+- Exact-head CI `36429203959` succeeded on `b9ea52c29063f4aa19d52a3a9b24521fde373829`. Exact-main CI `36429525004` and Cloudflare Production Deploy `36429837860` succeeded on `main@6d609ebf4abcd2faadd8f474ec1a48849acdb434`.
+- Production migration version is `20260928135144`. Production remains honest at 0 Pipelines / 0 Stages / 0 Deals / 0 forecast rows; no synthetic commercial acceptance records were created.
+- Production RLS remains enabled on Pipelines, Stages and Deals. V2 policy/audit guards, Team/close-actor FKs and the security-invoker forecast view are live. Post-migration advisors show no new unindexed-FK finding for the V2 Deal Team or close-actor FKs; existing advisor debt remains separate.
+- Controlled PostgreSQL 17 acceptance proved stage-policy rejection, Team tenant isolation, probability override gating, derived weighted forecast, bounded terminal evidence, terminal immutability, RLS isolation, audit privacy and zero outbound/conversation side effects.
+- Disposition: current RC scope is **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**.
 
 | Sales | SALES-SCORING; SALES-PIPELINE-V2; SALES-NEXT-ACTION | Explainable qualification, pipelines, follow-up, ownership, forecast and real won/lost evidence; no blind automated outreach |
 | Marketing and retention | MARKETING-CAMPAIGNS; MARKETING-CONSENT; MARKETING-ATTRIBUTION; CUSTOMER-SUCCESS-LOYALTY | Opt-in/out, purpose, suppression, audience/version, caps, templates, experiment evidence, loyalty/referrals; no invented attribution |
