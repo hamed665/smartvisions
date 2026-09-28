@@ -291,36 +291,40 @@ end;
 $account_audit_privacy$;
 
 -- Restore fixtures to their pre-0130 governance state through the governed commands.
-perform *
-from public.set_crm_account_parent_manual(
-  '00000000-0000-0000-0000-000000000c01',
-  '00000000-0000-0000-0000-00000000c001',
-  '10000000-0000-0000-0000-000000000c02',
-  null,
-  null,
-  'Restore Account smoke hierarchy',
-  '{"restore":true}'::jsonb
-);
+do $account_restore$
+begin
+  perform *
+  from public.set_crm_account_parent_manual(
+    '00000000-0000-0000-0000-000000000c01',
+    '00000000-0000-0000-0000-00000000c001',
+    '10000000-0000-0000-0000-000000000c02',
+    null,
+    null,
+    'Restore Account smoke hierarchy',
+    '{"restore":true}'::jsonb
+  );
 
-perform *
-from public.set_crm_account_lifecycle_manual(
-  '00000000-0000-0000-0000-000000000c01',
-  '00000000-0000-0000-0000-00000000c001',
-  '10000000-0000-0000-0000-000000000c01',
-  'UNCLASSIFIED',
-  'Restore Account smoke lifecycle',
-  '{"restore":true}'::jsonb
-);
+  perform *
+  from public.set_crm_account_lifecycle_manual(
+    '00000000-0000-0000-0000-000000000c01',
+    '00000000-0000-0000-0000-00000000c001',
+    '10000000-0000-0000-0000-000000000c01',
+    'UNCLASSIFIED',
+    'Restore Account smoke lifecycle',
+    '{"restore":true}'::jsonb
+  );
 
-perform *
-from public.set_crm_account_owner_manual(
-  '00000000-0000-0000-0000-000000000c01',
-  '00000000-0000-0000-0000-00000000c001',
-  '10000000-0000-0000-0000-000000000c01',
-  null,
-  'Restore Account smoke owner',
-  '{"restore":true}'::jsonb
-);
+  perform *
+  from public.set_crm_account_owner_manual(
+    '00000000-0000-0000-0000-000000000c01',
+    '00000000-0000-0000-0000-00000000c001',
+    '10000000-0000-0000-0000-000000000c01',
+    null,
+    'Restore Account smoke owner',
+    '{"restore":true}'::jsonb
+  );
+end;
+$account_restore$;
 
 do $account_fixture_restored$
 begin
