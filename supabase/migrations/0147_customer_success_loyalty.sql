@@ -944,6 +944,8 @@ begin
     return;
   end if;
 
+  v_before_lifecycle:=v_campaign.customer_success_lifecycle;
+
   update public.campaigns
   set customer_success_lifecycle=v_lifecycle,
       updated_by_user_id=p_actor_user_id,
@@ -957,8 +959,8 @@ begin
   ) values (
     p_organization_id,'USER',p_actor_user_id::text,'MARKETING_CAMPAIGN_CUSTOMER_SUCCESS_CLASSIFIED',
     'CAMPAIGN',v_campaign.id::text,
-    jsonb_build_object('customerSuccessLifecycle',v_campaign.customer_success_lifecycle),
-    jsonb_build_object('customerSuccessLifecycle',v_lifecycle)
+    jsonb_build_object('customerSuccessLifecycle',v_before_lifecycle),
+    jsonb_build_object('customerSuccessLifecycle',v_campaign.customer_success_lifecycle)
   );
 
   return query select v_campaign.id,v_campaign.customer_success_lifecycle,false;
