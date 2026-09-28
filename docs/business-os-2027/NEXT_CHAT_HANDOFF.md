@@ -1,5 +1,33 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## Latest continuation checkpoint — CRM-DATA-QUALITY Production closeout — 2026-09-28
+
+Always re-read runtime/current main before mutation.
+
+Verified baseline:
+- main `4a1cf8d0064bf6f35f82987e6b5f78c2ee2f3bc1`, PR #319 merged;
+- exact-main CI `36401560832`: SUCCESS;
+- Cloudflare Production Deploy `36401836383`: SUCCESS;
+- Production migration `0134_crm_data_quality_foundation` version `20260928090829`;
+- Production `crm_data_import_batches=0`, `crm_people=0`, Person links/relationships=0; no synthetic import evidence;
+- read-only deterministic quality scan and bounded atomic verified Contact import are live over existing canonical CRM authorities;
+- import apply is service-role-only SECURITY INVOKER; quality read is authenticated-only SECURITY INVOKER; receipt table has RLS and authenticated read-only grants;
+- no Data-Quality-specific advisor regression was introduced;
+- retention/purge remains `DEFERRED_WITH_REASON` until an approved Organization retention contract exists.
+
+Disposition:
+- Data-quality scan/import/validation/normalization/audit/bounded-bulk paths: **PRODUCTION_VERIFIED + CONTROLLED_TEST_VERIFIED**.
+- Destructive retention execution: **DEFERRED_WITH_REASON**.
+- Therefore do not call the entire Work Package globally complete.
+
+Next bounded action:
+1. fresh-audit `CRM-CUSTOMER360-V2` against current Support Case authority and existing Notes/Conversation/Task/Deal sources;
+2. integrate only authorities that now actually exist; Support linkage is now justified;
+3. do not fabricate Booking/Quote/Order/Invoice/Payment/Consent/Document truth if those modules are absent;
+4. if Customer360 has no safe incremental gap, proceed to `SECTION SEGMENT_SALES_MARKETING / SEGMENT-V2`;
+5. preserve exact Production evidence and no-parallel-truth rules.
+
+
 ## Latest continuation checkpoint — CRM-SUPPORT-CASE → CRM-DATA-QUALITY — 2026-09-28
 
 Always re-read runtime/current main before mutation.

@@ -1,5 +1,22 @@
 # Smart Visions Growth OS — Current Production State
 
+## Superseding CRM Data Quality Production checkpoint — 2026-09-28
+
+- Canonical main: `4a1cf8d0064bf6f35f82987e6b5f78c2ee2f3bc1` after PR #319.
+- Exact-main CI `36401560832`: SUCCESS.
+- Cloudflare Production Deploy `36401836383`: SUCCESS on the same SHA.
+- Production Supabase migration `0134_crm_data_quality_foundation` is live as version `20260928090829`; merged migration file SHA `a63ff38551fb6153bd1841d177575677525c6063`.
+- `CRM-DATA-QUALITY` reuses canonical Business/Identity/Person authorities plus `CRM-IDENTITY-GRAPH`; no second dedupe engine, Person store, Account model or import-contact truth exists.
+- Deterministic read-only quality scan surfaces exact Person/Business identity conflicts, active People without active identity, canonical normalization mismatches and exact duplicate Business email/phone/domain evidence. It never fuzzy-matches or auto-merges.
+- Verified Contact import is bounded to 1–100 rows / 256 KiB, validates the whole batch before canonical mutation, is atomic, request-key/content-hash idempotent, OWNER/ADMIN/SALES_MANAGER governed and fails closed on ambiguous identity evidence.
+- Import apply reuses `record_crm_business_identity` and `create_or_resolve_crm_person_from_verified_identity`. Import receipts store bounded counts/hash only; raw imported PII is not copied into the receipt/audit summary.
+- Production stayed honest after migration: `crm_data_import_batches=0`, `crm_people=0`, `crm_person_identity_links=0`, `crm_person_business_relationships=0`, `crm_identities=47`, `crm_identity_links=47`, `businesses=19`. No synthetic import/Person/relationship evidence was created.
+- `crm_data_import_batches` has RLS enabled with authenticated SELECT only; authenticated INSERT/UPDATE/DELETE are denied. `get_crm_data_quality_summary` is authenticated-only SECURITY INVOKER; `apply_crm_verified_contact_import` is service-role-only SECURITY INVOKER.
+- Post-0134 advisors show no Data-Quality-specific security or unindexed-FK regression; remaining advisor findings are existing platform debt.
+- Disposition: implemented Data Quality scan/import/validation/normalization/audit/bounded-bulk paths are **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**. Irreversible retention/purge remains **DEFERRED_WITH_REASON** until an Organization-approved legal/business retention contract exists, so the entire Work Package is not reported globally complete.
+- Fresh next audit must re-evaluate `CRM-CUSTOMER360-V2` now that canonical Support Cases exist, then continue through the stable Work Package order without fabricating absent Booking/Commerce/Consent authorities.
+
+
 ## Superseding CRM Support Case Production checkpoint and Data Quality active slice — 2026-09-28
 
 - Canonical Production baseline before this active branch: `main@ec70f9e60cc8ece014c0ca1ba50a20a2c8badecb`.
