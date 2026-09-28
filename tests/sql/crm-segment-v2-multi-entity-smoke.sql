@@ -235,6 +235,15 @@ begin
     '{"kind":"PREDICATE","source":"CANONICAL","field":"state","operator":"EQ","value":"OPEN"}'::jsonb,
     'segment-v2-deal-open'
   );
+  v_first:=public.update_crm_segment_definition(
+    v_first.organization_id,
+    v_first.id,
+    v_first.version,
+    'Open Deals current',
+    '{"kind":"PREDICATE","source":"CANONICAL","field":"state","operator":"EQ","value":"OPEN"}'::jsonb,
+    'segment-v2-deal-open-definition-2'
+  );
+
   v_replay:=public.create_crm_segment(
     '00000000-0000-0000-0000-000000000c01',
     'DEAL',
@@ -243,7 +252,7 @@ begin
     'segment-v2-deal-open'
   );
   if v_first.id is distinct from v_replay.id then
-    raise exception 'SEGMENT-V2 exact replay changed Segment identity';
+    raise exception 'SEGMENT-V2 durable create replay changed Segment identity after definition update';
   end if;
 
   begin
