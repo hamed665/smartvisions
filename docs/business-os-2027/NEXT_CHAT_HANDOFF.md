@@ -1,5 +1,35 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## Active continuation checkpoint — SEGMENT-SNAPSHOT — 2026-09-28
+
+Always re-read runtime/current main before mutation.
+
+Verified Production baseline:
+- `SEGMENT-V2` PR #323 merged to `main@9762e5ce79022718ede2def30610b94843d7f591`;
+- exact-main CI `36409087711`: SUCCESS;
+- Cloudflare Production Deploy `36409341905`: SUCCESS;
+- Production migration `0136_segment_v2_multi_entity` version `20260928102302`;
+- Production Segments / Segment versions = 0 / 0; no synthetic Segment evidence;
+- dynamic Segment engine supports `LEAD | PERSON | DEAL | ACCOUNT` on canonical authorities with no persisted membership;
+- RLS and SECURITY INVOKER boundaries are live and no Segment-specific advisor regression was introduced.
+
+Current bounded Work Package: `SECTION SEGMENT_SALES_MARKETING / SEGMENT-SNAPSHOT`.
+Active branch: `feat/segment-snapshot`.
+
+Snapshot rules:
+1. snapshot exact immutable Segment semantic version, entity type and predicate hash;
+2. store exact frozen entity IDs separately from dynamic Segment definitions;
+3. creation is trusted service-bound and attributed to OWNER/ADMIN/SALES_MANAGER;
+4. authenticated Organization members may read reproducible snapshot evidence through RLS;
+5. request-key replay is idempotent and semantic conflicts fail closed;
+6. header/member UPDATE/DELETE are forbidden and deferred integrity verification binds member_count + membership_hash to exact rows;
+7. max 10,000 members in this RC slice; larger audiences fail closed until capacity evidence justifies a higher contract;
+8. member entity IDs intentionally survive later live-entity retention/deletion so historical audience evidence is not rewritten;
+9. Snapshot membership is not marketing consent, not a Workflow trigger and not permission to send;
+10. no Production snapshot may be fabricated to prove the happy path;
+11. exact-head CI, PostgreSQL 17 smoke, merge, Production migration 0137, exact-main deploy and post-apply verification are mandatory before completion is claimed.
+
+
 ## Active continuation checkpoint — SEGMENT-V2 multi-entity implementation — 2026-09-28
 
 Always re-read runtime/current main before mutation.

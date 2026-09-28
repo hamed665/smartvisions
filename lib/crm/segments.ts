@@ -62,6 +62,30 @@ export type CrmSegmentEvaluation = {
   nextCursor: string | null;
 };
 
+export type CrmSegmentSnapshotPurpose = 'MANUAL' | 'CAMPAIGN' | 'WORKFLOW' | 'EXPORT' | 'OTHER';
+
+export type CrmSegmentSnapshotRow = {
+  id: string;
+  organization_id: string;
+  segment_id: string;
+  segment_version: number;
+  entity_type: CrmSegmentEntityType;
+  predicate_hash: string;
+  member_count: number;
+  membership_hash: string;
+  purpose: CrmSegmentSnapshotPurpose;
+  source_ref: string;
+  request_key: string;
+  created_by_user_id: string;
+  created_at: string;
+};
+
+export type CrmSegmentSnapshotMember = {
+  ordinal: number;
+  entity_id: string;
+};
+
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CUSTOM_TYPES = new Set([
   'TEXT','LONG_TEXT','NUMBER','BOOLEAN','DATE','DATETIME',
@@ -378,7 +402,7 @@ export class CrmSegmentMutationError extends Error {
 
 function mapMutationError(message: string) {
   if (/not found/i.test(message)) return new CrmSegmentMutationError('NOT_FOUND', message);
-  if (/version conflict|changed concurrently/i.test(message)) {
+  if (/version conflict|changed concurrently|request key conflict/i.test(message)) {
     return new CrmSegmentMutationError('VERSION_CONFLICT', message);
   }
   if (/not permitted|row-level security|permission denied/i.test(message)) {
@@ -507,6 +531,97 @@ export async function evaluateCrmSegment(input: {
   }
 
   return row as unknown as CrmSegmentEvaluation;
+}
+
+export async function listCrmSegmentSnapshots(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  segmentId?: string | null;
+  limit?: number;
+  cursor?: { createdAt: string; id: string } | null;
+}) {
+  const limit = clampLimit(input.limit);
+  const { data, error } = await input.supabase.rpc('get_crm_segment_snapshots', {
+    p_organization_id: input.organizationId,
+    p_segment_id: input.segmentId ?? null,
+    p_limit: limit + 1,
+    p_before_created_at: input.cursor?.createdAt ?? null,
+    p_before_id: input.cursor?.id ?? null,
+  });
+  if (error) throw new Error(`CRM Segment Snapshot query failed: ${error.message}`);
+
+  const rows = (Array.isArray(data) ? data : []) as CrmSegmentSnapshotRow[];
+  const hasMore = rows.length > limit;
+  const items = rows.slice(0, limit);
+  const last = hasMore ? items.at(-1) : null;
+  return {
+    items,
+    nextCursor: last ? { createdAt: last.created_at, id: last.id } : null,
+  };
+}
+
+export async function listCrmSegmentSnapshotMembers(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  snapshotId: string;
+  limit?: number;
+  afterOrdinal?: number | null;
+}) {
+  const limit = clampLimit(input.limit);
+  const { data, error } = await input.supabase.rpc('get_crm_segment_snapshot_members', {
+    p_organization_id: input.organizationId,
+    p_snapshot_id: input.snapshotId,
+    p_limit: limit + 1,
+    p_after_ordinal: input.afterOrdinal ?? null,
+  });
+  if (error) throw new Error(`CRM Segment Snapshot member query failed: ${error.message}`);
+
+  const rows = (Array.isArray(data) ? data : []) as CrmSegmentSnapshotMember[];
+  const hasMore = rows.length > limit;
+  const items = rows.slice(0, limit);
+  const last = hasMore ? items.at(-1) : null;
+  return {
+    items,
+    nextCursor: last ? last.ordinal : null,
+  };
+}
+
+export async function createCrmSegmentSnapshot(input: {
+  service: SupabaseClient;
+  organizationId: string;
+  actorUserId: string;
+  segmentId: string;
+  segmentVersion?: number | null;
+  purpose: CrmSegmentSnapshotPurpose;
+  sourceRef: string;
+  requestKey: string;
+}) {
+  const { data, error } = await input.service.rpc('create_crm_segment_snapshot', {
+    p_organization_id: input.organizationId,
+    p_actor_user_id: input.actorUserId,
+    p_segment_id: input.segmentId,
+    p_segment_version: input.segmentVersion ?? null,
+    p_purpose: input.purpose,
+    p_source_ref: input.sourceRef,
+    p_request_key: input.requestKey,
+  });
+  if (error) throw mapMutationError(error.message);
+
+  const row = object(data);
+  if (!row
+      || typeof row.id !== 'string'
+      || !UUID_RE.test(row.id)
+      || typeof row.segment_id !== 'string'
+      || !UUID_RE.test(row.segment_id)
+      || typeof row.segment_version !== 'number'
+      || !isCrmSegmentEntityType(row.entity_type)
+      || typeof row.predicate_hash !== 'string'
+      || typeof row.member_count !== 'number'
+      || typeof row.membership_hash !== 'string'
+      || typeof row.created_at !== 'string') {
+    throw new Error('CRM Segment Snapshot creation returned invalid evidence');
+  }
+  return row as unknown as CrmSegmentSnapshotRow;
 }
 
 export async function createCrmLeadSegment(input: {

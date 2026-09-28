@@ -1,17 +1,25 @@
-import { listCrmSegments } from '@/lib/crm/segments';
+import { listCrmSegments, listCrmSegmentSnapshots } from '@/lib/crm/segments';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { SegmentActions } from './segment-actions';
+import { SegmentSnapshotPanel } from './segment-snapshot-panel';
 
 export const dynamic = 'force-dynamic';
 
 export default async function SegmentsPage() {
   const { supabase, organizationId, role } = await getCurrentOrganization();
-  const page = await listCrmSegments({
-    supabase,
-    organizationId,
-    includeArchived: true,
-    limit: 100,
-  });
+  const [page, snapshotPage] = await Promise.all([
+    listCrmSegments({
+      supabase,
+      organizationId,
+      includeArchived: true,
+      limit: 100,
+    }),
+    listCrmSegmentSnapshots({
+      supabase,
+      organizationId,
+      limit: 50,
+    }),
+  ]);
 
   const canManage = ['OWNER','ADMIN','SALES_MANAGER'].includes(String(role));
   const active = page.items.filter(segment => segment.status === 'ACTIVE').length;
@@ -44,9 +52,16 @@ export default async function SegmentsPage() {
       segments={page.items}
     />
 
+    <SegmentSnapshotPanel
+      organizationId={organizationId}
+      canManage={canManage}
+      segments={page.items}
+      snapshots={snapshotPage.items}
+    />
+
     <section className="panel">
       <strong>Audience boundary</strong>
-      <p className="muted">This surface owns dynamic Segment definitions only. Immutable audience snapshots are a separate Work Package. Custom-field predicates are available only where the canonical custom-field authority exists: Lead and Deal.</p>
+      <p className="muted">Dynamic Segment definitions and immutable snapshots remain separate authorities. Snapshot membership is frozen historical evidence, never consent or send permission. Custom-field predicates are available only where the canonical custom-field authority exists: Lead and Deal.</p>
     </section>
   </div>;
 }
