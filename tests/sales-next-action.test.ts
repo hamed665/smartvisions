@@ -85,6 +85,15 @@ describe('SALES-NEXT-ACTION governance', () => {
     expect(shell).toContain("['Next Actions', '/next-actions']");
   });
 
+  it('normalizes enum and text source statuses in the Production hotfix', () => {
+    const hotfix = readFileSync('supabase/migrations/0141_sales_next_action_status_cast_fix.sql','utf8');
+    expect(hotfix).toContain('t.status::text as source_status');
+    expect(hotfix).toContain('la.status::text as source_status');
+    expect(hotfix).toContain('da.state::text as source_status');
+    expect(hotfix).not.toMatch(/create table/i);
+    expect(hotfix).not.toMatch(/insert into/i);
+  });
+
   it('runs PostgreSQL 17 acceptance in CI', () => {
     expect(ci).toContain('sales-next-action-smoke.sql');
   });
