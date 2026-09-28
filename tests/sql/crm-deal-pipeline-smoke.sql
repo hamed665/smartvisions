@@ -248,7 +248,10 @@ begin
     on d.organization_id=s.organization_id and d.pipeline_id=s.pipeline_id
   where d.id=v_deal and s.category='WON';
 
-  update public.crm_deals set stage_id=v_won where id=v_deal;
+  update public.crm_deals
+  set stage_id=v_won,
+      close_evidence='{"sourceType":"OPERATOR_CONFIRMED","sourceRef":"foundation-won-fixture"}'::jsonb
+  where id=v_deal;
 
   if not exists (
     select 1 from public.crm_deals
@@ -302,7 +305,9 @@ begin
   end;
 
   update public.crm_deals
-  set lost_reason='Budget unavailable', stage_id=v_lost
+  set lost_reason='Budget unavailable',
+      close_evidence='{"sourceType":"OPERATOR_CONFIRMED","sourceRef":"foundation-lost-fixture"}'::jsonb,
+      stage_id=v_lost
   where id=v_deal;
 
   if not exists (
