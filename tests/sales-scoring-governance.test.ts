@@ -53,6 +53,7 @@ describe('SALES-SCORING canonical Lead governance', () => {
     expect(canMutateCrmLeadScoring('SALES_AGENT')).toBe(false);
     expect(migration).toContain("current_user<>'service_role'");
     expect(migration).toContain('CRM Lead scoring fields require the governed scoring mutation boundary');
+    expect(migration).toContain("current_user<>'service_role'");
     expect(api).toContain('createSupabaseServiceClient()');
   });
 
@@ -61,6 +62,12 @@ describe('SALES-SCORING canonical Lead governance', () => {
     expect(migration).toContain('CRM_LEAD_DETERMINISTIC_SCORE_RECORDED');
     expect(migration).toContain('CRM_LEAD_ENGAGEMENT_RECOMPUTED');
     expect(migration).not.toMatch(/create table(?: if not exists)? public\.crm_lead_score_(history|events|receipts)/i);
+  });
+
+  it('bounds engagement evidence scans instead of walking unbounded message history', () => {
+    expect(migration).toContain('limit 100');
+    expect(migration).toContain('limit 500');
+    expect(migration).toContain("'CRM_ENGAGEMENT_V1'");
   });
 
   it('stamps new Hunter scored Lead inserts with bounded source provenance', () => {
