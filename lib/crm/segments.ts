@@ -138,11 +138,11 @@ function validateTimestampPredicate(operator: unknown, value: unknown) {
 }
 
 function enumValueValid(value: unknown, allowed: readonly string[]) {
-  return typeof value === 'string' && allowed.includes(value.toUpperCase());
+  return typeof value === 'string' && allowed.includes(value);
 }
 
 function enumListValid(value: unknown, allowed: readonly string[]) {
-  return isStringArray(value) && (value as string[]).every(item => allowed.includes(item.toUpperCase()));
+  return isStringArray(value) && (value as string[]).every(item => allowed.includes(item));
 }
 
 function validateCanonical(
@@ -187,7 +187,7 @@ function validateCanonical(
 
   if (field === 'currency' && entityAllows('DEAL')) {
     if (!validateTextPredicate(operator, value)) return false;
-    const validCurrency = (item: string) => /^[A-Z]{3}$/.test(item.toUpperCase());
+    const validCurrency = (item: string) => /^[A-Z]{3}$/.test(item);
     return Array.isArray(value)
       ? (value as string[]).every(validCurrency)
       : typeof value === 'string' && validCurrency(value);
@@ -204,7 +204,23 @@ function validateCanonical(
       : enumValueValid(value, allowed);
   }
 
-  if (['country_code','city','category','hierarchy_relation'].includes(field) && entityAllows('ACCOUNT')) {
+  if (field === 'country_code' && entityAllows('ACCOUNT')) {
+    if (!validateTextPredicate(operator, value)) return false;
+    const validCountry = (item: string) => /^[A-Z]{2}$/.test(item);
+    return Array.isArray(value)
+      ? (value as string[]).every(validCountry)
+      : typeof value === 'string' && validCountry(value);
+  }
+
+  if (field === 'hierarchy_relation' && entityAllows('ACCOUNT')) {
+    if (!validateTextPredicate(operator, value)) return false;
+    const allowed = ['BRANCH_OF','SUBSIDIARY_OF','DIVISION_OF'] as const;
+    return operator === 'IN' || operator === 'NOT_IN'
+      ? enumListValid(value, allowed)
+      : enumValueValid(value, allowed);
+  }
+
+  if (['city','category'].includes(field) && entityAllows('ACCOUNT')) {
     return validateTextPredicate(operator, value);
   }
 
@@ -335,7 +351,7 @@ function validateNode(
 
 export function isCrmSegmentEntityType(value: unknown): value is CrmSegmentEntityType {
   return typeof value === 'string'
-    && (CRM_SEGMENT_ENTITY_TYPES as readonly string[]).includes(value.toUpperCase());
+    && (CRM_SEGMENT_ENTITY_TYPES as readonly string[]).includes(value);
 }
 
 export function parseCrmSegmentPredicateTree(
