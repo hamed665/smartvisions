@@ -54,6 +54,13 @@ describe('CRM-CUSTOMER360-V2 Person context', () => {
     expect(migration).toContain('entity was not found in the Organization');
   });
 
+  it('allows only service-role Person-context-only updates through the existing Deal guard', () => {
+    expect(migration).toContain("current_user = 'service_role'");
+    expect(migration).toContain("to_jsonb(new) - array[");
+    expect(migration).toContain("'person_id','person_link_method','person_link_source_ref'");
+    expect(migration).toContain('new.version := old.version + 1');
+  });
+
   it('preserves direct Customer 360 links across governed Person merge', () => {
     expect(migration).toContain('reconcile_crm_customer360_person_merge');
     expect(migration).toContain('set person_id = new.merged_into_person_id');
