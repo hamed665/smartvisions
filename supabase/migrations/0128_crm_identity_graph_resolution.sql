@@ -32,7 +32,7 @@ begin
     raise exception 'CRM identity candidate limit must be between 1 and 100';
   end if;
 
-  if not public.is_org_member(p_organization_id, (select auth.uid())) then
+  if not public.is_org_member(p_organization_id) then
     raise exception 'CRM identity candidate read requires Organization membership';
   end if;
 
