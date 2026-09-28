@@ -356,6 +356,8 @@ select
 from public.crm_tasks
 where request_key='fixture-next-action-lead-accept';
 
+grant select on sales_next_action_task_baseline to service_role;
+
 set role service_role;
 
 do $next_action_service_direct_guard$
