@@ -838,7 +838,18 @@ Canonical main at this checkpoint: `b9dc839dcc30fbfb398852fc18258196290ab75c`.
 - Shadow Mode remains ON; Kill Switch and pause controls remain unchanged.
 - Existing Hunter runtime/data was preserved.
 
-**Fresh continuation cursor:** `SECTION SEGMENT_SALES_MARKETING -> MARKETING-CONSENT`.
+**2026-09-29 MARKETING-CONSENT Production closeout**
 
-For `MARKETING-CONSENT`, first map existing suppression/DNC/WhatsApp opt-in/provider/channel-policy evidence and the canonical send gate. Segment membership, Campaign approval and CRM status are not send consent. Do not create a parallel suppression, preference or provider-permission authority.
+- PR #337 delivered MARKETING-CONSENT governance. Exact-head CI `36476465786` succeeded on `145fe69c3d4617d399a76842e0e516bdf8999c89`; the PR merged to `main@2ad80936aaae62020face3b263fc5b98cb666790`.
+- Exact-main CI `36476868405` and Cloudflare Production Deploy `36477188658` both succeeded on the same main SHA.
+- Production migration `0144_marketing_consent_governance` is applied as version `20260928205708`.
+- Canonical permission evidence reuses `public.lead_sources`; canonical suppression/DNC remains `public.suppression_list`. No second Consent, preference, provider-permission or suppression authority was created.
+- Permission evidence is append-only behind `lead_sources_marketing_permission_guard`. `record_marketing_permission_event` is SECURITY INVOKER and service-role-only with explicit human/preference-center provenance. `get_marketing_permission` and `get_marketing_preferences` are SECURITY INVOKER and readable by authenticated/service-role callers under existing RLS.
+- Production verification remains honest: 0 marketing permission events, 0 effective preferences, 1 existing suppression row and 43 existing outreach messages. Post-migration verification observed 0 new outbound rows in the preceding 10 minutes. No synthetic opt-in/opt-out evidence was created.
+- The post-0144 advisor pass introduced no new Marketing security or unindexed-FK regression; existing platform advisor debt remains separate.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the governed internal permission path. Real customer opt-in/opt-out evidence remains data-driven and must never be fabricated.
+
+**Fresh continuation cursor:** `SECTION SEGMENT_SALES_MARKETING -> MARKETING-ATTRIBUTION`.
+
+For `MARKETING-ATTRIBUTION`, first audit existing outreach/reply/conversation/Lead/Deal and future booking/order/payment evidence. Do not infer attribution from Segment membership, Campaign approval, or direct conversion evidence alone; do not fabricate click/view events or create a second revenue truth.
 
