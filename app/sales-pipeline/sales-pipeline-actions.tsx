@@ -167,7 +167,9 @@ export function SalesPipelineActions(props: {
                   name:String(form.get('name')||''),
                   position:Number(form.get('position')),
                   is_active:form.get('isActive')==='on',
-                  defaultProbabilityPercent:Number(form.get('probability')),
+                  defaultProbabilityPercent:stage.category==='OPEN'
+                    ? Number(form.get('probability'))
+                    : stage.default_probability_percent,
                   forecastCategory:String(form.get('forecastCategory')||stage.forecast_category),
                   requiresAmount:form.get('requiresAmount')==='on',
                   requiresExpectedClose:form.get('requiresExpectedClose')==='on',
@@ -228,7 +230,7 @@ export function SalesPipelineActions(props: {
         <label>Pipeline<select name="pipelineId" value={createPipelineId} onChange={event=>setCreatePipelineId(event.target.value)} required>
           {props.pipelines.filter(p=>p.status==='ACTIVE').map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
         </select></label>
-        <label>Stage<select name="stageId" required defaultValue={activeStages.find(s=>s.category==='OPEN')?.id ?? ''}>
+        <label>Stage<select key={createPipelineId} name="stageId" required defaultValue={activeStages.find(s=>s.category==='OPEN')?.id ?? ''}>
           {activeStages.map(s=><option key={s.id} value={s.id}>{s.name} · {s.default_probability_percent}%</option>)}
         </select></label>
         <label>Amount<input name="amount" type="number" min={0} step="0.0001"/></label>
