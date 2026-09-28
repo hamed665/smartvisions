@@ -74,7 +74,8 @@ describe('SALES-NEXT-ACTION governance', () => {
     expect(service).toContain('acceptCrmNextActionCandidate');
     expect(route).toContain('staleHours');
     expect(route).toContain("Cache-Control': 'private, no-store");
-    expect(page).toContain('Prioritized queue');
+    expect(page).toContain('Next Actions');
+    expect(controls).toContain('Prioritized queue');
     expect(shell).toContain("['Next Actions', '/next-actions']");
   });
 
