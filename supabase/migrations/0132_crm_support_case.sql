@@ -953,6 +953,8 @@ $$;
 
 revoke all on function public.crm_support_actor_role(uuid,uuid)
   from public,anon,authenticated,service_role;
+grant execute on function public.crm_support_actor_role(uuid,uuid)
+  to service_role;
 revoke all on function public.guard_crm_support_case_scope()
   from public,anon,authenticated,service_role;
 
