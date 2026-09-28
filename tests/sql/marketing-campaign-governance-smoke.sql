@@ -240,7 +240,7 @@ begin
     '00000000-0000-0000-0000-000000000c01',
     'All linked Leads',
     '{"kind":"PREDICATE","source":"CANONICAL","field":"business_id","operator":"IS_SET"}'::jsonb,
-    'segment-create-linked-leads'
+    'marketing-campaign-linked-leads'
   );
 
   v_eval:=public.evaluate_crm_lead_segment(
@@ -275,7 +275,7 @@ begin
     into v_segment
   from public.crm_segments
   where organization_id='00000000-0000-0000-0000-000000000c01'
-    and last_request_key='segment-create-linked-leads';
+    and last_request_key='marketing-campaign-linked-leads';
 
   if v_segment.id is null or v_segment.entity_type<>'LEAD' then
     raise exception 'MARKETING-CAMPAIGNS LEAD Segment fixture is missing';
