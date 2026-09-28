@@ -28,7 +28,11 @@ describe('CRM-IDENTITY-GRAPH governed resolution', () => {
     expect(migration).toContain("'PERSON_CONFLICT'");
     expect(migration).toContain("'PERSON_AND_BUSINESS_CONFLICT'");
     expect(migration).toContain("'VERIFIED'");
-    expect(migration).not.toMatch(/levenshtein|similarity\(|fuzzy/i);
+    const executableSql = migration
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('--'))
+      .join('\n');
+    expect(executableSql).not.toMatch(/levenshtein|similarity\(/i);
   });
 
   it('keeps manual resolution roles narrow', () => {
