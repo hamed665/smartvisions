@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getCurrentOrganization } from '@/lib/supabase/org';
+import { createSupabaseServiceClient } from '@/lib/supabase/service';
 import { controlledGooglePlaceQualification } from '@/lib/hunters/business/google-places-controlled';
 import { buildGrowthOpportunity, buildGrowthOpportunityPersistenceRow } from '@/lib/hunters/business/growth-routing';
 import { buildPrecisionLeadPersistenceRow } from '@/lib/hunters/business/service-fit';
@@ -119,8 +120,9 @@ export async function qualifyGooglePlacesPriorityBatch(form: FormData) {
           const{data:existingLead,error:existingLeadError}=await ctx.supabase.from('leads').select('id').eq('organization_id',ctx.organizationId).eq('business_id',businessId).maybeSingle();
           if(existingLeadError)throw existingLeadError;leadId=existingLead?.id?String(existingLead.id):null;
           if(!leadId){
-            const leadRow=buildPrecisionLeadPersistenceRow({organizationId:ctx.organizationId,businessId,qualification:q});
-            const{data:insertedLead,error:insertLeadError}=await ctx.supabase.from('leads').insert(leadRow).select('id').single();
+            const leadRow=buildPrecisionLeadPersistenceRow({organizationId:ctx.organizationId,businessId,qualification:q,actorUserId:ctx.userId});
+            const scoringService=createSupabaseServiceClient();
+            const{data:insertedLead,error:insertLeadError}=await scoringService.from('leads').insert(leadRow).select('id').single();
             if(insertLeadError){if(insertLeadError.code!=='23505')throw insertLeadError;const{data:racedLead,error:racedLeadError}=await ctx.supabase.from('leads').select('id').eq('organization_id',ctx.organizationId).eq('business_id',businessId).single();if(racedLeadError)throw racedLeadError;leadId=String(racedLead.id);}else{leadId=String(insertedLead.id);leadsCreated+=1;}
           }
         }else{rejected+=1;if(q.evidenceGaps.length)evidenceOnly+=1;}
