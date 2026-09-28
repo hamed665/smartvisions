@@ -81,8 +81,8 @@ describe('CRM-CUSTOMER360-V2 Person context', () => {
   });
 
   it('keeps unavailable canonical modules explicit instead of fabricating them', () => {
-    for (const module of ['bookings', 'quotes', 'orders', 'invoices', 'payments', 'supportCases', 'documents', 'consent']) {
-      expect(migration).toContain(`'${module}', 'MODULE_NOT_IMPLEMENTED'`);
+    for (const moduleName of ['bookings', 'quotes', 'orders', 'invoices', 'payments', 'supportCases', 'documents', 'consent']) {
+      expect(migration).toContain(`'${moduleName}', 'MODULE_NOT_IMPLEMENTED'`);
     }
   });
 
