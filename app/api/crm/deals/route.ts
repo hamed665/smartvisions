@@ -6,6 +6,7 @@ import {
   updateCrmDeal,
   CrmDealMutationError,
   type CrmDealState,
+  type CrmForecastCategory,
 } from '@/lib/crm/deals';
 import { createClient } from '@/lib/supabase/server';
 
@@ -13,6 +14,7 @@ export const dynamic = 'force-dynamic';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const STATES: CrmDealState[] = ['OPEN','WON','LOST'];
+const FORECAST_CATEGORIES: CrmForecastCategory[] = ['PIPELINE','BEST_CASE','COMMIT','CLOSED','OMITTED'];
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -136,6 +138,15 @@ export async function POST(request: Request) {
     ? parseIso(body.expectedCloseAt)
     : null;
   const ownerUserId = body.ownerUserId;
+  const ownerTeamId = body.ownerTeamId === null || body.ownerTeamId === undefined
+    ? null
+    : body.ownerTeamId;
+  const probabilityPercent = body.probabilityPercent === null || body.probabilityPercent === undefined
+    ? null
+    : Number(body.probabilityPercent);
+  const forecastCategory = body.forecastCategory === null || body.forecastCategory === undefined
+    ? null
+    : body.forecastCategory as CrmForecastCategory;
   const requestKey = typeof body.requestKey === 'string' ? body.requestKey.trim() : '';
   const metadata = body.metadata ?? {};
 
@@ -150,6 +161,10 @@ export async function POST(request: Request) {
       || ((amount === null) !== (currency === null))
       || expectedCloseAt === undefined
       || !isUuid(ownerUserId)
+      || !optionalUuid(ownerTeamId)
+      || (probabilityPercent !== null && (!Number.isInteger(probabilityPercent) || probabilityPercent < 0 || probabilityPercent > 100))
+      || (forecastCategory !== null && !FORECAST_CATEGORIES.includes(forecastCategory))
+      || (mode === 'LEAD_CONVERSION' && (ownerTeamId !== null || probabilityPercent !== null || forecastCategory !== null))
       || requestKey.length < 1
       || requestKey.length > 200
       || !isObject(metadata)
@@ -191,6 +206,9 @@ export async function POST(request: Request) {
       currency,
       expectedCloseAt,
       ownerUserId,
+      ownerTeamId: ownerTeamId as string | null,
+      probabilityPercent,
+      forecastCategory,
       requestKey,
       metadata,
     });
@@ -234,7 +252,7 @@ export async function PATCH(request: Request) {
 
   const allowed = new Set([
     'title','stageId','amount','currency','expectedCloseAt',
-    'ownerUserId','lostReason','metadata',
+    'ownerUserId','ownerTeamId','probabilityPercent','forecastCategory','lostReason','metadata',
   ]);
   if (Object.keys(patch).some(key => !allowed.has(key))) {
     return NextResponse.json({ error: 'Unsupported CRM Deal patch field' }, { status: 400 });
@@ -256,6 +274,13 @@ export async function PATCH(request: Request) {
       || (currency !== undefined && currency !== null && !/^[A-Z]{3}$/.test(currency))
       || expectedCloseAt === undefined && Object.prototype.hasOwnProperty.call(patch,'expectedCloseAt')
       || (patch.ownerUserId !== undefined && !isUuid(patch.ownerUserId))
+      || (patch.ownerTeamId !== undefined && !optionalUuid(patch.ownerTeamId))
+      || (patch.probabilityPercent !== undefined
+        && (!Number.isInteger(Number(patch.probabilityPercent))
+          || Number(patch.probabilityPercent) < 0
+          || Number(patch.probabilityPercent) > 100))
+      || (patch.forecastCategory !== undefined
+        && !FORECAST_CATEGORIES.includes(patch.forecastCategory as CrmForecastCategory))
       || (patch.lostReason !== undefined && patch.lostReason !== null
         && (typeof patch.lostReason !== 'string' || patch.lostReason.length > 2000))
       || (patch.metadata !== undefined && !isObject(patch.metadata))) {
@@ -275,6 +300,11 @@ export async function PATCH(request: Request) {
         currency,
         expectedCloseAt,
         ownerUserId: patch.ownerUserId as string | undefined,
+        ownerTeamId: patch.ownerTeamId as string | null | undefined,
+        probabilityPercent: patch.probabilityPercent === undefined
+          ? undefined
+          : Number(patch.probabilityPercent),
+        forecastCategory: patch.forecastCategory as CrmForecastCategory | undefined,
         lostReason: patch.lostReason as string | null | undefined,
         metadata: patch.metadata as Record<string,unknown> | undefined,
       },
