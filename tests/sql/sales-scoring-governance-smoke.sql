@@ -220,6 +220,8 @@ $scoring_override$;
 
 reset role;
 
+reset role;
+
 insert into public.sales_conversations(
   id,organization_id,lead_id,channel,stage,last_inbound_at
 ) values (
