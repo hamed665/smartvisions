@@ -12,9 +12,9 @@
 create index if not exists outreach_messages_marketing_attribution_idx
   on public.outreach_messages(
     organization_id,
-    campaign_id,
     lead_id,
     sent_at,
+    campaign_id,
     id
   )
   where campaign_id is not null
@@ -85,6 +85,8 @@ begin
       and d.state='WON'
       and d.lead_id is not null
       and d.won_at is not null
+    order by d.won_at desc,d.id desc
+    limit p_limit
   ),
   touch_evidence as (
     select
@@ -124,10 +126,13 @@ begin
     left join public.reply_events re
       on re.organization_id=om.organization_id
      and re.outreach_message_id=om.id
+     and re.created_at>=om.sent_at
+     and re.created_at<=wd.outcome_at
     left join public.marketing_campaign_conversion_evidence ce
       on ce.organization_id=wd.organization_id
      and ce.campaign_id=c.id
      and ce.deal_id=wd.deal_id
+     and ce.occurred_at<=wd.outcome_at
   ),
   campaign_rollup as (
     select
@@ -231,8 +236,7 @@ begin
     v_model='LINEAR'
     or (v_model='FIRST_TOUCH' and r.first_rank=1)
     or (v_model='LAST_TOUCH' and r.last_rank=1)
-  order by r.outcome_at desc,r.deal_id,r.last_touch_at desc,r.campaign_id
-  limit p_limit;
+  order by r.outcome_at desc,r.deal_id,r.last_touch_at desc,r.campaign_id;
 end;
 $marketing_attribution$;
 
@@ -242,4 +246,4 @@ grant execute on function public.get_marketing_attribution(uuid,text,integer,int
   to authenticated,service_role;
 
 comment on function public.get_marketing_attribution(uuid,text,integer,integer) is
-  'Read-only, observational Marketing attribution over real sent campaign touchpoints and canonical WON Deals. Supports bounded FIRST_TOUCH/LAST_TOUCH/LINEAR credit. Never claims causality or collected revenue; explicit conversion evidence alone is insufficient without a real prior touchpoint.';
+  'Read-only, observational Marketing attribution over real sent campaign touchpoints and canonical WON Deals. p_limit bounds Deal outcomes so LINEAR credit is never truncated mid-Deal. Supports bounded FIRST_TOUCH/LAST_TOUCH/LINEAR credit. Never claims causality or collected revenue; explicit conversion evidence alone is insufficient without a real prior touchpoint.';

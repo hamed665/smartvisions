@@ -135,7 +135,7 @@ begin
     null,
     '60000000-0000-0000-0000-000000000c92',
     'Controlled evidence-only record. Must not create attribution without a sent touchpoint.',
-    '2026-09-28T11:00:00Z'::timestamptz,
+    now()-interval '15 minutes',
     'marketing-attribution-evidence-only'
   );
 end;
@@ -153,8 +153,8 @@ select
   c.id,
   'EMAIL','OUTBOUND','DELIVERED','attribution-provider-a',
   'Controlled attribution first touch',
-  '2026-09-28T08:00:00Z'::timestamptz,
-  '2026-09-28T08:00:00Z'::timestamptz,
+  now()-interval '40 minutes',
+  now()-interval '40 minutes',
   '{}'::jsonb
 from public.campaigns c
 where c.organization_id='00000000-0000-0000-0000-000000000c01'
@@ -172,8 +172,8 @@ select
   c.id,
   'EMAIL','OUTBOUND','DELIVERED','attribution-provider-b',
   'Controlled attribution last touch',
-  '2026-09-28T09:00:00Z'::timestamptz,
-  '2026-09-28T09:00:00Z'::timestamptz,
+  now()-interval '20 minutes',
+  now()-interval '20 minutes',
   '{}'::jsonb
 from public.campaigns c
 where c.organization_id='00000000-0000-0000-0000-000000000c01'
@@ -191,8 +191,8 @@ select
   c.id,
   'EMAIL','OUTBOUND','DELIVERED','attribution-provider-after-outcome',
   'Controlled post-outcome touch that must be ignored',
-  '2026-09-28T13:00:00Z'::timestamptz,
-  '2026-09-28T13:00:00Z'::timestamptz,
+  now()+interval '10 minutes',
+  now()+interval '10 minutes',
   '{}'::jsonb
 from public.campaigns c
 where c.organization_id='00000000-0000-0000-0000-000000000c01'
@@ -206,8 +206,8 @@ insert into public.sales_conversations(
   '20000000-0000-0000-0000-000000000c92',
   'EMAIL',
   'AUTO',
-  '2026-09-28T09:00:00Z'::timestamptz,
-  '2026-09-28T09:00:00Z'::timestamptz
+  now()-interval '20 minutes',
+  now()-interval '20 minutes'
 );
 
 insert into public.conversation_messages(
@@ -224,8 +224,8 @@ insert into public.conversation_messages(
   'Controlled exact provider-message linkage',
   'SENT',
   '{}'::jsonb,
-  '2026-09-28T09:00:00Z'::timestamptz,
-  '2026-09-28T09:00:00Z'::timestamptz
+  now()-interval '20 minutes',
+  now()-interval '20 minutes'
 );
 
 insert into public.reply_events(
@@ -241,7 +241,7 @@ insert into public.reply_events(
   80,
   true,
   false,
-  '2026-09-28T09:30:00Z'::timestamptz
+  now()-interval '15 minutes'
 );
 
 reset role;
@@ -271,8 +271,8 @@ begin
   set
     stage_id=v_won_stage,
     state='WON',
-    won_at='2026-09-28T12:00:00Z'::timestamptz,
-    expected_close_at='2026-09-28T12:00:00Z'::timestamptz,
+    won_at=now()-interval '10 minutes',
+    expected_close_at=now()-interval '10 minutes',
     close_evidence='{"sourceType":"OPERATOR_CONFIRMED","sourceRef":"controlled-attribution-smoke"}'::jsonb
   where organization_id='00000000-0000-0000-0000-000000000c01'
     and id='60000000-0000-0000-0000-000000000c92';
@@ -282,7 +282,7 @@ begin
     from public.crm_deals
     where id='60000000-0000-0000-0000-000000000c92'
       and state='WON'
-      and won_at='2026-09-28T12:00:00Z'::timestamptz
+      and won_at is not null
   ) then
     raise exception 'MARKETING-ATTRIBUTION controlled Deal did not reach WON';
   end if;
