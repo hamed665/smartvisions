@@ -687,3 +687,29 @@ Before mutation, re-audit current main/open PRs/exact-head CI, Production migrat
 
 For `MARKETING-ATTRIBUTION`, first audit existing outreach/reply/conversation/Lead/Deal and future booking/order/payment evidence. Do not infer attribution from Segment membership, Campaign approval, or direct conversion evidence alone; do not fabricate click/view events or create a second revenue truth.
 
+
+
+---
+
+
+## MARKETING-ATTRIBUTION Production closeout — 2026-09-29
+
+- Work Package: `SECTION SEGMENT_SALES_MARKETING -> MARKETING-ATTRIBUTION`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the current observational attribution scope.
+- PR #339 delivered the bounded read-only model on existing canonical authorities only. No second attribution table, revenue truth, Campaign store, CRM store, send path or provider truth was created.
+- Implementation merge: `main@9e8373bb37102b3763b92d19abda66ee3acf724a`.
+- Exact-head CI: `36484937638` SUCCESS on `dcd9fbbf51f6857cacee787f546cf11d7d4001af`.
+- Exact-main CI: `36485322314` SUCCESS.
+- Cloudflare Production Deploy: `36485633187` SUCCESS, including release-candidate smoke, exact validated bundle promotion, routed Production smoke and safe API/webhook rejection smoke.
+- Production migration `0145_marketing_attribution_observational` is live. A concurrent idempotent promotion recorded two byte-equivalent migration-history entries, versions `20260928212346` and `20260928212358`. The schema itself contains only the intended single function/index; no manual migration-history deletion was performed.
+- Production runtime: `get_marketing_attribution(...,'LAST_TOUCH',30,200)` executes successfully under the real Smart Visions authenticated OWNER/RLS context.
+- Current honest Production evidence: 0 MARKETING Campaigns, 0 WON Deals, 43 existing outreach messages, 0 Marketing conversion-evidence rows, therefore 0 attribution rows. No synthetic Campaign, Deal, message, click, view, payment or revenue fixture was created.
+- `get_marketing_attribution` is SECURITY INVOKER; authenticated/service_role may execute, anon may not. No persisted `marketing_attribution*` table/view/materialized authority exists.
+- Attribution requires real sent MARKETING outreach before a canonical WON Deal. Exact Conversation linkage requires the same provider message ID. FIRST_TOUCH/LAST_TOUCH/LINEAR are bounded observational credit models only; `causal_claim=false` and `revenue_claimed=false`.
+- Deal amount remains sales evidence, not collected revenue. Booking/Order/Invoice/Payment attribution stays deferred until their canonical authorities exist.
+- Post-apply advisors show no Attribution-specific security finding. The new partial index is currently reported only as unused, expected while Production has no MARKETING Campaign/WON Deal attribution workload.
+- No outbound/provider send side effect was introduced; Shadow Mode and existing safety controls remain unchanged.
+
+**Fresh continuation cursor:** `SECTION SEGMENT_SALES_MARKETING -> HUNTER-CUSTOMER-MODULE`.
+
+Before mutation, re-audit current main/open PRs/exact-head CI and Production Hunter/discovery/enrichment/credit/dedupe/CRM-promotion/compliance authorities. Extend the existing Hunter only; do not create a second prospect, discovery, enrichment, credit, CRM, consent/suppression or provider-send authority.
