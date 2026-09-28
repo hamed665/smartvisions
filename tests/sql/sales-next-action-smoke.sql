@@ -24,8 +24,9 @@ insert into public.leads(
   );
 
 insert into public.followup_jobs(
-  organization_id,lead_id,sequence,scheduled_at,status,channel
+  id,organization_id,lead_id,sequence,scheduled_at,status,channel
 ) values (
+  '70000000-0000-0000-0000-000000000c91',
   '00000000-0000-0000-0000-000000000c01',
   '20000000-0000-0000-0000-000000000c91',
   91,
