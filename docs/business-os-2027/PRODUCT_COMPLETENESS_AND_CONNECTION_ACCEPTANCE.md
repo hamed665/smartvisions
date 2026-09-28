@@ -296,6 +296,13 @@ Each row is REQUIRED for the applicable complete-product scope; partial foundati
 | Locale/accessibility | UX-LOCALIZATION; UX-ACCESSIBILITY | English core UI, Arabic/RTL and planned Persian/Hindi/Urdu needs, correct dates/currency/timezone, keyboard/screen reader, mobile forms and errors |
 | Operations/security | ENT-IAM; ENT-DATA-GOVERNANCE; ENT-SECURITY; ENT-INCIDENT; ENT-OBSERVABILITY; ENT-PERFORMANCE; ENT-BACKUP-DR; ENT-RELEASE; ENT-CONTRACTS; COMM-OPERATIONS | Auth/session/MFA, governance/deletion/export/residency, audit, alerts/SLOs, capacity, upgrades, restore drills/rollback and documented support terms |
 
+### IDENTITY_CRM evidence checkpoint — 2026-09-28
+
+- `CRM-PERSON-CONTACT` and the internally controlled `CRM-IDENTITY-GRAPH` paths are Production-verified without fabricating People.
+- PR #313 / migration `0129_crm_customer360_v2_person_context` Production-verified Person-centric composition for existing Conversation/Task/Deal/Lead authorities. The complete Customer 360 acceptance row remains open for Notes, Booking, Quote, Order, Invoice/Payment, Support, Consent and Documents.
+- `CRM-ACCOUNT-V2` implementation must reuse `public.businesses` as canonical external Company/Account truth and `crm_person_business_relationships` as Contacts. `tenant_businesses` / `branches` remain tenant operating hierarchy. Existing Production Companies may not be auto-promoted to Customer lifecycle merely because they were discovered or have Leads.
+- `CRM-DATA-QUALITY` remains open beyond the already implemented identity merge/split/conflict controls; import/normalization/retention/bulk-safety acceptance is not silently inherited.
+
 ### COMM-DETAIL — Inbox/media usability
 
 Attachment authorization must cover direct/download URLs, previews, expiry, revoked access, file type/size limits, unsafe content and isolated storage access. Search and counters must not leak inaccessible contacts. Drafts, internal notes and blocked/unsent messages are not customer-visible history. Saved replies need scope, permissions, language and version control. New inbound while a conversation is open must obey defined read-state semantics.
