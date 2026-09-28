@@ -66,37 +66,38 @@ export default async function SalesPipelinePage() {
 
   if (canCreateDeals) {
     const service = createSupabaseServiceClient();
-    const [membersResult, businessesResult] = await Promise.all([
-      service
-        .from('organization_members')
-        .select('user_id,role')
-        .eq('organization_id', organizationId)
-        .in('role',['OWNER','ADMIN','SALES_MANAGER','SALES_AGENT'])
-        .limit(500),
-      service
-        .from('businesses')
-        .select('id,name')
-        .eq('organization_id', organizationId)
-        .order('name')
-        .limit(250),
-    ]);
+    const businessesResult = await service
+      .from('businesses')
+      .select('id,name')
+      .eq('organization_id', organizationId)
+      .order('name')
+      .limit(250);
 
-    if (membersResult.error) {
-      throw new Error('CRM Pipeline owner lookup failed: ' + membersResult.error.message);
-    }
     if (businessesResult.error) {
       throw new Error('CRM Pipeline Account lookup failed: ' + businessesResult.error.message);
     }
 
-    owners = (membersResult.data ?? []).map(row => ({
-      userId:String(row.user_id),
-      role:String(row.role),
-      businessWide:true,
-    }));
     businesses = (businessesResult.data ?? []).map(row => ({
       id:String(row.id),
       name:String(row.name),
     }));
+
+    if (canManagePipeline) {
+      const membersResult = await service
+        .from('organization_members')
+        .select('user_id,role')
+        .eq('organization_id', organizationId)
+        .in('role',['OWNER','ADMIN','SALES_MANAGER','SALES_AGENT'])
+        .limit(500);
+      if (membersResult.error) {
+        throw new Error('CRM Pipeline owner lookup failed: ' + membersResult.error.message);
+      }
+      owners = (membersResult.data ?? []).map(row => ({
+        userId:String(row.user_id),
+        role:String(row.role),
+        businessWide:true,
+      }));
+    }
   }
 
   return <div>
@@ -120,6 +121,7 @@ export default async function SalesPipelinePage() {
       canManagePipeline={canManagePipeline}
       canManageDeals={canManageDeals}
       canCreateDeals={canCreateDeals}
+      canReassignOwner={canManagePipeline}
       pipelines={pipelineData.pipelines}
       stages={pipelineData.stages}
       deals={dealsPage.items}
