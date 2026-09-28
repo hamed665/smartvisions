@@ -18,6 +18,8 @@ export type CrmTaskRow = {
   business_id: string | null;
   lead_id: string | null;
   conversation_id: string | null;
+  deal_id: string | null;
+  person_id: string | null;
   task_type: CrmTaskType;
   title: string;
   description: string | null;
@@ -25,6 +27,10 @@ export type CrmTaskRow = {
   priority: CrmTaskPriority;
   assignee_user_id: string | null;
   due_at: string | null;
+  reminder_at: string | null;
+  reminder_acknowledged_at: string | null;
+  is_overdue: boolean;
+  reminder_due: boolean;
   blocked_reason: string | null;
   completion_note: string | null;
   source_type: string;
@@ -87,8 +93,12 @@ export async function listCrmTasks(input: {
   organizationId: string;
   businessId?: string | null;
   leadId?: string | null;
+  dealId?: string | null;
+  personId?: string | null;
   assigneeUserId?: string | null;
   status?: CrmTaskStatus | null;
+  overdueOnly?: boolean;
+  reminderDueOnly?: boolean;
   includeClosed?: boolean;
   limit?: number;
   cursor?: CrmTaskCursor | null;
@@ -96,12 +106,16 @@ export async function listCrmTasks(input: {
   const limit = clampLimit(input.limit);
   const cursor = normalizeCrmTaskCursor(input.cursor);
 
-  const { data, error } = await input.supabase.rpc('get_crm_tasks', {
+  const { data, error } = await input.supabase.rpc('get_crm_tasks_v2', {
     p_organization_id: input.organizationId,
     p_business_id: input.businessId ?? null,
     p_lead_id: input.leadId ?? null,
+    p_deal_id: input.dealId ?? null,
+    p_person_id: input.personId ?? null,
     p_assignee_user_id: input.assigneeUserId ?? null,
     p_status: input.status ?? null,
+    p_overdue_only: input.overdueOnly === true,
+    p_reminder_due_only: input.reminderDueOnly === true,
     p_include_closed: input.includeClosed === true,
     p_limit: limit + 1,
     p_before_updated_at: cursor?.updatedAt ?? null,
@@ -128,12 +142,14 @@ export async function createCrmTask(input: {
   businessId?: string | null;
   leadId?: string | null;
   conversationId?: string | null;
+  dealId?: string | null;
   taskType?: CrmTaskType;
   title: string;
   description?: string | null;
   priority?: CrmTaskPriority;
   assigneeUserId?: string | null;
   dueAt?: string | null;
+  reminderAt?: string | null;
   requestKey: string;
   metadata?: Record<string, unknown>;
 }): Promise<CrmTaskRow> {
@@ -156,6 +172,7 @@ export async function createCrmTask(input: {
       business_id: input.businessId ?? null,
       lead_id: input.leadId ?? null,
       conversation_id: input.conversationId ?? null,
+      deal_id: input.dealId ?? null,
       task_type: input.taskType ?? 'GENERAL',
       title: input.title.trim(),
       description: input.description?.trim() || null,
@@ -163,6 +180,7 @@ export async function createCrmTask(input: {
       priority: input.priority ?? 'NORMAL',
       assignee_user_id: input.assigneeUserId ?? null,
       due_at: input.dueAt ?? null,
+      reminder_at: input.reminderAt ?? null,
       source_type: 'MANUAL',
       source_id: null,
       request_key: input.requestKey.trim(),
@@ -202,6 +220,7 @@ export async function updateCrmTask(input: {
     priority?: CrmTaskPriority;
     assigneeUserId?: string | null;
     dueAt?: string | null;
+    reminderAt?: string | null;
     blockedReason?: string | null;
     completionNote?: string | null;
     metadata?: Record<string, unknown>;
@@ -220,6 +239,7 @@ export async function updateCrmTask(input: {
     update.assignee_user_id = input.patch.assigneeUserId;
   }
   if (input.patch.dueAt !== undefined) update.due_at = input.patch.dueAt;
+  if (input.patch.reminderAt !== undefined) update.reminder_at = input.patch.reminderAt;
   if (input.patch.blockedReason !== undefined) {
     update.blocked_reason = input.patch.blockedReason?.trim() || null;
   }
@@ -258,4 +278,37 @@ export async function updateCrmTask(input: {
     'VERSION_CONFLICT',
     `CRM task version conflict; current version is ${current.data.version}`,
   );
+}
+
+
+export async function acknowledgeCrmTaskReminder(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  taskId: string;
+}) {
+  const { data, error } = await input.supabase.rpc('acknowledge_crm_task_reminder', {
+    p_organization_id: input.organizationId,
+    p_task_id: input.taskId,
+  });
+  if (error) throw new Error(`CRM task reminder acknowledgement failed: ${error.message}`);
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row?.resolved_task_id) throw new Error('CRM task reminder acknowledgement returned no task');
+  return { taskId: String(row.resolved_task_id), replayed: row.replayed === true };
+}
+
+export async function listCrmTaskActivity(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  taskId: string;
+  limit?: number;
+}) {
+  const { data, error } = await input.supabase.rpc('get_crm_task_activity_v2', {
+    p_organization_id: input.organizationId,
+    p_task_id: input.taskId,
+    p_limit: clampLimit(input.limit),
+    p_before_at: null,
+    p_before_activity_id: null,
+  });
+  if (error) throw new Error(`CRM task activity query failed: ${error.message}`);
+  return Array.isArray(data) ? data : [];
 }
