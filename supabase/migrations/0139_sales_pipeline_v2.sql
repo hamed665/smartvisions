@@ -824,9 +824,9 @@ as $$
 $$;
 
 revoke all on function public.crm_deal_team_owner_valid(uuid,uuid,uuid)
-  from public,anon,service_role;
+  from public,anon;
 grant execute on function public.crm_deal_team_owner_valid(uuid,uuid,uuid)
-  to authenticated;
+  to authenticated,service_role;
 
 revoke all on function public.get_crm_pipeline_forecast(
   uuid,uuid,uuid,uuid,timestamptz,timestamptz
