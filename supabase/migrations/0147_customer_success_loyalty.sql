@@ -453,8 +453,8 @@ declare
   v_actor_role text;
   v_assignee_role text;
   v_candidate record;
-  v_existing public.crm_tasks%rowtype;
-  v_task public.crm_tasks%rowtype;
+  v_existing record;
+  v_task_id uuid;
   v_action text:=upper(trim(coalesce(p_action_kind,'')));
   v_source_id text;
   v_due timestamptz:=coalesce(p_due_at,now()+interval '1 day');
@@ -499,7 +499,8 @@ begin
 
   v_source_id:=v_action||':'||p_business_id::text;
 
-  select * into v_existing
+  select id,source_type,source_id,business_id,assignee_user_id
+  into v_existing
   from public.crm_tasks
   where organization_id=p_organization_id and request_key=trim(p_request_key);
 
@@ -545,9 +546,9 @@ begin
       'healthScoreAtAcceptance',v_candidate.health_score,
       'riskSignals',to_jsonb(v_candidate.risk_signals)
     )
-  ) returning * into v_task;
+  ) returning id into v_task_id;
 
-  return query select v_task.id,false;
+  return query select v_task_id,false;
 end;
 $$;
 
@@ -985,6 +986,9 @@ revoke all on public.customer_loyalty_events from anon,authenticated;
 revoke all on public.customer_referrals from anon,authenticated;
 grant select on public.customer_loyalty_events to authenticated,service_role;
 grant select on public.customer_referrals to authenticated,service_role;
+-- The Customer Success read model needs only two CRM Task columns not already
+-- granted to the trusted runtime by SALES-NEXT-ACTION. Keep this column-scoped.
+grant select(due_at,metadata) on public.crm_tasks to service_role;
 grant insert on public.customer_loyalty_events to service_role;
 grant insert,update on public.customer_referrals to service_role;
 
