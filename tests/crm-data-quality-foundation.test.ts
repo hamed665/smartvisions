@@ -23,7 +23,7 @@ describe('CRM-DATA-QUALITY foundation', () => {
   it('normalizes import identities with the canonical runtime normalizer', () => {
     const rows = prepareVerifiedContactImportRows([{
       clientRowKey: 'row-1',
-      businessId: '10000000-0000-0000-0000-000000000c01',
+      businessId: '10000000-0000-4000-8000-000000000c01',
       identityType: 'EMAIL',
       identityValue: '  USER@Example.COM  ',
       displayName: 'User',
@@ -37,13 +37,13 @@ describe('CRM-DATA-QUALITY foundation', () => {
     expect(() => prepareVerifiedContactImportRows([
       {
         clientRowKey: 'row-1',
-        businessId: '10000000-0000-0000-0000-000000000c01',
+        businessId: '10000000-0000-4000-8000-000000000c01',
         identityType: 'PHONE',
         identityValue: '+968 9999 9999',
       },
       {
         clientRowKey: 'row-2',
-        businessId: '10000000-0000-0000-0000-000000000c01',
+        businessId: '10000000-0000-4000-8000-000000000c01',
         identityType: 'PHONE',
         identityValue: '96899999999',
       },
@@ -55,7 +55,7 @@ describe('CRM-DATA-QUALITY foundation', () => {
     expect(() => prepareVerifiedContactImportRows([])).toThrow(/1 to 100/);
     expect(() => prepareVerifiedContactImportRows(Array.from({ length: 101 }, (_, index) => ({
       clientRowKey: `row-${index}`,
-      businessId: '10000000-0000-0000-0000-000000000c01',
+      businessId: '10000000-0000-4000-8000-000000000c01',
       identityType: 'EMAIL' as const,
       identityValue: `u${index}@example.test`,
     })))).toThrow(/1 to 100/);
