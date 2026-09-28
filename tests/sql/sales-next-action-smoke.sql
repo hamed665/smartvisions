@@ -109,7 +109,7 @@ begin
     );
     raise exception 'Browser fabricated NEXT_ACTION Task directly';
   exception when others then
-    if sqlerrm not like 'NEXT_ACTION CRM task must be accepted through governed candidate materialization%' then
+    if sqlerrm not like 'NEXT_ACTION CRM task requires trusted governed candidate materialization%' then
       raise;
     end if;
   end;
@@ -186,6 +186,17 @@ begin
 end;
 $next_action_derived_queue$;
 
+reset role;
+select set_config('request.jwt.claim.sub','',false);
+
+create temp table sales_next_action_accept_results(
+  candidate text primary key,
+  task_id uuid not null
+);
+grant insert,select on sales_next_action_accept_results to service_role;
+
+set role service_role;
+
 do $next_action_accept_replay$
 declare
   v_first uuid;
@@ -196,6 +207,7 @@ begin
     into v_first,v_replayed
   from public.accept_crm_next_action_candidate(
     '00000000-0000-0000-0000-000000000c01',
+    '00000000-0000-0000-0000-00000000c001',
     'LEAD_STALE',
     '20000000-0000-0000-0000-000000000c91',
     '00000000-0000-0000-0000-00000000c001',
@@ -213,6 +225,7 @@ begin
     into v_second,v_replayed
   from public.accept_crm_next_action_candidate(
     '00000000-0000-0000-0000-000000000c01',
+    '00000000-0000-0000-0000-00000000c001',
     'LEAD_STALE',
     '20000000-0000-0000-0000-000000000c91',
     '00000000-0000-0000-0000-00000000c001',
@@ -231,46 +244,19 @@ begin
     where id=v_first
       and source_type='NEXT_ACTION'
       and source_id='LEAD:20000000-0000-0000-0000-000000000c91:STALE'
-      and task_type='FOLLOW_UP'
       and status='OPEN'
       and assignee_user_id='00000000-0000-0000-0000-00000000c001'
-      and metadata->>'reasonCode'='LEAD_STALE'
   ) then
     raise exception 'Accepted stale Lead did not materialize into canonical CRM Task';
   end if;
 
-  if exists (
-    select 1
-    from public.get_crm_next_actions(
-      '00000000-0000-0000-0000-000000000c01',
-      72,
-      null,
-      200
-    )
-    where candidate_kind='LEAD_STALE'
-      and source_entity_id='20000000-0000-0000-0000-000000000c91'
-  ) then
-    raise exception 'Accepted stale Lead remained as a duplicate derived candidate';
-  end if;
-
-  if not exists (
-    select 1
-    from public.get_crm_next_actions(
-      '00000000-0000-0000-0000-000000000c01',
-      72,
-      null,
-      200
-    )
-    where task_id=v_first
-      and accepted=true
-      and source_entity_type='TASK'
-  ) then
-    raise exception 'Accepted next action did not become canonical Task queue item';
-  end if;
+  insert into sales_next_action_accept_results(candidate,task_id)
+  values ('LEAD_STALE',v_first);
 
   begin
     perform public.accept_crm_next_action_candidate(
       '00000000-0000-0000-0000-000000000c01',
+      '00000000-0000-0000-0000-00000000c001',
       'DEAL_STALE',
       '60000000-0000-0000-0000-000000000c92',
       '00000000-0000-0000-0000-00000000c001',
@@ -297,6 +283,7 @@ begin
     into v_task,v_replayed
   from public.accept_crm_next_action_candidate(
     '00000000-0000-0000-0000-000000000c01',
+    '00000000-0000-0000-0000-00000000c001',
     'DEAL_STALE',
     '60000000-0000-0000-0000-000000000c92',
     null,
@@ -315,14 +302,115 @@ begin
     where id=v_task
       and deal_id='60000000-0000-0000-0000-000000000c92'
       and source_type='NEXT_ACTION'
-      and task_type='FOLLOW_UP'
-      and priority='HIGH'
+      and status='OPEN'
       and assignee_user_id='00000000-0000-0000-0000-00000000c001'
   ) then
     raise exception 'Stale Deal acceptance did not preserve human Deal ownership';
   end if;
+
+  insert into sales_next_action_accept_results(candidate,task_id)
+  values ('DEAL_STALE',v_task);
 end;
 $next_action_accept_deal$;
+
+reset role;
+
+do $next_action_materialization_evidence$
+declare
+  v_lead_task uuid;
+  v_deal_task uuid;
+begin
+  select task_id into v_lead_task
+  from sales_next_action_accept_results
+  where candidate='LEAD_STALE';
+
+  select task_id into v_deal_task
+  from sales_next_action_accept_results
+  where candidate='DEAL_STALE';
+
+  if not exists (
+    select 1 from public.crm_tasks
+    where id=v_lead_task
+      and task_type='FOLLOW_UP'
+      and priority='HIGH'
+      and creator_type='SYSTEM'
+      and created_by_user_id is null
+      and metadata->>'reasonCode'='LEAD_STALE'
+      and metadata->>'acceptedByUserId'='00000000-0000-0000-0000-00000000c001'
+  ) then
+    raise exception 'Accepted Lead Task human provenance is incomplete';
+  end if;
+
+  if not exists (
+    select 1 from public.crm_tasks
+    where id=v_deal_task
+      and task_type='FOLLOW_UP'
+      and priority='HIGH'
+      and creator_type='SYSTEM'
+      and created_by_user_id is null
+      and metadata->>'reasonCode'='DEAL_STALE'
+      and metadata->>'acceptedByUserId'='00000000-0000-0000-0000-00000000c001'
+  ) then
+    raise exception 'Accepted Deal Task human provenance is incomplete';
+  end if;
+end;
+$next_action_materialization_evidence$;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000c001',false);
+
+do $next_action_queue_after_accept$
+declare
+  v_lead_task uuid;
+begin
+  select task_id into v_lead_task
+  from sales_next_action_accept_results
+  where candidate='LEAD_STALE';
+
+  if exists (
+    select 1
+    from public.get_crm_next_actions(
+      '00000000-0000-0000-0000-000000000c01',
+      72,
+      null,
+      200
+    )
+    where candidate_kind='LEAD_STALE'
+      and source_entity_id='20000000-0000-0000-0000-000000000c91'
+  ) then
+    raise exception 'Accepted stale Lead remained as a duplicate derived candidate';
+  end if;
+
+  if not exists (
+    select 1
+    from public.get_crm_next_actions(
+      '00000000-0000-0000-0000-000000000c01',
+      72,
+      null,
+      200
+    )
+    where task_id=v_lead_task
+      and accepted=true
+      and source_entity_type='TASK'
+  ) then
+    raise exception 'Accepted next action did not become canonical Task queue item';
+  end if;
+
+  if exists (
+    select 1
+    from public.get_crm_next_actions(
+      '00000000-0000-0000-0000-000000000c01',
+      72,
+      null,
+      200
+    )
+    where candidate_kind='DEAL_STALE'
+      and source_entity_id='60000000-0000-0000-0000-000000000c92'
+  ) then
+    raise exception 'Accepted stale Deal remained as a duplicate derived candidate';
+  end if;
+end;
+$next_action_queue_after_accept$;
 
 do $next_action_browser_model_guard$
 declare
@@ -501,12 +589,20 @@ begin
     'authenticated',
     'public.get_crm_next_actions(uuid,integer,uuid,integer)',
     'EXECUTE'
-  ) or not has_function_privilege(
+  ) then
+    raise exception 'Authenticated next-action read grant missing';
+  end if;
+
+  if has_function_privilege(
     'authenticated',
-    'public.accept_crm_next_action_candidate(uuid,text,uuid,uuid,timestamptz,timestamptz,text,integer)',
+    'public.accept_crm_next_action_candidate(uuid,uuid,text,uuid,uuid,timestamptz,timestamptz,text,integer)',
+    'EXECUTE'
+  ) or not has_function_privilege(
+    'service_role',
+    'public.accept_crm_next_action_candidate(uuid,uuid,text,uuid,uuid,timestamptz,timestamptz,text,integer)',
     'EXECUTE'
   ) then
-    raise exception 'Authenticated next-action function grants missing';
+    raise exception 'Next-action acceptance trust boundary is incorrect';
   end if;
 
   if has_function_privilege(
