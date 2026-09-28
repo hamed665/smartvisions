@@ -199,6 +199,9 @@ jobs:
             -f /work/tests/sql/marketing-attribution-observational-smoke.sql
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
+            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f /work/tests/sql/hunter-customer-module-bootstrap.sql
             -f /work/tests/sql/hunter-customer-module-smoke.sql
       - run: npm run build
       - run: npm run build:vinext

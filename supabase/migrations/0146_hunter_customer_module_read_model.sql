@@ -137,8 +137,9 @@ begin
   won_by_currency as (
     select
       coalesce(currency,'UNSPECIFIED') as currency,
-      coalesce(sum(amount),0)::numeric as amount
+      sum(amount)::numeric as amount
     from won
+    where amount is not null
     group by coalesce(currency,'UNSPECIFIED')
   ),
   entitlement_rows as (
@@ -443,11 +444,12 @@ begin
           from (
             select
               coalesce(d.currency,'UNSPECIFIED') as currency,
-              coalesce(sum(d.amount),0)::numeric as amount
+              sum(d.amount)::numeric as amount
             from public.crm_deals d
             where d.organization_id=p_organization_id
               and d.lead_id=pb.lead_id
               and d.state='WON'
+              and d.amount is not null
             group by coalesce(d.currency,'UNSPECIFIED')
           ) x
         ),
