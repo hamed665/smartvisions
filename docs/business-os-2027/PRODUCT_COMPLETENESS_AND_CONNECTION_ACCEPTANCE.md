@@ -275,14 +275,13 @@ Each row is REQUIRED for the applicable complete-product scope; partial foundati
 | Customer 360 | CRM-CUSTOMER360-V2; CRM-ACTIVITY-TASK-V2 | Conversations, deals, tasks, notes, bookings, quotes, orders, invoices/payments, support, consent and documents with governed scope |
 | Configurable CRM | CRM-CUSTOM-OBJECTS; SEGMENT-V2; SEGMENT-SNAPSHOT | Typed governed schema, immutable audience snapshots where needed, versioned filters; no unbounded arbitrary metadata querying |
 
-### SEGMENT-V2 implementation checkpoint — 2026-09-28
+### SEGMENT-V2 / SEGMENT-SNAPSHOT checkpoint — 2026-09-28
 
-- Active branch `feat/segment-v2-multi-entity` extends the existing governed `crm_segments + crm_segment_versions` authority to `LEAD | PERSON | DEAL | ACCOUNT`; it does not create a parallel Segment/rule/membership system.
-- Predicates remain typed, bounded and allowlisted. Person PII/display-name/free metadata and arbitrary SQL/JSONPath are not valid audience criteria.
-- Custom Field predicates remain Lead/Deal only because the current governed Custom Field authority supports only those entities.
-- Dynamic Segment evaluation is an audience read, not send consent and not a Workflow/Campaign trigger. It must not invoke providers or persist current membership.
-- `SEGMENT-SNAPSHOT` remains REQUIRED as the separate immutable-audience authority for historically reproducible campaign/workflow execution.
-- This is implementation evidence only until exact-head CI, merge, Production migration/deploy and Production security/no-backfill verification succeed.
+- `SEGMENT-V2` is **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** from PR #323 / migration `0136_segment_v2_multi_entity`, exact-main CI `36409087711` and Cloudflare Production Deploy `36409341905` on `main@9762e5ce79022718ede2def30610b94843d7f591`.
+- The governed `crm_segments + crm_segment_versions` authority supports `LEAD | PERSON | DEAL | ACCOUNT` with typed bounded predicates and no persisted dynamic membership. Production remains 0 Segment definitions/versions.
+- Person PII/display-name/free metadata and arbitrary SQL/JSONPath are not audience criteria; governed Custom Fields remain Lead/Deal only.
+- Dynamic evaluation is not consent and does not invoke Campaign/Workflow/provider sends.
+- `SEGMENT-SNAPSHOT` remains **REQUIRED / ACTIVE IMPLEMENTATION** on branch `feat/segment-snapshot`: exact immutable Segment version + entity IDs, creation evidence, membership hash and no silent mutation. It is not Production-verified until migration 0137 and exact deployment evidence pass.
 
 | Sales | SALES-SCORING; SALES-PIPELINE-V2; SALES-NEXT-ACTION | Explainable qualification, pipelines, follow-up, ownership, forecast and real won/lost evidence; no blind automated outreach |
 | Marketing and retention | MARKETING-CAMPAIGNS; MARKETING-CONSENT; MARKETING-ATTRIBUTION; CUSTOMER-SUCCESS-LOYALTY | Opt-in/out, purpose, suppression, audience/version, caps, templates, experiment evidence, loyalty/referrals; no invented attribution |
