@@ -27,9 +27,13 @@ describe('CRM-ACCOUNT-V2 governance', () => {
   });
 
   it('does not infer lifecycle, ownership or hierarchy for existing Companies', () => {
+    const preRuntimeDdl = migration.split(
+      'create or replace function public.guard_crm_account_governance',
+    )[0];
     expect(migration).toContain("account_lifecycle text not null default 'UNCLASSIFIED'");
-    expect(migration).not.toMatch(/update public\.businesses\s+set\s+account_lifecycle\s*=\s*'PROSPECT'/i);
-    expect(migration).not.toMatch(/update public\.businesses\s+set\s+account_owner_user_id/i);
+    expect(preRuntimeDdl).not.toMatch(/update public\.businesses\s+set\s+account_lifecycle/i);
+    expect(preRuntimeDdl).not.toMatch(/update public\.businesses\s+set\s+account_owner_user_id/i);
+    expect(preRuntimeDdl).not.toMatch(/update public\.businesses\s+set\s+parent_business_id/i);
   });
 
   it('governs lifecycle and external Account hierarchy with deterministic contracts', () => {
