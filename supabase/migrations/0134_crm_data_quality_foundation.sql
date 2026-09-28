@@ -174,7 +174,7 @@ begin
   ),
   business_email_duplicates as (
     select
-      min(b.id) as entity_id,
+      (array_agg(b.id order by b.id))[1] as entity_id,
       'BUSINESS_EMAIL_DUPLICATE'::text as issue_type,
       'MEDIUM'::text as severity,
       jsonb_build_object(
@@ -190,7 +190,7 @@ begin
   ),
   business_phone_duplicates as (
     select
-      min(b.id) as entity_id,
+      (array_agg(b.id order by b.id))[1] as entity_id,
       'BUSINESS_PHONE_DUPLICATE'::text as issue_type,
       'MEDIUM'::text as severity,
       jsonb_build_object(
@@ -206,7 +206,7 @@ begin
   ),
   business_domain_duplicates as (
     select
-      min(b.id) as entity_id,
+      (array_agg(b.id order by b.id))[1] as entity_id,
       'BUSINESS_DOMAIN_DUPLICATE'::text as issue_type,
       'LOW'::text as severity,
       jsonb_build_object(
