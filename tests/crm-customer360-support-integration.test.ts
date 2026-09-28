@@ -31,8 +31,8 @@ describe('CRM-CUSTOMER360-V2 Support integration', () => {
     const timelineStart = migration.indexOf("'activityTimeline', coalesce((");
     const supportBlock = migration.slice(supportStart, timelineStart);
     expect(supportBlock).toContain("'subject'");
-    expect(supportBlock).toContain("'resolutionSummary'");
     expect(supportBlock).not.toContain("'description'");
+    expect(supportBlock).not.toContain("'resolutionSummary'");
     expect(supportBlock).not.toContain("'csatComment'");
   });
 
