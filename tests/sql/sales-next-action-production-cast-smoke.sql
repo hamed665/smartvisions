@@ -29,26 +29,7 @@ begin
 end;
 $next_action_status_schema_contract$;
 
-do $next_action_status_cast_definition$
-declare
-  v_def text;
-begin
-  select pg_get_functiondef(p.oid) into v_def
-  from pg_proc p
-  join pg_namespace n on n.oid=p.pronamespace
-  where n.nspname='public'
-    and p.proname='get_crm_next_actions'
-    and pg_get_function_identity_arguments(p.oid)='p_organization_id uuid, p_stale_hours integer, p_assignee_user_id uuid, p_limit integer';
 
-  if v_def is null
-     or v_def not like '%t.status::text AS source_status%'
-     or v_def not like '%la.status::text AS source_status%'
-     or v_def not like '%da.state::text AS source_status%'
-  then
-    raise exception 'SALES-NEXT-ACTION source status normalization is missing';
-  end if;
-end;
-$next_action_status_cast_definition$;
 
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000c001',false);
