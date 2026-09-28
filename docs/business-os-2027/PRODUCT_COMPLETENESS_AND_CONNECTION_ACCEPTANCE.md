@@ -274,6 +274,16 @@ Each row is REQUIRED for the applicable complete-product scope; partial foundati
 | Person/account CRM | CRM-PERSON-CONTACT; CRM-IDENTITY-GRAPH; CRM-ACCOUNT-V2; CRM-DATA-QUALITY | Evidence-based identity, multiple identities, company relationships, import, manual merge/split and conflict review; no fabricated people |
 | Customer 360 | CRM-CUSTOMER360-V2; CRM-ACTIVITY-TASK-V2 | Conversations, deals, tasks, notes, bookings, quotes, orders, invoices/payments, support, consent and documents with governed scope |
 | Configurable CRM | CRM-CUSTOM-OBJECTS; SEGMENT-V2; SEGMENT-SNAPSHOT | Typed governed schema, immutable audience snapshots where needed, versioned filters; no unbounded arbitrary metadata querying |
+
+### SEGMENT-V2 implementation checkpoint — 2026-09-28
+
+- Active branch `feat/segment-v2-multi-entity` extends the existing governed `crm_segments + crm_segment_versions` authority to `LEAD | PERSON | DEAL | ACCOUNT`; it does not create a parallel Segment/rule/membership system.
+- Predicates remain typed, bounded and allowlisted. Person PII/display-name/free metadata and arbitrary SQL/JSONPath are not valid audience criteria.
+- Custom Field predicates remain Lead/Deal only because the current governed Custom Field authority supports only those entities.
+- Dynamic Segment evaluation is an audience read, not send consent and not a Workflow/Campaign trigger. It must not invoke providers or persist current membership.
+- `SEGMENT-SNAPSHOT` remains REQUIRED as the separate immutable-audience authority for historically reproducible campaign/workflow execution.
+- This is implementation evidence only until exact-head CI, merge, Production migration/deploy and Production security/no-backfill verification succeed.
+
 | Sales | SALES-SCORING; SALES-PIPELINE-V2; SALES-NEXT-ACTION | Explainable qualification, pipelines, follow-up, ownership, forecast and real won/lost evidence; no blind automated outreach |
 | Marketing and retention | MARKETING-CAMPAIGNS; MARKETING-CONSENT; MARKETING-ATTRIBUTION; CUSTOMER-SUCCESS-LOYALTY | Opt-in/out, purpose, suppression, audience/version, caps, templates, experiment evidence, loyalty/referrals; no invented attribution |
 | Hunter | HUNTER-CUSTOMER-MODULE | Extend existing discovery/enrichment; tenant targeting, credit usage, dedupe, qualified CRM promotion and ROI; discovery is not send consent |
