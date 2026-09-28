@@ -460,6 +460,31 @@ begin
     raise exception 'invalid next action request key';
   end if;
 
+  v_source_id:=case
+    when p_candidate_kind='LEAD_STALE'
+      then 'LEAD:'||p_entity_id::text||':STALE'
+    when p_candidate_kind='DEAL_CLOSE_OVERDUE'
+      then 'DEAL:'||p_entity_id::text||':CLOSE_OVERDUE'
+    else 'DEAL:'||p_entity_id::text||':STALE'
+  end;
+
+  select
+    t.id,t.source_type,t.source_id
+  into v_existing
+  from public.crm_tasks t
+  where t.organization_id=p_organization_id
+    and t.request_key=trim(p_request_key);
+
+  if found then
+    if v_existing.source_type='NEXT_ACTION'
+       and v_existing.source_id=v_source_id
+    then
+      return query select v_existing.id,true;
+      return;
+    end if;
+    raise exception 'next action request key was reused with different semantics';
+  end if;
+
   if p_candidate_kind='LEAD_STALE' then
     select
       l.business_id,
@@ -604,23 +629,6 @@ begin
   );
   if v_reminder>v_due then
     raise exception 'next action reminder cannot be after due time';
-  end if;
-
-  select
-    t.id,t.source_type,t.source_id
-  into v_existing
-  from public.crm_tasks t
-  where t.organization_id=p_organization_id
-    and t.request_key=trim(p_request_key);
-
-  if found then
-    if v_existing.source_type='NEXT_ACTION'
-       and v_existing.source_id=v_source_id
-    then
-      return query select v_existing.id,true;
-      return;
-    end if;
-    raise exception 'next action request key was reused with different semantics';
   end if;
 
   perform set_config('app.crm_next_action_accept','1',true);
