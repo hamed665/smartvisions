@@ -133,7 +133,7 @@ export async function POST(request: Request) {
     }
 
     const requestKey = typeof body.requestKey === 'string' ? body.requestKey.trim() : '';
-    if (!requestKey || requestKey.length > 200) {
+    if (!/^[A-Za-z0-9._:-]{1,200}$/.test(requestKey)) {
       return NextResponse.json({ error: 'Verified import requestKey is required' }, { status: 400 });
     }
 
