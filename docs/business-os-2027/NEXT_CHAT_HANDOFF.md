@@ -1,5 +1,34 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## Latest continuation checkpoint — CRM-SUPPORT-CASE → CRM-DATA-QUALITY — 2026-09-28
+
+Always re-read runtime/current main before mutation.
+
+Verified Production baseline:
+- main `ec70f9e60cc8ece014c0ca1ba50a20a2c8badecb`;
+- PR #317 Support Case + SLA merged; PR #318 FK-index hardening merged;
+- Production migrations `0132_crm_support_case` and `0133_crm_support_case_fk_index_hardening` are live;
+- exact-main CI `36376715097`: SUCCESS;
+- Cloudflare Production Deploy `36376910976`: SUCCESS;
+- Production Support Cases = 0; SLA policies = 0; no synthetic support evidence;
+- Support reads are RLS-governed authenticated paths; trusted mutations are service-role-only SECURITY INVOKER; no Support-specific FK advisor regression remains.
+
+Current bounded Work Package: `SECTION IDENTITY_CRM / CRM-DATA-QUALITY`.
+
+Active branch: `feat/crm-data-quality-foundation`.
+
+Rules for this slice:
+1. reuse Identity Graph exact duplicate/conflict candidates and existing MERGE/SPLIT/UNLINK; never build a second dedupe engine;
+2. quality scan is deterministic/read-only and may surface exact Business/Identity anomalies without fuzzy auto-merge;
+3. verified Contact import targets existing canonical Business + Identity + Person + Person-Business relationship authorities;
+4. import is atomic, bounded to 100 rows / 256 KiB, request-key idempotent and OWNER/ADMIN/SALES_MANAGER governed;
+5. ambiguous identity-to-Business evidence fails the entire batch closed;
+6. import receipt/audit stores counts/hash only, never raw imported PII;
+7. no Production import batch may be fabricated merely to prove the happy path;
+8. irreversible retention/purge remains DEFERRED_WITH_REASON until an approved Organization legal/business retention contract exists;
+9. PostgreSQL 17 dedicated smoke, exact-head CI, merge, Production migration, exact-main deploy and advisors are mandatory before Production completion is claimed.
+
+
 
 ## Latest continuation checkpoint — CRM-ACTIVITY-TASK-V2 → CRM-SUPPORT-CASE — 2026-09-28
 
