@@ -9,8 +9,6 @@ begin
 end;
 $support_no_backfill$;
 
-set role service_role;
-
 insert into public.sales_conversations(
   id,organization_id,lead_id,channel
 ) values (
@@ -20,6 +18,8 @@ insert into public.sales_conversations(
   'EMAIL'
 )
 on conflict (id) do nothing;
+
+set role service_role;
 
 do $support_sla_and_case$
 declare
