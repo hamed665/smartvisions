@@ -33,7 +33,7 @@ export default async function HuntersPage() {
   return <div>
     <div className="headerRow">
       <div><h1>Hunters</h1><p className="muted">Business discovery plus growth-opportunity routing and explicit project demand.</p></div>
-      <Link className="textLink" href="/campaigns">Create campaign →</Link>
+      <div><Link className="textLink" href="/hunters/customer-module">Customer module →</Link>{' · '}<Link className="textLink" href="/campaigns">Create campaign →</Link></div>
     </div>
     <section className="grid">
       <div className="card"><span className="muted">Business campaigns</span><div className="value">{c.filter((row) => row.hunter_type === 'BUSINESS').length}</div></div>
