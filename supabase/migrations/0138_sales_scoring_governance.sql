@@ -433,7 +433,9 @@ declare
 begin
   perform public.crm_assert_lead_scoring_actor(p_organization_id,p_actor_user_id);
 
-  if p_opportunity_score not between 0 and 100
+  if p_opportunity_score is null
+     or p_opportunity_score not between 0 and 100
+     or p_intent_score is null
      or p_intent_score not between 0 and 100
      or (p_fit_score is not null and p_fit_score not between 0 and 100)
      or (p_engagement_score is not null and p_engagement_score not between 0 and 100)
@@ -455,6 +457,7 @@ begin
      )
      or v_policy !~ '^[A-Za-z0-9._:-]{1,80}$'
      or v_request_key !~ '^[A-Za-z0-9._:-]{1,200}$'
+     or p_expected_revision is null
      or p_expected_revision<0
   then
     raise exception 'CRM Lead deterministic scoring payload is invalid';
@@ -528,10 +531,7 @@ begin
   ) values (
     p_organization_id,'USER',p_actor_user_id::text,
     'CRM_LEAD_DETERMINISTIC_SCORE_RECORDED','lead',p_lead_id::text,
-    jsonb_build_object(
-      'opportunityScore',v_lead.opportunity_score,
-      'revision',p_expected_revision
-    ),
+    jsonb_build_object('revision',p_expected_revision),
     v_result,
     v_request_key
   );
@@ -569,7 +569,7 @@ declare
 begin
   perform public.crm_assert_lead_scoring_actor(p_organization_id,p_actor_user_id);
 
-  if v_request_key !~ '^[A-Za-z0-9._:-]{1,200}$' or p_expected_revision<0 then
+  if v_request_key !~ '^[A-Za-z0-9._:-]{1,200}
     raise exception 'CRM Lead engagement recompute payload is invalid';
   end if;
 
@@ -648,8 +648,6 @@ begin
 
   update public.leads
   set engagement_score=v_engagement,
-      scoring_source=coalesce(scoring_source,'CRM_ENGAGEMENT_V1'),
-      scoring_policy_version=coalesce(scoring_policy_version,'sales-scoring-v1'),
       scoring_evidence=coalesce(scoring_evidence,'{}'::jsonb)
         || jsonb_build_object('engagement',v_engagement_evidence),
       scoring_revision=scoring_revision+1,
@@ -680,10 +678,1509 @@ begin
   ) values (
     p_organization_id,'USER',p_actor_user_id::text,
     'CRM_LEAD_ENGAGEMENT_RECOMPUTED','lead',p_lead_id::text,
+    jsonb_build_object('revision',p_expected_revision),
+    v_result || jsonb_build_object(
+      'evidenceCounts',jsonb_build_object(
+        'conversations',v_conversation_count,
+        'inboundConversations',v_inbound_conversation_count,
+        'readReceipts',v_read_receipt_count,
+        'activeConversations',v_active_conversation_count
+      )
+    ),
+    v_request_key
+  );
+
+  return v_result - 'request_hash';
+end;
+$$;
+
+create or replace function public.set_crm_lead_score_override(
+  p_organization_id uuid,
+  p_actor_user_id uuid,
+  p_lead_id uuid,
+  p_override_score integer,
+  p_reason text,
+  p_expires_at timestamptz,
+  p_expected_revision integer,
+  p_request_key text
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = public, pg_catalog
+as $$
+declare
+  v_lead public.leads%rowtype;
+  v_result jsonb;
+  v_reason text:=trim(coalesce(p_reason,''));
+  v_request_key text:=trim(coalesce(p_request_key,''));
+  v_request_hash text;
+begin
+  perform public.crm_assert_lead_scoring_actor(p_organization_id,p_actor_user_id);
+
+  if p_override_score is null
+     or p_override_score not between 0 and 100
+     or length(v_reason) not between 1 and 240
+     or (p_expires_at is not null and p_expires_at<=now())
+     or p_expected_revision is null
+     or p_expected_revision<0
+     or v_request_key !~ '^[A-Za-z0-9._:-]{1,200}
+  end if;
+
+  v_request_hash:=md5(concat_ws('|',
+    p_organization_id::text,p_actor_user_id::text,p_lead_id::text,
+    p_override_score::text,md5(v_reason),coalesce(p_expires_at::text,''),
+    p_expected_revision::text
+  ));
+
+  v_result:=public.crm_lead_scoring_replay(
+    p_organization_id,'CRM_LEAD_SCORE_OVERRIDE_SET',
+    p_lead_id,v_request_key,v_request_hash
+  );
+  if v_result is not null then return v_result; end if;
+
+  select * into v_lead
+  from public.leads l
+  where l.organization_id=p_organization_id and l.id=p_lead_id
+  for update;
+  if not found then raise exception 'CRM Lead scoring target was not found'; end if;
+  if v_lead.scoring_revision<>p_expected_revision then
+    raise exception 'CRM Lead scoring version conflict';
+  end if;
+
+  perform set_config('app.crm_lead_scoring_mutation','allowed',true);
+
+  update public.leads
+  set manual_score_override=p_override_score,
+      manual_score_override_reason=v_reason,
+      manual_score_override_by_user_id=p_actor_user_id,
+      manual_score_override_at=now(),
+      manual_score_override_expires_at=p_expires_at,
+      scoring_revision=scoring_revision+1,
+      scoring_updated_at=now(),
+      scoring_updated_by_user_id=p_actor_user_id,
+      updated_at=now()
+  where organization_id=p_organization_id and id=p_lead_id
+  returning * into v_lead;
+
+  v_result:=jsonb_build_object(
+    'leadId',v_lead.id,
+    'opportunityScore',v_lead.opportunity_score,
+    'effectiveScore',public.crm_lead_effective_opportunity_score(
+      v_lead.opportunity_score,v_lead.manual_score_override,
+      v_lead.manual_score_override_expires_at,now()
+    ),
+    'overrideScore',v_lead.manual_score_override,
+    'overrideExpiresAt',v_lead.manual_score_override_expires_at,
+    'revision',v_lead.scoring_revision,
+    'request_hash',v_request_hash,
+    'replayed',false
+  );
+
+  insert into public.audit_logs(
+    organization_id,actor_type,actor_id,action,entity_type,entity_id,
+    before_data,after_data,correlation_id
+  ) values (
+    p_organization_id,'USER',p_actor_user_id::text,
+    'CRM_LEAD_SCORE_OVERRIDE_SET','lead',p_lead_id::text,
     jsonb_build_object(
-      'engagementScore',v_lead.engagement_score,
+      'effectiveScore',public.crm_lead_effective_opportunity_score(
+        v_lead.opportunity_score,null,null,now()
+      ),
       'revision',p_expected_revision
     ),
+    v_result || jsonb_build_object('reason_present',true),
+    v_request_key
+  );
+
+  return v_result - 'request_hash';
+end;
+$$;
+
+create or replace function public.clear_crm_lead_score_override(
+  p_organization_id uuid,
+  p_actor_user_id uuid,
+  p_lead_id uuid,
+  p_reason text,
+  p_expected_revision integer,
+  p_request_key text
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = public, pg_catalog
+as $$
+declare
+  v_lead public.leads%rowtype;
+  v_result jsonb;
+  v_reason text:=trim(coalesce(p_reason,''));
+  v_request_key text:=trim(coalesce(p_request_key,''));
+  v_request_hash text;
+begin
+  perform public.crm_assert_lead_scoring_actor(p_organization_id,p_actor_user_id);
+
+  if length(v_reason) not between 1 and 240
+     or p_expected_revision is null
+     or p_expected_revision<0
+     or v_request_key !~ '^[A-Za-z0-9._:-]{1,200}$'
+  then
+    raise exception 'CRM Lead score override clear payload is invalid';
+  end if;
+
+  v_request_hash:=md5(concat_ws('|',
+    p_organization_id::text,p_actor_user_id::text,p_lead_id::text,
+    md5(v_reason),p_expected_revision::text
+  ));
+
+  v_result:=public.crm_lead_scoring_replay(
+    p_organization_id,'CRM_LEAD_SCORE_OVERRIDE_CLEARED',
+    p_lead_id,v_request_key,v_request_hash
+  );
+  if v_result is not null then return v_result; end if;
+
+  select * into v_lead
+  from public.leads l
+  where l.organization_id=p_organization_id and l.id=p_lead_id
+  for update;
+  if not found then raise exception 'CRM Lead scoring target was not found'; end if;
+  if v_lead.scoring_revision<>p_expected_revision then
+    raise exception 'CRM Lead scoring version conflict';
+  end if;
+  if v_lead.manual_score_override is null then
+    raise exception 'CRM Lead score override is not active';
+  end if;
+
+  perform set_config('app.crm_lead_scoring_mutation','allowed',true);
+
+  update public.leads
+  set manual_score_override=null,
+      manual_score_override_reason=null,
+      manual_score_override_by_user_id=null,
+      manual_score_override_at=null,
+      manual_score_override_expires_at=null,
+      scoring_revision=scoring_revision+1,
+      scoring_updated_at=now(),
+      scoring_updated_by_user_id=p_actor_user_id,
+      updated_at=now()
+  where organization_id=p_organization_id and id=p_lead_id
+  returning * into v_lead;
+
+  v_result:=jsonb_build_object(
+    'leadId',v_lead.id,
+    'opportunityScore',v_lead.opportunity_score,
+    'effectiveScore',v_lead.opportunity_score,
+    'overrideScore',null,
+    'revision',v_lead.scoring_revision,
+    'request_hash',v_request_hash,
+    'replayed',false
+  );
+
+  insert into public.audit_logs(
+    organization_id,actor_type,actor_id,action,entity_type,entity_id,
+    before_data,after_data,correlation_id
+  ) values (
+    p_organization_id,'USER',p_actor_user_id::text,
+    'CRM_LEAD_SCORE_OVERRIDE_CLEARED','lead',p_lead_id::text,
+    jsonb_build_object('overrideWasActive',true,'revision',p_expected_revision),
+    v_result || jsonb_build_object('reason_present',true),
+    v_request_key
+  );
+
+  return v_result - 'request_hash';
+end;
+$$;
+
+create or replace function public.record_crm_lead_model_score_suggestion(
+  p_organization_id uuid,
+  p_actor_user_id uuid,
+  p_lead_id uuid,
+  p_suggestion jsonb,
+  p_expected_revision integer,
+  p_request_key text
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = public, pg_catalog
+as $$
+declare
+  v_lead public.leads%rowtype;
+  v_result jsonb;
+  v_request_key text:=trim(coalesce(p_request_key,''));
+  v_request_hash text;
+  v_key text;
+  v_score_key text;
+  v_score integer;
+begin
+  perform public.crm_assert_lead_scoring_actor(p_organization_id,p_actor_user_id);
+
+  if jsonb_typeof(p_suggestion)<>'object'
+     or octet_length(p_suggestion::text)>8192
+     or p_expected_revision is null
+     or p_expected_revision<0
+     or v_request_key !~ '^[A-Za-z0-9._:-]{1,200}$'
+  then
+    raise exception 'CRM Lead model score suggestion payload is invalid';
+  end if;
+
+  for v_key in select jsonb_object_keys(p_suggestion) loop
+    if v_key not in (
+      'opportunityScore','fitScore','intentScore','engagementScore',
+      'reasons','provider','model','modelVersion','sourceRunId'
+    ) then
+      raise exception 'CRM Lead model score suggestion contains unsupported fields';
+    end if;
+  end loop;
+
+  if nullif(trim(p_suggestion->>'provider'),'') is null
+     or length(p_suggestion->>'provider')>80
+     or nullif(trim(p_suggestion->>'model'),'') is null
+     or length(p_suggestion->>'model')>160
+     or nullif(trim(p_suggestion->>'modelVersion'),'') is null
+     or length(p_suggestion->>'modelVersion')>80
+     or not (
+       p_suggestion ? 'opportunityScore'
+       or p_suggestion ? 'fitScore'
+       or p_suggestion ? 'intentScore'
+       or p_suggestion ? 'engagementScore'
+     )
+  then
+    raise exception 'CRM Lead model score suggestion provenance is invalid';
+  end if;
+
+  foreach v_score_key in array array[
+    'opportunityScore','fitScore','intentScore','engagementScore'
+  ] loop
+    if p_suggestion ? v_score_key then
+      if (p_suggestion->>v_score_key) !~ '^[0-9]{1,3}$' then
+        raise exception 'CRM Lead model score suggestion score is invalid';
+      end if;
+      v_score:=(p_suggestion->>v_score_key)::integer;
+      if v_score not between 0 and 100 then
+        raise exception 'CRM Lead model score suggestion score is invalid';
+      end if;
+    end if;
+  end loop;
+
+  if p_suggestion ? 'sourceRunId'
+     and (
+       length(p_suggestion->>'sourceRunId')<1
+       or length(p_suggestion->>'sourceRunId')>160
+     )
+  then
+    raise exception 'CRM Lead model score suggestion sourceRunId is invalid';
+  end if;
+
+  if p_suggestion ? 'reasons' then
+    if jsonb_typeof(p_suggestion->'reasons')<>'array'
+       or jsonb_array_length(p_suggestion->'reasons')>20
+       or exists (
+         select 1 from jsonb_array_elements(p_suggestion->'reasons') e
+         where jsonb_typeof(e)<>'string' or length(e#>>'{}')>240
+       )
+    then
+      raise exception 'CRM Lead model score suggestion reasons are invalid';
+    end if;
+  end if;
+
+  v_request_hash:=md5(concat_ws('|',
+    p_organization_id::text,p_actor_user_id::text,p_lead_id::text,
+    md5(p_suggestion::text),p_expected_revision::text
+  ));
+
+  v_result:=public.crm_lead_scoring_replay(
+    p_organization_id,'CRM_LEAD_MODEL_SCORE_SUGGESTED',
+    p_lead_id,v_request_key,v_request_hash
+  );
+  if v_result is not null then return v_result; end if;
+
+  select * into v_lead
+  from public.leads l
+  where l.organization_id=p_organization_id and l.id=p_lead_id
+  for update;
+  if not found then raise exception 'CRM Lead scoring target was not found'; end if;
+  if v_lead.scoring_revision<>p_expected_revision then
+    raise exception 'CRM Lead scoring version conflict';
+  end if;
+
+  perform set_config('app.crm_lead_scoring_mutation','allowed',true);
+
+  update public.leads
+  set model_score_suggestion=p_suggestion,
+      model_score_suggested_at=now(),
+      scoring_revision=scoring_revision+1,
+      scoring_updated_at=now(),
+      scoring_updated_by_user_id=p_actor_user_id,
+      updated_at=now()
+  where organization_id=p_organization_id and id=p_lead_id
+  returning * into v_lead;
+
+  v_result:=jsonb_build_object(
+    'leadId',v_lead.id,
+    'opportunityScore',v_lead.opportunity_score,
+    'effectiveScore',public.crm_lead_effective_opportunity_score(
+      v_lead.opportunity_score,v_lead.manual_score_override,
+      v_lead.manual_score_override_expires_at,now()
+    ),
+    'revision',v_lead.scoring_revision,
+    'suggestionAdvisoryOnly',true,
+    'request_hash',v_request_hash,
+    'replayed',false
+  );
+
+  insert into public.audit_logs(
+    organization_id,actor_type,actor_id,action,entity_type,entity_id,
+    before_data,after_data,correlation_id
+  ) values (
+    p_organization_id,'USER',p_actor_user_id::text,
+    'CRM_LEAD_MODEL_SCORE_SUGGESTED','lead',p_lead_id::text,
+    jsonb_build_object('revision',p_expected_revision),
+    v_result || jsonb_build_object(
+      'provider',p_suggestion->>'provider',
+      'model',p_suggestion->>'model',
+      'modelVersion',p_suggestion->>'modelVersion',
+      'hasReasons',p_suggestion ? 'reasons'
+    ),
+    v_request_key
+  );
+
+  return v_result - 'request_hash';
+end;
+$$;
+
+revoke all on function public.crm_lead_effective_opportunity_score(
+  integer,integer,timestamptz,timestamptz
+) from public,anon;
+grant execute on function public.crm_lead_effective_opportunity_score(
+  integer,integer,timestamptz,timestamptz
+) to authenticated,service_role;
+
+revoke all on function public.get_crm_lead_scoring(uuid,uuid)
+  from public,anon,service_role;
+grant execute on function public.get_crm_lead_scoring(uuid,uuid)
+  to authenticated;
+
+revoke all on function public.crm_assert_lead_scoring_actor(uuid,uuid)
+  from public,anon,authenticated,service_role;
+grant execute on function public.crm_assert_lead_scoring_actor(uuid,uuid)
+  to service_role;
+
+revoke all on function public.crm_lead_scoring_replay(uuid,text,uuid,text,text)
+  from public,anon,authenticated,service_role;
+grant execute on function public.crm_lead_scoring_replay(uuid,text,uuid,text,text)
+  to service_role;
+
+revoke all on function public.record_crm_lead_deterministic_score(
+  uuid,uuid,uuid,integer,integer,integer,integer,jsonb,text,text,jsonb,integer,text
+) from public,anon,authenticated,service_role;
+grant execute on function public.record_crm_lead_deterministic_score(
+  uuid,uuid,uuid,integer,integer,integer,integer,jsonb,text,text,jsonb,integer,text
+) to service_role;
+
+revoke all on function public.recompute_crm_lead_engagement(
+  uuid,uuid,uuid,integer,text
+) from public,anon,authenticated,service_role;
+grant execute on function public.recompute_crm_lead_engagement(
+  uuid,uuid,uuid,integer,text
+) to service_role;
+
+revoke all on function public.set_crm_lead_score_override(
+  uuid,uuid,uuid,integer,text,timestamptz,integer,text
+) from public,anon,authenticated,service_role;
+grant execute on function public.set_crm_lead_score_override(
+  uuid,uuid,uuid,integer,text,timestamptz,integer,text
+) to service_role;
+
+revoke all on function public.clear_crm_lead_score_override(
+  uuid,uuid,uuid,text,integer,text
+) from public,anon,authenticated,service_role;
+grant execute on function public.clear_crm_lead_score_override(
+  uuid,uuid,uuid,text,integer,text
+) to service_role;
+
+revoke all on function public.record_crm_lead_model_score_suggestion(
+  uuid,uuid,uuid,jsonb,integer,text
+) from public,anon,authenticated,service_role;
+grant execute on function public.record_crm_lead_model_score_suggestion(
+  uuid,uuid,uuid,jsonb,integer,text
+) to service_role;
+
+revoke all on function public.guard_crm_lead_scoring_mutation()
+  from public,anon,authenticated,service_role;
+
+comment on column public.leads.opportunity_score is
+  'Canonical deterministic accepted Lead opportunity score (0..100). Model suggestions never overwrite it.';
+comment on column public.leads.fit_score is
+  'Optional evidence-backed fit dimension (0..100); NULL means not yet measured, not zero.';
+comment on column public.leads.engagement_score is
+  'Optional deterministic engagement dimension (0..100); NULL means not yet measured.';
+comment on column public.leads.manual_score_override is
+  'Explicit operator override used only for effective score while active; deterministic base opportunity_score is preserved.';
+comment on column public.leads.model_score_suggestion is
+  'Non-authoritative bounded model suggestion with provider/model/version provenance; never silently accepted.';
+
+     or p_expected_revision is null
+     or p_expected_revision<0 then
+    raise exception 'CRM Lead engagement recompute payload is invalid';
+  end if;
+
+  v_request_hash:=md5(concat_ws('|',
+    p_organization_id::text,p_actor_user_id::text,p_lead_id::text,
+    p_expected_revision::text,'CRM_ENGAGEMENT_V1'
+  ));
+
+  v_result:=public.crm_lead_scoring_replay(
+    p_organization_id,'CRM_LEAD_ENGAGEMENT_RECOMPUTED',
+    p_lead_id,v_request_key,v_request_hash
+  );
+  if v_result is not null then return v_result; end if;
+
+  select * into v_lead
+  from public.leads l
+  where l.organization_id=p_organization_id and l.id=p_lead_id
+  for update;
+  if not found then raise exception 'CRM Lead scoring target was not found'; end if;
+  if v_lead.scoring_revision<>p_expected_revision then
+    raise exception 'CRM Lead scoring version conflict';
+  end if;
+
+  select
+    count(*)::integer,
+    count(*) filter (where c.last_inbound_at is not null)::integer,
+    count(*) filter (
+      where c.stage in ('ACTIVE','CLOSING','FOLLOW_UP_DUE','NEEDS_HUMAN','HOT')
+    )::integer,
+    max(c.last_inbound_at)
+  into
+    v_conversation_count,
+    v_inbound_conversation_count,
+    v_active_conversation_count,
+    v_latest_inbound_at
+  from public.sales_conversations c
+  where c.organization_id=p_organization_id
+    and c.lead_id=p_lead_id;
+
+  select count(*)::integer
+    into v_read_receipt_count
+  from public.conversation_messages m
+  where m.organization_id=p_organization_id
+    and m.lead_id=p_lead_id
+    and m.read_at is not null;
+
+  if v_inbound_conversation_count>0 then
+    v_engagement:=v_engagement+40;
+    v_reasons:=v_reasons||jsonb_build_array('INBOUND_CONVERSATION_EVIDENCE');
+  end if;
+  if v_lead.status::text in ('REPLIED','INTERESTED','HOT','HUMAN','WON') then
+    v_engagement:=v_engagement+30;
+    v_reasons:=v_reasons||jsonb_build_array('CRM_STAGE_RESPONSE_EVIDENCE');
+  end if;
+  if v_read_receipt_count>0 then
+    v_engagement:=v_engagement+20;
+    v_reasons:=v_reasons||jsonb_build_array('PROVIDER_READ_RECEIPT_EVIDENCE');
+  end if;
+  if v_active_conversation_count>0 then
+    v_engagement:=v_engagement+10;
+    v_reasons:=v_reasons||jsonb_build_array('ACTIVE_CONVERSATION_EVIDENCE');
+  end if;
+  v_engagement:=least(100,greatest(0,v_engagement));
+
+  v_engagement_evidence:=jsonb_build_object(
+    'policyVersion','crm-engagement-v1',
+    'conversationCount',v_conversation_count,
+    'inboundConversationCount',v_inbound_conversation_count,
+    'readReceiptCount',v_read_receipt_count,
+    'activeConversationCount',v_active_conversation_count,
+    'latestInboundAt',v_latest_inbound_at,
+    'reasonCodes',v_reasons
+  );
+
+  perform set_config('app.crm_lead_scoring_mutation','allowed',true);
+
+  update public.leads
+  set engagement_score=v_engagement,
+      scoring_evidence=coalesce(scoring_evidence,'{}'::jsonb)
+        || jsonb_build_object('engagement',v_engagement_evidence),
+      scoring_revision=scoring_revision+1,
+      scoring_updated_at=now(),
+      scoring_updated_by_user_id=p_actor_user_id,
+      updated_at=now()
+  where organization_id=p_organization_id and id=p_lead_id
+  returning * into v_lead;
+
+  v_result:=jsonb_build_object(
+    'leadId',v_lead.id,
+    'opportunityScore',v_lead.opportunity_score,
+    'effectiveScore',public.crm_lead_effective_opportunity_score(
+      v_lead.opportunity_score,v_lead.manual_score_override,
+      v_lead.manual_score_override_expires_at,now()
+    ),
+    'fitScore',v_lead.fit_score,
+    'intentScore',v_lead.intent_score,
+    'engagementScore',v_lead.engagement_score,
+    'revision',v_lead.scoring_revision,
+    'request_hash',v_request_hash,
+    'replayed',false
+  );
+
+  insert into public.audit_logs(
+    organization_id,actor_type,actor_id,action,entity_type,entity_id,
+    before_data,after_data,correlation_id
+  ) values (
+    p_organization_id,'USER',p_actor_user_id::text,
+    'CRM_LEAD_ENGAGEMENT_RECOMPUTED','lead',p_lead_id::text,
+    jsonb_build_object('revision',p_expected_revision),
+    v_result || jsonb_build_object(
+      'evidenceCounts',jsonb_build_object(
+        'conversations',v_conversation_count,
+        'inboundConversations',v_inbound_conversation_count,
+        'readReceipts',v_read_receipt_count,
+        'activeConversations',v_active_conversation_count
+      )
+    ),
+    v_request_key
+  );
+
+  return v_result - 'request_hash';
+end;
+$$;
+
+create or replace function public.set_crm_lead_score_override(
+  p_organization_id uuid,
+  p_actor_user_id uuid,
+  p_lead_id uuid,
+  p_override_score integer,
+  p_reason text,
+  p_expires_at timestamptz,
+  p_expected_revision integer,
+  p_request_key text
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = public, pg_catalog
+as $$
+declare
+  v_lead public.leads%rowtype;
+  v_result jsonb;
+  v_reason text:=trim(coalesce(p_reason,''));
+  v_request_key text:=trim(coalesce(p_request_key,''));
+  v_request_hash text;
+begin
+  perform public.crm_assert_lead_scoring_actor(p_organization_id,p_actor_user_id);
+
+  if p_override_score not between 0 and 100
+     or length(v_reason) not between 1 and 240
+     or (p_expires_at is not null and p_expires_at<=now())
+     or p_expected_revision<0
+     or v_request_key !~ '^[A-Za-z0-9._:-]{1,200}$'
+  then
+    raise exception 'CRM Lead score override payload is invalid';
+  end if;
+
+  v_request_hash:=md5(concat_ws('|',
+    p_organization_id::text,p_actor_user_id::text,p_lead_id::text,
+    p_override_score::text,md5(v_reason),coalesce(p_expires_at::text,''),
+    p_expected_revision::text
+  ));
+
+  v_result:=public.crm_lead_scoring_replay(
+    p_organization_id,'CRM_LEAD_SCORE_OVERRIDE_SET',
+    p_lead_id,v_request_key,v_request_hash
+  );
+  if v_result is not null then return v_result; end if;
+
+  select * into v_lead
+  from public.leads l
+  where l.organization_id=p_organization_id and l.id=p_lead_id
+  for update;
+  if not found then raise exception 'CRM Lead scoring target was not found'; end if;
+  if v_lead.scoring_revision<>p_expected_revision then
+    raise exception 'CRM Lead scoring version conflict';
+  end if;
+
+  perform set_config('app.crm_lead_scoring_mutation','allowed',true);
+
+  update public.leads
+  set manual_score_override=p_override_score,
+      manual_score_override_reason=v_reason,
+      manual_score_override_by_user_id=p_actor_user_id,
+      manual_score_override_at=now(),
+      manual_score_override_expires_at=p_expires_at,
+      scoring_revision=scoring_revision+1,
+      scoring_updated_at=now(),
+      scoring_updated_by_user_id=p_actor_user_id,
+      updated_at=now()
+  where organization_id=p_organization_id and id=p_lead_id
+  returning * into v_lead;
+
+  v_result:=jsonb_build_object(
+    'leadId',v_lead.id,
+    'opportunityScore',v_lead.opportunity_score,
+    'effectiveScore',public.crm_lead_effective_opportunity_score(
+      v_lead.opportunity_score,v_lead.manual_score_override,
+      v_lead.manual_score_override_expires_at,now()
+    ),
+    'overrideScore',v_lead.manual_score_override,
+    'overrideExpiresAt',v_lead.manual_score_override_expires_at,
+    'revision',v_lead.scoring_revision,
+    'request_hash',v_request_hash,
+    'replayed',false
+  );
+
+  insert into public.audit_logs(
+    organization_id,actor_type,actor_id,action,entity_type,entity_id,
+    before_data,after_data,correlation_id
+  ) values (
+    p_organization_id,'USER',p_actor_user_id::text,
+    'CRM_LEAD_SCORE_OVERRIDE_SET','lead',p_lead_id::text,
+    jsonb_build_object(
+      'effectiveScore',public.crm_lead_effective_opportunity_score(
+        v_lead.opportunity_score,null,null,now()
+      ),
+      'revision',p_expected_revision
+    ),
+    v_result || jsonb_build_object('reason_present',true),
+    v_request_key
+  );
+
+  return v_result - 'request_hash';
+end;
+$$;
+
+create or replace function public.clear_crm_lead_score_override(
+  p_organization_id uuid,
+  p_actor_user_id uuid,
+  p_lead_id uuid,
+  p_reason text,
+  p_expected_revision integer,
+  p_request_key text
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = public, pg_catalog
+as $$
+declare
+  v_lead public.leads%rowtype;
+  v_result jsonb;
+  v_reason text:=trim(coalesce(p_reason,''));
+  v_request_key text:=trim(coalesce(p_request_key,''));
+  v_request_hash text;
+begin
+  perform public.crm_assert_lead_scoring_actor(p_organization_id,p_actor_user_id);
+
+  if length(v_reason) not between 1 and 240
+     or p_expected_revision<0
+     or v_request_key !~ '^[A-Za-z0-9._:-]{1,200}$'
+  then
+    raise exception 'CRM Lead score override clear payload is invalid';
+  end if;
+
+  v_request_hash:=md5(concat_ws('|',
+    p_organization_id::text,p_actor_user_id::text,p_lead_id::text,
+    md5(v_reason),p_expected_revision::text
+  ));
+
+  v_result:=public.crm_lead_scoring_replay(
+    p_organization_id,'CRM_LEAD_SCORE_OVERRIDE_CLEARED',
+    p_lead_id,v_request_key,v_request_hash
+  );
+  if v_result is not null then return v_result; end if;
+
+  select * into v_lead
+  from public.leads l
+  where l.organization_id=p_organization_id and l.id=p_lead_id
+  for update;
+  if not found then raise exception 'CRM Lead scoring target was not found'; end if;
+  if v_lead.scoring_revision<>p_expected_revision then
+    raise exception 'CRM Lead scoring version conflict';
+  end if;
+  if v_lead.manual_score_override is null then
+    raise exception 'CRM Lead score override is not active';
+  end if;
+
+  perform set_config('app.crm_lead_scoring_mutation','allowed',true);
+
+  update public.leads
+  set manual_score_override=null,
+      manual_score_override_reason=null,
+      manual_score_override_by_user_id=null,
+      manual_score_override_at=null,
+      manual_score_override_expires_at=null,
+      scoring_revision=scoring_revision+1,
+      scoring_updated_at=now(),
+      scoring_updated_by_user_id=p_actor_user_id,
+      updated_at=now()
+  where organization_id=p_organization_id and id=p_lead_id
+  returning * into v_lead;
+
+  v_result:=jsonb_build_object(
+    'leadId',v_lead.id,
+    'opportunityScore',v_lead.opportunity_score,
+    'effectiveScore',v_lead.opportunity_score,
+    'overrideScore',null,
+    'revision',v_lead.scoring_revision,
+    'request_hash',v_request_hash,
+    'replayed',false
+  );
+
+  insert into public.audit_logs(
+    organization_id,actor_type,actor_id,action,entity_type,entity_id,
+    before_data,after_data,correlation_id
+  ) values (
+    p_organization_id,'USER',p_actor_user_id::text,
+    'CRM_LEAD_SCORE_OVERRIDE_CLEARED','lead',p_lead_id::text,
+    jsonb_build_object('overrideWasActive',true,'revision',p_expected_revision),
+    v_result || jsonb_build_object('reason_present',true),
+    v_request_key
+  );
+
+  return v_result - 'request_hash';
+end;
+$$;
+
+create or replace function public.record_crm_lead_model_score_suggestion(
+  p_organization_id uuid,
+  p_actor_user_id uuid,
+  p_lead_id uuid,
+  p_suggestion jsonb,
+  p_expected_revision integer,
+  p_request_key text
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = public, pg_catalog
+as $$
+declare
+  v_lead public.leads%rowtype;
+  v_result jsonb;
+  v_request_key text:=trim(coalesce(p_request_key,''));
+  v_request_hash text;
+  v_key text;
+  v_score_key text;
+  v_score integer;
+begin
+  perform public.crm_assert_lead_scoring_actor(p_organization_id,p_actor_user_id);
+
+  if jsonb_typeof(p_suggestion)<>'object'
+     or octet_length(p_suggestion::text)>8192
+     or p_expected_revision<0
+     or v_request_key !~ '^[A-Za-z0-9._:-]{1,200}$'
+  then
+    raise exception 'CRM Lead model score suggestion payload is invalid';
+  end if;
+
+  for v_key in select jsonb_object_keys(p_suggestion) loop
+    if v_key not in (
+      'opportunityScore','fitScore','intentScore','engagementScore',
+      'reasons','provider','model','modelVersion','sourceRunId'
+    ) then
+      raise exception 'CRM Lead model score suggestion contains unsupported fields';
+    end if;
+  end loop;
+
+  if nullif(trim(p_suggestion->>'provider'),'') is null
+     or length(p_suggestion->>'provider')>80
+     or nullif(trim(p_suggestion->>'model'),'') is null
+     or length(p_suggestion->>'model')>160
+     or nullif(trim(p_suggestion->>'modelVersion'),'') is null
+     or length(p_suggestion->>'modelVersion')>80
+     or not (
+       p_suggestion ? 'opportunityScore'
+       or p_suggestion ? 'fitScore'
+       or p_suggestion ? 'intentScore'
+       or p_suggestion ? 'engagementScore'
+     )
+  then
+    raise exception 'CRM Lead model score suggestion provenance is invalid';
+  end if;
+
+  foreach v_score_key in array array[
+    'opportunityScore','fitScore','intentScore','engagementScore'
+  ] loop
+    if p_suggestion ? v_score_key then
+      if (p_suggestion->>v_score_key) !~ '^[0-9]{1,3}$' then
+        raise exception 'CRM Lead model score suggestion score is invalid';
+      end if;
+      v_score:=(p_suggestion->>v_score_key)::integer;
+      if v_score not between 0 and 100 then
+        raise exception 'CRM Lead model score suggestion score is invalid';
+      end if;
+    end if;
+  end loop;
+
+  if p_suggestion ? 'sourceRunId'
+     and (
+       length(p_suggestion->>'sourceRunId')<1
+       or length(p_suggestion->>'sourceRunId')>160
+     )
+  then
+    raise exception 'CRM Lead model score suggestion sourceRunId is invalid';
+  end if;
+
+  if p_suggestion ? 'reasons' then
+    if jsonb_typeof(p_suggestion->'reasons')<>'array'
+       or jsonb_array_length(p_suggestion->'reasons')>20
+       or exists (
+         select 1 from jsonb_array_elements(p_suggestion->'reasons') e
+         where jsonb_typeof(e)<>'string' or length(e#>>'{}')>240
+       )
+    then
+      raise exception 'CRM Lead model score suggestion reasons are invalid';
+    end if;
+  end if;
+
+  v_request_hash:=md5(concat_ws('|',
+    p_organization_id::text,p_actor_user_id::text,p_lead_id::text,
+    md5(p_suggestion::text),p_expected_revision::text
+  ));
+
+  v_result:=public.crm_lead_scoring_replay(
+    p_organization_id,'CRM_LEAD_MODEL_SCORE_SUGGESTED',
+    p_lead_id,v_request_key,v_request_hash
+  );
+  if v_result is not null then return v_result; end if;
+
+  select * into v_lead
+  from public.leads l
+  where l.organization_id=p_organization_id and l.id=p_lead_id
+  for update;
+  if not found then raise exception 'CRM Lead scoring target was not found'; end if;
+  if v_lead.scoring_revision<>p_expected_revision then
+    raise exception 'CRM Lead scoring version conflict';
+  end if;
+
+  perform set_config('app.crm_lead_scoring_mutation','allowed',true);
+
+  update public.leads
+  set model_score_suggestion=p_suggestion,
+      model_score_suggested_at=now(),
+      scoring_revision=scoring_revision+1,
+      scoring_updated_at=now(),
+      scoring_updated_by_user_id=p_actor_user_id,
+      updated_at=now()
+  where organization_id=p_organization_id and id=p_lead_id
+  returning * into v_lead;
+
+  v_result:=jsonb_build_object(
+    'leadId',v_lead.id,
+    'opportunityScore',v_lead.opportunity_score,
+    'effectiveScore',public.crm_lead_effective_opportunity_score(
+      v_lead.opportunity_score,v_lead.manual_score_override,
+      v_lead.manual_score_override_expires_at,now()
+    ),
+    'revision',v_lead.scoring_revision,
+    'suggestionAdvisoryOnly',true,
+    'request_hash',v_request_hash,
+    'replayed',false
+  );
+
+  insert into public.audit_logs(
+    organization_id,actor_type,actor_id,action,entity_type,entity_id,
+    before_data,after_data,correlation_id
+  ) values (
+    p_organization_id,'USER',p_actor_user_id::text,
+    'CRM_LEAD_MODEL_SCORE_SUGGESTED','lead',p_lead_id::text,
+    jsonb_build_object('revision',p_expected_revision),
+    v_result || jsonb_build_object(
+      'provider',p_suggestion->>'provider',
+      'model',p_suggestion->>'model',
+      'modelVersion',p_suggestion->>'modelVersion',
+      'hasReasons',p_suggestion ? 'reasons'
+    ),
+    v_request_key
+  );
+
+  return v_result - 'request_hash';
+end;
+$$;
+
+revoke all on function public.crm_lead_effective_opportunity_score(
+  integer,integer,timestamptz,timestamptz
+) from public,anon;
+grant execute on function public.crm_lead_effective_opportunity_score(
+  integer,integer,timestamptz,timestamptz
+) to authenticated,service_role;
+
+revoke all on function public.get_crm_lead_scoring(uuid,uuid)
+  from public,anon,service_role;
+grant execute on function public.get_crm_lead_scoring(uuid,uuid)
+  to authenticated;
+
+revoke all on function public.crm_assert_lead_scoring_actor(uuid,uuid)
+  from public,anon,authenticated,service_role;
+grant execute on function public.crm_assert_lead_scoring_actor(uuid,uuid)
+  to service_role;
+
+revoke all on function public.crm_lead_scoring_replay(uuid,text,uuid,text,text)
+  from public,anon,authenticated,service_role;
+grant execute on function public.crm_lead_scoring_replay(uuid,text,uuid,text,text)
+  to service_role;
+
+revoke all on function public.record_crm_lead_deterministic_score(
+  uuid,uuid,uuid,integer,integer,integer,integer,jsonb,text,text,jsonb,integer,text
+) from public,anon,authenticated,service_role;
+grant execute on function public.record_crm_lead_deterministic_score(
+  uuid,uuid,uuid,integer,integer,integer,integer,jsonb,text,text,jsonb,integer,text
+) to service_role;
+
+revoke all on function public.recompute_crm_lead_engagement(
+  uuid,uuid,uuid,integer,text
+) from public,anon,authenticated,service_role;
+grant execute on function public.recompute_crm_lead_engagement(
+  uuid,uuid,uuid,integer,text
+) to service_role;
+
+revoke all on function public.set_crm_lead_score_override(
+  uuid,uuid,uuid,integer,text,timestamptz,integer,text
+) from public,anon,authenticated,service_role;
+grant execute on function public.set_crm_lead_score_override(
+  uuid,uuid,uuid,integer,text,timestamptz,integer,text
+) to service_role;
+
+revoke all on function public.clear_crm_lead_score_override(
+  uuid,uuid,uuid,text,integer,text
+) from public,anon,authenticated,service_role;
+grant execute on function public.clear_crm_lead_score_override(
+  uuid,uuid,uuid,text,integer,text
+) to service_role;
+
+revoke all on function public.record_crm_lead_model_score_suggestion(
+  uuid,uuid,uuid,jsonb,integer,text
+) from public,anon,authenticated,service_role;
+grant execute on function public.record_crm_lead_model_score_suggestion(
+  uuid,uuid,uuid,jsonb,integer,text
+) to service_role;
+
+revoke all on function public.guard_crm_lead_scoring_mutation()
+  from public,anon,authenticated,service_role;
+
+comment on column public.leads.opportunity_score is
+  'Canonical deterministic accepted Lead opportunity score (0..100). Model suggestions never overwrite it.';
+comment on column public.leads.fit_score is
+  'Optional evidence-backed fit dimension (0..100); NULL means not yet measured, not zero.';
+comment on column public.leads.engagement_score is
+  'Optional deterministic engagement dimension (0..100); NULL means not yet measured.';
+comment on column public.leads.manual_score_override is
+  'Explicit operator override used only for effective score while active; deterministic base opportunity_score is preserved.';
+comment on column public.leads.model_score_suggestion is
+  'Non-authoritative bounded model suggestion with provider/model/version provenance; never silently accepted.';
+
+  then
+    raise exception 'CRM Lead score override payload is invalid';
+  end if;
+
+  v_request_hash:=md5(concat_ws('|',
+    p_organization_id::text,p_actor_user_id::text,p_lead_id::text,
+    p_override_score::text,md5(v_reason),coalesce(p_expires_at::text,''),
+    p_expected_revision::text
+  ));
+
+  v_result:=public.crm_lead_scoring_replay(
+    p_organization_id,'CRM_LEAD_SCORE_OVERRIDE_SET',
+    p_lead_id,v_request_key,v_request_hash
+  );
+  if v_result is not null then return v_result; end if;
+
+  select * into v_lead
+  from public.leads l
+  where l.organization_id=p_organization_id and l.id=p_lead_id
+  for update;
+  if not found then raise exception 'CRM Lead scoring target was not found'; end if;
+  if v_lead.scoring_revision<>p_expected_revision then
+    raise exception 'CRM Lead scoring version conflict';
+  end if;
+
+  perform set_config('app.crm_lead_scoring_mutation','allowed',true);
+
+  update public.leads
+  set manual_score_override=p_override_score,
+      manual_score_override_reason=v_reason,
+      manual_score_override_by_user_id=p_actor_user_id,
+      manual_score_override_at=now(),
+      manual_score_override_expires_at=p_expires_at,
+      scoring_revision=scoring_revision+1,
+      scoring_updated_at=now(),
+      scoring_updated_by_user_id=p_actor_user_id,
+      updated_at=now()
+  where organization_id=p_organization_id and id=p_lead_id
+  returning * into v_lead;
+
+  v_result:=jsonb_build_object(
+    'leadId',v_lead.id,
+    'opportunityScore',v_lead.opportunity_score,
+    'effectiveScore',public.crm_lead_effective_opportunity_score(
+      v_lead.opportunity_score,v_lead.manual_score_override,
+      v_lead.manual_score_override_expires_at,now()
+    ),
+    'overrideScore',v_lead.manual_score_override,
+    'overrideExpiresAt',v_lead.manual_score_override_expires_at,
+    'revision',v_lead.scoring_revision,
+    'request_hash',v_request_hash,
+    'replayed',false
+  );
+
+  insert into public.audit_logs(
+    organization_id,actor_type,actor_id,action,entity_type,entity_id,
+    before_data,after_data,correlation_id
+  ) values (
+    p_organization_id,'USER',p_actor_user_id::text,
+    'CRM_LEAD_SCORE_OVERRIDE_SET','lead',p_lead_id::text,
+    jsonb_build_object(
+      'effectiveScore',public.crm_lead_effective_opportunity_score(
+        v_lead.opportunity_score,null,null,now()
+      ),
+      'revision',p_expected_revision
+    ),
+    v_result || jsonb_build_object('reason_present',true),
+    v_request_key
+  );
+
+  return v_result - 'request_hash';
+end;
+$$;
+
+create or replace function public.clear_crm_lead_score_override(
+  p_organization_id uuid,
+  p_actor_user_id uuid,
+  p_lead_id uuid,
+  p_reason text,
+  p_expected_revision integer,
+  p_request_key text
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = public, pg_catalog
+as $$
+declare
+  v_lead public.leads%rowtype;
+  v_result jsonb;
+  v_reason text:=trim(coalesce(p_reason,''));
+  v_request_key text:=trim(coalesce(p_request_key,''));
+  v_request_hash text;
+begin
+  perform public.crm_assert_lead_scoring_actor(p_organization_id,p_actor_user_id);
+
+  if length(v_reason) not between 1 and 240
+     or p_expected_revision<0
+     or v_request_key !~ '^[A-Za-z0-9._:-]{1,200}$'
+  then
+    raise exception 'CRM Lead score override clear payload is invalid';
+  end if;
+
+  v_request_hash:=md5(concat_ws('|',
+    p_organization_id::text,p_actor_user_id::text,p_lead_id::text,
+    md5(v_reason),p_expected_revision::text
+  ));
+
+  v_result:=public.crm_lead_scoring_replay(
+    p_organization_id,'CRM_LEAD_SCORE_OVERRIDE_CLEARED',
+    p_lead_id,v_request_key,v_request_hash
+  );
+  if v_result is not null then return v_result; end if;
+
+  select * into v_lead
+  from public.leads l
+  where l.organization_id=p_organization_id and l.id=p_lead_id
+  for update;
+  if not found then raise exception 'CRM Lead scoring target was not found'; end if;
+  if v_lead.scoring_revision<>p_expected_revision then
+    raise exception 'CRM Lead scoring version conflict';
+  end if;
+  if v_lead.manual_score_override is null then
+    raise exception 'CRM Lead score override is not active';
+  end if;
+
+  perform set_config('app.crm_lead_scoring_mutation','allowed',true);
+
+  update public.leads
+  set manual_score_override=null,
+      manual_score_override_reason=null,
+      manual_score_override_by_user_id=null,
+      manual_score_override_at=null,
+      manual_score_override_expires_at=null,
+      scoring_revision=scoring_revision+1,
+      scoring_updated_at=now(),
+      scoring_updated_by_user_id=p_actor_user_id,
+      updated_at=now()
+  where organization_id=p_organization_id and id=p_lead_id
+  returning * into v_lead;
+
+  v_result:=jsonb_build_object(
+    'leadId',v_lead.id,
+    'opportunityScore',v_lead.opportunity_score,
+    'effectiveScore',v_lead.opportunity_score,
+    'overrideScore',null,
+    'revision',v_lead.scoring_revision,
+    'request_hash',v_request_hash,
+    'replayed',false
+  );
+
+  insert into public.audit_logs(
+    organization_id,actor_type,actor_id,action,entity_type,entity_id,
+    before_data,after_data,correlation_id
+  ) values (
+    p_organization_id,'USER',p_actor_user_id::text,
+    'CRM_LEAD_SCORE_OVERRIDE_CLEARED','lead',p_lead_id::text,
+    jsonb_build_object('overrideWasActive',true,'revision',p_expected_revision),
+    v_result || jsonb_build_object('reason_present',true),
+    v_request_key
+  );
+
+  return v_result - 'request_hash';
+end;
+$$;
+
+create or replace function public.record_crm_lead_model_score_suggestion(
+  p_organization_id uuid,
+  p_actor_user_id uuid,
+  p_lead_id uuid,
+  p_suggestion jsonb,
+  p_expected_revision integer,
+  p_request_key text
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = public, pg_catalog
+as $$
+declare
+  v_lead public.leads%rowtype;
+  v_result jsonb;
+  v_request_key text:=trim(coalesce(p_request_key,''));
+  v_request_hash text;
+  v_key text;
+  v_score_key text;
+  v_score integer;
+begin
+  perform public.crm_assert_lead_scoring_actor(p_organization_id,p_actor_user_id);
+
+  if jsonb_typeof(p_suggestion)<>'object'
+     or octet_length(p_suggestion::text)>8192
+     or p_expected_revision<0
+     or v_request_key !~ '^[A-Za-z0-9._:-]{1,200}$'
+  then
+    raise exception 'CRM Lead model score suggestion payload is invalid';
+  end if;
+
+  for v_key in select jsonb_object_keys(p_suggestion) loop
+    if v_key not in (
+      'opportunityScore','fitScore','intentScore','engagementScore',
+      'reasons','provider','model','modelVersion','sourceRunId'
+    ) then
+      raise exception 'CRM Lead model score suggestion contains unsupported fields';
+    end if;
+  end loop;
+
+  if nullif(trim(p_suggestion->>'provider'),'') is null
+     or length(p_suggestion->>'provider')>80
+     or nullif(trim(p_suggestion->>'model'),'') is null
+     or length(p_suggestion->>'model')>160
+     or nullif(trim(p_suggestion->>'modelVersion'),'') is null
+     or length(p_suggestion->>'modelVersion')>80
+     or not (
+       p_suggestion ? 'opportunityScore'
+       or p_suggestion ? 'fitScore'
+       or p_suggestion ? 'intentScore'
+       or p_suggestion ? 'engagementScore'
+     )
+  then
+    raise exception 'CRM Lead model score suggestion provenance is invalid';
+  end if;
+
+  foreach v_score_key in array array[
+    'opportunityScore','fitScore','intentScore','engagementScore'
+  ] loop
+    if p_suggestion ? v_score_key then
+      if (p_suggestion->>v_score_key) !~ '^[0-9]{1,3}$' then
+        raise exception 'CRM Lead model score suggestion score is invalid';
+      end if;
+      v_score:=(p_suggestion->>v_score_key)::integer;
+      if v_score not between 0 and 100 then
+        raise exception 'CRM Lead model score suggestion score is invalid';
+      end if;
+    end if;
+  end loop;
+
+  if p_suggestion ? 'sourceRunId'
+     and (
+       length(p_suggestion->>'sourceRunId')<1
+       or length(p_suggestion->>'sourceRunId')>160
+     )
+  then
+    raise exception 'CRM Lead model score suggestion sourceRunId is invalid';
+  end if;
+
+  if p_suggestion ? 'reasons' then
+    if jsonb_typeof(p_suggestion->'reasons')<>'array'
+       or jsonb_array_length(p_suggestion->'reasons')>20
+       or exists (
+         select 1 from jsonb_array_elements(p_suggestion->'reasons') e
+         where jsonb_typeof(e)<>'string' or length(e#>>'{}')>240
+       )
+    then
+      raise exception 'CRM Lead model score suggestion reasons are invalid';
+    end if;
+  end if;
+
+  v_request_hash:=md5(concat_ws('|',
+    p_organization_id::text,p_actor_user_id::text,p_lead_id::text,
+    md5(p_suggestion::text),p_expected_revision::text
+  ));
+
+  v_result:=public.crm_lead_scoring_replay(
+    p_organization_id,'CRM_LEAD_MODEL_SCORE_SUGGESTED',
+    p_lead_id,v_request_key,v_request_hash
+  );
+  if v_result is not null then return v_result; end if;
+
+  select * into v_lead
+  from public.leads l
+  where l.organization_id=p_organization_id and l.id=p_lead_id
+  for update;
+  if not found then raise exception 'CRM Lead scoring target was not found'; end if;
+  if v_lead.scoring_revision<>p_expected_revision then
+    raise exception 'CRM Lead scoring version conflict';
+  end if;
+
+  perform set_config('app.crm_lead_scoring_mutation','allowed',true);
+
+  update public.leads
+  set model_score_suggestion=p_suggestion,
+      model_score_suggested_at=now(),
+      scoring_revision=scoring_revision+1,
+      scoring_updated_at=now(),
+      scoring_updated_by_user_id=p_actor_user_id,
+      updated_at=now()
+  where organization_id=p_organization_id and id=p_lead_id
+  returning * into v_lead;
+
+  v_result:=jsonb_build_object(
+    'leadId',v_lead.id,
+    'opportunityScore',v_lead.opportunity_score,
+    'effectiveScore',public.crm_lead_effective_opportunity_score(
+      v_lead.opportunity_score,v_lead.manual_score_override,
+      v_lead.manual_score_override_expires_at,now()
+    ),
+    'revision',v_lead.scoring_revision,
+    'suggestionAdvisoryOnly',true,
+    'request_hash',v_request_hash,
+    'replayed',false
+  );
+
+  insert into public.audit_logs(
+    organization_id,actor_type,actor_id,action,entity_type,entity_id,
+    before_data,after_data,correlation_id
+  ) values (
+    p_organization_id,'USER',p_actor_user_id::text,
+    'CRM_LEAD_MODEL_SCORE_SUGGESTED','lead',p_lead_id::text,
+    jsonb_build_object('revision',p_expected_revision),
+    v_result || jsonb_build_object(
+      'provider',p_suggestion->>'provider',
+      'model',p_suggestion->>'model',
+      'modelVersion',p_suggestion->>'modelVersion',
+      'hasReasons',p_suggestion ? 'reasons'
+    ),
+    v_request_key
+  );
+
+  return v_result - 'request_hash';
+end;
+$$;
+
+revoke all on function public.crm_lead_effective_opportunity_score(
+  integer,integer,timestamptz,timestamptz
+) from public,anon;
+grant execute on function public.crm_lead_effective_opportunity_score(
+  integer,integer,timestamptz,timestamptz
+) to authenticated,service_role;
+
+revoke all on function public.get_crm_lead_scoring(uuid,uuid)
+  from public,anon,service_role;
+grant execute on function public.get_crm_lead_scoring(uuid,uuid)
+  to authenticated;
+
+revoke all on function public.crm_assert_lead_scoring_actor(uuid,uuid)
+  from public,anon,authenticated,service_role;
+grant execute on function public.crm_assert_lead_scoring_actor(uuid,uuid)
+  to service_role;
+
+revoke all on function public.crm_lead_scoring_replay(uuid,text,uuid,text,text)
+  from public,anon,authenticated,service_role;
+grant execute on function public.crm_lead_scoring_replay(uuid,text,uuid,text,text)
+  to service_role;
+
+revoke all on function public.record_crm_lead_deterministic_score(
+  uuid,uuid,uuid,integer,integer,integer,integer,jsonb,text,text,jsonb,integer,text
+) from public,anon,authenticated,service_role;
+grant execute on function public.record_crm_lead_deterministic_score(
+  uuid,uuid,uuid,integer,integer,integer,integer,jsonb,text,text,jsonb,integer,text
+) to service_role;
+
+revoke all on function public.recompute_crm_lead_engagement(
+  uuid,uuid,uuid,integer,text
+) from public,anon,authenticated,service_role;
+grant execute on function public.recompute_crm_lead_engagement(
+  uuid,uuid,uuid,integer,text
+) to service_role;
+
+revoke all on function public.set_crm_lead_score_override(
+  uuid,uuid,uuid,integer,text,timestamptz,integer,text
+) from public,anon,authenticated,service_role;
+grant execute on function public.set_crm_lead_score_override(
+  uuid,uuid,uuid,integer,text,timestamptz,integer,text
+) to service_role;
+
+revoke all on function public.clear_crm_lead_score_override(
+  uuid,uuid,uuid,text,integer,text
+) from public,anon,authenticated,service_role;
+grant execute on function public.clear_crm_lead_score_override(
+  uuid,uuid,uuid,text,integer,text
+) to service_role;
+
+revoke all on function public.record_crm_lead_model_score_suggestion(
+  uuid,uuid,uuid,jsonb,integer,text
+) from public,anon,authenticated,service_role;
+grant execute on function public.record_crm_lead_model_score_suggestion(
+  uuid,uuid,uuid,jsonb,integer,text
+) to service_role;
+
+revoke all on function public.guard_crm_lead_scoring_mutation()
+  from public,anon,authenticated,service_role;
+
+comment on column public.leads.opportunity_score is
+  'Canonical deterministic accepted Lead opportunity score (0..100). Model suggestions never overwrite it.';
+comment on column public.leads.fit_score is
+  'Optional evidence-backed fit dimension (0..100); NULL means not yet measured, not zero.';
+comment on column public.leads.engagement_score is
+  'Optional deterministic engagement dimension (0..100); NULL means not yet measured.';
+comment on column public.leads.manual_score_override is
+  'Explicit operator override used only for effective score while active; deterministic base opportunity_score is preserved.';
+comment on column public.leads.model_score_suggestion is
+  'Non-authoritative bounded model suggestion with provider/model/version provenance; never silently accepted.';
+
+     or p_expected_revision is null
+     or p_expected_revision<0 then
+    raise exception 'CRM Lead engagement recompute payload is invalid';
+  end if;
+
+  v_request_hash:=md5(concat_ws('|',
+    p_organization_id::text,p_actor_user_id::text,p_lead_id::text,
+    p_expected_revision::text,'CRM_ENGAGEMENT_V1'
+  ));
+
+  v_result:=public.crm_lead_scoring_replay(
+    p_organization_id,'CRM_LEAD_ENGAGEMENT_RECOMPUTED',
+    p_lead_id,v_request_key,v_request_hash
+  );
+  if v_result is not null then return v_result; end if;
+
+  select * into v_lead
+  from public.leads l
+  where l.organization_id=p_organization_id and l.id=p_lead_id
+  for update;
+  if not found then raise exception 'CRM Lead scoring target was not found'; end if;
+  if v_lead.scoring_revision<>p_expected_revision then
+    raise exception 'CRM Lead scoring version conflict';
+  end if;
+
+  select
+    count(*)::integer,
+    count(*) filter (where c.last_inbound_at is not null)::integer,
+    count(*) filter (
+      where c.stage in ('ACTIVE','CLOSING','FOLLOW_UP_DUE','NEEDS_HUMAN','HOT')
+    )::integer,
+    max(c.last_inbound_at)
+  into
+    v_conversation_count,
+    v_inbound_conversation_count,
+    v_active_conversation_count,
+    v_latest_inbound_at
+  from public.sales_conversations c
+  where c.organization_id=p_organization_id
+    and c.lead_id=p_lead_id;
+
+  select count(*)::integer
+    into v_read_receipt_count
+  from public.conversation_messages m
+  where m.organization_id=p_organization_id
+    and m.lead_id=p_lead_id
+    and m.read_at is not null;
+
+  if v_inbound_conversation_count>0 then
+    v_engagement:=v_engagement+40;
+    v_reasons:=v_reasons||jsonb_build_array('INBOUND_CONVERSATION_EVIDENCE');
+  end if;
+  if v_lead.status::text in ('REPLIED','INTERESTED','HOT','HUMAN','WON') then
+    v_engagement:=v_engagement+30;
+    v_reasons:=v_reasons||jsonb_build_array('CRM_STAGE_RESPONSE_EVIDENCE');
+  end if;
+  if v_read_receipt_count>0 then
+    v_engagement:=v_engagement+20;
+    v_reasons:=v_reasons||jsonb_build_array('PROVIDER_READ_RECEIPT_EVIDENCE');
+  end if;
+  if v_active_conversation_count>0 then
+    v_engagement:=v_engagement+10;
+    v_reasons:=v_reasons||jsonb_build_array('ACTIVE_CONVERSATION_EVIDENCE');
+  end if;
+  v_engagement:=least(100,greatest(0,v_engagement));
+
+  v_engagement_evidence:=jsonb_build_object(
+    'policyVersion','crm-engagement-v1',
+    'conversationCount',v_conversation_count,
+    'inboundConversationCount',v_inbound_conversation_count,
+    'readReceiptCount',v_read_receipt_count,
+    'activeConversationCount',v_active_conversation_count,
+    'latestInboundAt',v_latest_inbound_at,
+    'reasonCodes',v_reasons
+  );
+
+  perform set_config('app.crm_lead_scoring_mutation','allowed',true);
+
+  update public.leads
+  set engagement_score=v_engagement,
+      scoring_evidence=coalesce(scoring_evidence,'{}'::jsonb)
+        || jsonb_build_object('engagement',v_engagement_evidence),
+      scoring_revision=scoring_revision+1,
+      scoring_updated_at=now(),
+      scoring_updated_by_user_id=p_actor_user_id,
+      updated_at=now()
+  where organization_id=p_organization_id and id=p_lead_id
+  returning * into v_lead;
+
+  v_result:=jsonb_build_object(
+    'leadId',v_lead.id,
+    'opportunityScore',v_lead.opportunity_score,
+    'effectiveScore',public.crm_lead_effective_opportunity_score(
+      v_lead.opportunity_score,v_lead.manual_score_override,
+      v_lead.manual_score_override_expires_at,now()
+    ),
+    'fitScore',v_lead.fit_score,
+    'intentScore',v_lead.intent_score,
+    'engagementScore',v_lead.engagement_score,
+    'revision',v_lead.scoring_revision,
+    'request_hash',v_request_hash,
+    'replayed',false
+  );
+
+  insert into public.audit_logs(
+    organization_id,actor_type,actor_id,action,entity_type,entity_id,
+    before_data,after_data,correlation_id
+  ) values (
+    p_organization_id,'USER',p_actor_user_id::text,
+    'CRM_LEAD_ENGAGEMENT_RECOMPUTED','lead',p_lead_id::text,
+    jsonb_build_object('revision',p_expected_revision),
     v_result || jsonb_build_object(
       'evidenceCounts',jsonb_build_object(
         'conversations',v_conversation_count,
