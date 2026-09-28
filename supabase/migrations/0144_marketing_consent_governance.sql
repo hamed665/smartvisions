@@ -360,7 +360,7 @@ as $$
       and s.permission_channel=i.channel
       and s.permission_purpose=i.purpose
       and s.permission_recipient=i.recipient
-    order by s.retrieved_at desc,s.created_at desc,s.id desc
+    order by s.retrieved_at desc,s.id desc
     limit 1
   )
   select
@@ -441,7 +441,6 @@ as $$
       s.permission_purpose,
       s.permission_recipient,
       s.retrieved_at desc,
-      s.created_at desc,
       s.id desc
   ) x
   order by x.retrieved_at desc,x.id desc
