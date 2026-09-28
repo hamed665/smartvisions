@@ -41,6 +41,23 @@ begin
     raise exception 'SEGMENT-SNAPSHOT creation RPC grants are incorrect';
   end if;
 
+  if not has_table_privilege('service_role','public.crm_segments','SELECT')
+     or not has_table_privilege('service_role','public.crm_segment_versions','SELECT')
+     or not has_table_privilege('service_role','public.crm_deals','SELECT')
+     or not has_table_privilege('service_role','public.crm_custom_field_values','SELECT')
+  then
+    raise exception 'SEGMENT-SNAPSHOT trusted evaluator read grants are incomplete';
+  end if;
+
+  if has_table_privilege('service_role','public.crm_segments','INSERT')
+     or has_table_privilege('service_role','public.crm_segments','UPDATE')
+     or has_table_privilege('service_role','public.crm_segments','DELETE')
+     or has_table_privilege('service_role','public.crm_deals','UPDATE')
+     or has_table_privilege('service_role','public.crm_custom_field_values','UPDATE')
+  then
+    raise exception 'SEGMENT-SNAPSHOT widened canonical CRM mutation privileges';
+  end if;
+
   if (
     select p.prosecdef
     from pg_proc p
@@ -133,6 +150,39 @@ begin
   end;
 end;
 $snapshot_create_replay$;
+
+do $snapshot_deal_custom_field$
+declare
+  v_segment public.crm_segments%rowtype;
+  v_snapshot public.crm_segment_snapshots%rowtype;
+begin
+  select *
+    into v_segment
+  from public.crm_segments
+  where organization_id='00000000-0000-0000-0000-000000000c01'
+    and last_request_key='segment-v2-deal-contract';
+
+  if v_segment.id is null or v_segment.entity_type<>'DEAL' then
+    raise exception 'SEGMENT-SNAPSHOT Deal Custom Field Segment fixture is missing';
+  end if;
+
+  v_snapshot:=public.create_crm_segment_snapshot(
+    v_segment.organization_id,
+    '00000000-0000-0000-0000-00000000c001',
+    v_segment.id,
+    v_segment.current_definition_version,
+    'MANUAL',
+    'smoke:deal-custom',
+    'segment-snapshot-deal-custom'
+  );
+
+  if v_snapshot.entity_type<>'DEAL'
+     or v_snapshot.member_count<>1
+  then
+    raise exception 'SEGMENT-SNAPSHOT Deal Custom Field freeze failed: %',to_jsonb(v_snapshot);
+  end if;
+end;
+$snapshot_deal_custom_field$;
 
 reset role;
 set role authenticated;
