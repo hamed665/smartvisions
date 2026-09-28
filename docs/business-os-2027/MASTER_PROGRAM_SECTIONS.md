@@ -569,6 +569,16 @@ Extend governed segments to justified entities:
 - manual override;
 - model-assisted suggestions with deterministic ownership.
 
+
+**Current evidence checkpoint — PRODUCTION_VERIFIED (2026-09-28):**
+- PR #326 / Production migration `0138_sales_scoring_governance` extends canonical `public.leads`; no second score store or qualification engine exists.
+- Existing deterministic score truth remains authoritative while fit/engagement provenance, revisioning, manual override/correction/expiry and advisory model suggestions are explicitly governed.
+- Hunter acquisition scoring remains source-attributed evidence and is not conflated with canonical CRM Lead truth.
+- Exact-head CI `36424281940`, exact-main CI `36424607322` and Cloudflare Production Deploy `36424885898` succeeded on `main@f6b08675d8c3a83aa6dccd8790fe9b9077e1c7ea`.
+- Production migration version is `20260928125243`; 19 existing Leads were not rescored/backfilled and all new governance fields remain unused until real evidence is written.
+- RLS/guard trigger and service-bound SECURITY INVOKER mutation contracts are live; controlled PostgreSQL 17 smoke proved replay/conflict safety, manual override correction, advisory-only model scoring, bounded engagement recompute, tenant isolation, audit privacy and zero outbound side effects.
+- Disposition: current RC scope is **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**.
+
 Production closeout:
 - Canonical accepted scoring authority remains `public.leads`; PR #326 extended the existing authority rather than creating a second score table/engine.
 - Migration `0138_sales_scoring_governance` adds governed fit/engagement dimensions, bounded evidence + policy/source provenance, optimistic scoring revision, explicit human override with expiry/correction semantics, and separately stored advisory model suggestions.
