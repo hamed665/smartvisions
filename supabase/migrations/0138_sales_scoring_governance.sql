@@ -1081,6 +1081,32 @@ begin
 end;
 $$;
 
+-- SECURITY INVOKER scoring functions intentionally run as service_role.
+-- Fresh environments do not reliably inherit the historical Production table grants,
+-- so declare the minimum trusted Lead privileges this Work Package actually needs.
+grant select,insert on public.leads to service_role;
+grant update (
+  opportunity_score,
+  fit_score,
+  intent_score,
+  engagement_score,
+  score_reasons,
+  scoring_source,
+  scoring_policy_version,
+  scoring_evidence,
+  scoring_revision,
+  scoring_updated_at,
+  scoring_updated_by_user_id,
+  manual_score_override,
+  manual_score_override_reason,
+  manual_score_override_by_user_id,
+  manual_score_override_at,
+  manual_score_override_expires_at,
+  model_score_suggestion,
+  model_score_suggested_at,
+  updated_at
+) on public.leads to service_role;
+
 revoke all on function public.crm_lead_effective_opportunity_score(
   integer,integer,timestamptz,timestamptz
 ) from public,anon;
