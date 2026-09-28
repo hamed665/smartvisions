@@ -993,7 +993,7 @@ begin
      or length(trim(coalesce(p_request_key,''))) not between 1 and 200
   then raise exception 'CRM Segment create payload is invalid'; end if;
 
-  select s.*,v.* into v_segment,v_version
+  select s,v into v_segment,v_version
   from public.crm_segments s
   join public.crm_segment_versions v
     on v.organization_id=s.organization_id
