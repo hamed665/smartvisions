@@ -8,6 +8,12 @@
 -- Existing Production Leads are not rescored or backfilled. New governance fields stay
 -- NULL/revision 0 until real evidence is written through the governed contract.
 
+-- Production already has score_reasons as canonical Lead truth, but the
+-- reconstructed numbered migration chain did not create it. Reconcile that
+-- historical drift idempotently before applying governance.
+alter table public.leads
+  add column if not exists score_reasons jsonb not null default '[]'::jsonb;
+
 alter table public.leads
   add column if not exists fit_score integer,
   add column if not exists engagement_score integer,
@@ -439,6 +445,7 @@ begin
      or p_intent_score not between 0 and 100
      or (p_fit_score is not null and p_fit_score not between 0 and 100)
      or (p_engagement_score is not null and p_engagement_score not between 0 and 100)
+     or p_score_reasons is null
      or jsonb_typeof(p_score_reasons)<>'array'
      or jsonb_array_length(p_score_reasons)>50
      or octet_length(p_score_reasons::text)>16384
@@ -446,6 +453,7 @@ begin
        select 1 from jsonb_array_elements(p_score_reasons) e
        where jsonb_typeof(e)<>'string' or length(e#>>'{}')>500
      )
+     or p_evidence is null
      or jsonb_typeof(p_evidence)<>'object'
      or octet_length(p_evidence::text)>8192
      or v_source not in (
