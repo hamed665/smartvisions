@@ -666,10 +666,13 @@ begin
         'id', b.id,
         'name', b.name,
         'countryCode', b.country_code,
-        'city', b.city,
-        'category', b.category,
-        'officialWebsite', b.official_website,
-        'formattedAddress', b.formatted_address,
+        -- These enrichment columns exist in current Production but are not part of
+        -- the oldest supported Business bootstrap. Read them opportunistically
+        -- from the row JSON so Account v2 remains backward-compatible.
+        'city', to_jsonb(b) ->> 'city',
+        'category', to_jsonb(b) ->> 'category',
+        'officialWebsite', to_jsonb(b) ->> 'official_website',
+        'formattedAddress', to_jsonb(b) ->> 'formatted_address',
         'lifecycle', b.account_lifecycle,
         'ownerUserId', b.account_owner_user_id,
         'parentBusinessId', b.parent_business_id,
