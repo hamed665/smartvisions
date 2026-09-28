@@ -49,6 +49,16 @@ begin
     if sqlerrm not like 'CRM Lead scoring fields require the governed scoring mutation boundary%' then raise; end if;
   end;
 
+  perform set_config('app.crm_lead_scoring_mutation','allowed',true);
+  begin
+    update public.leads
+    set opportunity_score=98
+    where id='60000000-0000-0000-0000-000000000c01';
+    raise exception 'Authenticated browser spoofed scoring mutation marker';
+  exception when others then
+    if sqlerrm not like 'CRM Lead scoring fields require the governed scoring mutation boundary%' then raise; end if;
+  end;
+
   begin
     insert into public.leads(
       id,organization_id,business_id,status,agent_mode,
