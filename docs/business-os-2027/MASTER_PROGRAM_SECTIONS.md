@@ -441,12 +441,14 @@ Unify:
 - branch/business relationship;
 - B2B lifecycle.
 
-**Current implementation decision — ACTIVE (not yet Production evidence):**
-- Reuse canonical external Company/Account authority `public.businesses`; do not create a second `crm_accounts` store.
-- Reuse `crm_person_business_relationships` for evidence-backed contacts.
-- External Account hierarchy may relate Business records as branch/subsidiary/division with cycle and tenant guards.
-- Keep `tenant_businesses` / `branches` exclusively for the tenant's own operating hierarchy.
-- Existing Companies must remain `UNCLASSIFIED` until governed lifecycle evidence exists; discovery/Lead existence is not Customer status.
+**Current evidence checkpoint — PRODUCTION_VERIFIED (2026-09-28):**
+- PR #314 / Production migration `crm_account_v2_governance` extends canonical `public.businesses`; no second `crm_accounts` store exists.
+- `crm_person_business_relationships` remains evidence-backed Contact authority.
+- External branch/subsidiary/division hierarchy is Organization-bound and cycle-safe; `tenant_businesses` / `branches` remain the tenant operating hierarchy.
+- Account ownership is constrained to assignable Organization members and governed by OWNER/ADMIN/SALES_MANAGER mutation authority.
+- B2B lifecycle requires explicit bounded evidence. Production has 19 Businesses, all 19 `UNCLASSIFIED`, 0 owner assignments and 0 external hierarchy links; migration inferred nothing.
+- Authenticated Account read is SECURITY INVOKER; trusted mutations are service-role-only SECURITY INVOKER; RLS and governance trigger are live.
+- Exact-main CI `36370424412` and Cloudflare Production Deploy `36370581976` succeeded on `main@88a6ab7f1b4f4241ea031deda85b5cecd66b7bc1`.
 
 ## CRM-CUSTOM-OBJECTS
 
