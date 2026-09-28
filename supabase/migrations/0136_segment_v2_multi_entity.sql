@@ -433,50 +433,73 @@ begin
 
     -- exact lifecycle/state allowlists where canonical values are closed.
     if v_entity_type='PERSON' and v_field='status' then
-      if v_operator in ('EQ','NEQ') and upper(p_node->>'value') not in ('ACTIVE','MERGED','RETIRED') then
+      if v_operator in ('EQ','NEQ') and (p_node->>'value') not in ('ACTIVE','MERGED','RETIRED') then
         raise exception 'CRM Segment Person status value is invalid';
       end if;
       if v_operator in ('IN','NOT_IN') then
         for v_item in select value from jsonb_array_elements(p_node->'value') loop
-          if upper(v_item #>> '{}') not in ('ACTIVE','MERGED','RETIRED') then
+          if (v_item #>> '{}') not in ('ACTIVE','MERGED','RETIRED') then
             raise exception 'CRM Segment Person status list contains invalid value';
           end if;
         end loop;
       end if;
     elsif v_entity_type='DEAL' and v_field='state' then
-      if v_operator in ('EQ','NEQ') and upper(p_node->>'value') not in ('OPEN','WON','LOST') then
+      if v_operator in ('EQ','NEQ') and (p_node->>'value') not in ('OPEN','WON','LOST') then
         raise exception 'CRM Segment Deal state value is invalid';
       end if;
       if v_operator in ('IN','NOT_IN') then
         for v_item in select value from jsonb_array_elements(p_node->'value') loop
-          if upper(v_item #>> '{}') not in ('OPEN','WON','LOST') then
+          if (v_item #>> '{}') not in ('OPEN','WON','LOST') then
             raise exception 'CRM Segment Deal state list contains invalid value';
           end if;
         end loop;
       end if;
     elsif v_entity_type='ACCOUNT' and v_field='account_lifecycle' then
       if v_operator in ('EQ','NEQ')
-         and upper(p_node->>'value') not in (
+         and (p_node->>'value') not in (
            'UNCLASSIFIED','PROSPECT','QUALIFIED','CUSTOMER','FORMER_CUSTOMER','PARTNER','ARCHIVED'
          ) then
         raise exception 'CRM Segment Account lifecycle value is invalid';
       end if;
       if v_operator in ('IN','NOT_IN') then
         for v_item in select value from jsonb_array_elements(p_node->'value') loop
-          if upper(v_item #>> '{}') not in (
+          if (v_item #>> '{}') not in (
             'UNCLASSIFIED','PROSPECT','QUALIFIED','CUSTOMER','FORMER_CUSTOMER','PARTNER','ARCHIVED'
           ) then
             raise exception 'CRM Segment Account lifecycle list contains invalid value';
           end if;
         end loop;
       end if;
+    elsif v_entity_type='ACCOUNT' and v_field='country_code' then
+      if v_operator in ('EQ','NEQ') and (p_node->>'value') !~ '^[A-Z]{2}$' then
+        raise exception 'CRM Segment Account country code is invalid';
+      end if;
+      if v_operator in ('IN','NOT_IN') then
+        for v_item in select value from jsonb_array_elements(p_node->'value') loop
+          if (v_item #>> '{}') !~ '^[A-Z]{2}$' then
+            raise exception 'CRM Segment Account country-code list contains invalid value';
+          end if;
+        end loop;
+      end if;
+    elsif v_entity_type='ACCOUNT' and v_field='hierarchy_relation' then
+      if v_operator in ('EQ','NEQ')
+         and (p_node->>'value') not in ('BRANCH_OF','SUBSIDIARY_OF','DIVISION_OF') then
+        raise exception 'CRM Segment Account hierarchy relation is invalid';
+      end if;
+      if v_operator in ('IN','NOT_IN') then
+        for v_item in select value from jsonb_array_elements(p_node->'value') loop
+          if (v_item #>> '{}') not in ('BRANCH_OF','SUBSIDIARY_OF','DIVISION_OF') then
+            raise exception 'CRM Segment Account hierarchy list contains invalid value';
+          end if;
+        end loop;
+      end if;
     elsif v_entity_type='DEAL' and v_field='currency' then
-      if v_operator in ('EQ','NEQ') and upper(p_node->>'value') !~ '^[A-Z]{3}$' then
+      if v_operator in ('EQ','NEQ') and (p_node->>'value') !~ '^[A-Z]{3}$' then
         raise exception 'CRM Segment Deal currency is invalid';
       end if;
       if v_operator in ('IN','NOT_IN') then
         for v_item in select value from jsonb_array_elements(p_node->'value') loop
-          if upper(v_item #>> '{}') !~ '^[A-Z]{3}$' then
+          if (v_item #>> '{}') !~ '^[A-Z]{3}$' then
             raise exception 'CRM Segment Deal currency list contains invalid value';
           end if;
         end loop;
