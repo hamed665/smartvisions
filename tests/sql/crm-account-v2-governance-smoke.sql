@@ -175,7 +175,8 @@ begin
     raise exception 'Authenticated user directly changed governed Account fields';
   exception
     when others then
-      if sqlerrm not like 'CRM Account governance requires the trusted server boundary%' then
+      if sqlerrm not like 'CRM Account governance requires the trusted server boundary%'
+         and sqlerrm not like 'permission denied for table businesses%' then
         raise;
       end if;
   end;
