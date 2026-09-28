@@ -217,7 +217,7 @@ begin
   from public.record_crm_support_csat_manual(
     '00000000-0000-0000-0000-000000000c01',
     '00000000-0000-0000-0000-00000000c001',
-    v_case,5,'Support private CSAT comment','verified-fixture-csat',v_version
+    v_case,5::smallint,'Support private CSAT comment','verified-fixture-csat',v_version
   );
 
   select resolved_version into v_version
