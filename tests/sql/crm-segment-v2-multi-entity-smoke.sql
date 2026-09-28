@@ -108,8 +108,8 @@ begin
   if v_eval->>'entityType'<>'PERSON'
      or not exists (
        select 1
-       from jsonb_array_elements_text(v_eval->'entityIds') id
-       where id=v_person::text
+       from jsonb_array_elements_text(v_eval->'entityIds') as item(value)
+       where item.value=v_person::text
      ) then
     raise exception 'SEGMENT-V2 Person evaluation missed canonical active Person: %',v_eval;
   end if;
@@ -199,8 +199,8 @@ begin
   if v_eval->>'entityType'<>'ACCOUNT'
      or not exists (
        select 1
-       from jsonb_array_elements_text(v_eval->'entityIds') id
-       where id='10000000-0000-0000-0000-000000000c01'
+       from jsonb_array_elements_text(v_eval->'entityIds') as item(value)
+       where item.value='10000000-0000-0000-0000-000000000c01'
      ) then
     raise exception 'SEGMENT-V2 Account evaluation missed canonical unclassified Account: %',v_eval;
   end if;
