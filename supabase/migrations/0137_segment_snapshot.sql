@@ -540,6 +540,30 @@ grant execute on function public.crm_validate_segment_v2_predicate_node(
 grant execute on function public.crm_segment_predicate_matches_v2(
   uuid,text,uuid,jsonb
 ) to service_role;
+grant execute on function public.crm_validate_segment_deal_custom_predicate(
+  uuid,jsonb
+) to service_role;
+grant execute on function public.crm_segment_entity_context(
+  uuid,text,uuid
+) to service_role;
+grant execute on function public.crm_segment_custom_field_matches_entity(
+  uuid,text,uuid,jsonb
+) to service_role;
+grant execute on function public.crm_segment_predicate_matches_v2_node(
+  uuid,text,uuid,jsonb,jsonb
+) to service_role;
+grant execute on function public.crm_validate_segment_predicate_node(
+  uuid,text,jsonb,integer
+) to service_role;
+grant execute on function public.crm_segment_predicate_matches_lead(
+  uuid,uuid,jsonb
+) to service_role;
+grant execute on function public.crm_segment_predicate_matches_lead_node(
+  uuid,uuid,text,integer,integer,uuid,timestamptz,timestamptz,jsonb
+) to service_role;
+grant execute on function public.crm_segment_valid_uuid_text(text) to service_role;
+grant execute on function public.crm_segment_valid_timestamptz_text(text) to service_role;
+grant execute on function public.crm_segment_valid_date_text(text) to service_role;
 
 revoke all on function public.guard_crm_segment_snapshot_immutable()
   from public,anon,authenticated,service_role;
