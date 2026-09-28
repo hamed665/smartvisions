@@ -318,6 +318,18 @@ begin
   ) then
     raise exception 'service_role cannot execute Customer 360 Person link';
   end if;
+
+  if not has_column_privilege('service_role', 'public.crm_tasks', 'person_id', 'UPDATE')
+     or not has_column_privilege('service_role', 'public.crm_deals', 'person_id', 'UPDATE')
+     or not has_column_privilege('service_role', 'public.crm_tasks', 'business_id', 'SELECT')
+     or not has_column_privilege('service_role', 'public.crm_deals', 'business_id', 'SELECT') then
+    raise exception 'Customer 360 narrow Task/Deal service grants are incomplete';
+  end if;
+
+  if has_table_privilege('service_role', 'public.crm_tasks', 'UPDATE')
+     or has_table_privilege('service_role', 'public.crm_deals', 'UPDATE') then
+    raise exception 'Customer 360 widened Task/Deal service_role to table-level UPDATE';
+  end if;
 end;
 $customer360_security$;
 
