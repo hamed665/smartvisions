@@ -171,17 +171,24 @@ export async function POST(request: Request) {
     const parentBusinessId = body.parentBusinessId === null || body.parentBusinessId === ''
       ? null
       : body.parentBusinessId;
-    const relation = body.relation === null || body.relation === '' ? null : body.relation;
+    const relationValue = body.relation;
 
     if (parentBusinessId !== null && !isUuid(parentBusinessId)) {
       return NextResponse.json({ error: 'Invalid CRM Account parent' }, { status: 400 });
     }
-    if (parentBusinessId !== null && !isCrmAccountHierarchyRelation(relation)) {
+    if (parentBusinessId !== null && !isCrmAccountHierarchyRelation(relationValue)) {
       return NextResponse.json({ error: 'CRM Account hierarchy relation is required' }, { status: 400 });
     }
-    if (parentBusinessId === null && relation !== null) {
+    if (parentBusinessId === null
+        && relationValue !== null
+        && relationValue !== ''
+        && relationValue !== undefined) {
       return NextResponse.json({ error: 'CRM Account hierarchy relation requires a parent' }, { status: 400 });
     }
+
+    const relation = parentBusinessId === null
+      ? null
+      : (isCrmAccountHierarchyRelation(relationValue) ? relationValue : null);
 
     const result = await setCrmAccountParentManual({
       service,
