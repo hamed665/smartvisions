@@ -779,11 +779,11 @@ begin
   if v_case.status in ('RESOLVED','CLOSED') then raise exception 'Resolved CRM Support Case cannot be escalated'; end if;
   if v_case.escalation_level>=3 then raise exception 'CRM Support Case escalation limit reached'; end if;
   if v_case.version<>p_expected_version then raise exception 'CRM Support Case version conflict'; end if;
-  update public.crm_support_cases
-    set escalation_level=escalation_level+1,escalated_at=now(),
-        updated_by_user_id=p_actor_user_id,version=version+1,updated_at=now()
-  where organization_id=p_organization_id and id=p_case_id
-  returning id,version,crm_support_cases.escalation_level
+  update public.crm_support_cases as c
+    set escalation_level=c.escalation_level+1,escalated_at=now(),
+        updated_by_user_id=p_actor_user_id,version=c.version+1,updated_at=now()
+  where c.organization_id=p_organization_id and c.id=p_case_id
+  returning c.id,c.version,c.escalation_level
     into resolved_case_id,resolved_version,escalation_level;
   insert into public.audit_logs(
     organization_id,actor_type,actor_id,action,entity_type,entity_id,before_data,after_data,correlation_id
