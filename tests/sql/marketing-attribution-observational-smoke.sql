@@ -141,6 +141,11 @@ begin
 end;
 $attribution_campaign_fixtures$;
 
+-- The trusted RPC checks above intentionally run as service_role. The remaining
+-- rows are disposable CI fixtures, so restore the harness owner instead of
+-- broadening service_role INSERT privileges on canonical Conversation tables.
+reset role;
+
 insert into public.outreach_messages(
   id,organization_id,lead_id,campaign_id,
   channel,direction,status,provider_message_id,body,
