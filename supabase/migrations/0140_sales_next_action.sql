@@ -68,13 +68,8 @@ to authenticated
 with check (
   creator_type='USER'
   and created_by_user_id=(select auth.uid())
-  and (
-    (source_type='MANUAL' and source_id is null)
-    or (
-      source_type='NEXT_ACTION'
-      and nullif(trim(source_id),'') is not null
-    )
-  )
+  and source_type='MANUAL'
+  and source_id is null
   and public.crm_task_can_manage(organization_id,assignee_user_id)
 );
 
@@ -89,8 +84,10 @@ declare
   v_model_marker text:=coalesce(current_setting('app.crm_next_action_model_mutation',true),'');
 begin
   if tg_op='INSERT' then
-    if new.source_type='NEXT_ACTION' and v_accept_marker<>'1' then
-      raise exception 'NEXT_ACTION CRM task must be accepted through governed candidate materialization';
+    if new.source_type='NEXT_ACTION'
+       and (current_user<>'service_role' or v_accept_marker<>'1')
+    then
+      raise exception 'NEXT_ACTION CRM task requires trusted governed candidate materialization';
     end if;
 
     if new.next_action_model_suggestion is not null
@@ -412,6 +409,7 @@ $next_action_queue$;
 
 create or replace function public.accept_crm_next_action_candidate(
   p_organization_id uuid,
+  p_actor_user_id uuid,
   p_candidate_kind text,
   p_entity_id uuid,
   p_assignee_user_id uuid default null,
@@ -429,7 +427,9 @@ security invoker
 set search_path=public,auth,pg_catalog
 as $accept_next_action$
 declare
-  v_actor uuid:=auth.uid();
+  v_actor uuid:=p_actor_user_id;
+  v_actor_role text;
+  v_assignee_role text;
   v_business_id uuid;
   v_lead_id uuid;
   v_deal_id uuid;
@@ -447,9 +447,24 @@ declare
   v_existing record;
   v_task_id uuid;
 begin
-  if v_actor is null then
-    raise exception 'authentication required';
+  if current_user<>'service_role' then
+    raise exception 'next action acceptance requires trusted service boundary';
   end if;
+  if v_actor is null then
+    raise exception 'next action acceptance actor is required';
+  end if;
+
+  select m.role into v_actor_role
+  from public.organization_members m
+  where m.organization_id=p_organization_id
+    and m.user_id=v_actor;
+
+  if v_actor_role is null
+     or v_actor_role not in ('OWNER','ADMIN','SALES_MANAGER','SALES_AGENT')
+  then
+    raise exception 'next action acceptance actor is not permitted';
+  end if;
+
   if p_candidate_kind not in ('LEAD_STALE','DEAL_STALE','DEAL_CLOSE_OVERDUE') then
     raise exception 'unsupported next action candidate kind';
   end if;
@@ -615,8 +630,25 @@ begin
     v_priority:='HIGH';
   end if;
 
-  if not public.crm_task_can_manage(p_organization_id,v_assignee) then
-    raise exception 'next action Task assignment is not permitted';
+  if v_assignee is null then
+    raise exception 'next action Task requires a human assignee';
+  end if;
+
+  select m.role into v_assignee_role
+  from public.organization_members m
+  where m.organization_id=p_organization_id
+    and m.user_id=v_assignee;
+
+  if v_assignee_role is null
+     or v_assignee_role not in ('OWNER','ADMIN','SALES_MANAGER','SALES_AGENT')
+  then
+    raise exception 'next action Task assignee is not permitted';
+  end if;
+
+  if v_actor_role='SALES_AGENT'
+     and v_assignee is distinct from v_actor
+  then
+    raise exception 'Sales Agent cannot assign next action to another user';
   end if;
 
   if v_due<=now()-interval '1 minute' then
@@ -632,6 +664,7 @@ begin
   end if;
 
   perform set_config('app.crm_next_action_accept','1',true);
+  perform set_config('app.crm_next_action_actor',v_actor::text,true);
 
   insert into public.crm_tasks(
     organization_id,
@@ -666,18 +699,20 @@ begin
     'NEXT_ACTION',
     v_source_id,
     trim(p_request_key),
-    'USER',
-    v_actor,
+    'SYSTEM',
+    null,
     jsonb_build_object(
       'nextActionPolicyVersion','sales-next-action-v1',
       'reasonCode',v_reason_code,
       'staleHours',p_stale_hours,
-      'lastActivityAt',v_last_activity
+      'lastActivityAt',v_last_activity,
+      'acceptedByUserId',v_actor
     )
   )
   returning id into v_task_id;
 
   perform set_config('app.crm_next_action_accept','',true);
+  perform set_config('app.crm_next_action_actor','',true);
 
   return query select v_task_id,false;
 end;
@@ -805,6 +840,7 @@ begin
   if tg_op='INSERT' and new.source_type='NEXT_ACTION' then
     v_action:='CRM_NEXT_ACTION_ACCEPTED';
     v_after:=jsonb_strip_nulls(jsonb_build_object(
+      'acceptedByUserId',new.metadata->>'acceptedByUserId',
       'sourceId',new.source_id,
       'reasonCode',new.metadata->>'reasonCode',
       'taskType',new.task_type,
@@ -843,8 +879,16 @@ begin
     entity_type,entity_id,before_data,after_data,correlation_id
   ) values (
     new.organization_id,
-    case when auth.uid() is null then 'SYSTEM' else 'USER' end,
-    coalesce(auth.uid()::text,new.next_action_model_suggested_by_user_id::text,current_user),
+    case
+      when v_action='CRM_NEXT_ACTION_ACCEPTED' then 'USER'
+      when auth.uid() is null then 'SYSTEM'
+      else 'USER'
+    end,
+    case
+      when v_action='CRM_NEXT_ACTION_ACCEPTED'
+      then coalesce(new.metadata->>'acceptedByUserId',current_user)
+      else coalesce(auth.uid()::text,new.next_action_model_suggested_by_user_id::text,current_user)
+    end,
     v_action,
     'crm_tasks',
     new.id::text,
@@ -873,11 +917,11 @@ grant execute on function public.get_crm_next_actions(uuid,integer,uuid,integer)
   to authenticated;
 
 revoke all on function public.accept_crm_next_action_candidate(
-  uuid,text,uuid,uuid,timestamptz,timestamptz,text,integer
+  uuid,uuid,text,uuid,uuid,timestamptz,timestamptz,text,integer
 ) from public,anon,authenticated,service_role;
 grant execute on function public.accept_crm_next_action_candidate(
-  uuid,text,uuid,uuid,timestamptz,timestamptz,text,integer
-) to authenticated;
+  uuid,uuid,text,uuid,uuid,timestamptz,timestamptz,text,integer
+) to service_role;
 
 revoke all on function public.record_crm_task_next_action_model_suggestion(
   uuid,uuid,uuid,jsonb
@@ -889,11 +933,38 @@ grant execute on function public.record_crm_task_next_action_model_suggestion(
 grant select(
   id,
   organization_id,
+  business_id,
+  lead_id,
+  deal_id,
   status,
   assignee_user_id,
+  updated_at,
+  request_key,
+  source_type,
+  source_id,
   next_action_model_suggestion,
   next_action_model_suggested_at,
   next_action_model_suggested_by_user_id
+) on public.crm_tasks to service_role;
+
+grant insert(
+  organization_id,
+  business_id,
+  lead_id,
+  deal_id,
+  task_type,
+  title,
+  status,
+  priority,
+  assignee_user_id,
+  due_at,
+  reminder_at,
+  source_type,
+  source_id,
+  request_key,
+  creator_type,
+  created_by_user_id,
+  metadata
 ) on public.crm_tasks to service_role;
 
 grant update(
@@ -906,7 +977,7 @@ grant update(
 comment on function public.get_crm_next_actions(uuid,integer,uuid,integer) is
   'Derived human action queue over canonical Tasks, Leads, Deals and Conversation activity. Read-only; no send or workflow side effect.';
 comment on function public.accept_crm_next_action_candidate(
-  uuid,text,uuid,uuid,timestamptz,timestamptz,text,integer
+  uuid,uuid,text,uuid,uuid,timestamptz,timestamptz,text,integer
 ) is
   'Explicit human acceptance of a stale Lead/Deal candidate into canonical crm_tasks. Never sends a customer message.';
 comment on column public.crm_tasks.next_action_model_suggestion is
