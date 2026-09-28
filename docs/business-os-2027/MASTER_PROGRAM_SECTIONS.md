@@ -569,6 +569,16 @@ Extend governed segments to justified entities:
 - manual override;
 - model-assisted suggestions with deterministic ownership.
 
+Production closeout:
+- Canonical accepted scoring authority remains `public.leads`; PR #326 extended the existing authority rather than creating a second score table/engine.
+- Migration `0138_sales_scoring_governance` adds governed fit/engagement dimensions, bounded evidence + policy/source provenance, optimistic scoring revision, explicit human override with expiry/correction semantics, and separately stored advisory model suggestions.
+- Hunter scored Lead promotion now stamps explicit acquisition-source provenance through the trusted service boundary; acquisition scoring is not silently relabeled as generic CRM scoring truth.
+- Trusted score mutations are SECURITY INVOKER, service-role-only and attributed to OWNER/ADMIN/SALES_MANAGER. Authenticated members retain RLS-governed reads; trusted browser mutation execute is denied.
+- Controlled PostgreSQL 17 acceptance proved replay/conflict handling, override/base-score separation, model-suggestion non-authority, bounded engagement recompute, tenant isolation, audit privacy and no outbound side effect.
+- Exact-head CI `36424281940`, exact-main CI `36424607322` and Cloudflare Production Deploy `36424885898` succeeded on `main@f6b08675d8c3a83aa6dccd8790fe9b9077e1c7ea`; Production migration version is `20260928125243`.
+- Production remained honest: 19 existing Leads were not rescored/backfilled; governed revision/fit/engagement/override/model suggestion/provenance remain zero/null until real evidence is written.
+- Disposition: current RC scope is **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**.
+
 ## SALES-PIPELINE-V2
 
 - multiple pipelines;
