@@ -30,6 +30,7 @@ type Customer360 = {
   conversations: Item[];
   tasks: Item[];
   deals: Item[];
+  supportCases: Item[];
   activityTimeline: Item[];
   linkCandidates: {
     leads: Candidate[];
@@ -136,6 +137,12 @@ export default async function CustomerDetailPage({ params }: Props) {
     </section>
 
     <section className="panel">
+      <h2>Support Cases</h2>
+      <p className="muted">Only Cases created with this explicit canonical Person context are shown. Customer 360 does not rewrite immutable Support Case identity/context.</p>
+      {sectionRows(customer.supportCases ?? [], [['Status', 'status'], ['Priority', 'priority'], ['Escalation', 'escalationLevel'], ['CSAT', 'csatScore'], ['Updated', 'updatedAt']])}
+    </section>
+
+    <section className="panel">
       <h2>Activity timeline</h2>
       <p className="muted">Only timeline items whose Lead or Conversation is explicitly linked to this Person are shown. A Company relationship alone is never treated as Person activity.</p>
       {sectionRows(customer.activityTimeline, [['Kind', 'kind'], ['Channel', 'channel'], ['Visibility', 'visibility'], ['Occurred', 'occurredAt']])}
@@ -158,7 +165,7 @@ export default async function CustomerDetailPage({ params }: Props) {
       <div className="healthList">
         {Object.entries(customer.moduleStatus ?? {}).map(([module, status]) => <span key={module}>{module} <strong>{status}</strong></span>)}
       </div>
-      <p className="muted">Missing modules remain explicit. Customer 360 does not create placeholder Booking, Quote, Order, Invoice, Payment, Support, Document or Consent truth.</p>
+      <p className="muted">Missing modules remain explicit. Customer 360 does not create placeholder Booking, Quote, Order, Invoice, Payment, Document or Consent truth. Scoped internal Notes stay outside this Organization-wide read model until their authorization can be preserved.</p>
     </section>
   </div>;
 }
