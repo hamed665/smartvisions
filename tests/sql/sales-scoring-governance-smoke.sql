@@ -218,6 +218,8 @@ begin
 end;
 $scoring_override$;
 
+reset role;
+
 insert into public.sales_conversations(
   id,organization_id,lead_id,channel,stage,last_inbound_at
 ) values (
@@ -228,6 +230,8 @@ insert into public.sales_conversations(
 )
 on conflict (id) do update
 set lead_id=excluded.lead_id,stage='ACTIVE',last_inbound_at=excluded.last_inbound_at;
+
+set role service_role;
 
 do $scoring_engagement$
 declare
