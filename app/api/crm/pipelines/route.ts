@@ -6,6 +6,7 @@ import {
   updateCrmPipelineStage,
   type CrmPipelineStatus,
   type CrmStageCategory,
+  type CrmForecastCategory,
 } from '@/lib/crm/deals';
 import { createClient } from '@/lib/supabase/server';
 
@@ -14,6 +15,7 @@ export const dynamic = 'force-dynamic';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CATEGORIES: CrmStageCategory[] = ['OPEN','WON','LOST'];
 const PIPELINE_STATUSES: CrmPipelineStatus[] = ['ACTIVE','ARCHIVED'];
+const FORECAST_CATEGORIES: CrmForecastCategory[] = ['PIPELINE','BEST_CASE','COMMIT','CLOSED','OMITTED'];
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -81,11 +83,22 @@ export async function POST(request: Request) {
         if (!isObject(stage)) return true;
         const stageName = typeof stage.name === 'string' ? stage.name.trim() : '';
         const position = Number(stage.position);
+        const category = stage.category as CrmStageCategory;
+        const probability = stage.defaultProbabilityPercent === undefined
+          ? undefined
+          : Number(stage.defaultProbabilityPercent);
+        const forecast = stage.forecastCategory as CrmForecastCategory | undefined;
         return stageName.length < 1
           || stageName.length > 120
           || !Number.isInteger(position)
           || position < 1
-          || !CATEGORIES.includes(stage.category as CrmStageCategory);
+          || !CATEGORIES.includes(category)
+          || (probability !== undefined && (!Number.isInteger(probability) || probability < 0 || probability > 100))
+          || (forecast !== undefined && !FORECAST_CATEGORIES.includes(forecast))
+          || (stage.requiresAmount !== undefined && typeof stage.requiresAmount !== 'boolean')
+          || (stage.requiresExpectedClose !== undefined && typeof stage.requiresExpectedClose !== 'boolean')
+          || (category === 'WON' && probability !== undefined && probability !== 100)
+          || (category === 'LOST' && probability !== undefined && probability !== 0);
       })) {
     return NextResponse.json({ error: 'Invalid CRM pipeline payload' }, { status: 400 });
   }
@@ -100,6 +113,12 @@ export async function POST(request: Request) {
         name: String((stage as Record<string, unknown>).name).trim(),
         position: Number((stage as Record<string, unknown>).position),
         category: (stage as Record<string, unknown>).category as CrmStageCategory,
+        defaultProbabilityPercent: (stage as Record<string, unknown>).defaultProbabilityPercent === undefined
+          ? undefined
+          : Number((stage as Record<string, unknown>).defaultProbabilityPercent),
+        forecastCategory: (stage as Record<string, unknown>).forecastCategory as CrmForecastCategory | undefined,
+        requiresAmount: (stage as Record<string, unknown>).requiresAmount as boolean | undefined,
+        requiresExpectedClose: (stage as Record<string, unknown>).requiresExpectedClose as boolean | undefined,
       })),
     });
     return NextResponse.json({ pipelineId }, { status: 201 });
@@ -161,20 +180,39 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ pipeline });
     }
 
-    const allowed = new Set(['name','position','is_active']);
+    const allowed = new Set([
+      'name','position','is_active','defaultProbabilityPercent',
+      'forecastCategory','requiresAmount','requiresExpectedClose',
+    ]);
+    const probability = patch.defaultProbabilityPercent === undefined
+      ? undefined
+      : Number(patch.defaultProbabilityPercent);
     if (Object.keys(patch).some(key => !allowed.has(key))
         || (patch.name !== undefined && (typeof patch.name !== 'string' || patch.name.trim().length < 1 || patch.name.trim().length > 120))
         || (patch.position !== undefined && (!Number.isInteger(patch.position) || Number(patch.position) < 1))
-        || (patch.is_active !== undefined && typeof patch.is_active !== 'boolean')) {
+        || (patch.is_active !== undefined && typeof patch.is_active !== 'boolean')
+        || (probability !== undefined && (!Number.isInteger(probability) || probability < 0 || probability > 100))
+        || (patch.forecastCategory !== undefined && !FORECAST_CATEGORIES.includes(patch.forecastCategory as CrmForecastCategory))
+        || (patch.requiresAmount !== undefined && typeof patch.requiresAmount !== 'boolean')
+        || (patch.requiresExpectedClose !== undefined && typeof patch.requiresExpectedClose !== 'boolean')) {
       return NextResponse.json({ error: 'Invalid CRM pipeline stage patch' }, { status: 400 });
     }
+
+    const stagePatch: Record<string, unknown> = {};
+    if (patch.name !== undefined) stagePatch.name = String(patch.name).trim();
+    if (patch.position !== undefined) stagePatch.position = Number(patch.position);
+    if (patch.is_active !== undefined) stagePatch.is_active = patch.is_active;
+    if (probability !== undefined) stagePatch.default_probability_percent = probability;
+    if (patch.forecastCategory !== undefined) stagePatch.forecast_category = patch.forecastCategory;
+    if (patch.requiresAmount !== undefined) stagePatch.requires_amount = patch.requiresAmount;
+    if (patch.requiresExpectedClose !== undefined) stagePatch.requires_expected_close = patch.requiresExpectedClose;
 
     const stage = await updateCrmPipelineStage({
       supabase,
       organizationId,
       stageId: id,
       expectedVersion: Number(expectedVersion),
-      patch: patch as never,
+      patch: stagePatch as never,
     });
     return NextResponse.json({ stage });
   } catch (error) {
