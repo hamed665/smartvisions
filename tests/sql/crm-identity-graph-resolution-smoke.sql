@@ -171,18 +171,6 @@ begin
     raise exception 'CRM Person merge did not preserve multiple canonical identities';
   end if;
 
-  if exists (
-    select 1
-    from public.list_crm_identity_resolution_candidates(
-      '00000000-0000-0000-0000-000000000c01',
-      50
-    )
-    where identity_id = v_sales_identity
-      and conflict_state like '%PERSON%'
-  ) then
-    raise exception 'Resolved CRM Person conflict remained in the candidate read model';
-  end if;
-
   select resolved_person_id, replayed
     into v_result, v_replayed
   from public.merge_crm_people_manual(
@@ -294,6 +282,37 @@ begin
   end if;
 end;
 $crm_identity_graph_merge_split_unlink$;
+
+reset role;
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000c001', false);
+
+do $crm_identity_graph_resolved_candidate$
+declare
+  v_sales_identity uuid;
+begin
+  select id into v_sales_identity
+  from public.crm_identities
+  where organization_id = '00000000-0000-0000-0000-000000000c01'
+    and normalized_value = 'sales@example.test';
+
+  if exists (
+    select 1
+    from public.list_crm_identity_resolution_candidates(
+      '00000000-0000-0000-0000-000000000c01',
+      50
+    )
+    where identity_id = v_sales_identity
+      and conflict_state like '%PERSON%'
+  ) then
+    raise exception 'Resolved CRM Person conflict remained in the candidate read model';
+  end if;
+end;
+$crm_identity_graph_resolved_candidate$;
+
+reset role;
+select set_config('request.jwt.claim.sub', '', false);
+set role service_role;
 
 do $crm_identity_graph_split_orphan_block$
 declare
