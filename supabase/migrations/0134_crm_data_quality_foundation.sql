@@ -27,7 +27,7 @@ create table if not exists public.crm_data_import_batches (
     references public.organization_members(organization_id, user_id)
     on delete restrict,
   check (length(request_key) between 1 and 200 and request_key !~ '[^A-Za-z0-9._:-]'),
-  check (length(content_hash) = 32),
+  check (length(content_hash) = 64),
   check (row_count between 1 and 100),
   check (created_people_count between 0 and row_count),
   check (linked_relationship_count between 0 and row_count),
@@ -39,8 +39,8 @@ create table if not exists public.crm_data_import_batches (
 create index if not exists crm_data_import_batches_org_created_idx
   on public.crm_data_import_batches(organization_id, created_at desc, id);
 
-create index if not exists crm_data_import_batches_requested_by_idx
-  on public.crm_data_import_batches(requested_by_user_id);
+create index if not exists crm_data_import_batches_org_requested_by_idx
+  on public.crm_data_import_batches(organization_id, requested_by_user_id);
 
 alter table public.crm_data_import_batches enable row level security;
 
@@ -350,7 +350,7 @@ begin
     raise exception 'CRM verified import payload exceeds 256 KiB';
   end if;
 
-  v_content_hash := md5(p_rows::text);
+  v_content_hash := encode(extensions.digest(p_rows::text, 'sha256'), 'hex');
 
   select *
     into v_existing
