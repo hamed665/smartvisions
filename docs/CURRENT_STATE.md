@@ -1,5 +1,19 @@
 # Smart Visions Growth OS — Current Production State
 
+
+## Superseding CRM Activity / Task v2 Production checkpoint — 2026-09-28
+
+- Canonical main: `11599810d8ffebd081e3571859c1bc3588a08ebe` after PR #316.
+- Exact-main CI `36371693852`: SUCCESS.
+- Cloudflare Production Deploy `36371846971`: SUCCESS on the same SHA.
+- Production Supabase migration `0131_crm_activity_task_v2` is live as version `20260928025600`.
+- `crm_tasks` remains the only actionable human-work store. Task v2 added Deal linkage, reminders, acknowledgement, due/overdue state and immutable activity evidence over existing audit truth; no second Task/Activity store exists.
+- Production has 0 CRM Tasks. No recurring task, Booking/Order/Case link or synthetic Task was fabricated.
+- Authenticated Task reads/reminder acknowledgement are SECURITY INVOKER and RLS-governed. Existing task mutation authority remains canonical.
+- Recurrence remains `DEFERRED_WITH_REASON` until a real recurring-work contract exists.
+- Fresh dependency audit selected `CRM-SUPPORT-CASE` next. `CRM-CUSTOM-OBJECTS` remains deferred until a real use case proves the schema contract.
+
+
 ## Superseding CRM Account v2 Production checkpoint — 2026-09-28
 
 This checkpoint supersedes older notes that still mark `CRM-ACCOUNT-V2` as implementation-only.
