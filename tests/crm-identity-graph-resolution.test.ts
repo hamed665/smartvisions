@@ -76,6 +76,19 @@ describe('CRM-IDENTITY-GRAPH governed resolution', () => {
     expect(migration).not.toMatch(/grant execute on function public\.(merge_crm_people_manual|split_crm_person_identity_manual|unlink_crm_person_identity_manual)[\s\S]*?to authenticated;/);
   });
 
+  it('exposes an operator review surface over the governed API', () => {
+    const page = readFileSync('app/identity-review/page.tsx', 'utf8');
+    const client = readFileSync('app/identity-review/resolution-client.tsx', 'utf8');
+    const shell = readFileSync('app/app-shell.tsx', 'utf8');
+    expect(page).toContain('listCrmIdentityResolutionCandidates');
+    expect(page).toContain('CRM identity conflicts');
+    expect(client).toContain("fetch('/api/crm/identity-graph'");
+    expect(client).toContain("action: 'MERGE'");
+    expect(client).toContain("action: 'SPLIT'");
+    expect(client).toContain("action: 'UNLINK'");
+    expect(shell).toContain("['Identity Review', '/identity-review']");
+  });
+
   it('runs the dedicated PostgreSQL smoke in CI', () => {
     expect(ci).toContain('crm-identity-graph-resolution-smoke.sql');
   });
