@@ -113,18 +113,6 @@ begin
     raise exception 'Customer Success Task replay failed';
   end if;
 
-  if not exists (
-    select 1 from public.crm_tasks
-    where id=v_first
-      and source_type='CUSTOMER_SUCCESS'
-      and source_id='ONBOARDING:10000000-0000-0000-0000-000000000c02'
-      and creator_type='SYSTEM'
-      and created_by_user_id is null
-      and metadata->>'acceptedByUserId'='00000000-0000-0000-0000-00000000c001'
-  ) then
-    raise exception 'Customer Success Task provenance is incorrect';
-  end if;
-
   insert into customer_success_results(task_id) values(v_first);
 end;
 $customer_success_task_acceptance$;
@@ -132,6 +120,25 @@ $customer_success_task_acceptance$;
 reset role;
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000c001',false);
+
+do $customer_success_task_provenance$
+declare
+  v_task uuid;
+begin
+  select task_id into v_task from customer_success_results limit 1;
+  if not exists (
+    select 1 from public.crm_tasks
+    where id=v_task
+      and source_type='CUSTOMER_SUCCESS'
+      and source_id='ONBOARDING:10000000-0000-0000-0000-000000000c02'
+      and creator_type='SYSTEM'
+      and created_by_user_id is null
+      and metadata->>'acceptedByUserId'='00000000-0000-0000-0000-00000000c001'
+  ) then
+    raise exception 'Customer Success Task provenance is incorrect under authenticated RLS';
+  end if;
+end;
+$customer_success_task_provenance$;
 
 update public.crm_tasks
 set status='DONE',completion_note='Controlled onboarding complete'
