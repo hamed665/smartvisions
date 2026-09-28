@@ -569,7 +569,10 @@ declare
 begin
   perform public.crm_assert_lead_scoring_actor(p_organization_id,p_actor_user_id);
 
-  if v_request_key !~ '^[A-Za-z0-9._:-]{1,200}
+  if v_request_key !~ '^[A-Za-z0-9._:-]{1,200}$'
+     or p_expected_revision is null
+     or p_expected_revision<0
+  then
     raise exception 'CRM Lead engagement recompute payload is invalid';
   end if;
 
@@ -725,7 +728,9 @@ begin
      or (p_expires_at is not null and p_expires_at<=now())
      or p_expected_revision is null
      or p_expected_revision<0
-     or v_request_key !~ '^[A-Za-z0-9._:-]{1,200}
+     or v_request_key !~ '^[A-Za-z0-9._:-]{1,200}$'
+  then
+    raise exception 'CRM Lead score override payload is invalid';
   end if;
 
   v_request_hash:=md5(concat_ws('|',
