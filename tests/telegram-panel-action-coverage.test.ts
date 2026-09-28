@@ -23,6 +23,12 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
   'app/daily-target-actions.ts': {
     setDailyOutreachTarget:'SPECIALIZED:DAILY_OUTREACH_TARGET',
   },
+  'app/marketing-campaign-actions.ts': {
+    createMarketingCampaign:'SPECIALIZED:MARKETING_CAMPAIGN_GOVERNANCE',
+    upsertMarketingCampaignVariant:'SPECIALIZED:MARKETING_CAMPAIGN_GOVERNANCE',
+    transitionMarketingCampaign:'SPECIALIZED:MARKETING_CAMPAIGN_GOVERNANCE',
+    recordMarketingCampaignConversion:'SPECIALIZED:MARKETING_CAMPAIGN_GOVERNANCE',
+  },
   'app/management-actions.ts': {
     updateSystemControls:'SPECIALIZED:SAFE_CONTROLS',
     createCampaign:'campaign.create', updateCampaign:'campaign.update', updateOutreachPolicy:'outreach.update',
