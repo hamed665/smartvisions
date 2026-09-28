@@ -388,10 +388,8 @@ declare
   v_task uuid;
 begin
   select id into v_task
-  from public.crm_tasks
-  where organization_id='00000000-0000-0000-0000-000000000c01'
-    and source_type='NEXT_ACTION'
-    and source_id='LEAD:20000000-0000-0000-0000-000000000c91:STALE';
+  from sales_next_action_task_baseline
+  limit 1;
 
   perform public.record_crm_task_next_action_model_suggestion(
     '00000000-0000-0000-0000-000000000c01',
