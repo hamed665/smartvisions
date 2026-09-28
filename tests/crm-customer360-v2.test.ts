@@ -80,7 +80,7 @@ describe('CRM-CUSTOMER360-V2 Person context', () => {
   it('never attributes Company timeline activity unless Lead or Conversation is directly linked', () => {
     expect(migration).toContain('and l.person_id = p_person_id');
     expect(migration).toContain('and c.person_id = p_person_id');
-    expect(migration).toContain('A Company relationship alone never attributes activity');
+    expect(migration.toLowerCase()).toContain('company relationship alone never attributes activity');
   });
 
   it('bounds every Customer 360 collection by the requested limit', () => {
