@@ -6,15 +6,13 @@ select
   (select count(*) from public.conversation_messages) as message_count;
 
 insert into public.leads(
-  id,organization_id,business_id,status,opportunity_score,intent_score,updated_at
+  id,organization_id,business_id,status,updated_at
 ) values
   (
     '20000000-0000-0000-0000-000000000c91',
     '00000000-0000-0000-0000-000000000c01',
     '10000000-0000-0000-0000-000000000c01',
     'REPLIED',
-    75,
-    20,
     now()-interval '10 days'
   ),
   (
@@ -22,8 +20,6 @@ insert into public.leads(
     '00000000-0000-0000-0000-000000000c01',
     '10000000-0000-0000-0000-000000000c02',
     'QUALIFIED',
-    80,
-    10,
     now()-interval '10 days'
   );
 
