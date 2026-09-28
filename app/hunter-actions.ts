@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getCurrentOrganization } from '@/lib/supabase/org';
+import { createSupabaseServiceClient } from '@/lib/supabase/service';
 import { getCostGuardState } from '@/lib/reliability/cost-guard';
 import {
   controlledGooglePlaceDetails,
@@ -221,7 +222,8 @@ export async function enrichGooglePlaceCandidate(form: FormData) {
     let leadId = existingLead?.id ? String(existingLead.id) : '';
     let createdLead = false;
     if (!leadId && priorityQualified) {
-      const { data: insertedLead, error: insertLeadError } = await ctx.supabase.from('leads').insert(buildLeadPersistenceRow(ctx.organizationId, businessId, qualifiedBusiness)).select('id').single();
+      const scoringService = createSupabaseServiceClient();
+      const { data: insertedLead, error: insertLeadError } = await scoringService.from('leads').insert(buildLeadPersistenceRow(ctx.organizationId, businessId, qualifiedBusiness, ctx.userId)).select('id').single();
       if (insertLeadError) {
         if (insertLeadError.code !== '23505') throw insertLeadError;
         const { data: racedLead, error: racedLeadError } = await ctx.supabase.from('leads').select('id').eq('organization_id', ctx.organizationId).eq('business_id', businessId).single();
