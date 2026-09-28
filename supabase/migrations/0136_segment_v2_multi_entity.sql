@@ -1016,22 +1016,44 @@ begin
      or length(trim(coalesce(p_request_key,''))) not between 1 and 200
   then raise exception 'CRM Segment create payload is invalid'; end if;
 
-  select s,v into v_segment,v_version
-  from public.crm_segments s
-  join public.crm_segment_versions v
-    on v.organization_id=s.organization_id
-   and v.segment_id=s.id
-   and v.version=1
-  where s.organization_id=p_organization_id
-    and s.last_request_key=trim(p_request_key)
+  -- Immutable definition-version request keys are the durable create receipt.
+  -- This remains replay-safe even after Segment lifecycle/definition mutations
+  -- have changed crm_segments.last_request_key.
+  select * into v_version
+  from public.crm_segment_versions v
+  where v.organization_id=p_organization_id
     and v.request_key=trim(p_request_key);
 
   if found then
+    if v_version.version<>1 then
+      raise exception 'CRM Segment request key conflict';
+    end if;
+
+    select * into v_segment
+    from public.crm_segments s
+    where s.organization_id=p_organization_id
+      and s.id=v_version.segment_id;
+
+    if not found then
+      raise exception 'CRM Segment replay receipt has no Segment identity';
+    end if;
+
     if v_segment.entity_type<>v_entity_type
        or v_version.name<>trim(p_name)
        or v_version.predicate_hash<>md5(p_predicate_tree::text)
-    then raise exception 'CRM Segment request key conflict'; end if;
+    then
+      raise exception 'CRM Segment request key conflict';
+    end if;
     return v_segment;
+  end if;
+
+  if exists (
+    select 1
+    from public.crm_segments s
+    where s.organization_id=p_organization_id
+      and s.last_request_key=trim(p_request_key)
+  ) then
+    raise exception 'CRM Segment request key conflict';
   end if;
 
   insert into public.crm_segments(
