@@ -176,6 +176,96 @@ begin
 end;
 $dq_apply$;
 
+do $dq_scope_and_atomicity$
+declare
+  v_identity uuid;
+begin
+  begin
+    perform *
+    from public.apply_crm_verified_contact_import(
+      '00000000-0000-0000-0000-000000000c01',
+      '00000000-0000-0000-0000-00000000c001',
+      'dq-cross-tenant',
+      jsonb_build_array(
+        jsonb_build_object(
+          'clientRowKey','dq-cross-tenant-row',
+          'businessId','10000000-0000-0000-0000-000000000d01',
+          'identityType','EMAIL',
+          'normalizedValue','cross-tenant@example.test'
+        )
+      )
+    );
+    raise exception 'CRM verified import crossed Organization boundary';
+  exception
+    when others then
+      if sqlerrm not like 'CRM verified import Business is not in the Organization%' then
+        raise;
+      end if;
+  end;
+
+  if exists (
+    select 1 from public.crm_data_import_batches
+    where organization_id='00000000-0000-0000-0000-000000000c01'
+      and request_key='dq-cross-tenant'
+  ) then
+    raise exception 'Cross-tenant CRM import left a receipt';
+  end if;
+
+  select id into v_identity
+  from public.crm_identities
+  where organization_id='00000000-0000-0000-0000-000000000c01'
+    and identity_type='EMAIL'
+    and normalized_value='sales@example.test'
+    and status='ACTIVE';
+
+  if v_identity is null then
+    raise exception 'CRM ambiguity fixture identity is missing';
+  end if;
+
+  begin
+    perform *
+    from public.apply_crm_verified_contact_import(
+      '00000000-0000-0000-0000-000000000c01',
+      '00000000-0000-0000-0000-00000000c001',
+      'dq-ambiguity-rollback',
+      jsonb_build_array(
+        jsonb_build_object(
+          'clientRowKey','dq-ambiguous-row',
+          'businessId','10000000-0000-0000-0000-000000000c02',
+          'identityType','EMAIL',
+          'normalizedValue','sales@example.test'
+        )
+      )
+    );
+    raise exception 'CRM verified import accepted ambiguous Business identity';
+  exception
+    when others then
+      if sqlerrm not like 'CRM verified import identity is ambiguous across Businesses%' then
+        raise;
+      end if;
+  end;
+
+  if exists (
+    select 1
+    from public.crm_identity_links
+    where organization_id='00000000-0000-0000-0000-000000000c01'
+      and identity_id=v_identity
+      and business_id='10000000-0000-0000-0000-000000000c02'
+      and status <> 'RETIRED'
+  ) then
+    raise exception 'Ambiguous CRM import did not roll back the conflicting Business link';
+  end if;
+
+  if exists (
+    select 1 from public.crm_data_import_batches
+    where organization_id='00000000-0000-0000-0000-000000000c01'
+      and request_key='dq-ambiguity-rollback'
+  ) then
+    raise exception 'Ambiguous CRM import left a partial batch receipt';
+  end if;
+end;
+$dq_scope_and_atomicity$;
+
 do $dq_duplicate_rows_blocked$
 begin
   begin
