@@ -194,6 +194,7 @@ create temp table sales_next_action_accept_results(
   task_id uuid not null
 );
 grant insert,select on sales_next_action_accept_results to service_role;
+grant select on sales_next_action_accept_results to authenticated;
 
 set role service_role;
 
