@@ -48,6 +48,8 @@ type SendContext = {
   template_body_parameters?: string[] | null;
   catalog_content_id?: string | null;
   voice_reply?: boolean | null;
+  purpose?: string | null;
+  campaign_id?: string | null;
 };
 
 export async function POST(request: Request) {
@@ -107,6 +109,26 @@ export async function POST(request: Request) {
   const idempotencyKey = typeof metadata.idempotency_key === 'string' ? metadata.idempotency_key : null;
   if (!sendContext.to || !sendContext.market_code || !idempotencyKey || !message.original_text) {
     return NextResponse.json({ error: 'Approved draft is missing persisted send context' }, { status: 409 });
+  }
+
+  let canonicalSendPurpose = String(sendContext.purpose ?? metadata.purpose ?? '').trim().toUpperCase();
+  const linkedCampaignId = String(sendContext.campaign_id ?? metadata.campaign_id ?? '').trim() || null;
+  if (linkedCampaignId) {
+    const { data: linkedCampaign, error: linkedCampaignError } = await supabase
+      .from('campaigns')
+      .select('id,campaign_kind')
+      .eq('organization_id', body.organizationId)
+      .eq('id', linkedCampaignId)
+      .maybeSingle();
+    if (linkedCampaignError || !linkedCampaign) {
+      return NextResponse.json({ error: linkedCampaignError?.message ?? 'Linked Campaign not found' }, { status: 409 });
+    }
+    if (String(linkedCampaign.campaign_kind ?? 'HUNTER').toUpperCase() === 'MARKETING') {
+      canonicalSendPurpose = 'MARKETING';
+    }
+  }
+  if (String(metadata.source ?? '').toUpperCase() === 'MARKETING_CAMPAIGN' && canonicalSendPurpose !== 'MARKETING') {
+    return NextResponse.json({ error: 'Marketing campaign send is missing canonical Campaign linkage/purpose' }, { status: 409 });
   }
 
   let shadowModeExceptionVerified = false;
@@ -455,6 +477,7 @@ export async function POST(request: Request) {
         templateName: sendContext.template_name,
         shadowModeExceptionVerified,
         marketWindowExceptionVerified: liveTestMarketWindowExceptionVerified,
+        purpose: canonicalSendPurpose || null,
       });
       const costState = await getCostGuardState(body.organizationId!);
       assertPaidOperationAllowed(costState, body.priority ?? 'NORMAL');
