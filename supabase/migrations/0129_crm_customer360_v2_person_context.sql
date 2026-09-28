@@ -171,6 +171,160 @@ begin
 end;
 $customer360_person_guard$;
 
+create or replace function public.guard_crm_deal_mutation()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public, auth, pg_catalog
+as $deal_guard$
+declare
+  v_actor uuid := auth.uid();
+  v_stage_category text;
+  v_stage_active boolean;
+  v_pipeline_status text;
+begin
+  -- Customer 360 may attach/correct Person context on historical Deals without
+  -- reopening or mutating commercial truth. This exception is deliberately
+  -- restricted to service_role and to rows where every non-context field is
+  -- byte-for-byte unchanged (apart from version/updated_at maintained here).
+  if tg_op = 'UPDATE'
+     and current_user = 'service_role'
+     and (
+       new.person_id is distinct from old.person_id
+       or new.person_link_method is distinct from old.person_link_method
+       or new.person_link_source_ref is distinct from old.person_link_source_ref
+       or new.person_link_evidence is distinct from old.person_link_evidence
+       or new.person_linked_by_user_id is distinct from old.person_linked_by_user_id
+       or new.person_linked_at is distinct from old.person_linked_at
+     )
+     and (
+       to_jsonb(new) - array[
+         'person_id','person_link_method','person_link_source_ref',
+         'person_link_evidence','person_linked_by_user_id','person_linked_at',
+         'version','updated_at'
+       ]
+     ) = (
+       to_jsonb(old) - array[
+         'person_id','person_link_method','person_link_source_ref',
+         'person_link_evidence','person_linked_by_user_id','person_linked_at',
+         'version','updated_at'
+       ]
+     )
+  then
+    new.version := old.version + 1;
+    new.updated_at := now();
+    return new;
+  end if;
+
+  select s.category, s.is_active, p.status
+    into v_stage_category, v_stage_active, v_pipeline_status
+  from public.crm_pipeline_stages s
+  join public.crm_pipelines p
+    on p.organization_id = s.organization_id
+   and p.id = s.pipeline_id
+  where s.organization_id = new.organization_id
+    and s.id = new.stage_id
+    and s.pipeline_id = new.pipeline_id;
+
+  if v_stage_category is null then
+    raise exception 'CRM deal stage/pipeline not found';
+  end if;
+  if not v_stage_active or v_pipeline_status <> 'ACTIVE' then
+    raise exception 'CRM deal requires ACTIVE pipeline and stage';
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.creator_type = 'USER' then
+      if v_actor is null or new.created_by_user_id is distinct from v_actor then
+        raise exception 'CRM deal USER creator must match auth.uid()';
+      end if;
+    end if;
+
+    if v_stage_category = 'OPEN' then
+      new.state := 'OPEN';
+      new.won_at := null;
+      new.lost_at := null;
+      new.lost_reason := null;
+    elsif v_stage_category = 'WON' then
+      new.state := 'WON';
+      new.won_at := now();
+      new.lost_at := null;
+      new.lost_reason := null;
+    else
+      if nullif(trim(new.lost_reason), '') is null then
+        raise exception 'CRM LOST deal requires lost_reason';
+      end if;
+      new.state := 'LOST';
+      new.won_at := null;
+      new.lost_at := now();
+    end if;
+
+    new.version := 1;
+    new.updated_at := now();
+    return new;
+  end if;
+
+  if new.organization_id is distinct from old.organization_id
+     or new.business_id is distinct from old.business_id
+     or new.lead_id is distinct from old.lead_id
+     or new.pipeline_id is distinct from old.pipeline_id
+     or new.source_type is distinct from old.source_type
+     or new.source_id is distinct from old.source_id
+     or new.request_key is distinct from old.request_key
+     or new.creator_type is distinct from old.creator_type
+     or new.created_by_user_id is distinct from old.created_by_user_id
+  then
+    raise exception 'CRM deal tenant/scope/source/creator is immutable';
+  end if;
+
+  if old.state in ('WON','LOST') then
+    if new.stage_id is distinct from old.stage_id then
+      raise exception 'terminal CRM deal stage is immutable';
+    end if;
+    if new.amount is distinct from old.amount
+       or new.currency is distinct from old.currency
+       or new.owner_user_id is distinct from old.owner_user_id
+       or new.expected_close_at is distinct from old.expected_close_at
+       or new.lost_reason is distinct from old.lost_reason
+    then
+      raise exception 'terminal CRM deal commercial truth is immutable';
+    end if;
+  end if;
+
+  if new.stage_id is distinct from old.stage_id then
+    if v_stage_category = 'OPEN' then
+      new.state := 'OPEN';
+      new.won_at := null;
+      new.lost_at := null;
+      new.lost_reason := null;
+    elsif v_stage_category = 'WON' then
+      new.state := 'WON';
+      new.won_at := now();
+      new.lost_at := null;
+      new.lost_reason := null;
+    elsif v_stage_category = 'LOST' then
+      if nullif(trim(new.lost_reason), '') is null then
+        raise exception 'CRM LOST deal requires lost_reason';
+      end if;
+      new.state := 'LOST';
+      new.won_at := null;
+      new.lost_at := now();
+    end if;
+  else
+    new.state := old.state;
+    new.won_at := old.won_at;
+    new.lost_at := old.lost_at;
+    if old.state <> 'LOST' then
+      new.lost_reason := null;
+    end if;
+  end if;
+
+  new.version := old.version + 1;
+  new.updated_at := now();
+  return new;
+end;
+$deal_guard$;
+
 drop trigger if exists leads_customer360_person_context_guard on public.leads;
 create trigger leads_customer360_person_context_guard
 before insert or update on public.leads
