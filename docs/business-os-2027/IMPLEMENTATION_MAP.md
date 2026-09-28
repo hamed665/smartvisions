@@ -13,7 +13,7 @@ This is not a feature wishlist. It is the dependency history required to avoid r
 
 For future execution, **do not assign or infer projected GitHub PR numbers**. The stable program roadmap is `MASTER_PROGRAM_SECTIONS.md`, which uses semantic Section and Work Package IDs. Historical PR numbers in this file remain implementation evidence only.
 
-Current planned continuation cursor: fresh dependency audit within `SECTION IDENTITY_CRM` across `CRM-CUSTOM-OBJECTS`, `CRM-ACTIVITY-TASK-V2`, `CRM-SUPPORT-CASE` and `CRM-DATA-QUALITY`. PR #314 / Production migration `crm_account_v2_governance` Production-verified canonical external Account hierarchy, ownership and B2B lifecycle on `public.businesses` without reclassifying any of the 19 Production Companies. Reuse existing custom-field/task/deal/identity foundations and select the first verified unresolved dependency; do not create duplicate CRM stores.
+Current planned continuation cursor: `SECTION IDENTITY_CRM / CRM-SUPPORT-CASE`. PR #316 / Production migration `0131_crm_activity_task_v2` Production-verified the current Task/Activity scope on canonical `crm_tasks` with reminders, due/overdue state, Deal linkage and immutable audit-derived activity, while Production remained at 0 Tasks. `CRM-CUSTOM-OBJECTS` is deferred until a real typed-object use case exists. Support Case is the first verified missing CRM authority; build one canonical Case + Smart Core SLA path and do not fabricate Order/Payment links before those modules exist.
 
 ## Phase 0 — Architecture contracts
 
