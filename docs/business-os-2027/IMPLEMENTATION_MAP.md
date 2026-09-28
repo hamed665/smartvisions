@@ -268,3 +268,16 @@ Within the Phase 3 CRM foundation and the stable `SEGMENT_SALES_MARKETING / SALE
 Exact-main CI `36429525004` and Cloudflare Production Deploy `36429837860` succeeded on `main@6d609ebf4abcd2faadd8f474ec1a48849acdb434`; Production migration version is `20260928135144`. Production remains 0 Pipelines / 0 Stages / 0 Deals, deliberately without synthetic acceptance data.
 
 The execution cursor advances to `SALES-NEXT-ACTION`; Phase numbering does not change.
+
+
+## 2026-09-28 Sales Next Action Production checkpoint
+
+PR #331 and Production migration `0140_sales_next_action` delivered the bounded next-action queue by extending canonical CRM Tasks and deriving candidates from existing Lead/Deal/Conversation truth. Production then exposed a real enum/text UNION mismatch that CI did not reproduce. PR #332 and `0141_sales_next_action_status_cast_fix` normalized all source-status branches without adding a second queue or mutating customer data.
+
+Final PR #332 exact-head CI `36462166810`, exact-main CI `36462560234` and Cloudflare Production Deploy `36462884290` all succeeded. Production migration versions are `20260928174748` for 0140 and `20260928180433` for 0141.
+
+Production currently contains 19 Leads / 0 Deals / 0 CRM Tasks / 0 NEXT_ACTION Tasks / 6 PENDING legacy followup jobs. Authenticated runtime returns 17 real stale-Lead candidates; 2 recent NEW Leads are correctly excluded. Human acceptance is explicit and service-governed; AI suggestions are advisory only; no blind auto-send or synthetic Production fixture was introduced.
+
+`SALES-NEXT-ACTION` is **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**.
+
+The execution cursor advances to `MARKETING-CAMPAIGNS`; Phase numbering does not change.
