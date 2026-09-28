@@ -348,7 +348,8 @@ begin
              person_link_source_ref = trim(p_source_ref),
              person_link_evidence = p_evidence,
              person_linked_by_user_id = p_actor_user_id,
-             person_linked_at = now()
+             person_linked_at = now(),
+             updated_at = now()
        where organization_id = p_organization_id
          and id = p_entity_id;
     when 'CONVERSATION' then
@@ -358,7 +359,8 @@ begin
              person_link_source_ref = trim(p_source_ref),
              person_link_evidence = p_evidence,
              person_linked_by_user_id = p_actor_user_id,
-             person_linked_at = now()
+             person_linked_at = now(),
+             updated_at = now()
        where organization_id = p_organization_id
          and id = p_entity_id;
     when 'TASK' then
@@ -368,7 +370,8 @@ begin
              person_link_source_ref = trim(p_source_ref),
              person_link_evidence = p_evidence,
              person_linked_by_user_id = p_actor_user_id,
-             person_linked_at = now()
+             person_linked_at = now(),
+             updated_at = now()
        where organization_id = p_organization_id
          and id = p_entity_id;
     when 'DEAL' then
@@ -378,7 +381,8 @@ begin
              person_link_source_ref = trim(p_source_ref),
              person_link_evidence = p_evidence,
              person_linked_by_user_id = p_actor_user_id,
-             person_linked_at = now()
+             person_linked_at = now(),
+             updated_at = now()
        where organization_id = p_organization_id
          and id = p_entity_id;
   end case;
@@ -501,7 +505,8 @@ begin
              person_link_source_ref = null,
              person_link_evidence = null,
              person_linked_by_user_id = null,
-             person_linked_at = null
+             person_linked_at = null,
+             updated_at = now()
        where organization_id = p_organization_id and id = p_entity_id;
     when 'CONVERSATION' then
       update public.sales_conversations
@@ -510,7 +515,8 @@ begin
              person_link_source_ref = null,
              person_link_evidence = null,
              person_linked_by_user_id = null,
-             person_linked_at = null
+             person_linked_at = null,
+             updated_at = now()
        where organization_id = p_organization_id and id = p_entity_id;
     when 'TASK' then
       update public.crm_tasks
@@ -519,7 +525,8 @@ begin
              person_link_source_ref = null,
              person_link_evidence = null,
              person_linked_by_user_id = null,
-             person_linked_at = null
+             person_linked_at = null,
+             updated_at = now()
        where organization_id = p_organization_id and id = p_entity_id;
     when 'DEAL' then
       update public.crm_deals
@@ -528,7 +535,8 @@ begin
              person_link_source_ref = null,
              person_link_evidence = null,
              person_linked_by_user_id = null,
-             person_linked_at = null
+             person_linked_at = null,
+             updated_at = now()
        where organization_id = p_organization_id and id = p_entity_id;
   end case;
 
@@ -567,29 +575,25 @@ begin
   then
     update public.leads
        set person_id = new.merged_into_person_id,
-           person_link_evidence = coalesce(person_link_evidence, '{}'::jsonb)
-             || jsonb_build_object('merged_from_person_id', old.id::text)
+           updated_at = now()
      where organization_id = new.organization_id
        and person_id = old.id;
 
     update public.sales_conversations
        set person_id = new.merged_into_person_id,
-           person_link_evidence = coalesce(person_link_evidence, '{}'::jsonb)
-             || jsonb_build_object('merged_from_person_id', old.id::text)
+           updated_at = now()
      where organization_id = new.organization_id
        and person_id = old.id;
 
     update public.crm_tasks
        set person_id = new.merged_into_person_id,
-           person_link_evidence = coalesce(person_link_evidence, '{}'::jsonb)
-             || jsonb_build_object('merged_from_person_id', old.id::text)
+           updated_at = now()
      where organization_id = new.organization_id
        and person_id = old.id;
 
     update public.crm_deals
        set person_id = new.merged_into_person_id,
-           person_link_evidence = coalesce(person_link_evidence, '{}'::jsonb)
-             || jsonb_build_object('merged_from_person_id', old.id::text)
+           updated_at = now()
      where organization_id = new.organization_id
        and person_id = old.id;
   end if;
