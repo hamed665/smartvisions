@@ -16,6 +16,8 @@ export type CrmPipelineRow = {
   updated_at: string;
 };
 
+export type CrmForecastCategory = 'PIPELINE' | 'BEST_CASE' | 'COMMIT' | 'CLOSED' | 'OMITTED';
+
 export type CrmPipelineStageRow = {
   id: string;
   organization_id: string;
@@ -24,6 +26,10 @@ export type CrmPipelineStageRow = {
   position: number;
   category: CrmStageCategory;
   is_active: boolean;
+  default_probability_percent: number;
+  forecast_category: CrmForecastCategory;
+  requires_amount: boolean;
+  requires_expected_close: boolean;
   created_by_user_id: string;
   version: number;
   created_at: string;
@@ -43,6 +49,11 @@ export type CrmDealRow = {
   currency: string | null;
   expected_close_at: string | null;
   owner_user_id: string;
+  owner_team_id: string | null;
+  probability_percent: number;
+  forecast_category: CrmForecastCategory;
+  forecast_source: 'STAGE_DEFAULT' | 'MANUAL';
+  weighted_amount: number | null;
   lost_reason: string | null;
   won_at: string | null;
   lost_at: string | null;
@@ -138,7 +149,15 @@ export async function createCrmPipeline(input: {
   organizationId: string;
   name: string;
   isDefault?: boolean;
-  stages: Array<{ name: string; position: number; category: CrmStageCategory }>;
+  stages: Array<{
+    name: string;
+    position: number;
+    category: CrmStageCategory;
+    defaultProbabilityPercent?: number;
+    forecastCategory?: CrmForecastCategory;
+    requiresAmount?: boolean;
+    requiresExpectedClose?: boolean;
+  }>;
 }) {
   const { data, error } = await input.supabase.rpc('create_crm_pipeline_with_stages', {
     p_organization_id: input.organizationId,
@@ -195,7 +214,11 @@ export async function updateCrmPipelineStage(input: {
   organizationId: string;
   stageId: string;
   expectedVersion: number;
-  patch: Partial<Pick<CrmPipelineStageRow, 'name' | 'position' | 'is_active'>>;
+  patch: Partial<Pick<
+    CrmPipelineStageRow,
+    'name' | 'position' | 'is_active' | 'default_probability_percent'
+      | 'forecast_category' | 'requires_amount' | 'requires_expected_close'
+  >>;
 }) {
   await assertPipelineManagePermission({
     supabase: input.supabase,
@@ -278,6 +301,9 @@ export async function createCrmDealFromLead(input: {
   currency?: string | null;
   expectedCloseAt?: string | null;
   ownerUserId: string;
+  ownerTeamId?: string | null;
+  probabilityPercent?: number | null;
+  forecastCategory?: CrmForecastCategory | null;
   requestKey: string;
   metadata?: Record<string, unknown>;
 }) {
@@ -328,6 +354,9 @@ export async function createCrmDeal(input: {
   currency?: string | null;
   expectedCloseAt?: string | null;
   ownerUserId: string;
+  ownerTeamId?: string | null;
+  probabilityPercent?: number | null;
+  forecastCategory?: CrmForecastCategory | null;
   lostReason?: string | null;
   requestKey: string;
   metadata?: Record<string, unknown>;
@@ -355,6 +384,9 @@ export async function createCrmDeal(input: {
       currency: input.currency?.trim().toUpperCase() ?? null,
       expected_close_at: input.expectedCloseAt ?? null,
       owner_user_id: input.ownerUserId,
+      owner_team_id: input.ownerTeamId ?? null,
+      probability_percent: input.probabilityPercent ?? null,
+      forecast_category: input.forecastCategory ?? null,
       lost_reason: input.lostReason?.trim() || null,
       source_type: 'MANUAL',
       source_id: null,
@@ -393,6 +425,9 @@ export async function updateCrmDeal(input: {
     currency?: string | null;
     expectedCloseAt?: string | null;
     ownerUserId?: string;
+    ownerTeamId?: string | null;
+    probabilityPercent?: number;
+    forecastCategory?: CrmForecastCategory;
     lostReason?: string | null;
     metadata?: Record<string, unknown>;
   };
@@ -426,6 +461,9 @@ export async function updateCrmDeal(input: {
   }
   if (input.patch.expectedCloseAt !== undefined) update.expected_close_at = input.patch.expectedCloseAt;
   if (input.patch.ownerUserId !== undefined) update.owner_user_id = input.patch.ownerUserId;
+  if (input.patch.ownerTeamId !== undefined) update.owner_team_id = input.patch.ownerTeamId;
+  if (input.patch.probabilityPercent !== undefined) update.probability_percent = input.patch.probabilityPercent;
+  if (input.patch.forecastCategory !== undefined) update.forecast_category = input.patch.forecastCategory;
   if (input.patch.lostReason !== undefined) update.lost_reason = input.patch.lostReason?.trim() || null;
   if (input.patch.metadata !== undefined) update.metadata = input.patch.metadata;
 
@@ -454,4 +492,42 @@ export async function updateCrmDeal(input: {
     'VERSION_CONFLICT',
     `CRM deal version conflict; current version is ${current.data.version}`,
   );
+}
+
+
+export type CrmPipelineForecastRow = {
+  pipeline_id: string;
+  pipeline_name: string;
+  stage_id: string;
+  stage_name: string;
+  forecast_category: CrmForecastCategory;
+  currency: string | null;
+  owner_user_id: string;
+  owner_team_id: string | null;
+  deal_count: number;
+  total_amount: number | null;
+  weighted_amount: number | null;
+  earliest_expected_close_at: string | null;
+  latest_expected_close_at: string | null;
+};
+
+export async function getCrmPipelineForecast(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  pipelineId?: string | null;
+  ownerUserId?: string | null;
+  ownerTeamId?: string | null;
+  from?: string | null;
+  to?: string | null;
+}) {
+  const { data, error } = await input.supabase.rpc('get_crm_pipeline_forecast', {
+    p_organization_id: input.organizationId,
+    p_pipeline_id: input.pipelineId ?? null,
+    p_owner_user_id: input.ownerUserId ?? null,
+    p_owner_team_id: input.ownerTeamId ?? null,
+    p_from: input.from ?? null,
+    p_to: input.to ?? null,
+  });
+  if (error) throw new Error(`CRM pipeline forecast query failed: ${error.message}`);
+  return (Array.isArray(data) ? data : []) as CrmPipelineForecastRow[];
 }
