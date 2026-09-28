@@ -1133,4 +1133,4 @@ comment on column public.leads.engagement_score is
 comment on column public.leads.manual_score_override is
   'Explicit operator override used only for effective score while active; deterministic base opportunity_score is preserved.';
 comment on column public.leads.model_score_suggestion is
-  'Non-authoritative bounded model suggestion with provider/model/version provenance;
+  'Non-authoritative bounded model suggestion with provider/model/version provenance; never silently accepted.';
