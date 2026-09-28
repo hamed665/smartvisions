@@ -1,5 +1,18 @@
 # Smart Visions Growth OS — Current Production State
 
+## Superseding CRM Support Case Production checkpoint and Data Quality active slice — 2026-09-28
+
+- Canonical Production baseline before this active branch: `main@ec70f9e60cc8ece014c0ca1ba50a20a2c8badecb`.
+- PR #317 / migration `0132_crm_support_case` established one canonical Smart Core Support Case + SLA authority; PR #318 / `0133_crm_support_case_fk_index_hardening` closed its FK-index findings.
+- Exact-main CI `36376715097` and Cloudflare Production Deploy `36376910976` succeeded on `ec70f9e60cc8ece014c0ca1ba50a20a2c8badecb`.
+- Production has 0 Support Cases and 0 SLA policies; no synthetic ticket/SLA evidence was created. RLS is enabled; reads are authenticated-only; trusted create/assign/escalate/transition/SLA mutations are service-role-only; relevant functions are SECURITY INVOKER. Post-0133 advisors show no Support-specific unindexed-FK regression.
+- Disposition: internally controlled `CRM-SUPPORT-CASE` paths are **PRODUCTION_VERIFIED**. Order/Payment linkage remains dependency-gated until canonical commerce authorities exist.
+- Fresh audit selected `CRM-DATA-QUALITY` next. Existing Identity Graph already owns exact conflict detection and governed MERGE/SPLIT/UNLINK; no duplicate resolution engine may be created.
+- Active branch `feat/crm-data-quality-foundation` extends canonical CRM truth with a deterministic quality scan and bounded atomic verified Contact import. The import reuses `record_crm_business_identity` and `create_or_resolve_crm_person_from_verified_identity`, is capped at 100 rows / 256 KiB, uses request-key idempotency, fails closed on ambiguity, stores receipt counts/hash only, and never copies raw imported PII into the receipt/audit summary.
+- Destructive retention remains **DEFERRED_WITH_REASON** in this slice: irreversible purge/anonymization must not be enabled before an Organization-approved legal/business retention contract exists.
+- This Data Quality branch is implementation evidence only until exact-head CI, merge, Production migration, exact-main deploy and post-apply verification succeed.
+
+
 
 ## Superseding CRM Activity / Task v2 Production checkpoint — 2026-09-28
 
