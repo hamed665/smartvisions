@@ -72,8 +72,9 @@ describe('SALES-SCORING canonical Lead governance', () => {
         name: 'Fixture Business',
         businessStatus: 'OPERATIONAL',
         officialWebsite: null,
-        nationalPhoneNumber: '+968 0000 0000',
-        internationalPhoneNumber: '+96800000000',
+        phone: '00000000',
+        internationalPhone: '+96800000000',
+        countryCode: 'OM',
       } as never,
       '00000000-0000-0000-0000-000000000002',
     );
