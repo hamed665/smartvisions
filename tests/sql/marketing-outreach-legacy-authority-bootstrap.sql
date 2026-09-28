@@ -109,6 +109,19 @@ create table if not exists public.outreach_messages (
   created_at timestamptz not null default now()
 );
 
+-- customer-360-timeline-bootstrap intentionally carries a compact outreach_messages
+-- projection. Normalize only the nullable historical columns needed by modern
+-- migrations; never replace that existing canonical test authority.
+alter table public.outreach_messages
+  add column if not exists campaign_id uuid references public.campaigns(id) on delete set null,
+  add column if not exists mailbox_id uuid references public.mailboxes(id) on delete set null,
+  add column if not exists message_variant_id uuid references public.message_variants(id) on delete set null,
+  add column if not exists idempotency_key text,
+  add column if not exists locale text,
+  add column if not exists dialect text,
+  add column if not exists tone_profile text,
+  add column if not exists message_variant text;
+
 create unique index if not exists outreach_idempotency_unique
   on public.outreach_messages(organization_id,idempotency_key)
   where idempotency_key is not null;
@@ -130,6 +143,11 @@ create table if not exists public.followup_jobs (
   created_at timestamptz not null default now(),
   unique (organization_id,lead_id,campaign_id,sequence)
 );
+
+-- The Customer 360 bootstrap already creates followup_jobs without the legacy
+-- campaign link. Restore that nullable linkage for Production-lineage parity.
+alter table public.followup_jobs
+  add column if not exists campaign_id uuid references public.campaigns(id) on delete set null;
 
 create index if not exists followup_due_idx
   on public.followup_jobs(organization_id,status,scheduled_at);
