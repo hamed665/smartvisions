@@ -34,6 +34,7 @@ export function SegmentSnapshotPanel({
     [segments],
   );
   const [segmentId, setSegmentId] = useState(activeSegments[0]?.id ?? '');
+  const [purpose, setPurpose] = useState<'MANUAL' | 'CAMPAIGN'>('MANUAL');
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const requestKey = useRef<string | null>(null);
@@ -47,7 +48,7 @@ export function SegmentSnapshotPanel({
     setMessage(null);
 
     if (!requestKey.current) requestKey.current = `segment-snapshot:${crypto.randomUUID()}`;
-    if (!sourceRef.current) sourceRef.current = `operator-ui:${crypto.randomUUID()}`;
+    if (!sourceRef.current) sourceRef.current = `operator-ui:${purpose.toLowerCase()}:${crypto.randomUUID()}`;
 
     try {
       const body = await jsonRequest('/api/crm/segments/snapshots', {
@@ -57,7 +58,7 @@ export function SegmentSnapshotPanel({
           organizationId,
           segmentId: selected.id,
           segmentVersion: selected.current_definition_version,
-          purpose: 'MANUAL',
+          purpose,
           sourceRef: sourceRef.current,
           requestKey: requestKey.current,
         }),
@@ -65,7 +66,7 @@ export function SegmentSnapshotPanel({
       const snapshot = body.snapshot as Record<string, unknown> | undefined;
       setMessage(
         snapshot
-          ? `Snapshot frozen: ${String(snapshot.member_count ?? 0)} ${selected.entity_type} IDs at definition v${selected.current_definition_version}.`
+          ? `Snapshot frozen for ${purpose}: ${String(snapshot.member_count ?? 0)} ${selected.entity_type} IDs at definition v${selected.current_definition_version}.`
           : 'Snapshot frozen.',
       );
       requestKey.current = null;
@@ -91,7 +92,10 @@ export function SegmentSnapshotPanel({
           value={selected?.id ?? ''}
           disabled={working}
           onChange={event => {
-            setSegmentId(event.target.value);
+            const nextId = event.target.value;
+            const next = activeSegments.find(segment => segment.id === nextId) ?? null;
+            setSegmentId(nextId);
+            if (next?.entity_type !== 'LEAD') setPurpose('MANUAL');
             requestKey.current = null;
             sourceRef.current = null;
           }}
@@ -99,6 +103,21 @@ export function SegmentSnapshotPanel({
           {activeSegments.map(segment => <option key={segment.id} value={segment.id}>
             {segment.name} · {segment.entity_type} · definition v{segment.current_definition_version}
           </option>)}
+        </select>
+      </label>
+      <label>
+        Snapshot purpose
+        <select
+          value={purpose}
+          disabled={working}
+          onChange={event => {
+            setPurpose(event.target.value as 'MANUAL' | 'CAMPAIGN');
+            requestKey.current = null;
+            sourceRef.current = null;
+          }}
+        >
+          <option value="MANUAL">Manual evidence</option>
+          <option value="CAMPAIGN" disabled={selected?.entity_type !== 'LEAD'}>Marketing Campaign audience</option>
         </select>
       </label>
       <div>
@@ -109,7 +128,7 @@ export function SegmentSnapshotPanel({
 
     {canManage && selected
       ? <button type="button" disabled={working} onClick={() => void freezeSnapshot()}>
-          Freeze current version
+          {purpose === 'CAMPAIGN' ? 'Freeze for Marketing Campaign' : 'Freeze current version'}
         </button>
       : !canManage
         ? <p className="muted">Snapshot creation requires OWNER, ADMIN or SALES_MANAGER.</p>
