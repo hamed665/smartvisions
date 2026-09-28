@@ -993,98 +993,122 @@ begin
       'leads', coalesce((
         select jsonb_agg(jsonb_build_object(
           'entityType', 'LEAD',
-          'entityId', l.id,
-          'businessId', l.business_id,
-          'label', coalesce(b.name, l.id::text),
-          'updatedAt', l.updated_at
-        ) order by l.updated_at desc, l.id)
-        from public.leads l
-        left join public.businesses b
-          on b.organization_id = l.organization_id
-         and b.id = l.business_id
-        where l.organization_id = p_organization_id
-          and l.person_id is null
-          and l.business_id is not null
-          and exists (
-            select 1
-            from public.crm_person_business_relationships r
-            where r.organization_id = p_organization_id
-              and r.person_id = p_person_id
-              and r.business_id = l.business_id
-              and r.status = 'ACTIVE'
-          )
+          'entityId', q.id,
+          'businessId', q.business_id,
+          'label', coalesce(q.business_name, q.id::text),
+          'updatedAt', q.updated_at
+        ) order by q.updated_at desc, q.id)
+        from (
+          select l.id, l.business_id, b.name as business_name, l.updated_at
+          from public.leads l
+          left join public.businesses b
+            on b.organization_id = l.organization_id
+           and b.id = l.business_id
+          where l.organization_id = p_organization_id
+            and l.person_id is null
+            and l.business_id is not null
+            and exists (
+              select 1
+              from public.crm_person_business_relationships r
+              where r.organization_id = p_organization_id
+                and r.person_id = p_person_id
+                and r.business_id = l.business_id
+                and r.status = 'ACTIVE'
+            )
+          order by l.updated_at desc, l.id
+          limit p_limit
+        ) q
       ), '[]'::jsonb),
       'conversations', coalesce((
         select jsonb_agg(jsonb_build_object(
           'entityType', 'CONVERSATION',
-          'entityId', c.id,
-          'businessId', l.business_id,
-          'label', c.channel || ' · ' || c.id::text,
-          'updatedAt', c.updated_at
-        ) order by c.updated_at desc, c.id)
-        from public.sales_conversations c
-        join public.leads l
-          on l.organization_id = c.organization_id
-         and l.id = c.lead_id
-        where c.organization_id = p_organization_id
-          and c.person_id is null
-          and exists (
-            select 1
-            from public.crm_person_business_relationships r
-            where r.organization_id = p_organization_id
-              and r.person_id = p_person_id
-              and r.business_id = l.business_id
-              and r.status = 'ACTIVE'
-          )
+          'entityId', q.id,
+          'businessId', q.business_id,
+          'label', q.channel || ' · ' || q.id::text,
+          'updatedAt', q.updated_at
+        ) order by q.updated_at desc, q.id)
+        from (
+          select c.id, l.business_id, c.channel, c.updated_at
+          from public.sales_conversations c
+          join public.leads l
+            on l.organization_id = c.organization_id
+           and l.id = c.lead_id
+          where c.organization_id = p_organization_id
+            and c.person_id is null
+            and exists (
+              select 1
+              from public.crm_person_business_relationships r
+              where r.organization_id = p_organization_id
+                and r.person_id = p_person_id
+                and r.business_id = l.business_id
+                and r.status = 'ACTIVE'
+            )
+          order by c.updated_at desc, c.id
+          limit p_limit
+        ) q
       ), '[]'::jsonb),
       'tasks', coalesce((
         select jsonb_agg(jsonb_build_object(
           'entityType', 'TASK',
-          'entityId', t.id,
-          'businessId', coalesce(t.business_id, l.business_id, cl.business_id),
-          'label', t.title,
-          'updatedAt', t.updated_at
-        ) order by t.updated_at desc, t.id)
-        from public.crm_tasks t
-        left join public.leads l
-          on l.organization_id = t.organization_id
-         and l.id = t.lead_id
-        left join public.sales_conversations c
-          on c.organization_id = t.organization_id
-         and c.id = t.conversation_id
-        left join public.leads cl
-          on cl.organization_id = c.organization_id
-         and cl.id = c.lead_id
-        where t.organization_id = p_organization_id
-          and t.person_id is null
-          and exists (
-            select 1
-            from public.crm_person_business_relationships r
-            where r.organization_id = p_organization_id
-              and r.person_id = p_person_id
-              and r.business_id = coalesce(t.business_id, l.business_id, cl.business_id)
-              and r.status = 'ACTIVE'
-          )
+          'entityId', q.id,
+          'businessId', q.business_id,
+          'label', q.title,
+          'updatedAt', q.updated_at
+        ) order by q.updated_at desc, q.id)
+        from (
+          select
+            t.id,
+            coalesce(t.business_id, l.business_id, cl.business_id) as business_id,
+            t.title,
+            t.updated_at
+          from public.crm_tasks t
+          left join public.leads l
+            on l.organization_id = t.organization_id
+           and l.id = t.lead_id
+          left join public.sales_conversations c
+            on c.organization_id = t.organization_id
+           and c.id = t.conversation_id
+          left join public.leads cl
+            on cl.organization_id = c.organization_id
+           and cl.id = c.lead_id
+          where t.organization_id = p_organization_id
+            and t.person_id is null
+            and exists (
+              select 1
+              from public.crm_person_business_relationships r
+              where r.organization_id = p_organization_id
+                and r.person_id = p_person_id
+                and r.business_id = coalesce(t.business_id, l.business_id, cl.business_id)
+                and r.status = 'ACTIVE'
+            )
+          order by t.updated_at desc, t.id
+          limit p_limit
+        ) q
       ), '[]'::jsonb),
       'deals', coalesce((
         select jsonb_agg(jsonb_build_object(
           'entityType', 'DEAL',
-          'entityId', d.id,
-          'businessId', d.business_id,
-          'label', d.title,
-          'updatedAt', d.updated_at
-        ) order by d.updated_at desc, d.id)
-        from public.crm_deals d
-        where d.organization_id = p_organization_id
-          and d.person_id is null
-          and exists (
-            select 1
-            from public.crm_person_business_relationships r
-            where r.organization_id = p_organization_id
-              and r.person_id = p_person_id
-              and r.business_id = d.business_id
-              and r.status = 'ACTIVE'
-          )
+          'entityId', q.id,
+          'businessId', q.business_id,
+          'label', q.title,
+          'updatedAt', q.updated_at
+        ) order by q.updated_at desc, q.id)
+        from (
+          select d.id, d.business_id, d.title, d.updated_at
+          from public.crm_deals d
+          where d.organization_id = p_organization_id
+            and d.person_id is null
+            and exists (
+              select 1
+              from public.crm_person_business_relationships r
+              where r.organization_id = p_organization_id
+                and r.person_id = p_person_id
+                and r.business_id = d.business_id
+                and r.status = 'ACTIVE'
+            )
+          order by d.updated_at desc, d.id
+          limit p_limit
+        ) q
       ), '[]'::jsonb)
     ),
     'moduleStatus', jsonb_build_object(
