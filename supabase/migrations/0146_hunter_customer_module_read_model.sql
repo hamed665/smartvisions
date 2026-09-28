@@ -430,21 +430,29 @@ begin
   ) provider_usage on true
   left join lateral (
     select
-      count(*)::bigint as won_count,
+      (
+        select count(*)::bigint
+        from public.crm_deals d0
+        where d0.organization_id=p_organization_id
+          and d0.lead_id=pb.lead_id
+          and d0.state='WON'
+      ) as won_count,
       coalesce(
-        jsonb_object_agg(x.currency,x.amount order by x.currency),
+        (
+          select jsonb_object_agg(x.currency,x.amount order by x.currency)
+          from (
+            select
+              coalesce(d.currency,'UNSPECIFIED') as currency,
+              coalesce(sum(d.amount),0)::numeric as amount
+            from public.crm_deals d
+            where d.organization_id=p_organization_id
+              and d.lead_id=pb.lead_id
+              and d.state='WON'
+            group by coalesce(d.currency,'UNSPECIFIED')
+          ) x
+        ),
         '{}'::jsonb
       ) as amounts
-    from (
-      select
-        coalesce(d.currency,'UNSPECIFIED') as currency,
-        coalesce(sum(d.amount),0)::numeric as amount
-      from public.crm_deals d
-      where d.organization_id=p_organization_id
-        and d.lead_id=pb.lead_id
-        and d.state='WON'
-      group by coalesce(d.currency,'UNSPECIFIED')
-    ) x
   ) won on true
   order by pb.discovered_at desc,pb.discovery_id desc;
 end;
