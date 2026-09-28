@@ -174,6 +174,9 @@ jobs:
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f /work/tests/sql/sales-pipeline-v2-smoke.sql
+          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
+            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f /work/tests/sql/sales-next-action-smoke.sql
       - run: npm run build
       - run: npm run build:vinext
       - run: npm run verify:cloudflare-scheduled
