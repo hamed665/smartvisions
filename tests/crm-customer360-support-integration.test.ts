@@ -15,8 +15,11 @@ describe('CRM-CUSTOMER360-V2 Support integration', () => {
   });
 
   it('attributes only explicit Person-linked Support Cases', () => {
-    expect(migration).toContain('and person_id = p_person_id');
-    expect(migration).not.toContain('crm_person_business_relationships r\n');
+    const supportStart = migration.indexOf("'supportCases', coalesce((");
+    const timelineStart = migration.indexOf("'activityTimeline', coalesce((");
+    const supportBlock = migration.slice(supportStart, timelineStart);
+    expect(supportBlock).toContain('and person_id = p_person_id');
+    expect(supportBlock).not.toContain('crm_person_business_relationships');
     expect(migration).toContain("'supportCases', 'IMPLEMENTED'");
   });
 
