@@ -5,6 +5,7 @@ import {
   listCrmIdentityResolutionCandidates,
   mergeCrmPeopleManual,
   splitCrmPersonIdentityManual,
+  unlinkCrmPersonIdentityManual,
 } from '@/lib/crm/identity-graph';
 import { createClient } from '@/lib/supabase/server';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
@@ -30,7 +31,7 @@ function errorStatus(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   if (/requires an authorized|membership|permission denied|row-level security/i.test(message)) return 403;
   if (/same Organization|active source Person|active canonical identity|not actively linked/i.test(message)) return 404;
-  if (/conflict|already in use|requires two active People/i.test(message)) return 409;
+  if (/conflict|already in use|requires two active People|would leave/i.test(message)) return 409;
   if (/invalid|required|distinct|non-empty|limit/i.test(message)) return 400;
   return 500;
 }
@@ -103,12 +104,13 @@ export async function POST(request: Request) {
   const evidence = body.evidence;
 
   if (!isUuid(organizationId)
-      || !['MERGE', 'SPLIT'].includes(String(action))
+      || !['MERGE', 'SPLIT', 'UNLINK'].includes(String(action))
       || typeof reason !== 'string'
       || !reason.trim()
       || reason.trim().length > 500
       || !isObject(evidence)
-      || Object.keys(evidence).length === 0) {
+      || Object.keys(evidence).length === 0
+      || JSON.stringify(evidence).length > 8192) {
     return NextResponse.json({ error: 'Invalid CRM identity resolution payload' }, { status: 400 });
   }
 
@@ -138,6 +140,25 @@ export async function POST(request: Request) {
         evidence,
       });
       return NextResponse.json({ action: 'MERGE', ...result });
+    }
+
+    if (action === 'UNLINK') {
+      const personId = body.personId;
+      const identityId = body.identityId;
+      if (!isUuid(personId) || !isUuid(identityId)) {
+        return NextResponse.json({ error: 'Invalid CRM Person unlink payload' }, { status: 400 });
+      }
+
+      const result = await unlinkCrmPersonIdentityManual({
+        service,
+        organizationId,
+        actorUserId: membership.userId,
+        personId,
+        identityId,
+        reason,
+        evidence,
+      });
+      return NextResponse.json({ action: 'UNLINK', ...result });
     }
 
     const sourcePersonId = body.sourcePersonId;
