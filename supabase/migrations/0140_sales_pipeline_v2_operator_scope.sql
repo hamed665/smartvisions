@@ -180,6 +180,64 @@ as $$
     );
 $$;
 
+create or replace function public.guard_crm_pipeline_stage_live_policy()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public, pg_catalog
+as $
+begin
+  if tg_op='UPDATE'
+     and (
+       new.probability_bps is distinct from old.probability_bps
+       or new.forecast_category is distinct from old.forecast_category
+       or new.require_amount is distinct from old.require_amount
+       or new.require_expected_close is distinct from old.require_expected_close
+       or new.allow_probability_override is distinct from old.allow_probability_override
+       or (old.is_active and not new.is_active)
+     )
+     and exists (
+       select 1
+       from public.crm_deals d
+       where d.organization_id=old.organization_id
+         and d.pipeline_id=old.pipeline_id
+         and d.stage_id=old.id
+         and d.state='OPEN'
+     )
+  then
+    raise exception 'CRM Pipeline live stage policy is locked while OPEN Deals reference the stage';
+  end if;
+  return new;
+end;
+$;
+
+drop trigger if exists crm_pipeline_stages_live_policy_guard on public.crm_pipeline_stages;
+create trigger crm_pipeline_stages_live_policy_guard
+before update on public.crm_pipeline_stages
+for each row execute function public.guard_crm_pipeline_stage_live_policy();
+
+create or replace function public.guard_crm_deal_stage_move_forecast()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public, pg_catalog
+as $
+begin
+  if tg_op='UPDATE'
+     and new.stage_id is distinct from old.stage_id
+     and new.probability_override_bps is not distinct from old.probability_override_bps
+  then
+    new.probability_override_bps:=null;
+  end if;
+  return new;
+end;
+$;
+
+drop trigger if exists crm_deals_aa_stage_move_forecast_guard on public.crm_deals;
+create trigger crm_deals_aa_stage_move_forecast_guard
+before update of stage_id,probability_override_bps on public.crm_deals
+for each row execute function public.guard_crm_deal_stage_move_forecast();
+
 create or replace function public.guard_crm_deal_owner_team_scope()
 returns trigger
 language plpgsql
@@ -408,6 +466,10 @@ revoke all on function public.crm_deal_scope_can_manage(uuid,uuid,uuid)
 grant execute on function public.crm_deal_scope_can_manage(uuid,uuid,uuid)
   to authenticated;
 
+revoke all on function public.guard_crm_pipeline_stage_live_policy()
+  from public,anon,authenticated,service_role;
+revoke all on function public.guard_crm_deal_stage_move_forecast()
+  from public,anon,authenticated,service_role;
 revoke all on function public.guard_crm_deal_owner_team_scope()
   from public,anon,authenticated,service_role;
 
