@@ -41,6 +41,13 @@ describe('CRM-CUSTOMER360-V2 Person context', () => {
     expect(isCrmCustomer360EntityType('PAYMENT')).toBe(false);
   });
 
+  it('keeps Task and Deal service access column-scoped', () => {
+    expect(migration).toContain('grant select (\n  id, organization_id, business_id, lead_id, conversation_id, person_id\n) on public.crm_tasks to service_role');
+    expect(migration).toContain(') on public.crm_deals to service_role');
+    expect(migration).not.toContain('grant update on public.crm_tasks to service_role');
+    expect(migration).not.toContain('grant update on public.crm_deals to service_role');
+  });
+
   it('keeps browser mutation manual-only behind the service client', () => {
     expect(route).toContain("verificationMethod: 'MANUAL_CONFIRMED'");
     expect(route).not.toContain("verificationMethod: 'PROVIDER_AUTHENTICATED'");
