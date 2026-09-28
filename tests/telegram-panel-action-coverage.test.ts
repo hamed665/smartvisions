@@ -29,6 +29,9 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
     transitionMarketingCampaign:'SPECIALIZED:MARKETING_CAMPAIGN_GOVERNANCE',
     recordMarketingCampaignConversion:'SPECIALIZED:MARKETING_CAMPAIGN_GOVERNANCE',
   },
+  'app/marketing-consent-actions.ts': {
+    recordMarketingPreference:'SPECIALIZED:MARKETING_CONSENT_GOVERNANCE',
+  },
   'app/management-actions.ts': {
     updateSystemControls:'SPECIALIZED:SAFE_CONTROLS',
     createCampaign:'campaign.create', updateCampaign:'campaign.update', updateOutreachPolicy:'outreach.update',
