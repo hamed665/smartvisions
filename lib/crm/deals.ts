@@ -301,9 +301,6 @@ export async function createCrmDealFromLead(input: {
   currency?: string | null;
   expectedCloseAt?: string | null;
   ownerUserId: string;
-  ownerTeamId?: string | null;
-  probabilityPercent?: number | null;
-  forecastCategory?: CrmForecastCategory | null;
   requestKey: string;
   metadata?: Record<string, unknown>;
 }) {
