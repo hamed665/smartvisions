@@ -82,3 +82,30 @@ export async function splitCrmPersonIdentityManual(input: {
     replayed: row.replayed === true,
   };
 }
+
+export async function unlinkCrmPersonIdentityManual(input: {
+  service: SupabaseClient;
+  organizationId: string;
+  actorUserId: string;
+  personId: string;
+  identityId: string;
+  reason: string;
+  evidence: Record<string, unknown>;
+}) {
+  const { data, error } = await input.service.rpc('unlink_crm_person_identity_manual', {
+    p_organization_id: input.organizationId,
+    p_actor_user_id: input.actorUserId,
+    p_person_id: input.personId,
+    p_identity_id: input.identityId,
+    p_reason: input.reason,
+    p_evidence: input.evidence,
+  });
+
+  if (error) throw new Error(`CRM Person unlink failed: ${error.message}`);
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row?.resolved_person_id) throw new Error('CRM Person unlink returned no Person');
+  return {
+    personId: String(row.resolved_person_id),
+    replayed: row.replayed === true,
+  };
+}
