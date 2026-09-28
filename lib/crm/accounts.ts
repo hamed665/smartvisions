@@ -25,8 +25,6 @@ export type CrmAccountListRow = {
   organization_id: string;
   name: string;
   country_code: string;
-  city: string | null;
-  category: string | null;
   account_lifecycle: CrmAccountLifecycle;
   account_owner_user_id: string | null;
   parent_business_id: string | null;
@@ -66,8 +64,6 @@ export async function listCrmAccounts(input: {
       'organization_id',
       'name',
       'country_code',
-      'city',
-      'category',
       'account_lifecycle',
       'account_owner_user_id',
       'parent_business_id',
