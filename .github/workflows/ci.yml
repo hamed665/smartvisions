@@ -113,6 +113,14 @@ jobs:
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/tests/sql/meta-whatsapp-tenant-routing-smoke.sql
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1             -f /work/tests/sql/control-plane-foundation-smoke.sql
 
+          # Reconstruct only the canonical legacy Marketing/Outreach authorities that
+          # Production carries from migrations 0002/0003/0015. The modern CI chain
+          # intentionally starts later, so without this test-only baseline it cannot
+          # validate new migrations against the real long-lived Production lineage.
+          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
+            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f /work/tests/sql/marketing-outreach-legacy-authority-bootstrap.sql
+
           # Keep every numbered migration after the explicit foundational chain under PostgreSQL 17.
           # This closes the gap where 0102+ files existed but were never executed by CI.
           late_count=0

@@ -75,6 +75,15 @@ describe('MARKETING-CAMPAIGNS governance', () => {
     expect(page).toContain('This page does not send messages.');
   });
 
+  it('reconstructs the legacy canonical authority before modern PostgreSQL 17 migration verification', () => {
+    expect(ci).toContain('marketing-outreach-legacy-authority-bootstrap.sql');
+    const legacyBootstrap = readFileSync('tests/sql/marketing-outreach-legacy-authority-bootstrap.sql','utf8');
+    expect(legacyBootstrap).toContain('Production already has these canonical tables');
+    expect(legacyBootstrap).toContain('create table if not exists public.campaigns');
+    expect(legacyBootstrap).toContain('create table if not exists public.outreach_messages');
+    expect(legacyBootstrap).toContain('create table if not exists public.message_templates');
+  });
+
   it('runs PostgreSQL 17 controlled acceptance in CI', () => {
     expect(ci).toContain('marketing-campaign-governance-smoke.sql');
   });
