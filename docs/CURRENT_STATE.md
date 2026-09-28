@@ -1,5 +1,20 @@
 # Smart Visions Growth OS — Current Production State
 
+## Superseding SEGMENT-V2 Production checkpoint and SEGMENT-SNAPSHOT active slice — 2026-09-28
+
+- PR #323 merged to canonical `main@9762e5ce79022718ede2def30610b94843d7f591`.
+- Exact-main CI `36409087711`: SUCCESS; Cloudflare Production Deploy `36409341905`: SUCCESS.
+- Production migration `0136_segment_v2_multi_entity` is live as version `20260928102302`.
+- Canonical Segment authority remains `crm_segments + crm_segment_versions`; Production still has 0 Segments and 0 Segment versions, so no synthetic audience definition exists.
+- Dynamic governed Segments now support `LEAD | PERSON | DEAL | ACCOUNT` with bounded typed predicates. Person PII/free metadata and Account contact/prose/arbitrary JSON are excluded. Governed Custom Fields remain Lead/Deal only.
+- Generic and legacy Lead evaluator/create paths remain SECURITY INVOKER; authenticated execution is allowed, service-role execution of public evaluator/create RPCs remains denied. RLS stays enabled on Segment/version tables.
+- Post-0136 advisors show no Segment-specific security or unindexed-FK regression.
+- Disposition: `SEGMENT-V2` implemented scope is **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**.
+- Active branch `feat/segment-snapshot` implements the separate `SEGMENT-SNAPSHOT` authority: immutable header + exact entity IDs, exact Segment semantic version/predicate hash, bounded request-key-idempotent service-bound creation, membership integrity hash, deferred tamper detection, authenticated RLS reads and no send/consent side effect.
+- Snapshot creation is bounded to 10,000 members for the RC safety contract and fails closed above the bound. Snapshot member IDs intentionally do not foreign-key to live CRM entities so later retention/deletion cannot silently rewrite historical audience evidence.
+- This Snapshot slice is implementation evidence only until exact-head CI, merge, Production migration 0137, exact-main deploy and post-apply no-backfill/security/advisor verification succeed.
+
+
 ## Superseding CRM Customer 360 Support integration Production checkpoint — 2026-09-28
 
 - Canonical main: `eed2a07b0bda3ec87c57f7ee4c4062d40b351cd7` after PR #321.
