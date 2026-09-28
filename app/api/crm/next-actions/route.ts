@@ -5,6 +5,7 @@ import {
   listCrmNextActions,
 } from '@/lib/crm/next-actions';
 import { createClient } from '@/lib/supabase/server';
+import { createSupabaseServiceClient } from '@/lib/supabase/service';
 
 export const dynamic = 'force-dynamic';
 
@@ -133,9 +134,11 @@ export async function POST(request: Request) {
   }
 
   try {
+    const trustedSupabase = createSupabaseServiceClient();
     const result = await acceptCrmNextActionCandidate({
-      supabase,
+      supabase: trustedSupabase,
       organizationId,
+      actorUserId: auth.user.id,
       candidateKind: candidateKind as 'LEAD_STALE' | 'DEAL_STALE' | 'DEAL_CLOSE_OVERDUE',
       entityId,
       assigneeUserId,
