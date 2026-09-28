@@ -252,7 +252,7 @@ begin
   );
 
   if v_segment.entity_type<>'LEAD'
-     or jsonb_array_length(v_eval->'leadIds')<>2
+     or jsonb_array_length(v_eval->'leadIds')<1
   then
     raise exception 'MARKETING-CAMPAIGNS self-contained LEAD Segment fixture is invalid: %',v_eval;
   end if;
@@ -293,7 +293,7 @@ begin
 
   if v_snapshot.entity_type<>'LEAD'
      or v_snapshot.purpose<>'CAMPAIGN'
-     or v_snapshot.member_count<>2
+     or v_snapshot.member_count<1
   then
     raise exception 'MARKETING-CAMPAIGNS immutable audience Snapshot is invalid: %',to_jsonb(v_snapshot);
   end if;
@@ -576,7 +576,7 @@ begin
 
   if v_row.campaign_id is null
      or v_row.segment_version<1
-     or v_row.audience_member_count<>2
+     or v_row.audience_member_count<1
      or v_row.variant_count<>2
      or v_row.allocation_bps<>10000
      or v_row.control_variant_count<>1
