@@ -13,7 +13,7 @@ This is not a feature wishlist. It is the dependency history required to avoid r
 
 For future execution, **do not assign or infer projected GitHub PR numbers**. The stable program roadmap is `MASTER_PROGRAM_SECTIONS.md`, which uses semantic Section and Work Package IDs. Historical PR numbers in this file remain implementation evidence only.
 
-Current planned continuation cursor: fresh dependency audit of `SECTION IDENTITY_CRM / CRM-CUSTOMER360-V2`, after Production verification of `CRM-PERSON-CONTACT` and `CRM-IDENTITY-GRAPH`. If the audit proves `CRM-ACCOUNT-V2` or `CRM-DATA-QUALITY` is a hard prerequisite, follow the verified dependency rather than forcing this cursor.
+Current planned continuation cursor: `SECTION IDENTITY_CRM / CRM-ACCOUNT-V2`. PR #313 / Production migration `0129_crm_customer360_v2_person_context` Production-verified the evidence-backed Person-centric composition over currently implemented Lead/Conversation/Task/Deal authorities without fabricating Person links. The broader Customer 360 requirement remains partial for modules not yet implemented. The Account v2 audit confirmed `public.businesses` is the canonical external Company/Account authority; extend it rather than creating a second Account store, and keep `tenant_businesses` / `branches` reserved for the tenant's own operating hierarchy.
 
 ## Phase 0 — Architecture contracts
 
