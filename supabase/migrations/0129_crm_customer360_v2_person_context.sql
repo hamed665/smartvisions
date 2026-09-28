@@ -142,6 +142,25 @@ create index if not exists crm_deals_org_person_link_actor_fk_idx
   on public.crm_deals(organization_id, person_linked_by_user_id)
   where person_linked_by_user_id is not null;
 
+-- Customer 360 merge reconciliation and trusted Person-context mutation need
+-- only these Lead/Conversation columns. Production may already grant broader
+-- service access for existing runtimes; this migration does not revoke it.
+grant select (
+  id, organization_id, business_id, person_id
+) on public.leads to service_role;
+grant update (
+  person_id, person_link_method, person_link_source_ref, person_link_evidence,
+  person_linked_by_user_id, person_linked_at, updated_at
+) on public.leads to service_role;
+
+grant select (
+  id, organization_id, lead_id, person_id
+) on public.sales_conversations to service_role;
+grant update (
+  person_id, person_link_method, person_link_source_ref, person_link_evidence,
+  person_linked_by_user_id, person_linked_at, updated_at
+) on public.sales_conversations to service_role;
+
 -- Keep the historical service_role deny on CRM Tasks/Deals broad access.
 -- Customer 360 receives only the columns required by its trusted Person-context
 -- mutation path. Existing authenticated policies and module authorities remain
