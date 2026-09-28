@@ -100,9 +100,10 @@ export function buildBusinessPersistenceRow(organizationId:string,business:Disco
   };
 }
 
-export function buildLeadPersistenceRow(organizationId:string,businessId:string,business:DiscoveredBusiness) {
+export function buildLeadPersistenceRow(organizationId:string,businessId:string,business:DiscoveredBusiness,actorUserId?:string) {
   if (!isPriorityNoWebsiteBusiness(business)) throw new Error('Low-confidence business cannot be promoted as a no-website Lead');
   const {score,reasons} = calculateNoWebsiteOpportunityScore(business);
+  const scoredAt=new Date().toISOString();
   return {
     organization_id:organizationId,
     business_id:businessId,
@@ -112,6 +113,19 @@ export function buildLeadPersistenceRow(organizationId:string,businessId:string,
     agent_mode:'AUTO' as const,
     recommended_offer:'business_website',
     score_reasons:reasons,
-    updated_at:new Date().toISOString(),
+    fit_score:null,
+    engagement_score:null,
+    scoring_source:'HUNTER_NO_WEBSITE_V1' as const,
+    scoring_policy_version:'sales-scoring-v1',
+    scoring_evidence:{
+      evidenceType:'GOOGLE_PLACES_BUSINESS_PROFILE',
+      websiteClass:classifyWebsiteUri(business.officialWebsite),
+      operational:String(business.businessStatus??'').toUpperCase()==='OPERATIONAL',
+      directContact:hasDirectProspectContact(business),
+    },
+    scoring_revision:1,
+    scoring_updated_at:scoredAt,
+    scoring_updated_by_user_id:actorUserId??null,
+    updated_at:scoredAt,
   };
 }
