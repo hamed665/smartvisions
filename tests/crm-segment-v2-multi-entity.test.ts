@@ -99,6 +99,32 @@ describe('SEGMENT-V2 multi-entity governance', () => {
     }
   });
 
+  it('requires canonical enum/code casing so validation and evaluation cannot disagree', () => {
+    expect(parseCrmSegmentPredicateTree({
+      kind: 'PREDICATE',
+      source: 'CANONICAL',
+      field: 'status',
+      operator: 'EQ',
+      value: 'active',
+    }, 'PERSON')).toBeNull();
+
+    expect(parseCrmSegmentPredicateTree({
+      kind: 'PREDICATE',
+      source: 'CANONICAL',
+      field: 'currency',
+      operator: 'EQ',
+      value: 'omr',
+    }, 'DEAL')).toBeNull();
+
+    expect(parseCrmSegmentPredicateTree({
+      kind: 'PREDICATE',
+      source: 'CANONICAL',
+      field: 'country_code',
+      operator: 'EQ',
+      value: 'om',
+    }, 'ACCOUNT')).toBeNull();
+  });
+
   it('does not pretend Person or Account custom-field authority exists', () => {
     const custom = {
       kind: 'PREDICATE',
