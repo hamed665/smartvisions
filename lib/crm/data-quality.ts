@@ -54,7 +54,7 @@ export function prepareVerifiedContactImportRows(
     throw new Error('Verified Contact import supports 1 to 100 rows');
   }
 
-  const estimatedSize = Buffer.byteLength(JSON.stringify(rows), 'utf8');
+  const estimatedSize = new TextEncoder().encode(JSON.stringify(rows)).byteLength;
   if (estimatedSize > 262_144) {
     throw new Error('Verified Contact import payload exceeds 256 KiB');
   }
@@ -69,7 +69,7 @@ export function prepareVerifiedContactImportRows(
     const relationshipType = String(row.relationshipType ?? 'CONTACT').trim().toUpperCase() as CrmVerifiedContactImportRow['relationshipType'];
     const identityValue = String(row.identityValue ?? '');
 
-    if (!clientRowKey || clientRowKey.length > 120) {
+    if (!/^[A-Za-z0-9._:-]{1,120}$/.test(clientRowKey)) {
       throw new Error(`Import row ${index + 1} has an invalid clientRowKey`);
     }
     if (clientKeys.has(clientRowKey)) {
