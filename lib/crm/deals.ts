@@ -106,10 +106,12 @@ async function assertDealManagePermission(input: {
   supabase: SupabaseClient;
   organizationId: string;
   ownerUserId: string;
+  teamId: string | null;
 }) {
-  const { data, error } = await input.supabase.rpc('crm_deal_can_manage', {
+  const { data, error } = await input.supabase.rpc('crm_deal_scope_can_manage', {
     p_organization_id: input.organizationId,
     p_owner_user_id: input.ownerUserId,
+    p_team_id: input.teamId,
   });
   if (error) throw new Error(`CRM Deal permission check failed: ${error.message}`);
   if (data !== true) {
@@ -441,7 +443,7 @@ export async function updateCrmDeal(input: {
 }) {
   const currentOwner = await input.supabase
     .from('crm_deals')
-    .select('owner_user_id')
+    .select('owner_user_id,team_id')
     .eq('organization_id', input.organizationId)
     .eq('id', input.dealId)
     .maybeSingle();
@@ -457,6 +459,7 @@ export async function updateCrmDeal(input: {
     supabase: input.supabase,
     organizationId: input.organizationId,
     ownerUserId: String(currentOwner.data.owner_user_id),
+    teamId: currentOwner.data.team_id ? String(currentOwner.data.team_id) : null,
   });
 
   const update: Record<string, unknown> = {};
