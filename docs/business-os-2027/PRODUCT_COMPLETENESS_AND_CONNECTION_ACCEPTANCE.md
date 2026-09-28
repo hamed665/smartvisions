@@ -1,5 +1,18 @@
 # Product completeness and customer connection acceptance — Business OS 2027
 
+## CRM identity acceptance checkpoint — 2026-09-28
+
+This checkpoint records evidence only; it does not shrink the complete-product matrix below.
+
+- `CRM-PERSON-CONTACT`: **PRODUCTION_VERIFIED** for the internally controlled Person/identity/company-relationship foundation and authorization boundary from PR #309/#310, migrations `0126/0127`.
+- `CRM-IDENTITY-GRAPH`: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for deterministic exact-identity conflict candidates, evidence/confidence state, governed manual MERGE/SPLIT/UNLINK, cross-Organization isolation, anti-orphan behavior, bounded audit, operator review surface and Production deployment from PR #311 / migration `0128`.
+- Production currently contains zero real `crm_people` rows. Therefore a real Production happy-path manual resolution action is not claimed; synthetic People or conflict evidence must not be created to make this gate green.
+- Generic automatic “unmerge” is **DEFERRED_WITH_REASON**. The implementation preserves merge lineage and retired evidence and provides governed split/unlink correction paths, but does not claim a universally lossless inverse after relationship evidence has been coalesced.
+- `CRM-ACCOUNT-V2`, `CRM-DATA-QUALITY` and the broader Person/account CRM acceptance row remain **REQUIRED**. The Person/account CRM area is not globally complete merely because the first two Work Packages are Production-verified.
+- `CRM-CUSTOMER360-V2` remains **REQUIRED** and is the next fresh dependency audit. Existing timeline, conversations, deals and tasks must be composed from canonical sources; booking/quote/order/invoice/payment/support/consent/document data must not be fabricated when the corresponding authority is absent.
+- Evidence baseline: `main@c5710ac556faea883745f8656bf0b6c0afc2506f`; exact-main CI #1495 SUCCESS; Cloudflare Production Deploy #975 SUCCESS; Production Supabase through `0128_crm_identity_graph_resolution` version `20260928004331`; Shadow Mode ON; Global Kill Switch OFF.
+
+
 Owner-requested preservation baseline: 2026-09-26 (Asia/Muscat).
 Code audit baseline: `542ef8bf33b394918404990fdb97b9b7df1e7f8e`.
 Scope-lock refresh baseline: `bae105697bdb68cb8b25494cf8303e6efe1a6d81` after PR #261; Production Supabase is verified through `0099_comm_unified_inbox_action_claim_policy_consolidation`.

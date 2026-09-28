@@ -1,5 +1,34 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## Latest continuation checkpoint — CRM-IDENTITY-GRAPH — 2026-09-28
+
+Always re-read runtime/current main before mutation. The verified baseline at this checkpoint is:
+
+- canonical main: `c5710ac556faea883745f8656bf0b6c0afc2506f`, PR #311 merged with exact expected head `1b46af4da044efe6df26dfd7ca3874c471584b99`;
+- exact-main CI #1495: SUCCESS, including PostgreSQL 17 migration-chain and dedicated CRM identity-graph smoke;
+- Cloudflare Production Deploy #975: SUCCESS on the same SHA; candidate Worker `7a4f60cc-d9fa-41af-ae0d-9094e9ffe3fb`, Production Worker `e641d560-637f-4d65-9f6b-7cbc2a1c12d1`;
+- Production Supabase head: `0128_crm_identity_graph_resolution` version `20260928004331`;
+- `CRM-PERSON-CONTACT` foundation (#309/#310) and `CRM-IDENTITY-GRAPH` (#311) extend canonical `crm_people`, `crm_identities`, `crm_identity_links`, `crm_person_identity_links` and `crm_person_business_relationships`; no second Person/CRM/Account/identity store exists;
+- exact identity conflicts are surfaced with evidence IDs; manual MERGE/SPLIT/UNLINK are governed; ambiguous/cross-Organization/orphaning operations fail closed; no fuzzy or display-name-only auto-merge exists;
+- Production mutation RPCs are service-role-only and SECURITY INVOKER; candidate read is authenticated-only; relevant public tables retain RLS;
+- Production still has 0 People, 0 Person-identity links and 0 Person-business relationships. Do not create synthetic People/conflicts/acceptance receipts merely to exercise the happy path;
+- Shadow Mode remains ON; Global Kill Switch OFF; Chatwoot external provisioning remains disabled; no outbound provider side effect was invoked by the deployment smoke;
+- exact generic unmerge remains `DEFERRED_WITH_REASON`; merge lineage plus split/unlink correction paths are retained instead of promising a lossy inverse.
+
+Next bounded Work Package: fresh audit of `SECTION IDENTITY_CRM / CRM-CUSTOMER360-V2`.
+
+Before designing that slice:
+1. re-read current main/open PRs/CI/Production migrations and current master/completeness requirements;
+2. audit canonical `crm_people`, identities/links, Person-Business relationships, `crm_customer_timeline`, `leads`, `sales_conversations`, Deals/Pipelines, Tasks and any current Notes/Consent/Documents/Booking/Quote/Order/Invoice/Payment/Support sources;
+3. build a governed Customer 360 composition over existing authorities; do not create a second customer/activity/conversation/deal/task store;
+4. do not add `person_id` to historical authorities merely for visual convenience. Introduce a link only when a canonical evidence and lifecycle contract justifies it;
+5. integrate modules that actually exist; for absent booking/order/payment/support/etc. preserve typed integration boundaries without fake rows, fake success or duplicate truth;
+6. preserve tenant isolation, scoped authorization, deterministic pagination, bounded queries, auditability and no-cross-tenant behavior;
+7. if the fresh audit proves `CRM-ACCOUNT-V2` or `CRM-DATA-QUALITY` is a hard prerequisite, follow that dependency and document why instead of forcing the planning order.
+
+Older continuation sections below are historical where they conflict with this checkpoint.
+
+
 ## Latest continuation checkpoint — TikTok / SMS-RCS / controlled Voice — 2026-09-28
 
 Always re-read runtime/current main before mutation. The verified baseline before this documentation reconciliation is:
