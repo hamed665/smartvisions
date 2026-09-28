@@ -33,9 +33,13 @@ describe('SALES-NEXT-ACTION governance', () => {
   it('requires explicit human acceptance before a candidate becomes a Task', () => {
     expect(migration).toContain("source_type='NEXT_ACTION'");
     expect(migration).toContain("app.crm_next_action_accept");
-    expect(migration).toContain('NEXT_ACTION CRM task must be accepted through governed candidate materialization');
+    expect(migration).toContain("current_user<>'service_role'");
+    expect(migration).toContain('NEXT_ACTION CRM task requires trusted governed candidate materialization');
     expect(migration).toContain('accept_crm_next_action_candidate');
+    expect(migration).toContain('next action acceptance actor is not permitted');
     expect(route).toContain("body.action !== 'ACCEPT'");
+    expect(route).toContain('createSupabaseServiceClient');
+    expect(route).toContain('actorUserId: auth.user.id');
     expect(controls).toContain('Accept as Task');
   });
 
@@ -45,6 +49,8 @@ describe('SALES-NEXT-ACTION governance', () => {
     expect(replayIndex).toBeGreaterThan(0);
     expect(replayIndex).toBeLessThan(staleIndex);
     expect(migration).toContain('next action request key was reused with different semantics');
+    expect(migration).toContain('to service_role;');
+    expect(migration).not.toContain(') to authenticated;\ngrant execute on function public.accept_crm_next_action_candidate');
   });
 
   it('keeps AI suggestion advisory and behind a trusted service boundary', () => {
