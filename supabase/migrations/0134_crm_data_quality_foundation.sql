@@ -352,12 +352,20 @@ begin
 
   v_content_hash := encode(extensions.digest(p_rows::text, 'sha256'), 'hex');
 
+  -- Serialize only identical Organization/request-key imports without granting
+  -- UPDATE on immutable receipt rows.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      p_organization_id::text || ':' || trim(p_request_key),
+      0
+    )
+  );
+
   select *
     into v_existing
   from public.crm_data_import_batches
   where organization_id = p_organization_id
-    and request_key = trim(p_request_key)
-  for update;
+    and request_key = trim(p_request_key);
 
   if found then
     if v_existing.content_hash <> v_content_hash then
