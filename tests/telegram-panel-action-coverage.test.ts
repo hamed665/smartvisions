@@ -58,6 +58,11 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
   'app/intelligence-actions.ts': {
     refreshGoogleBusinessIntelligence:'google.refresh',
   },
+  'app/leads/scoring-actions.ts': {
+    recomputeLeadEngagement:'SPECIALIZED:SALES_SCORING_GOVERNANCE',
+    setLeadScoreOverride:'SPECIALIZED:SALES_SCORING_GOVERNANCE',
+    clearLeadScoreOverride:'SPECIALIZED:SALES_SCORING_GOVERNANCE',
+  },
   'app/telegram-customer-actions.ts': {
     connectTelegramCustomerChannel:'SPECIALIZED:TELEGRAM_CUSTOMER_CHANNEL_CONNECT',
   },
