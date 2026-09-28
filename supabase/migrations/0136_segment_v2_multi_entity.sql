@@ -644,8 +644,8 @@ begin
     select jsonb_build_object(
       'account_lifecycle',b.account_lifecycle,
       'country_code',b.country_code,
-      'city',b.city,
-      'category',b.category,
+      'city',to_jsonb(b)->>'city',
+      'category',to_jsonb(b)->>'category',
       'hierarchy_relation',b.hierarchy_relation,
       'account_owner_user_id',b.account_owner_user_id,
       'parent_business_id',b.parent_business_id,
