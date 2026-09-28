@@ -133,6 +133,10 @@ create index if not exists leads_manual_override_expiry_idx
   on public.leads(organization_id, manual_score_override_expires_at)
   where manual_score_override is not null;
 
+create index if not exists conversation_messages_org_lead_scoring_idx
+  on public.conversation_messages(organization_id, lead_id, created_at desc, id desc)
+  where lead_id is not null;
+
 create unique index if not exists audit_logs_crm_lead_scoring_request_idx
   on public.audit_logs(organization_id, action, entity_id, correlation_id)
   where entity_type='lead'
