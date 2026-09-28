@@ -54,6 +54,7 @@ export async function listCrmNextActions(input: {
 export async function acceptCrmNextActionCandidate(input: {
   supabase: SupabaseClient;
   organizationId: string;
+  actorUserId: string;
   candidateKind: 'LEAD_STALE' | 'DEAL_STALE' | 'DEAL_CLOSE_OVERDUE';
   entityId: string;
   assigneeUserId?: string | null;
@@ -64,6 +65,7 @@ export async function acceptCrmNextActionCandidate(input: {
 }) {
   const { data, error } = await input.supabase.rpc('accept_crm_next_action_candidate', {
     p_organization_id: input.organizationId,
+    p_actor_user_id: input.actorUserId,
     p_candidate_kind: input.candidateKind,
     p_entity_id: input.entityId,
     p_assignee_user_id: input.assigneeUserId ?? null,
