@@ -6,6 +6,8 @@ select
   (select count(*) from public.conversation_messages) as message_count,
   (select count(*) from public.usage_events) as usage_count;
 
+grant select on customer_success_side_effect_baseline to service_role;
+
 set role service_role;
 
 -- Promote only a disposable CI Account through the canonical Account authority.
@@ -459,7 +461,7 @@ end;
 $customer_success_no_send_side_effect$;
 
 -- Restore the shared Account fixture through the canonical Account authority.
-perform *
+select *
 from public.set_crm_account_lifecycle_manual(
   '00000000-0000-0000-0000-000000000c01',
   '00000000-0000-0000-0000-00000000c001',
