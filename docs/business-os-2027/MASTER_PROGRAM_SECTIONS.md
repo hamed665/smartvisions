@@ -534,12 +534,11 @@ Extend governed segments to justified entities:
 - saved views;
 - governed custom-field predicates.
 
-**Current implementation checkpoint — ACTIVE / not yet Production evidence (2026-09-28):**
-- Active branch `feat/segment-v2-multi-entity` extends the existing canonical `crm_segments + crm_segment_versions`; it does not create a second Segment/rule/membership store.
-- Entity scope is `LEAD | PERSON | DEAL | ACCOUNT` with typed, allowlisted canonical predicates. Person PII/free metadata and arbitrary SQL/JSONPath are rejected.
-- Governed Custom Field predicates remain limited to the entities for which the current authority exists: Lead and Deal. Person/Account Custom Field support is not fabricated.
-- Dynamic evaluation stays bounded, versioned and side-effect-free apart from bounded audit evidence. `SEGMENT-SNAPSHOT` remains a separate Work Package; SEGMENT-V2 does not persist current membership.
-- This checkpoint is implementation evidence only until exact-head CI, merge, Production migration, exact-main deploy, grants/RLS/advisor verification and zero-synthetic-data evidence succeed.
+**Current evidence checkpoint — PRODUCTION_VERIFIED (2026-09-28):**
+- PR #323 / migration `0136_segment_v2_multi_entity` extends the existing canonical `crm_segments + crm_segment_versions`; no second Segment/rule/membership engine exists.
+- `LEAD | PERSON | DEAL | ACCOUNT` dynamic predicates are typed, allowlisted, bounded and side-effect-free apart from audit. Custom Fields remain Lead/Deal only.
+- Exact-main CI `36409087711` and Cloudflare Production Deploy `36409341905` succeeded on `main@9762e5ce79022718ede2def30610b94843d7f591`. Production Segments/versions remain 0/0.
+- Disposition: implemented `SEGMENT-V2` scope is **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**.
 
 ## SEGMENT-SNAPSHOT
 
@@ -549,6 +548,14 @@ Extend governed segments to justified entities:
 - creation evidence;
 - historical reproducibility;
 - no silent mutation.
+
+**Current implementation checkpoint — ACTIVE / not yet Production evidence:**
+- Active branch `feat/segment-snapshot` adds a dedicated immutable historical-audience authority, not a second dynamic Segment evaluator.
+- Snapshot header freezes Segment/version/entity type/predicate hash/member count/membership hash plus bounded creation evidence; members freeze exact ordered entity IDs.
+- Creation is service-bound, OWNER/ADMIN/SALES_MANAGER attributed, request-key idempotent and capped at 10,000 members for the RC safety contract.
+- Deferred integrity triggers verify exact member rows against frozen count/hash; UPDATE/DELETE is rejected.
+- Authenticated Organization members may read snapshot evidence under RLS. Snapshot membership never implies consent/send permission and triggers no Campaign/Workflow/provider action.
+- Production completion must not be claimed until exact-head CI, merge, migration 0137, exact-main deploy and post-apply verification succeed.
 
 ## SALES-SCORING
 
