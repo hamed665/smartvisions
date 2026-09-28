@@ -119,9 +119,17 @@ end;
 $marketing_structure$;
 
 -- Test-only fixture setup. No Production fixtures are created by this migration.
-update public.system_controls
-set shadow_mode=true
-where organization_id='00000000-0000-0000-0000-000000000c01';
+insert into public.system_controls(
+  organization_id,global_kill_switch,email_paused,whatsapp_ai_paused,agents_paused,shadow_mode
+) values (
+  '00000000-0000-0000-0000-000000000c01',false,false,false,false,true
+)
+on conflict (organization_id) do update
+set shadow_mode=true,
+    global_kill_switch=false,
+    email_paused=false,
+    whatsapp_ai_paused=false,
+    agents_paused=false;
 
 do $marketing_fixture_controls$
 begin
