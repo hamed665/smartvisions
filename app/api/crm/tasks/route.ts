@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import {
+  acknowledgeCrmTaskReminder,
   createCrmTask,
   CrmTaskMutationError,
   listCrmTasks,
@@ -64,8 +65,12 @@ export async function GET(request: Request) {
   const organizationId = url.searchParams.get('organizationId')?.trim() ?? '';
   const businessId = url.searchParams.get('businessId');
   const leadId = url.searchParams.get('leadId');
+  const dealId = url.searchParams.get('dealId');
+  const personId = url.searchParams.get('personId');
   const assigneeUserId = url.searchParams.get('assigneeUserId');
   const status = url.searchParams.get('status');
+  const overdueOnly = parseBoolean(url.searchParams.get('overdueOnly'), false);
+  const reminderDueOnly = parseBoolean(url.searchParams.get('reminderDueOnly'), false);
   const includeClosed = parseBoolean(url.searchParams.get('includeClosed'), false);
   const limit = parseLimit(url.searchParams.get('limit'));
   const beforeUpdatedAt = url.searchParams.get('beforeUpdatedAt');
@@ -74,8 +79,12 @@ export async function GET(request: Request) {
   if (!isUuid(organizationId)
       || !optionalUuid(businessId)
       || !optionalUuid(leadId)
+      || !optionalUuid(dealId)
+      || !optionalUuid(personId)
       || !optionalUuid(assigneeUserId)
       || (status !== null && !STATUSES.includes(status as CrmTaskStatus))
+      || overdueOnly === null
+      || reminderDueOnly === null
       || includeClosed === null
       || limit === null) {
     return NextResponse.json({ error: 'Invalid CRM task query parameters' }, { status: 400 });
@@ -111,8 +120,12 @@ export async function GET(request: Request) {
       organizationId,
       businessId,
       leadId,
+      dealId,
+      personId,
       assigneeUserId,
       status: status as CrmTaskStatus | null,
+      overdueOnly,
+      reminderDueOnly,
       includeClosed,
       limit,
       cursor,
@@ -150,6 +163,7 @@ export async function POST(request: Request) {
   const businessId = body.businessId;
   const leadId = body.leadId;
   const conversationId = body.conversationId;
+  const dealId = body.dealId;
   const taskType = body.taskType ?? 'GENERAL';
   const title = typeof body.title === 'string' ? body.title.trim() : '';
   const description = body.description;
@@ -160,6 +174,9 @@ export async function POST(request: Request) {
   const dueAt = Object.prototype.hasOwnProperty.call(body, 'dueAt')
     ? parseIso(body.dueAt)
     : null;
+  const reminderAt = Object.prototype.hasOwnProperty.call(body, 'reminderAt')
+    ? parseIso(body.reminderAt)
+    : null;
   const requestKey = typeof body.requestKey === 'string' ? body.requestKey.trim() : '';
   const metadata = body.metadata ?? {};
 
@@ -167,6 +184,7 @@ export async function POST(request: Request) {
       || !optionalUuid(businessId)
       || !optionalUuid(leadId)
       || !optionalUuid(conversationId)
+      || !optionalUuid(dealId)
       || !TASK_TYPES.includes(taskType as CrmTaskType)
       || title.length < 1
       || title.length > 240
@@ -175,6 +193,7 @@ export async function POST(request: Request) {
       || !PRIORITIES.includes(priority as CrmTaskPriority)
       || !optionalUuid(assigneeUserId)
       || dueAt === undefined
+      || reminderAt === undefined
       || requestKey.length < 1
       || requestKey.length > 200
       || !isMetadata(metadata)) {
@@ -189,12 +208,14 @@ export async function POST(request: Request) {
       businessId,
       leadId,
       conversationId,
+      dealId,
       taskType: taskType as CrmTaskType,
       title,
       description: typeof description === 'string' ? description : null,
       priority: priority as CrmTaskPriority,
       assigneeUserId,
       dueAt,
+      reminderAt,
       requestKey,
       metadata,
     });
@@ -230,6 +251,22 @@ export async function PATCH(request: Request) {
   const expectedVersion = body.expectedVersion;
   const patch = body.patch;
 
+  if (body.action === 'ACK_REMINDER') {
+    if (!isUuid(organizationId) || !isUuid(taskId)) {
+      return NextResponse.json({ error: 'Invalid CRM task reminder acknowledgement' }, { status: 400 });
+    }
+    try {
+      const result = await acknowledgeCrmTaskReminder({ supabase, organizationId, taskId });
+      return NextResponse.json(result);
+    } catch (error) {
+      console.error('CRM task reminder acknowledgement failed', error);
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'CRM task reminder acknowledgement failed' },
+        { status: mutationStatus(error) },
+      );
+    }
+  }
+
   if (!isUuid(organizationId)
       || !isUuid(taskId)
       || typeof expectedVersion !== 'number'
@@ -242,7 +279,7 @@ export async function PATCH(request: Request) {
 
   const allowed = new Set([
     'taskType','title','description','status','priority','assigneeUserId',
-    'dueAt','blockedReason','completionNote','metadata',
+    'dueAt','reminderAt','blockedReason','completionNote','metadata',
   ]);
   if (Object.keys(patch).some(key => !allowed.has(key))) {
     return NextResponse.json({ error: 'Unsupported CRM task patch field' }, { status: 400 });
@@ -250,6 +287,9 @@ export async function PATCH(request: Request) {
 
   const dueAt = Object.prototype.hasOwnProperty.call(patch, 'dueAt')
     ? parseIso(patch.dueAt)
+    : undefined;
+  const reminderAt = Object.prototype.hasOwnProperty.call(patch, 'reminderAt')
+    ? parseIso(patch.reminderAt)
     : undefined;
 
   if ((patch.taskType !== undefined && !TASK_TYPES.includes(patch.taskType as CrmTaskType))
@@ -264,6 +304,7 @@ export async function PATCH(request: Request) {
         && !PRIORITIES.includes(patch.priority as CrmTaskPriority))
       || (patch.assigneeUserId !== undefined && !optionalUuid(patch.assigneeUserId))
       || dueAt === undefined && Object.prototype.hasOwnProperty.call(patch, 'dueAt')
+      || reminderAt === undefined && Object.prototype.hasOwnProperty.call(patch, 'reminderAt')
       || (patch.blockedReason !== undefined && patch.blockedReason !== null
         && (typeof patch.blockedReason !== 'string' || patch.blockedReason.length > 2000))
       || (patch.completionNote !== undefined && patch.completionNote !== null
@@ -286,6 +327,7 @@ export async function PATCH(request: Request) {
         priority: patch.priority as CrmTaskPriority | undefined,
         assigneeUserId: patch.assigneeUserId as string | null | undefined,
         dueAt,
+        reminderAt,
         blockedReason: patch.blockedReason as string | null | undefined,
         completionNote: patch.completionNote as string | null | undefined,
         metadata: patch.metadata as Record<string, unknown> | undefined,
