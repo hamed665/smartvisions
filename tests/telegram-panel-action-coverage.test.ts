@@ -58,11 +58,6 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
   'app/intelligence-actions.ts': {
     refreshGoogleBusinessIntelligence:'google.refresh',
   },
-  'app/leads/scoring-actions.ts': {
-    recomputeLeadEngagement:'SPECIALIZED:CRM_LEAD_SCORING_ENGAGEMENT_RECOMPUTE',
-    setLeadScoreOverride:'SPECIALIZED:CRM_LEAD_SCORING_OVERRIDE_SET',
-    clearLeadScoreOverride:'SPECIALIZED:CRM_LEAD_SCORING_OVERRIDE_CLEAR',
-  },
   'app/telegram-customer-actions.ts': {
     connectTelegramCustomerChannel:'SPECIALIZED:TELEGRAM_CUSTOMER_CHANNEL_CONNECT',
   },
@@ -129,9 +124,6 @@ describe('Control Center ↔ Telegram action coverage', () => {
     expect(CLASSIFICATION['app/management-actions.ts'].rejectMessage).toBe('SPECIALIZED:/reject');
     expect(CLASSIFICATION['app/management-actions.ts'].releaseHumanTakeover).toBe('SPECIALIZED:OWNER_RELEASE');
     expect(CLASSIFICATION['app/daily-target-actions.ts'].setDailyOutreachTarget).toBe('SPECIALIZED:DAILY_OUTREACH_TARGET');
-    expect(CLASSIFICATION['app/leads/scoring-actions.ts'].recomputeLeadEngagement).toBe('SPECIALIZED:CRM_LEAD_SCORING_ENGAGEMENT_RECOMPUTE');
-    expect(CLASSIFICATION['app/leads/scoring-actions.ts'].setLeadScoreOverride).toBe('SPECIALIZED:CRM_LEAD_SCORING_OVERRIDE_SET');
-    expect(CLASSIFICATION['app/leads/scoring-actions.ts'].clearLeadScoreOverride).toBe('SPECIALIZED:CRM_LEAD_SCORING_OVERRIDE_CLEAR');
     expect(CLASSIFICATION['app/business-os-actions.ts'].bootstrapCanonicalOperatingHierarchy).toBe('SPECIALIZED:BUSINESS_OS_HIERARCHY_BOOTSTRAP');
     expect(CLASSIFICATION['app/business-os-actions.ts'].bootstrapCanonicalTenant).toBe('SPECIALIZED:BUSINESS_OS_TENANT_BOOTSTRAP');
     expect(CLASSIFICATION['app/business-os-actions.ts'].prepareCommunicationPlaneProjection).toBe('SPECIALIZED:CHATWOOT_TENANT_PROJECTION_PREPARE');
