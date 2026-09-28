@@ -513,6 +513,16 @@ grant select on public.crm_segment_snapshot_members to authenticated;
 grant select,insert on public.crm_segment_snapshots to service_role;
 grant select,insert on public.crm_segment_snapshot_members to service_role;
 
+-- SECURITY INVOKER snapshot creation derives membership inside one DB transaction.
+-- Grant only the canonical read authorities its existing Segment matcher requires;
+-- do not grant service_role mutation rights on these CRM authorities.
+grant select on public.crm_segments to service_role;
+grant select on public.crm_segment_versions to service_role;
+grant select on public.crm_deals to service_role;
+grant select on public.crm_custom_field_definitions to service_role;
+grant select on public.crm_custom_field_options to service_role;
+grant select on public.crm_custom_field_values to service_role;
+
 revoke all on function public.create_crm_segment_snapshot(
   uuid,uuid,uuid,integer,text,text,text
 ) from public,anon,authenticated,service_role;
