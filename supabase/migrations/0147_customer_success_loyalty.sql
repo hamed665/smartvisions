@@ -78,6 +78,9 @@ create index customer_loyalty_events_source_idx
   on public.customer_loyalty_events(organization_id,source_type,source_ref)
   where source_type='REFERRAL';
 
+create index customer_loyalty_events_recorded_by_idx
+  on public.customer_loyalty_events(organization_id,recorded_by_user_id);
+
 alter table public.customer_loyalty_events enable row level security;
 create policy customer_loyalty_events_member_read
   on public.customer_loyalty_events for select to authenticated
@@ -147,6 +150,15 @@ create index customer_referrals_referred_lead_idx
 create index customer_referrals_referred_business_idx
   on public.customer_referrals(organization_id,referred_business_id)
   where referred_business_id is not null;
+
+create index customer_referrals_referrer_person_idx
+  on public.customer_referrals(organization_id,referrer_person_id)
+  where referrer_person_id is not null;
+create index customer_referrals_recorded_by_idx
+  on public.customer_referrals(organization_id,recorded_by_user_id);
+create index customer_referrals_transition_by_idx
+  on public.customer_referrals(organization_id,last_transition_by_user_id)
+  where last_transition_by_user_id is not null;
 
 alter table public.customer_referrals enable row level security;
 create policy customer_referrals_member_read
@@ -240,20 +252,20 @@ with account_evidence as (
     b.account_lifecycle,
     b.account_owner_user_id,
     greatest(
-      b.updated_at,
+      coalesce(b.account_lifecycle_updated_at,b.created_at),
       coalesce((select max(l.updated_at) from public.leads l
-                where l.organization_id=b.organization_id and l.business_id=b.id),b.updated_at),
+                where l.organization_id=b.organization_id and l.business_id=b.id),coalesce(b.account_lifecycle_updated_at,b.created_at)),
       coalesce((select max(sc.updated_at)
                 from public.sales_conversations sc
                 join public.leads l
                   on l.organization_id=sc.organization_id and l.id=sc.lead_id
-                where l.organization_id=b.organization_id and l.business_id=b.id),b.updated_at),
+                where l.organization_id=b.organization_id and l.business_id=b.id),coalesce(b.account_lifecycle_updated_at,b.created_at)),
       coalesce((select max(t.updated_at) from public.crm_tasks t
-                where t.organization_id=b.organization_id and t.business_id=b.id),b.updated_at),
+                where t.organization_id=b.organization_id and t.business_id=b.id),coalesce(b.account_lifecycle_updated_at,b.created_at)),
       coalesce((select max(c.updated_at) from public.crm_support_cases c
-                where c.organization_id=b.organization_id and c.business_id=b.id),b.updated_at),
+                where c.organization_id=b.organization_id and c.business_id=b.id),coalesce(b.account_lifecycle_updated_at,b.created_at)),
       coalesce((select max(r.updated_at) from public.crm_person_business_relationships r
-                where r.organization_id=b.organization_id and r.business_id=b.id),b.updated_at)
+                where r.organization_id=b.organization_id and r.business_id=b.id),coalesce(b.account_lifecycle_updated_at,b.created_at))
     ) as last_activity_at,
     (select count(*) from public.crm_support_cases c
      where c.organization_id=b.organization_id and c.business_id=b.id
@@ -274,6 +286,7 @@ with account_evidence as (
        on l.organization_id=sc.organization_id and l.id=sc.lead_id
      where l.organization_id=b.organization_id and l.business_id=b.id
        and m.created_at>=now()-interval '30 days'
+       and m.direction='INBOUND'
        and upper(coalesce(m.sentiment_label,'')) in ('NEGATIVE','VERY_NEGATIVE')) as negative_sentiment_count,
     (select count(*) from public.crm_person_business_relationships r
      where r.organization_id=b.organization_id and r.business_id=b.id and r.status='ACTIVE') as active_relationship_count,
@@ -917,6 +930,7 @@ as $$
 declare
   v_role text;
   v_campaign public.campaigns%rowtype;
+  v_before_lifecycle text;
   v_lifecycle text:=nullif(upper(trim(coalesce(p_lifecycle,''))),'');
 begin
   if current_user<>'service_role' then
