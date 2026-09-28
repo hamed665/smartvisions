@@ -240,7 +240,6 @@ begin
         'resolutionDueAt', s.resolution_due_at,
         'firstRespondedAt', s.first_responded_at,
         'escalationLevel', s.escalation_level,
-        'resolutionSummary', s.resolution_summary,
         'resolvedAt', s.resolved_at,
         'closedAt', s.closed_at,
         'csatScore', s.csat_score,
