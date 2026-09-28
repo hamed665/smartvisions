@@ -2,6 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type CrmSegmentStatus = 'ACTIVE' | 'ARCHIVED';
 export type CrmSegmentEvaluationMode = 'DYNAMIC';
+export type CrmSegmentEntityType = 'LEAD' | 'PERSON' | 'DEAL' | 'ACCOUNT';
+
+export const CRM_SEGMENT_ENTITY_TYPES: readonly CrmSegmentEntityType[] = [
+  'LEAD', 'PERSON', 'DEAL', 'ACCOUNT',
+];
 export type CrmSegmentSource = 'CANONICAL' | 'CUSTOM_FIELD';
 
 export type CrmSegmentPredicateNode =
@@ -19,7 +24,7 @@ export type CrmSegmentPredicateNode =
 export type CrmSegmentRow = {
   id: string;
   organization_id: string;
-  entity_type: 'LEAD';
+  entity_type: CrmSegmentEntityType;
   status: CrmSegmentStatus;
   current_definition_version: number;
   version: number;
@@ -34,13 +39,25 @@ export type CrmSegmentRow = {
   updated_at: string;
 };
 
-export type CrmSegmentEvaluation = {
+export type CrmLeadSegmentEvaluation = {
   segmentId: string;
   segmentVersion: number;
   evaluationMode: CrmSegmentEvaluationMode;
   predicateHash: string;
   evaluatedAt: string;
   leadIds: string[];
+  hasMore: boolean;
+  nextCursor: string | null;
+};
+
+export type CrmSegmentEvaluation = {
+  segmentId: string;
+  segmentVersion: number;
+  entityType: CrmSegmentEntityType;
+  evaluationMode: CrmSegmentEvaluationMode;
+  predicateHash: string;
+  evaluatedAt: string;
+  entityIds: string[];
   hasMore: boolean;
   nextCursor: string | null;
 };
@@ -88,7 +105,50 @@ function validIso(value: unknown) {
     && Number.isFinite(Date.parse(value));
 }
 
-function validateCanonical(node: Record<string, unknown>) {
+function validateTextPredicate(operator: unknown, value: unknown) {
+  if (operator === 'EQ' || operator === 'NEQ') {
+    return typeof value === 'string' && value.trim().length > 0;
+  }
+  return (operator === 'IN' || operator === 'NOT_IN') && isStringArray(value);
+}
+
+function validateNumberPredicate(operator: unknown, value: unknown) {
+  if (['EQ','NEQ','GT','GTE','LT','LTE'].includes(String(operator))) {
+    return typeof value === 'number' && Number.isFinite(value);
+  }
+  return operator === 'BETWEEN' && isNumberPair(value);
+}
+
+function validateUuidPredicate(operator: unknown, value: unknown) {
+  if (operator === 'IS_SET' || operator === 'IS_NOT_SET') {
+    return value === undefined || value === null;
+  }
+  if (operator === 'EQ') return typeof value === 'string' && UUID_RE.test(value);
+  return (operator === 'IN' || operator === 'NOT_IN')
+    && isStringArray(value)
+    && (value as string[]).every(item => UUID_RE.test(item));
+}
+
+function validateTimestampPredicate(operator: unknown, value: unknown) {
+  if (operator === 'BEFORE' || operator === 'AFTER') return validIso(value);
+  return operator === 'BETWEEN'
+    && isStringPair(value)
+    && (value as string[]).every(validIso)
+    && Date.parse((value as string[])[0]) <= Date.parse((value as string[])[1]);
+}
+
+function enumValueValid(value: unknown, allowed: readonly string[]) {
+  return typeof value === 'string' && allowed.includes(value.toUpperCase());
+}
+
+function enumListValid(value: unknown, allowed: readonly string[]) {
+  return isStringArray(value) && (value as string[]).every(item => allowed.includes(item.toUpperCase()));
+}
+
+function validateCanonical(
+  node: Record<string, unknown>,
+  entityType: CrmSegmentEntityType | null,
+) {
   if (!exactKeys(node, ['kind','source','field','operator','value'])) return false;
   const field = node.field;
   const operator = node.operator;
@@ -96,35 +156,76 @@ function validateCanonical(node: Record<string, unknown>) {
 
   if (typeof field !== 'string' || typeof operator !== 'string') return false;
 
-  if (field === 'status') {
-    if (operator === 'EQ' || operator === 'NEQ') {
-      return typeof value === 'string' && value.trim().length > 0;
+  const entityAllows = (...types: CrmSegmentEntityType[]) => entityType === null || types.includes(entityType);
+
+  if (field === 'status' && entityAllows('LEAD', 'PERSON')) {
+    if (!validateTextPredicate(operator, value)) return false;
+    if (entityType === 'PERSON') {
+      const allowed = ['ACTIVE','MERGED','RETIRED'] as const;
+      return operator === 'IN' || operator === 'NOT_IN'
+        ? enumListValid(value, allowed)
+        : enumValueValid(value, allowed);
     }
-    return (operator === 'IN' || operator === 'NOT_IN') && isStringArray(value);
+    return true;
   }
 
-  if (field === 'opportunity_score' || field === 'intent_score') {
-    if (['EQ','NEQ','GT','GTE','LT','LTE'].includes(operator)) {
-      return typeof value === 'number' && Number.isFinite(value);
-    }
-    return operator === 'BETWEEN' && isNumberPair(value);
+  if ((field === 'opportunity_score' || field === 'intent_score') && entityAllows('LEAD')) {
+    return validateNumberPredicate(operator, value);
   }
 
-  if (field === 'business_id') {
-    if (operator === 'IS_SET' || operator === 'IS_NOT_SET') return value === undefined || value === null;
-    if (operator === 'EQ') return typeof value === 'string' && UUID_RE.test(value);
-    return (operator === 'IN' || operator === 'NOT_IN')
-      && isStringArray(value)
-      && (value as string[]).every(item => UUID_RE.test(item));
+  if (field === 'state' && entityAllows('DEAL')) {
+    if (!validateTextPredicate(operator, value)) return false;
+    const allowed = ['OPEN','WON','LOST'] as const;
+    return operator === 'IN' || operator === 'NOT_IN'
+      ? enumListValid(value, allowed)
+      : enumValueValid(value, allowed);
   }
 
-  if (field === 'created_at' || field === 'updated_at') {
-    if (operator === 'BEFORE' || operator === 'AFTER') return validIso(value);
-    return operator === 'BETWEEN'
-      && isStringPair(value)
-      && (value as string[]).every(validIso)
-      && Date.parse((value as string[])[0]) <= Date.parse((value as string[])[1]);
+  if (field === 'amount' && entityAllows('DEAL')) {
+    return validateNumberPredicate(operator, value);
   }
+
+  if (field === 'currency' && entityAllows('DEAL')) {
+    if (!validateTextPredicate(operator, value)) return false;
+    const validCurrency = (item: string) => /^[A-Z]{3}$/.test(item.toUpperCase());
+    return Array.isArray(value)
+      ? (value as string[]).every(validCurrency)
+      : typeof value === 'string' && validCurrency(value);
+  }
+
+  if (field === 'account_lifecycle' && entityAllows('ACCOUNT')) {
+    if (!validateTextPredicate(operator, value)) return false;
+    const allowed = [
+      'UNCLASSIFIED','PROSPECT','QUALIFIED','CUSTOMER',
+      'FORMER_CUSTOMER','PARTNER','ARCHIVED',
+    ] as const;
+    return operator === 'IN' || operator === 'NOT_IN'
+      ? enumListValid(value, allowed)
+      : enumValueValid(value, allowed);
+  }
+
+  if (['country_code','city','category','hierarchy_relation'].includes(field) && entityAllows('ACCOUNT')) {
+    return validateTextPredicate(operator, value);
+  }
+
+  const leadUuid = field === 'business_id' && entityAllows('LEAD');
+  const dealUuid = [
+    'business_id','pipeline_id','stage_id','owner_user_id','person_id',
+  ].includes(field) && entityAllows('DEAL');
+  const accountUuid = [
+    'account_owner_user_id','parent_business_id',
+  ].includes(field) && entityAllows('ACCOUNT');
+  if (leadUuid || dealUuid || accountUuid) return validateUuidPredicate(operator, value);
+
+  const leadTime = ['created_at','updated_at'].includes(field) && entityAllows('LEAD');
+  const personTime = [
+    'first_seen_at','last_seen_at','created_at','updated_at',
+  ].includes(field) && entityAllows('PERSON');
+  const dealTime = [
+    'expected_close_at','created_at','updated_at',
+  ].includes(field) && entityAllows('DEAL');
+  const accountTime = ['created_at','updated_at'].includes(field) && entityAllows('ACCOUNT');
+  if (leadTime || personTime || dealTime || accountTime) return validateTimestampPredicate(operator, value);
 
   return false;
 }
@@ -149,7 +250,11 @@ function validateCurrency(value: unknown, between: boolean) {
     && /^[A-Z]{3}$/.test(row.currency);
 }
 
-function validateCustom(node: Record<string, unknown>) {
+function validateCustom(
+  node: Record<string, unknown>,
+  entityType: CrmSegmentEntityType | null,
+) {
+  if (entityType !== null && entityType !== 'LEAD' && entityType !== 'DEAL') return false;
   if (!exactKeys(node, [
     'kind','source','definitionId','definitionVersion','dataType','operator','value',
   ])) return false;
@@ -193,7 +298,11 @@ function validateCustom(node: Record<string, unknown>) {
   return false;
 }
 
-function validateNode(value: unknown, depth: number): { node: CrmSegmentPredicateNode; leaves: number } | null {
+function validateNode(
+  value: unknown,
+  depth: number,
+  entityType: CrmSegmentEntityType | null,
+): { node: CrmSegmentPredicateNode; leaves: number } | null {
   if (depth > 4) return null;
   const node = object(value);
   if (!node || node.kind === undefined) return null;
@@ -205,7 +314,7 @@ function validateNode(value: unknown, depth: number): { node: CrmSegmentPredicat
     const children: CrmSegmentPredicateNode[] = [];
     let leaves = 0;
     for (const child of node.children) {
-      const parsed = validateNode(child, depth + 1);
+      const parsed = validateNode(child, depth + 1, entityType);
       if (!parsed) return null;
       leaves += parsed.leaves;
       if (leaves > 20) return null;
@@ -217,13 +326,23 @@ function validateNode(value: unknown, depth: number): { node: CrmSegmentPredicat
   if (node.kind !== 'PREDICATE' || (node.source !== 'CANONICAL' && node.source !== 'CUSTOM_FIELD')) {
     return null;
   }
-  const valid = node.source === 'CANONICAL' ? validateCanonical(node) : validateCustom(node);
+  const valid = node.source === 'CANONICAL'
+    ? validateCanonical(node, entityType)
+    : validateCustom(node, entityType);
   if (!valid) return null;
   return { node: node as CrmSegmentPredicateNode, leaves: 1 };
 }
 
-export function parseCrmSegmentPredicateTree(value: unknown) {
-  const parsed = validateNode(value, 0);
+export function isCrmSegmentEntityType(value: unknown): value is CrmSegmentEntityType {
+  return typeof value === 'string'
+    && (CRM_SEGMENT_ENTITY_TYPES as readonly string[]).includes(value.toUpperCase());
+}
+
+export function parseCrmSegmentPredicateTree(
+  value: unknown,
+  entityType: CrmSegmentEntityType | null = null,
+) {
+  const parsed = validateNode(value, 0, entityType);
   return parsed && parsed.leaves >= 1 && parsed.leaves <= 20 ? parsed.node : null;
 }
 
@@ -277,6 +396,101 @@ export async function listCrmSegments(input: {
     items,
     nextCursor: last ? { updatedAt: last.updated_at, id: last.id } : null,
   };
+}
+
+export async function createCrmSegment(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  entityType: CrmSegmentEntityType;
+  name: string;
+  predicateTree: CrmSegmentPredicateNode;
+  requestKey: string;
+}) {
+  const { data, error } = await input.supabase.rpc('create_crm_segment', {
+    p_organization_id: input.organizationId,
+    p_entity_type: input.entityType,
+    p_name: input.name.trim(),
+    p_predicate_tree: input.predicateTree,
+    p_request_key: input.requestKey.trim(),
+  });
+  if (error) throw mapMutationError(error.message);
+  return data as CrmSegmentRow;
+}
+
+export async function updateCrmSegmentDefinition(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  segmentId: string;
+  expectedVersion: number;
+  name: string;
+  predicateTree: CrmSegmentPredicateNode;
+  requestKey: string;
+}) {
+  const { data, error } = await input.supabase.rpc('update_crm_segment_definition', {
+    p_organization_id: input.organizationId,
+    p_segment_id: input.segmentId,
+    p_expected_version: input.expectedVersion,
+    p_name: input.name.trim(),
+    p_predicate_tree: input.predicateTree,
+    p_request_key: input.requestKey.trim(),
+  });
+  if (error) throw mapMutationError(error.message);
+  return data as CrmSegmentRow;
+}
+
+export async function setCrmSegmentLifecycle(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  segmentId: string;
+  expectedVersion: number;
+  status: CrmSegmentStatus;
+  requestKey: string;
+}) {
+  const { data, error } = await input.supabase.rpc('set_crm_segment_lifecycle', {
+    p_organization_id: input.organizationId,
+    p_segment_id: input.segmentId,
+    p_expected_version: input.expectedVersion,
+    p_status: input.status,
+    p_request_key: input.requestKey.trim(),
+  });
+  if (error) throw mapMutationError(error.message);
+  return data as CrmSegmentRow;
+}
+
+export async function evaluateCrmSegment(input: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  segmentId: string;
+  segmentVersion?: number | null;
+  limit?: number;
+  afterEntityId?: string | null;
+}) {
+  const { data, error } = await input.supabase.rpc('evaluate_crm_segment', {
+    p_organization_id: input.organizationId,
+    p_segment_id: input.segmentId,
+    p_segment_version: input.segmentVersion ?? null,
+    p_limit: clampLimit(input.limit),
+    p_after_entity_id: input.afterEntityId ?? null,
+  });
+  if (error) throw mapMutationError(error.message);
+
+  const row = object(data);
+  if (!row
+      || typeof row.segmentId !== 'string'
+      || typeof row.segmentVersion !== 'number'
+      || !isCrmSegmentEntityType(row.entityType)
+      || row.evaluationMode !== 'DYNAMIC'
+      || typeof row.predicateHash !== 'string'
+      || typeof row.evaluatedAt !== 'string'
+      || !Array.isArray(row.entityIds)
+      || !row.entityIds.every(id => typeof id === 'string' && UUID_RE.test(id))
+      || typeof row.hasMore !== 'boolean'
+      || (row.nextCursor !== null && row.nextCursor !== undefined
+        && (typeof row.nextCursor !== 'string' || !UUID_RE.test(row.nextCursor)))) {
+    throw new Error('CRM Segment evaluation returned invalid evidence');
+  }
+
+  return row as unknown as CrmSegmentEvaluation;
 }
 
 export async function createCrmLeadSegment(input: {
@@ -368,5 +582,5 @@ export async function evaluateCrmLeadSegment(input: {
     throw new Error('CRM Segment evaluation returned invalid evidence');
   }
 
-  return row as unknown as CrmSegmentEvaluation;
+  return row as unknown as CrmLeadSegmentEvaluation;
 }
