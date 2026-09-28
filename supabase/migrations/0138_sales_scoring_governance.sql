@@ -324,7 +324,9 @@ begin
     or new.model_score_suggestion is distinct from old.model_score_suggestion
     or new.model_score_suggested_at is distinct from old.model_score_suggested_at
   then
-    if coalesce(current_setting('app.crm_lead_scoring_mutation',true),'')<>'allowed' then
+    if current_user<>'service_role'
+       or coalesce(current_setting('app.crm_lead_scoring_mutation',true),'')<>'allowed'
+    then
       raise exception 'CRM Lead scoring fields require the governed scoring mutation boundary';
     end if;
   end if;
@@ -604,6 +606,14 @@ begin
     raise exception 'CRM Lead scoring version conflict';
   end if;
 
+  with bounded_conversations as (
+    select c.stage,c.last_inbound_at
+    from public.sales_conversations c
+    where c.organization_id=p_organization_id
+      and c.lead_id=p_lead_id
+    order by c.updated_at desc,c.id desc
+    limit 100
+  )
   select
     count(*)::integer,
     count(*) filter (where c.last_inbound_at is not null)::integer,
@@ -616,16 +626,19 @@ begin
     v_inbound_conversation_count,
     v_active_conversation_count,
     v_latest_inbound_at
-  from public.sales_conversations c
-  where c.organization_id=p_organization_id
-    and c.lead_id=p_lead_id;
+  from bounded_conversations c;
 
   select count(*)::integer
     into v_read_receipt_count
-  from public.conversation_messages m
-  where m.organization_id=p_organization_id
-    and m.lead_id=p_lead_id
-    and m.read_at is not null;
+  from (
+    select m.read_at
+    from public.conversation_messages m
+    where m.organization_id=p_organization_id
+      and m.lead_id=p_lead_id
+    order by m.created_at desc,m.id desc
+    limit 500
+  ) bounded_messages
+  where bounded_messages.read_at is not null;
 
   if v_inbound_conversation_count>0 then
     v_engagement:=v_engagement+40;
