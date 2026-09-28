@@ -228,6 +228,37 @@ begin
 end;
 $browser_marketing_guard$;
 
+-- Own the LEAD Segment fixture inside this smoke instead of relying on a
+-- previous smoke's durable residue. Replaying the same canonical request key
+-- remains safe if another test already created the equivalent Segment.
+do $marketing_lead_segment_fixture$
+declare
+  v_segment public.crm_segments%rowtype;
+  v_eval jsonb;
+begin
+  v_segment:=public.create_crm_lead_segment(
+    '00000000-0000-0000-0000-000000000c01',
+    'All linked Leads',
+    '{"kind":"PREDICATE","source":"CANONICAL","field":"business_id","operator":"IS_SET"}'::jsonb,
+    'segment-create-linked-leads'
+  );
+
+  v_eval:=public.evaluate_crm_lead_segment(
+    v_segment.organization_id,
+    v_segment.id,
+    v_segment.current_definition_version,
+    100,
+    null
+  );
+
+  if v_segment.entity_type<>'LEAD'
+     or jsonb_array_length(v_eval->'leadIds')<>2
+  then
+    raise exception 'MARKETING-CAMPAIGNS self-contained LEAD Segment fixture is invalid: %',v_eval;
+  end if;
+end;
+$marketing_lead_segment_fixture$;
+
 reset role;
 select set_config('request.jwt.claim.sub','',false);
 
