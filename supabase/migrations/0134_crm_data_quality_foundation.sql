@@ -214,14 +214,14 @@ begin
       'LOW'::text as severity,
       jsonb_build_object(
         'businessIds', jsonb_agg(b.id order by b.id),
-        'domainFingerprint', md5(lower(trim(b.dedupe_domain))),
+        'domainFingerprint', md5(lower(trim(to_jsonb(b) ->> 'dedupe_domain'))),
         'count', count(*)
       ) as detail,
       max(b.updated_at) as detected_at
     from public.businesses b
     where b.organization_id = p_organization_id
-      and nullif(trim(b.dedupe_domain), '') is not null
-    group by lower(trim(b.dedupe_domain))
+      and nullif(trim(to_jsonb(b) ->> 'dedupe_domain'), '') is not null
+    group by lower(trim(to_jsonb(b) ->> 'dedupe_domain'))
     having count(*) > 1
   ),
   issues as (
@@ -374,11 +374,37 @@ begin
     return;
   end if;
 
-  if (
-    select count(*) <> count(distinct nullif(trim(value ->> 'clientRowKey'), ''))
-    from jsonb_array_elements(p_rows)
+  if exists (
+    select 1
+    from (
+      select
+        nullif(trim(value ->> 'clientRowKey'), '') as client_row_key,
+        count(*) as row_count
+      from jsonb_array_elements(p_rows)
+      group by nullif(trim(value ->> 'clientRowKey'), '')
+    ) keys
+    where keys.client_row_key is null or keys.row_count > 1
   ) then
     raise exception 'CRM verified import clientRowKey values must be unique and non-empty';
+  end if;
+
+  if exists (
+    select 1
+    from (
+      select
+        nullif(value ->> 'businessId', '') as business_id,
+        upper(trim(coalesce(value ->> 'identityType', ''))) as identity_type,
+        trim(coalesce(value ->> 'normalizedValue', '')) as normalized_value,
+        count(*) as row_count
+      from jsonb_array_elements(p_rows)
+      group by
+        nullif(value ->> 'businessId', ''),
+        upper(trim(coalesce(value ->> 'identityType', ''))),
+        trim(coalesce(value ->> 'normalizedValue', ''))
+    ) duplicates
+    where duplicates.row_count > 1
+  ) then
+    raise exception 'CRM verified import contains duplicate Business/identity rows';
   end if;
 
   for v_row in
@@ -454,16 +480,6 @@ begin
       raise exception 'CRM verified import jobTitle is too long';
     end if;
 
-    if exists (
-      select 1
-      from jsonb_array_elements(p_rows) other
-      where other <> v_row
-        and nullif(other ->> 'businessId', '') = v_business_id::text
-        and upper(trim(coalesce(other ->> 'identityType', ''))) = v_identity_type
-        and trim(coalesce(other ->> 'normalizedValue', '')) = v_normalized_value
-    ) then
-      raise exception 'CRM verified import contains duplicate Business/identity rows';
-    end if;
   end loop;
 
   -- Validation has completed for the complete batch before canonical mutation.
