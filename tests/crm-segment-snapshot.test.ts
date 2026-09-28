@@ -52,7 +52,7 @@ describe('SEGMENT-SNAPSHOT immutable audience contract', () => {
 
   it('exposes exact member pagination for historical reproduction', () => {
     expect(runtime).toContain('listCrmSegmentSnapshotMembers');
-    expect(api).toContain('getCrmSegmentSnapshotMembers');
+    expect(api).toContain('listCrmSegmentSnapshotMembers');
     expect(api).toContain('nextCursor');
   });
 
