@@ -1085,6 +1085,8 @@ $$;
 -- Fresh environments do not reliably inherit the historical Production table grants,
 -- so declare the minimum trusted Lead privileges this Work Package actually needs.
 grant select,insert on public.leads to service_role;
+grant select on public.sales_conversations to service_role;
+grant select on public.conversation_messages to service_role;
 grant update (
   opportunity_score,
   fit_score,
