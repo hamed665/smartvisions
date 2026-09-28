@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { isPublicShellPath } from '@/lib/public-paths';
 
 const groups = [
-  ['Sales', [['Dashboard', '/'], ['Hunters', '/hunters'], ['Leads', '/leads'], ['Customers', '/customers'], ['Accounts', '/accounts'], ['Tasks', '/tasks'], ['Support Cases', '/support-cases'], ['Data Quality', '/data-quality'], ['Identity Review', '/identity-review'], ['Intent Leads', '/intent-leads'], ['Campaigns', '/campaigns'], ['Conversations', '/conversations'], ['Hot Leads', '/hot-leads']]],
+  ['Sales', [['Dashboard', '/'], ['Hunters', '/hunters'], ['Leads', '/leads'], ['Customers', '/customers'], ['Accounts', '/accounts'], ['Segments', '/segments'], ['Tasks', '/tasks'], ['Support Cases', '/support-cases'], ['Data Quality', '/data-quality'], ['Identity Review', '/identity-review'], ['Intent Leads', '/intent-leads'], ['Campaigns', '/campaigns'], ['Conversations', '/conversations'], ['Hot Leads', '/hot-leads']]],
   ['Growth', [['Outreach', '/outreach'], ['Message Studio', '/messages'], ['Automations', '/automations'], ['Approvals', '/approvals'], ['Portfolio', '/portfolio'], ['Preview Studio', '/preview-studio']]],
   ['Control', [['Command Center', '/command-center'], ['Services', '/services'], ['Pricing', '/pricing'], ['Markets', '/markets'], ['AI Agents', '/agents'], ['Knowledge Base', '/knowledge'], ['Integrations', '/integrations'], ['Suppression / DNC', '/suppression']]],
   ['Operations', [['Reports', '/reports'], ['Cost & Usage', '/cost-usage'], ['Audit Log', '/audit'], ['System', '/system'], ['Settings', '/settings']]],
