@@ -733,15 +733,19 @@ begin
   if p_suggestion is not null then
     if jsonb_typeof(p_suggestion)<>'object'
        or octet_length(p_suggestion::text)>8192
+       or jsonb_typeof(p_suggestion->'action')<>'string'
        or nullif(trim(p_suggestion->>'action'),'') is null
        or p_suggestion->>'action' not in (
          'CALL','EMAIL','WHATSAPP','MEETING','REVIEW','FOLLOW_UP','OTHER'
        )
+       or jsonb_typeof(p_suggestion->'model')<>'string'
        or nullif(trim(p_suggestion->>'model'),'') is null
        or length(trim(p_suggestion->>'model'))>120
+       or jsonb_typeof(p_suggestion->'modelVersion')<>'string'
        or nullif(trim(p_suggestion->>'modelVersion'),'') is null
        or length(trim(p_suggestion->>'modelVersion'))>120
        or not (p_suggestion ? 'confidence')
+       or jsonb_typeof(p_suggestion->'confidence')<>'number'
     then
       raise exception 'invalid next action model suggestion contract';
     end if;
