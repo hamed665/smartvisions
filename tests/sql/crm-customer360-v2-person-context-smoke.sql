@@ -319,7 +319,11 @@ begin
     raise exception 'service_role cannot execute Customer 360 Person link';
   end if;
 
-  if not has_column_privilege('service_role', 'public.crm_tasks', 'person_id', 'UPDATE')
+  if not has_column_privilege('service_role', 'public.leads', 'person_id', 'UPDATE')
+     or not has_column_privilege('service_role', 'public.sales_conversations', 'person_id', 'UPDATE')
+     or not has_column_privilege('service_role', 'public.leads', 'organization_id', 'SELECT')
+     or not has_column_privilege('service_role', 'public.sales_conversations', 'lead_id', 'SELECT')
+     or not has_column_privilege('service_role', 'public.crm_tasks', 'person_id', 'UPDATE')
      or not has_column_privilege('service_role', 'public.crm_deals', 'person_id', 'UPDATE')
      or not has_column_privilege('service_role', 'public.crm_tasks', 'business_id', 'SELECT')
      or not has_column_privilege('service_role', 'public.crm_deals', 'business_id', 'SELECT') then
