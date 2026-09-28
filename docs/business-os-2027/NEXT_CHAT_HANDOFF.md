@@ -1,5 +1,38 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## Latest continuation checkpoint — CRM-CUSTOMER360-V2 Support closeout → SEGMENT-V2 — 2026-09-28
+
+Always re-read runtime/current main before mutation.
+
+Verified Production baseline:
+- main `eed2a07b0bda3ec87c57f7ee4c4062d40b351cd7`, PR #321 merged;
+- exact-main CI `36403380564`: SUCCESS;
+- Cloudflare Production Deploy `36403658680`: SUCCESS;
+- Production migration `0135_crm_customer360_support_integration` version `20260928092811`;
+- `get_crm_customer360_v2` is authenticated-only SECURITY INVOKER and now reads canonical Support Cases only through explicit `person_id`;
+- Production has 0 People, 0 Support Cases, 0 Support SLA policies and 0 import batches; no synthetic acceptance data;
+- Support context stays immutable; no Customer360 Support LINK/UNLINK mutation was added;
+- internal Notes remain `CANONICAL_LINK_PENDING` because their scoped-inbox authorization must not be widened;
+- Booking/Quote/Order/Invoice/Payment/Document/Consent remain explicit missing dependencies.
+
+Current disposition:
+- implemented Person/Lead/Conversation/Task/Deal/Support Customer360 composition: **PRODUCTION_VERIFIED + CONTROLLED_TEST_VERIFIED**;
+- whole `CRM-CUSTOMER360-V2`: **PARTIAL / REQUIRED**.
+
+Next bounded Work Package: `SECTION SEGMENT_SALES_MARKETING / SEGMENT-V2`.
+
+Fresh Segment audit:
+1. canonical authority is existing `crm_segments` + immutable `crm_segment_versions`; Production rows = 0/0;
+2. RLS is enabled; existing RPCs are SECURITY INVOKER;
+3. current schema/evaluator is deliberately `LEAD` + `DYNAMIC` only;
+4. do not create `crm_segment_rules` or a second Segment engine;
+5. extend typed predicate validation/evaluation to justified `PERSON`, `DEAL` and `ACCOUNT` entities using existing canonical authorities;
+6. preserve bounded predicate depth/leaves, versioning, idempotency, audit, tenant isolation and no arbitrary SQL/JSONPath;
+7. custom-field predicates remain governed and may only apply where the custom-field authority supports that entity;
+8. saved views/lifecycle criteria may be implemented inside the existing Segment contract where evidence justifies them;
+9. `SEGMENT-SNAPSHOT` is a separate following Work Package; do not silently persist current dynamic membership in SEGMENT-V2.
+
+
 ## Latest continuation checkpoint — CRM-DATA-QUALITY Production closeout — 2026-09-28
 
 Always re-read runtime/current main before mutation.

@@ -428,9 +428,11 @@ Unify:
 
 **Current evidence checkpoint — PARTIAL / PRODUCTION_VERIFIED for implemented authorities (2026-09-28):**
 - PR #313 / Production migration `0129_crm_customer360_v2_person_context` composes canonical People with existing Lead, Conversation, Task and Deal authorities through explicit evidence-backed Person context.
-- Production contains 0 canonical People, so 19 Leads and 12 Conversations remain unlinked by design; no synthetic backfill is allowed.
-- Person read/link correction is RLS/role governed; Company relationship alone never attributes activity to a Person.
-- Notes canonical linkage remains pending, and Booking/Quote/Order/Invoice/Payment/Support/Document/Consent remain REQUIRED under their owning Work Packages. Do not mark this whole Work Package complete from the implemented subset.
+- PR #321 / migration `0135_crm_customer360_support_integration` adds canonical Support Cases only through explicit Case `person_id`; it does not infer Person attribution from Company relationships or weaken immutable Support context.
+- Production contains 0 canonical People and 0 Support Cases, so 19 Leads and 12 Conversations remain unlinked by design and no synthetic happy-path evidence is created.
+- Person read/link correction is RLS/role governed; Support remains read-only inside 360; sensitive Support prose is not duplicated into the Customer 360 collection.
+- Exact-main CI `36403380564` and Cloudflare Production Deploy `36403658680` succeeded on `main@eed2a07b0bda3ec87c57f7ee4c4062d40b351cd7`.
+- Scoped Notes linkage remains authorization-gated, and Booking/Quote/Order/Invoice/Payment/Document/Consent remain REQUIRED under their owning Work Packages. Do not mark this whole Work Package complete from the implemented subset.
 
 ## CRM-ACCOUNT-V2
 
