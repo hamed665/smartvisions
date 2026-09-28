@@ -281,7 +281,7 @@ Each row is REQUIRED for the applicable complete-product scope; partial foundati
 - The governed `crm_segments + crm_segment_versions` authority supports `LEAD | PERSON | DEAL | ACCOUNT` with typed bounded predicates and no persisted dynamic membership. Production remains 0 Segment definitions/versions.
 - Person PII/display-name/free metadata and arbitrary SQL/JSONPath are not audience criteria; governed Custom Fields remain Lead/Deal only.
 - Dynamic evaluation is not consent and does not invoke Campaign/Workflow/provider sends.
-- `SEGMENT-SNAPSHOT` remains **REQUIRED / ACTIVE IMPLEMENTATION** on branch `feat/segment-snapshot`: exact immutable Segment version + entity IDs, creation evidence, membership hash and no silent mutation. It is not Production-verified until migration 0137 and exact deployment evidence pass.
+- `SEGMENT-SNAPSHOT` is now **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** from PR #324 / migration `0137_segment_snapshot`, exact-main CI `36411781776` and Cloudflare Production Deploy `36411960392` on `main@0e5e4e61be1d30c2ba134ed66a4ad1b2457a7c98`. Production has 0 Snapshots/0 members; no synthetic audience evidence is claimed. Snapshot membership remains historical evidence only, never consent or send permission.
 
 | Sales | SALES-SCORING; SALES-PIPELINE-V2; SALES-NEXT-ACTION | Explainable qualification, pipelines, follow-up, ownership, forecast and real won/lost evidence; no blind automated outreach |
 | Marketing and retention | MARKETING-CAMPAIGNS; MARKETING-CONSENT; MARKETING-ATTRIBUTION; CUSTOMER-SUCCESS-LOYALTY | Opt-in/out, purpose, suppression, audience/version, caps, templates, experiment evidence, loyalty/referrals; no invented attribution |
