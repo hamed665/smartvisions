@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { evaluateCanonicalMarketWindow } from '@/lib/outreach/canonical-market-window';
 import { evaluateWhatsAppSendPolicy } from '@/lib/whatsapp/policy';
 import { getWhatsAppMarketingPermission } from '@/lib/whatsapp/marketing-opt-in';
+import { getMarketingPermission, type MarketingPermissionChannel } from '@/lib/marketing/consent';
 
 export type CanonicalSendChannel = 'EMAIL' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK_MESSENGER' | 'TELEGRAM';
 
@@ -22,6 +23,8 @@ export type CanonicalSendSafetySnapshot = {
   suppressed: boolean;
   marketWindowAllowed: boolean;
   whatsappPolicyAllowed?: boolean;
+  marketingPermissionRequired?: boolean;
+  marketingPermissionAllowed?: boolean;
 };
 
 export function evaluateCanonicalSendSafety(input: CanonicalSendSafetySnapshot) {
@@ -46,6 +49,7 @@ export function evaluateCanonicalSendSafety(input: CanonicalSendSafetySnapshot) 
   if (input.suppressed) blocks.push('SUPPRESSED_RECIPIENT');
   if (!input.marketWindowAllowed) blocks.push('OUTSIDE_CANONICAL_MARKET_WINDOW');
   if (input.channel === 'WHATSAPP' && input.whatsappPolicyAllowed === false) blocks.push('WHATSAPP_24H_POLICY');
+  if (input.marketingPermissionRequired && input.marketingPermissionAllowed !== true) blocks.push('MARKETING_PERMISSION_REQUIRED');
   return { allowed: blocks.length === 0, blocks };
 }
 
@@ -79,6 +83,7 @@ type AssertCanonicalSendAllowedInput = {
   ownerManualSendVerified?: boolean;
   marketWindowExceptionVerified?: boolean;
   nowUtc?: Date;
+  purpose?: string | null;
 };
 
 export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllowedInput) {
@@ -207,6 +212,18 @@ export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllow
     nowUtc: input.nowUtc,
   });
 
+  const sendPurpose = String(input.purpose ?? '').trim().toUpperCase();
+  const marketingPermissionRequired = sendPurpose === 'MARKETING';
+  const marketingPermission = marketingPermissionRequired
+    ? await getMarketingPermission({
+        supabase,
+        organizationId,
+        leadId,
+        channel: channel as MarketingPermissionChannel,
+        recipient: input.recipient,
+      })
+    : null;
+
   let whatsappPolicy: ReturnType<typeof evaluateWhatsAppSendPolicy> | null = null;
   let whatsappMarketingPermission: Awaited<ReturnType<typeof getWhatsAppMarketingPermission>> | null = null;
   let lastInboundAt: string | null = null;
@@ -250,7 +267,9 @@ export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllow
     whatsappPolicy = evaluateWhatsAppSendPolicy({
       lastCustomerMessageAt: lastInboundAt ?? undefined,
       templateName: input.templateName ?? undefined,
-      marketingOptInVerified: whatsappMarketingPermission?.allowed === true,
+      marketingOptInVerified: marketingPermissionRequired
+        ? marketingPermission?.allowed === true
+        : whatsappMarketingPermission?.allowed === true,
       now: input.nowUtc,
     });
   }
@@ -283,6 +302,8 @@ export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllow
     suppressed,
     marketWindowAllowed,
     whatsappPolicyAllowed: whatsappPolicy?.allowed,
+    marketingPermissionRequired,
+    marketingPermissionAllowed: marketingPermission?.allowed,
   });
 
   if (!safety.allowed) throw new Error(`CANONICAL_SEND_BLOCKED:${safety.blocks.join(',')}`);
@@ -291,6 +312,7 @@ export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllow
     marketWindow,
     whatsappPolicy,
     whatsappMarketingPermission,
+    marketingPermission,
     lastInboundAt,
     canonicalRecipient: channel === 'EMAIL' ? businessEmail : channel === 'WHATSAPP' ? recipientPhone : input.recipient.trim(),
   };

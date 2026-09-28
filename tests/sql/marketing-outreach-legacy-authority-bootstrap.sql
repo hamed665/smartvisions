@@ -201,6 +201,28 @@ create table if not exists public.message_templates (
 create index if not exists message_templates_lookup_idx
   on public.message_templates(organization_id,channel,purpose,country_code,enabled);
 
+create table if not exists public.lead_sources (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  lead_id uuid not null references public.leads(id) on delete cascade,
+  field_name text not null,
+  value jsonb,
+  source_type text not null,
+  source_url text,
+  retrieved_at timestamptz not null,
+  verified_at timestamptz,
+  confidence numeric check (confidence is null or (confidence>=0 and confidence<=1))
+);
+
+create index if not exists lead_sources_lead_idx on public.lead_sources(lead_id);
+create index if not exists lead_sources_org_idx on public.lead_sources(organization_id);
+alter table public.lead_sources enable row level security;
+drop policy if exists org_member_sources on public.lead_sources;
+create policy org_member_sources on public.lead_sources for all
+  using (public.is_org_member(organization_id))
+  with check (public.is_org_member(organization_id));
+grant select,insert,update,delete on public.lead_sources to authenticated,service_role;
+
 alter table public.campaigns enable row level security;
 alter table public.mailboxes enable row level security;
 alter table public.outreach_policies enable row level security;

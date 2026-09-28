@@ -123,6 +123,32 @@ describe('canonical send safety', () => {
     expect(result.blocks).toContain('WHATSAPP_24H_POLICY');
   });
 
+  it('requires exact MARKETING permission without weakening suppression or other safety gates', () => {
+    const missing = evaluateCanonicalSendSafety({
+      ...base,
+      marketingPermissionRequired: true,
+      marketingPermissionAllowed: false,
+    });
+    expect(missing.allowed).toBe(false);
+    expect(missing.blocks).toContain('MARKETING_PERMISSION_REQUIRED');
+
+    const granted = evaluateCanonicalSendSafety({
+      ...base,
+      marketingPermissionRequired: true,
+      marketingPermissionAllowed: true,
+    });
+    expect(granted.allowed).toBe(true);
+
+    const suppressed = evaluateCanonicalSendSafety({
+      ...base,
+      marketingPermissionRequired: true,
+      marketingPermissionAllowed: true,
+      suppressed: true,
+    });
+    expect(suppressed.allowed).toBe(false);
+    expect(suppressed.blocks).toContain('SUPPRESSED_RECIPIENT');
+  });
+
   it('applies shared safety blocks to Instagram without a channel-specific bypass', () => {
     const result = evaluateCanonicalSendSafety({ ...base, channel: 'INSTAGRAM', channelPaused: true, suppressed: true });
     expect(result.allowed).toBe(false);
