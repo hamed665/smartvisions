@@ -806,45 +806,76 @@ begin
     ),
     'identities', coalesce((
       select jsonb_agg(jsonb_build_object(
-        'identityId', i.id,
-        'identityType', i.identity_type,
-        'displayValue', i.display_value,
-        'identityStatus', i.status,
-        'linkStatus', l.status,
-        'verificationMethod', l.verification_method,
-        'sourceRef', l.source_ref,
-        'firstSeenAt', l.first_seen_at,
-        'lastSeenAt', l.last_seen_at
-      ) order by l.last_seen_at desc, i.id)
-      from public.crm_person_identity_links l
-      join public.crm_identities i
-        on i.organization_id = l.organization_id
-       and i.id = l.identity_id
-      where l.organization_id = p_organization_id
-        and l.person_id = p_person_id
-        and l.status <> 'RETIRED'
+        'identityId', q.id,
+        'identityType', q.identity_type,
+        'displayValue', q.display_value,
+        'identityStatus', q.identity_status,
+        'linkStatus', q.link_status,
+        'verificationMethod', q.verification_method,
+        'sourceRef', q.source_ref,
+        'firstSeenAt', q.first_seen_at,
+        'lastSeenAt', q.last_seen_at
+      ) order by q.last_seen_at desc, q.id)
+      from (
+        select
+          i.id,
+          i.identity_type,
+          i.display_value,
+          i.status as identity_status,
+          l.status as link_status,
+          l.verification_method,
+          l.source_ref,
+          l.first_seen_at,
+          l.last_seen_at
+        from public.crm_person_identity_links l
+        join public.crm_identities i
+          on i.organization_id = l.organization_id
+         and i.id = l.identity_id
+        where l.organization_id = p_organization_id
+          and l.person_id = p_person_id
+          and l.status <> 'RETIRED'
+        order by l.last_seen_at desc, i.id
+        limit p_limit
+      ) q
     ), '[]'::jsonb),
     'relationships', coalesce((
       select jsonb_agg(jsonb_build_object(
-        'relationshipId', r.id,
-        'businessId', r.business_id,
-        'businessName', b.name,
-        'countryCode', b.country_code,
-        'city', b.city,
-        'category', b.category,
-        'relationshipType', r.relationship_type,
-        'jobTitle', r.job_title,
-        'verificationMethod', r.verification_method,
-        'status', r.status,
-        'firstSeenAt', r.first_seen_at,
-        'lastSeenAt', r.last_seen_at
-      ) order by r.last_seen_at desc, r.id)
-      from public.crm_person_business_relationships r
-      join public.businesses b
-        on b.organization_id = r.organization_id
-       and b.id = r.business_id
-      where r.organization_id = p_organization_id
-        and r.person_id = p_person_id
+        'relationshipId', q.id,
+        'businessId', q.business_id,
+        'businessName', q.business_name,
+        'countryCode', q.country_code,
+        'city', q.city,
+        'category', q.category,
+        'relationshipType', q.relationship_type,
+        'jobTitle', q.job_title,
+        'verificationMethod', q.verification_method,
+        'status', q.status,
+        'firstSeenAt', q.first_seen_at,
+        'lastSeenAt', q.last_seen_at
+      ) order by q.last_seen_at desc, q.id)
+      from (
+        select
+          r.id,
+          r.business_id,
+          b.name as business_name,
+          b.country_code,
+          b.city,
+          b.category,
+          r.relationship_type,
+          r.job_title,
+          r.verification_method,
+          r.status,
+          r.first_seen_at,
+          r.last_seen_at
+        from public.crm_person_business_relationships r
+        join public.businesses b
+          on b.organization_id = r.organization_id
+         and b.id = r.business_id
+        where r.organization_id = p_organization_id
+          and r.person_id = p_person_id
+        order by r.last_seen_at desc, r.id
+        limit p_limit
+      ) q
     ), '[]'::jsonb),
     'leads', coalesce((
       select jsonb_agg(jsonb_build_object(
