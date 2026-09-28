@@ -510,11 +510,12 @@ No arbitrary JSON/EAV free-for-all.
 - audit;
 - bulk operations with safety limits.
 
-**Current implementation checkpoint — ACTIVE / not yet Production evidence:**
-- Reuse `CRM-IDENTITY-GRAPH` for deterministic exact conflict review and governed MERGE/SPLIT/UNLINK; no second dedupe engine.
-- Active slice adds read-only quality scanning plus bounded atomic verified Contact import into canonical Business/Identity/Person relationships.
-- Import is capped at 100 rows / 256 KiB, idempotent by request key + content hash, ambiguity-fail-closed and PII-minimized in receipt/audit evidence.
-- Destructive retention is `DEFERRED_WITH_REASON` until an Organization-approved retention contract exists; this slice must not silently delete CRM evidence.
+**Current evidence checkpoint — PRODUCTION_VERIFIED for implemented safe scope (2026-09-28):**
+- PR #319 / migration `0134_crm_data_quality_foundation` reuses `CRM-IDENTITY-GRAPH` for exact conflict review and governed MERGE/SPLIT/UNLINK; no second dedupe engine exists.
+- Deterministic read-only quality scanning plus bounded atomic verified Contact import are deployed over canonical Business/Identity/Person relationships.
+- Import is capped at 100 rows / 256 KiB, validates the whole batch, is idempotent by request key + content hash, ambiguity-fail-closed and PII-minimized in receipt/audit evidence.
+- Exact-main CI `36401560832` and Cloudflare Production Deploy `36401836383` succeeded on `main@4a1cf8d0064bf6f35f82987e6b5f78c2ee2f3bc1`; Production has 0 import batches and 0 People, so no synthetic acceptance data exists.
+- Destructive retention remains `DEFERRED_WITH_REASON` until an Organization-approved retention contract exists. The Work Package is therefore not globally complete beyond its implemented safe scope.
 
 ---
 
