@@ -135,11 +135,15 @@ declare
   v_version_hash text;
   v_segment_entity_type text;
 begin
-  v_snapshot_id := case
-    when tg_table_name='crm_segment_snapshots' then new.id
-    else new.snapshot_id
-  end;
-  v_organization_id := new.organization_id;
+  if tg_table_name='crm_segment_snapshots' then
+    v_snapshot_id := new.id;
+    v_organization_id := new.organization_id;
+  elsif tg_table_name='crm_segment_snapshot_members' then
+    v_snapshot_id := new.snapshot_id;
+    v_organization_id := new.organization_id;
+  else
+    raise exception 'CRM Segment Snapshot integrity trigger attached to unexpected table';
+  end if;
 
   select *
     into v_snapshot
