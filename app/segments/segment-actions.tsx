@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import type {
@@ -54,62 +54,29 @@ function freshKey(prefix: string, ref: { current: string | null }) {
   return ref.current;
 }
 
-export function SegmentActions({
+async function jsonRequest(url: string, init: RequestInit) {
+  const response = await fetch(url, init);
+  const body = await response.json() as Record<string, unknown>;
+  if (!response.ok) {
+    throw new Error(typeof body.error === 'string' ? body.error : 'Segment request failed');
+  }
+  return body;
+}
+
+function CreateSegmentForm({
   organizationId,
   canManage,
-  segments,
 }: {
   organizationId: string;
   canManage: boolean;
-  segments: CrmSegmentRow[];
 }) {
   const router = useRouter();
   const [entityType, setEntityType] = useState<CrmSegmentEntityType>('LEAD');
   const [name, setName] = useState('');
   const [raw, setRaw] = useState(EXAMPLES.LEAD);
-  const [selectedId, setSelectedId] = useState(segments[0]?.id ?? '');
-  const selected = useMemo(
-    () => segments.find(segment => segment.id === selectedId) ?? null,
-    [segments, selectedId],
-  );
-  const [editName, setEditName] = useState(selected?.name ?? '');
-  const [editRaw, setEditRaw] = useState(
-    selected ? JSON.stringify(selected.predicate_tree, null, 2) : '',
-  );
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [evaluation, setEvaluation] = useState<{
-    entityType: string;
-    count: number;
-    hasMore: boolean;
-    segmentVersion: number;
-  } | null>(null);
-
-  const createKey = useRef<string | null>(null);
-  const editKey = useRef<string | null>(null);
-  const lifecycleKey = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!selected) {
-      setEditName('');
-      setEditRaw('');
-      return;
-    }
-    setEditName(selected.name);
-    setEditRaw(JSON.stringify(selected.predicate_tree, null, 2));
-    editKey.current = null;
-    lifecycleKey.current = null;
-    setEvaluation(null);
-  }, [selected]);
-
-  async function jsonRequest(url: string, init: RequestInit) {
-    const response = await fetch(url, init);
-    const body = await response.json() as Record<string, unknown>;
-    if (!response.ok) {
-      throw new Error(typeof body.error === 'string' ? body.error : 'Segment request failed');
-    }
-    return body;
-  }
+  const requestKey = useRef<string | null>(null);
 
   async function createSegment() {
     setWorking(true);
@@ -124,10 +91,10 @@ export function SegmentActions({
           entityType,
           name,
           predicateTree,
-          requestKey: freshKey('segment-create', createKey),
+          requestKey: freshKey('segment-create', requestKey),
         }),
       });
-      createKey.current = null;
+      requestKey.current = null;
       setName('');
       setMessage('Segment created. Dynamic membership is evaluated on demand.');
       router.refresh();
@@ -138,8 +105,90 @@ export function SegmentActions({
     }
   }
 
+  return <section className="panel">
+    <h2>Create dynamic Segment</h2>
+    <p className="muted">Predicates are typed and allowlisted. Free SQL, JSONPath, arbitrary metadata, Person PII and Account contact fields are rejected.</p>
+
+    <div className="formGrid">
+      <label>
+        Entity
+        <select
+          value={entityType}
+          disabled={!canManage || working}
+          onChange={event => {
+            const next = event.target.value as CrmSegmentEntityType;
+            setEntityType(next);
+            setRaw(EXAMPLES[next]);
+            requestKey.current = null;
+          }}
+        >
+          <option value="LEAD">Lead</option>
+          <option value="PERSON">Person</option>
+          <option value="DEAL">Deal</option>
+          <option value="ACCOUNT">Account</option>
+        </select>
+      </label>
+      <label>
+        Name
+        <input
+          value={name}
+          disabled={!canManage || working}
+          maxLength={160}
+          onChange={event => {
+            setName(event.target.value);
+            requestKey.current = null;
+          }}
+          placeholder="Qualified Oman accounts"
+        />
+      </label>
+    </div>
+
+    <label className="wideField">
+      Predicate JSON
+      <textarea
+        value={raw}
+        disabled={!canManage || working}
+        rows={12}
+        spellCheck={false}
+        onChange={event => {
+          setRaw(event.target.value);
+          requestKey.current = null;
+        }}
+      />
+    </label>
+
+    {canManage
+      ? <button type="button" disabled={working || !name.trim()} onClick={() => void createSegment()}>Create Segment</button>
+      : <p className="muted">Creating or changing Segments requires OWNER, ADMIN or SALES_MANAGER.</p>}
+
+    {message ? <p className="muted" role="status">{message}</p> : null}
+  </section>;
+}
+
+function ExistingSegmentEditor({
+  organizationId,
+  canManage,
+  segment,
+}: {
+  organizationId: string;
+  canManage: boolean;
+  segment: CrmSegmentRow;
+}) {
+  const router = useRouter();
+  const [editName, setEditName] = useState(segment.name);
+  const [editRaw, setEditRaw] = useState(JSON.stringify(segment.predicate_tree, null, 2));
+  const [working, setWorking] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [evaluation, setEvaluation] = useState<{
+    entityType: string;
+    count: number;
+    hasMore: boolean;
+    segmentVersion: number;
+  } | null>(null);
+  const editKey = useRef<string | null>(null);
+  const lifecycleKey = useRef<string | null>(null);
+
   async function saveDefinition() {
-    if (!selected) return;
     setWorking(true);
     setMessage(null);
     try {
@@ -150,9 +199,9 @@ export function SegmentActions({
         body: JSON.stringify({
           mode: 'DEFINITION',
           organizationId,
-          segmentId: selected.id,
-          entityType: selected.entity_type,
-          expectedVersion: selected.version,
+          segmentId: segment.id,
+          entityType: segment.entity_type,
+          expectedVersion: segment.version,
           name: editName,
           predicateTree,
           requestKey: freshKey('segment-definition', editKey),
@@ -169,19 +218,18 @@ export function SegmentActions({
   }
 
   async function toggleLifecycle() {
-    if (!selected) return;
     setWorking(true);
     setMessage(null);
     try {
-      const status = selected.status === 'ACTIVE' ? 'ARCHIVED' : 'ACTIVE';
+      const status = segment.status === 'ACTIVE' ? 'ARCHIVED' : 'ACTIVE';
       await jsonRequest('/api/crm/segments', {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           mode: 'LIFECYCLE',
           organizationId,
-          segmentId: selected.id,
-          expectedVersion: selected.version,
+          segmentId: segment.id,
+          expectedVersion: segment.version,
           status,
           requestKey: freshKey(`segment-${status.toLowerCase()}`, lifecycleKey),
         }),
@@ -197,7 +245,6 @@ export function SegmentActions({
   }
 
   async function evaluate() {
-    if (!selected) return;
     setWorking(true);
     setMessage(null);
     try {
@@ -206,8 +253,8 @@ export function SegmentActions({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           organizationId,
-          segmentId: selected.id,
-          segmentVersion: selected.current_definition_version,
+          segmentId: segment.id,
+          segmentVersion: segment.current_definition_version,
           limit: 100,
         }),
       });
@@ -217,10 +264,10 @@ export function SegmentActions({
           ? body.leadIds
           : [];
       setEvaluation({
-        entityType: String(body.entityType ?? selected.entity_type),
+        entityType: String(body.entityType ?? segment.entity_type),
         count: ids.length,
         hasMore: body.hasMore === true,
-        segmentVersion: Number(body.segmentVersion ?? selected.current_definition_version),
+        segmentVersion: Number(body.segmentVersion ?? segment.current_definition_version),
       });
       setMessage('Evaluation complete. No Campaign, Workflow or provider action was invoked.');
     } catch (error) {
@@ -232,127 +279,95 @@ export function SegmentActions({
   }
 
   return <>
-    <section className="panel">
-      <h2>Create dynamic Segment</h2>
-      <p className="muted">Predicates are typed and allowlisted. Free SQL, JSONPath, arbitrary metadata, Person PII and Account contact fields are rejected.</p>
+    <div className="healthList">
+      <span>Entity <strong>{segment.entity_type}</strong></span>
+      <span>Lifecycle <strong>{segment.status}</strong></span>
+      <span>Definition <strong>v{segment.current_definition_version}</strong></span>
+      <span>Row version <strong>{segment.version}</strong></span>
+    </div>
 
-      <div className="formGrid">
-        <label>
-          Entity
-          <select
-            value={entityType}
-            disabled={!canManage || working}
-            onChange={event => {
-              const next = event.target.value as CrmSegmentEntityType;
-              setEntityType(next);
-              setRaw(EXAMPLES[next]);
-              createKey.current = null;
-            }}
-          >
-            <option value="LEAD">Lead</option>
-            <option value="PERSON">Person</option>
-            <option value="DEAL">Deal</option>
-            <option value="ACCOUNT">Account</option>
-          </select>
-        </label>
-        <label>
-          Name
-          <input
-            value={name}
-            disabled={!canManage || working}
-            maxLength={160}
-            onChange={event => {
-              setName(event.target.value);
-              createKey.current = null;
-            }}
-            placeholder="Qualified Oman accounts"
-          />
-        </label>
-      </div>
+    <div className="headerRow">
+      <button type="button" disabled={working || segment.status !== 'ACTIVE'} onClick={() => void evaluate()}>Evaluate up to 100</button>
+      {canManage ? <button type="button" disabled={working} onClick={() => void toggleLifecycle()}>
+        {segment.status === 'ACTIVE' ? 'Archive' : 'Reactivate'}
+      </button> : null}
+    </div>
 
-      <label className="wideField">
-        Predicate JSON
-        <textarea
-          value={raw}
-          disabled={!canManage || working}
-          rows={12}
-          spellCheck={false}
+    {evaluation ? <p className="muted" role="status">
+      {evaluation.entityType} · definition v{evaluation.segmentVersion} · returned {evaluation.count}{evaluation.hasMore ? '+ (more available)' : ''}
+    </p> : null}
+
+    {canManage && segment.status === 'ACTIVE' ? <>
+      <h3>Publish new definition version</h3>
+      <label>
+        Name
+        <input
+          value={editName}
+          maxLength={160}
+          disabled={working}
           onChange={event => {
-            setRaw(event.target.value);
-            createKey.current = null;
+            setEditName(event.target.value);
+            editKey.current = null;
           }}
         />
       </label>
+      <label className="wideField">
+        Predicate JSON
+        <textarea
+          value={editRaw}
+          rows={12}
+          spellCheck={false}
+          disabled={working}
+          onChange={event => {
+            setEditRaw(event.target.value);
+            editKey.current = null;
+          }}
+        />
+      </label>
+      <button type="button" disabled={working || !editName.trim()} onClick={() => void saveDefinition()}>Publish new version</button>
+    </> : null}
 
-      {canManage
-        ? <button type="button" disabled={working || !name.trim()} onClick={() => void createSegment()}>Create Segment</button>
-        : <p className="muted">Creating or changing Segments requires OWNER, ADMIN or SALES_MANAGER.</p>}
-    </section>
+    {message ? <p className="muted" role="status">{message}</p> : null}
+  </>;
+}
+
+export function SegmentActions({
+  organizationId,
+  canManage,
+  segments,
+}: {
+  organizationId: string;
+  canManage: boolean;
+  segments: CrmSegmentRow[];
+}) {
+  const [selectedId, setSelectedId] = useState(segments[0]?.id ?? '');
+  const selected = segments.find(segment => segment.id === selectedId) ?? segments[0] ?? null;
+
+  return <>
+    <CreateSegmentForm organizationId={organizationId} canManage={canManage} />
 
     <section className="panel">
       <h2>Existing Segments</h2>
       {segments.length === 0 ? <p className="muted">No Segment exists. Production is not populated just to make this screen look busy.</p> : <>
         <label>
           Segment
-          <select value={selectedId} onChange={event => setSelectedId(event.target.value)}>
+          <select
+            value={selected?.id ?? ''}
+            onChange={event => setSelectedId(event.target.value)}
+          >
             {segments.map(segment => <option value={segment.id} key={segment.id}>
               {segment.name} · {segment.entity_type} · {segment.status} · v{segment.current_definition_version}
             </option>)}
           </select>
         </label>
 
-        {selected ? <>
-          <div className="healthList">
-            <span>Entity <strong>{selected.entity_type}</strong></span>
-            <span>Lifecycle <strong>{selected.status}</strong></span>
-            <span>Definition <strong>v{selected.current_definition_version}</strong></span>
-            <span>Row version <strong>{selected.version}</strong></span>
-          </div>
-
-          <div className="headerRow">
-            <button type="button" disabled={working || selected.status !== 'ACTIVE'} onClick={() => void evaluate()}>Evaluate up to 100</button>
-            {canManage ? <button type="button" disabled={working} onClick={() => void toggleLifecycle()}>
-              {selected.status === 'ACTIVE' ? 'Archive' : 'Reactivate'}
-            </button> : null}
-          </div>
-
-          {evaluation ? <p className="muted" role="status">
-            {evaluation.entityType} · definition v{evaluation.segmentVersion} · returned {evaluation.count}{evaluation.hasMore ? '+ (more available)' : ''}
-          </p> : null}
-
-          {canManage && selected.status === 'ACTIVE' ? <>
-            <h3>Publish new definition version</h3>
-            <label>
-              Name
-              <input
-                value={editName}
-                maxLength={160}
-                disabled={working}
-                onChange={event => {
-                  setEditName(event.target.value);
-                  editKey.current = null;
-                }}
-              />
-            </label>
-            <label className="wideField">
-              Predicate JSON
-              <textarea
-                value={editRaw}
-                rows={12}
-                spellCheck={false}
-                disabled={working}
-                onChange={event => {
-                  setEditRaw(event.target.value);
-                  editKey.current = null;
-                }}
-              />
-            </label>
-            <button type="button" disabled={working || !editName.trim()} onClick={() => void saveDefinition()}>Publish new version</button>
-          </> : null}
-        </> : null}
+        {selected ? <ExistingSegmentEditor
+          key={`${selected.id}:${selected.version}`}
+          organizationId={organizationId}
+          canManage={canManage}
+          segment={selected}
+        /> : null}
       </>}
     </section>
-
-    {message ? <p className="muted" role="status">{message}</p> : null}
   </>;
 }
