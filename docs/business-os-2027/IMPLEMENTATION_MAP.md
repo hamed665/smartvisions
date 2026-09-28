@@ -259,3 +259,12 @@ Status: **PRODUCTION-VERIFIED**.
 - Extra audit, hardening, migration-fix, index-cleanup, hotfix or closeout PRs do not renumber later work.
 - Actual PR numbers are recorded only after they exist.
 - Chatwoot Community source integration is owned by `SECTION COMMUNICATION`; it is not represented as a guessed future PR number.
+
+
+## 2026-09-28 Sales Pipeline V2 Production checkpoint
+
+Within the Phase 3 CRM foundation and the stable `SEGMENT_SALES_MARKETING / SALES-PIPELINE-V2` Work Package, PR #329 and Production migration `0139_sales_pipeline_v2` upgraded the existing canonical Deal/Pipeline authority rather than creating a replacement. Stage probability/forecast policies, canonical Team assignment, governed Deal probability override, bounded Won/Lost close evidence and derived forecasting read models are Production-verified.
+
+Exact-main CI `36429525004` and Cloudflare Production Deploy `36429837860` succeeded on `main@6d609ebf4abcd2faadd8f474ec1a48849acdb434`; Production migration version is `20260928135144`. Production remains 0 Pipelines / 0 Stages / 0 Deals, deliberately without synthetic acceptance data.
+
+The execution cursor advances to `SALES-NEXT-ACTION`; Phase numbering does not change.
