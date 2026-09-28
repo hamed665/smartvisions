@@ -1,5 +1,32 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## Latest continuation checkpoint — CRM-ACCOUNT-V2 Production-verified — 2026-09-28
+
+Always re-read runtime/current main before mutation.
+
+- canonical main: `88a6ab7f1b4f4241ea031deda85b5cecd66b7bc1`, PR #314 merged;
+- exact-main CI `36370424412`: SUCCESS;
+- Cloudflare Production Deploy `36370581976`: SUCCESS on the same SHA;
+- Production Worker: `dc6142da-42d9-42f4-9bf0-6d38be7bf358`;
+- Production Supabase migration: `crm_account_v2_governance` version `20260928023612`;
+- `public.businesses` remains canonical external Company/Account truth; no second Account store exists;
+- `tenant_businesses` / `branches` remain internal tenant operating hierarchy;
+- Production Businesses: 19 total, all 19 `UNCLASSIFIED`, 0 owner assignments, 0 external Account hierarchy links. Do not fabricate lifecycle/ownership/hierarchy evidence;
+- `crm_person_business_relationships` remains canonical Contact relationship authority;
+- Account read is authenticated-only + SECURITY INVOKER; owner/lifecycle/hierarchy mutations are service-role-only + SECURITY INVOKER; RLS and governance trigger are live;
+- advisor output has no new Account-specific security/FK regression;
+- Shadow Mode ON, Global Kill Switch OFF; Chatwoot external provisioning still disabled because Platform token GitHub secret is unconfigured.
+
+Disposition: `CRM-ACCOUNT-V2` internally controlled paths are **PRODUCTION_VERIFIED**.
+
+Next bounded action:
+1. audit current main + Production for `CRM-CUSTOM-OBJECTS`, `CRM-ACTIVITY-TASK-V2`, `CRM-SUPPORT-CASE`, `CRM-DATA-QUALITY`;
+2. reuse existing custom-field/task/deal/identity authorities;
+3. do not create duplicate object/task/case/data-quality stores;
+4. select the first verified missing dependency and implement it as one bounded vertical slice;
+5. preserve no-fabrication, tenant isolation, bounded bulk operations and exact Production evidence.
+
+
 
 ## Latest continuation checkpoint — CRM-CUSTOMER360-V2 → CRM-ACCOUNT-V2 — 2026-09-28
 

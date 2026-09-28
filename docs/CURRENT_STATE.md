@@ -1,5 +1,25 @@
 # Smart Visions Growth OS — Current Production State
 
+## Superseding CRM Account v2 Production checkpoint — 2026-09-28
+
+This checkpoint supersedes older notes that still mark `CRM-ACCOUNT-V2` as implementation-only.
+
+- PR #314 merged into canonical `main@88a6ab7f1b4f4241ea031deda85b5cecd66b7bc1`.
+- PR head CI run `36370240276` succeeded after PostgreSQL 17 caught and drove fixes for TypeScript narrowing, a test false-positive, backward compatibility with the core Business bootstrap, and privilege-level fail-closed behavior.
+- Exact-main CI run `36370424412` succeeded on the merge SHA across lint, typecheck, Vitest, the complete PostgreSQL 17 migration chain including dedicated Account smoke, Next build, Vinext build and Cloudflare scheduled verification.
+- Production migration `crm_account_v2_governance` is live as version `20260928023612`, sourced from merged migration file SHA `d7093bf90def75759962abe5a91f75032660bedb`.
+- Cloudflare Production Deploy run `36370581976` succeeded on the exact merge SHA. Release-candidate Worker version: `2f89924e-14ee-49e0-8f36-b56f3f3d816e`; Production Worker version: `dc6142da-42d9-42f4-9bf0-6d38be7bf358`. Candidate smoke, controlled SSR load, exact-bundle promotion, Production route check and safe API/webhook rejection smoke all passed without an outbound provider send.
+- Canonical external Company/Account authority remains `public.businesses`. No `crm_accounts` or second Account store was created. `tenant_businesses` / `branches` remain the tenant operating hierarchy.
+- Production stayed honest after migration: 19 Businesses total, 19 `UNCLASSIFIED`, 0 classified, 0 assigned Account owners, 0 external child Accounts. No discovered Company was silently promoted to Customer and no hierarchy was fabricated.
+- `crm_person_business_relationships` remains canonical Contact relationship authority.
+- External Account hierarchy is Organization-bound and cycle-safe; owner assignment is Organization-member-bound; lifecycle evidence is bounded and explicit.
+- `get_crm_account_v2` is authenticated-only and SECURITY INVOKER. Owner/lifecycle/parent mutation RPCs are service-role-only and SECURITY INVOKER. `businesses` RLS remains enabled and the governance trigger is live.
+- Supabase advisor output introduced no Account-specific security/FK regression. Existing baseline findings remain separate platform debt.
+- Production safety remains Shadow Mode ON and Global Kill Switch OFF. Chatwoot Platform token GitHub secret remains unconfigured, so Production Chatwoot provisioning remains disabled.
+- Disposition: internally controlled `CRM-ACCOUNT-V2` schema, authorization, runtime, UI/API and Production deployment are **PRODUCTION_VERIFIED**. Real operator lifecycle/owner/hierarchy actions remain evidence-driven and intentionally absent in Production because there is no authorized reason to mutate the 19 existing Companies merely for a green test.
+- Next cursor: fresh dependency audit inside `SECTION IDENTITY_CRM` across `CRM-CUSTOM-OBJECTS`, `CRM-ACTIVITY-TASK-V2`, `CRM-SUPPORT-CASE` and `CRM-DATA-QUALITY`. Reuse existing custom-field/task/deal/identity authorities and select the first real unresolved dependency; do not reimplement already Production-verified foundations.
+
+
 
 ## Superseding CRM Customer 360 v2 Person-context Production checkpoint — 2026-09-28
 
