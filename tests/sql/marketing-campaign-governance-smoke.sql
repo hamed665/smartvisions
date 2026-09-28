@@ -41,6 +41,13 @@ begin
     raise exception 'MARKETING-CAMPAIGNS variant campaign FK is missing';
   end if;
 
+  if to_regclass('public.marketing_campaign_conversion_deal_fk_idx') is null
+     or to_regclass('public.marketing_campaign_conversion_variant_fk_idx') is null
+     or to_regclass('public.marketing_campaign_conversion_recorded_by_fk_idx') is null
+  then
+    raise exception 'MARKETING-CAMPAIGNS conversion evidence FK indexes are incomplete';
+  end if;
+
   for v_func in
     select p.oid,p.proname,p.prosecdef
     from pg_proc p
