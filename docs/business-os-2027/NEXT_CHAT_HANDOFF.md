@@ -1,5 +1,30 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## Active continuation checkpoint — SEGMENT-V2 multi-entity implementation — 2026-09-28
+
+Always re-read runtime/current main before mutation.
+
+Verified baseline before this active branch:
+- canonical main `72036a5b2609c770e54898343fe9031d62c8d8aa`;
+- no open PR at branch start;
+- canonical Segment authority remains `crm_segments + crm_segment_versions`, RLS enabled, Production rows 0/0;
+- existing engine is DYNAMIC and LEAD-only; `SEGMENT-SNAPSHOT` remains separate.
+
+Active branch: `feat/segment-v2-multi-entity`.
+
+Bounded implementation rules:
+1. extend the existing Segment authority only; no second Segment/rule/membership engine;
+2. support `LEAD | PERSON | DEAL | ACCOUNT` from canonical authorities;
+3. keep Person PII/display-name/free metadata out of predicates;
+4. keep Account contact/enrichment prose and arbitrary JSON out of predicates;
+5. Custom Field predicates are only Lead/Deal because current Custom Field authority supports only those entities;
+6. preserve immutable semantic versions, depth <=4, <=8 children/group, <=20 leaves, request-key idempotency and tenant isolation;
+7. dynamic evaluation is <=100 rows/page and has no Campaign/Workflow/provider side effect;
+8. do not persist dynamic membership; immutable membership is owned by following `SEGMENT-SNAPSHOT`;
+9. existing Lead Segment RPC/API behavior remains backward compatible;
+10. do not claim Production completion until exact-head CI, merge, migration 0136, exact-main deploy and Production security/advisor/no-backfill checks pass.
+
+
 ## Latest continuation checkpoint — CRM-CUSTOMER360-V2 Support closeout → SEGMENT-V2 — 2026-09-28
 
 Always re-read runtime/current main before mutation.

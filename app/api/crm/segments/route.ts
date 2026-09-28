@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import {
-  createCrmLeadSegment,
+  createCrmSegment,
   CrmSegmentMutationError,
+  isCrmSegmentEntityType,
   listCrmSegments,
   parseCrmSegmentPredicateTree,
-  setCrmLeadSegmentLifecycle,
-  updateCrmLeadSegmentDefinition,
+  setCrmSegmentLifecycle,
+  updateCrmSegmentDefinition,
+  type CrmSegmentEntityType,
   type CrmSegmentStatus,
 } from '@/lib/crm/segments';
 import { createClient } from '@/lib/supabase/server';
@@ -119,9 +121,18 @@ export async function POST(request: Request) {
   const organizationId = body.organizationId;
   const name = typeof body.name === 'string' ? body.name.trim() : '';
   const requestKey = typeof body.requestKey === 'string' ? body.requestKey.trim() : '';
-  const predicateTree = parseCrmSegmentPredicateTree(body.predicateTree);
+  const entityTypeRaw = typeof body.entityType === 'string'
+    ? body.entityType.trim().toUpperCase()
+    : 'LEAD';
+  const entityType = isCrmSegmentEntityType(entityTypeRaw)
+    ? entityTypeRaw as CrmSegmentEntityType
+    : null;
+  const predicateTree = entityType
+    ? parseCrmSegmentPredicateTree(body.predicateTree, entityType)
+    : null;
 
   if (!isUuid(organizationId)
+      || !entityType
       || name.length < 1 || name.length > 160
       || requestKey.length < 1 || requestKey.length > 200
       || !predicateTree) {
@@ -129,9 +140,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    const segment = await createCrmLeadSegment({
+    const segment = await createCrmSegment({
       supabase,
       organizationId,
+      entityType,
       name,
       predicateTree,
       requestKey,
@@ -177,12 +189,18 @@ export async function PATCH(request: Request) {
   try {
     if (mode === 'DEFINITION') {
       const name = typeof body.name === 'string' ? body.name.trim() : '';
-      const predicateTree = parseCrmSegmentPredicateTree(body.predicateTree);
+      const entityTypeRaw = typeof body.entityType === 'string'
+        ? body.entityType.trim().toUpperCase()
+        : null;
+      const entityType = entityTypeRaw && isCrmSegmentEntityType(entityTypeRaw)
+        ? entityTypeRaw as CrmSegmentEntityType
+        : null;
+      const predicateTree = parseCrmSegmentPredicateTree(body.predicateTree, entityType);
       if (name.length < 1 || name.length > 160 || !predicateTree) {
         return NextResponse.json({ error: 'Invalid CRM Segment definition' }, { status: 400 });
       }
 
-      const segment = await updateCrmLeadSegmentDefinition({
+      const segment = await updateCrmSegmentDefinition({
         supabase,
         organizationId,
         segmentId,
@@ -200,7 +218,7 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: 'Invalid CRM Segment lifecycle status' }, { status: 400 });
       }
 
-      const segment = await setCrmLeadSegmentLifecycle({
+      const segment = await setCrmSegmentLifecycle({
         supabase,
         organizationId,
         segmentId,

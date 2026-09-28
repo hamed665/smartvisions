@@ -534,6 +534,13 @@ Extend governed segments to justified entities:
 - saved views;
 - governed custom-field predicates.
 
+**Current implementation checkpoint — ACTIVE / not yet Production evidence (2026-09-28):**
+- Active branch `feat/segment-v2-multi-entity` extends the existing canonical `crm_segments + crm_segment_versions`; it does not create a second Segment/rule/membership store.
+- Entity scope is `LEAD | PERSON | DEAL | ACCOUNT` with typed, allowlisted canonical predicates. Person PII/free metadata and arbitrary SQL/JSONPath are rejected.
+- Governed Custom Field predicates remain limited to the entities for which the current authority exists: Lead and Deal. Person/Account Custom Field support is not fabricated.
+- Dynamic evaluation stays bounded, versioned and side-effect-free apart from bounded audit evidence. `SEGMENT-SNAPSHOT` remains a separate Work Package; SEGMENT-V2 does not persist current membership.
+- This checkpoint is implementation evidence only until exact-head CI, merge, Production migration, exact-main deploy, grants/RLS/advisor verification and zero-synthetic-data evidence succeed.
+
 ## SEGMENT-SNAPSHOT
 
 - immutable audience snapshot;
