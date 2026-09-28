@@ -924,7 +924,7 @@ begin
         'opportunityScore', l.opportunity_score,
         'intentScore', l.intent_score,
         'agentMode', l.agent_mode,
-        'recommendedOffer', l.recommended_offer,
+        'recommendedOffer', to_jsonb(l) ->> 'recommended_offer',
         'personLinkMethod', l.person_link_method,
         'personLinkSourceRef', l.person_link_source_ref,
         'personLinkedAt', l.person_linked_at,
