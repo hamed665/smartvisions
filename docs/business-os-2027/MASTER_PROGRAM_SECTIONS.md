@@ -549,13 +549,15 @@ Extend governed segments to justified entities:
 - historical reproducibility;
 - no silent mutation.
 
-**Current implementation checkpoint — ACTIVE / not yet Production evidence:**
-- Active branch `feat/segment-snapshot` adds a dedicated immutable historical-audience authority, not a second dynamic Segment evaluator.
-- Snapshot header freezes Segment/version/entity type/predicate hash/member count/membership hash plus bounded creation evidence; members freeze exact ordered entity IDs.
+**Current evidence checkpoint — PRODUCTION_VERIFIED (2026-09-28):**
+- PR #324 / migration `0137_segment_snapshot` adds a dedicated immutable historical-audience authority, not a second dynamic Segment evaluator.
+- Snapshot header freezes exact Segment/version/entity type/predicate hash/member count/membership hash plus bounded creation evidence; members freeze exact ordered entity IDs.
 - Creation is service-bound, OWNER/ADMIN/SALES_MANAGER attributed, request-key idempotent and capped at 10,000 members for the RC safety contract.
-- Deferred integrity triggers verify exact member rows against frozen count/hash; UPDATE/DELETE is rejected.
-- Authenticated Organization members may read snapshot evidence under RLS. Snapshot membership never implies consent/send permission and triggers no Campaign/Workflow/provider action.
-- Production completion must not be claimed until exact-head CI, merge, migration 0137, exact-main deploy and post-apply verification succeed.
+- Deferred integrity triggers verify exact member rows against frozen count/hash; UPDATE/DELETE is rejected. Authenticated Organization members have RLS-governed read only.
+- Exact-head and exact-main CI proved Person and Deal Custom Field snapshot paths, replay, tamper rejection, historical reproducibility, tenant isolation, audit privacy and no send side effect.
+- Exact-main CI `36411781776` and Cloudflare Production Deploy `36411960392` succeeded on `main@0e5e4e61be1d30c2ba134ed66a4ad1b2457a7c98`; Production migration version is `20260928104942`.
+- Production Snapshots/members remain 0/0 because no synthetic acceptance data was fabricated.
+- Disposition: current RC scope is **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**.
 
 ## SALES-SCORING
 

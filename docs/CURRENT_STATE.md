@@ -1,19 +1,20 @@
 # Smart Visions Growth OS — Current Production State
 
-## Superseding SEGMENT-V2 Production checkpoint and SEGMENT-SNAPSHOT active slice — 2026-09-28
+## Superseding SEGMENT-SNAPSHOT Production checkpoint — 2026-09-28
 
-- PR #323 merged to canonical `main@9762e5ce79022718ede2def30610b94843d7f591`.
-- Exact-main CI `36409087711`: SUCCESS; Cloudflare Production Deploy `36409341905`: SUCCESS.
-- Production migration `0136_segment_v2_multi_entity` is live as version `20260928102302`.
-- Canonical Segment authority remains `crm_segments + crm_segment_versions`; Production still has 0 Segments and 0 Segment versions, so no synthetic audience definition exists.
-- Dynamic governed Segments now support `LEAD | PERSON | DEAL | ACCOUNT` with bounded typed predicates. Person PII/free metadata and Account contact/prose/arbitrary JSON are excluded. Governed Custom Fields remain Lead/Deal only.
-- Generic and legacy Lead evaluator/create paths remain SECURITY INVOKER; authenticated execution is allowed, service-role execution of public evaluator/create RPCs remains denied. RLS stays enabled on Segment/version tables.
-- Post-0136 advisors show no Segment-specific security or unindexed-FK regression.
-- Disposition: `SEGMENT-V2` implemented scope is **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**.
-- Active branch `feat/segment-snapshot` implements the separate `SEGMENT-SNAPSHOT` authority: immutable header + exact entity IDs, exact Segment semantic version/predicate hash, bounded request-key-idempotent service-bound creation, membership integrity hash, deferred tamper detection, authenticated RLS reads and no send/consent side effect.
-- Snapshot creation is bounded to 10,000 members for the RC safety contract and fails closed above the bound. Snapshot member IDs intentionally do not foreign-key to live CRM entities so later retention/deletion cannot silently rewrite historical audience evidence.
-- This Snapshot slice is implementation evidence only until exact-head CI, merge, Production migration 0137, exact-main deploy and post-apply no-backfill/security/advisor verification succeed.
-
+- PR #324 merged to canonical `main@0e5e4e61be1d30c2ba134ed66a4ad1b2457a7c98`.
+- Exact-main CI `36411781776`: SUCCESS across lint, typecheck, 1298 Vitest tests, PostgreSQL 17 migration/smoke chain, Next build, Vinext and Cloudflare scheduled verification.
+- Cloudflare Production Deploy `36411960392`: SUCCESS on the exact main SHA.
+- Production migration `0137_segment_snapshot` is live as version `20260928104942`; merged migration file SHA `abc1e5d7c9710bf43ca99aa989ec9dff8f5ce8e3`.
+- Canonical dynamic Segment authority remains `crm_segments + crm_segment_versions`; Snapshot owns only immutable historical audience evidence through `crm_segment_snapshots + crm_segment_snapshot_members`.
+- Production stayed honest: Segment definitions=0, Segment versions=0, Snapshots=0, Snapshot members=0. No synthetic audience or acceptance snapshot was created.
+- Snapshot creation is service-role-only SECURITY INVOKER and requires an attributed OWNER/ADMIN/SALES_MANAGER. Authenticated members have RLS-governed read only; browser INSERT/UPDATE/DELETE is denied.
+- Snapshot header freezes exact Segment/version/entity type/predicate hash/member count/membership hash. Exact ordered member IDs are immutable, request-key-idempotent and capped at 10,000 in the RC contract.
+- Deferred integrity triggers bind the header count/hash to exact member rows and immutable triggers reject UPDATE/DELETE. Controlled PostgreSQL 17 smoke proved replay safety, tamper rejection, historical reproducibility after Segment definition advancement, Deal Custom Field evaluation, cross-tenant isolation, bounded audit privacy and zero outbound-message side effects.
+- The trusted service received SELECT-only access required to evaluate Segment predicates atomically; no INSERT/UPDATE/DELETE authority was added on canonical Segment, Deal or Custom Field stores.
+- Post-0137 advisors show no Snapshot-specific security or unindexed-FK regression; existing advisor debt remains separate.
+- Disposition: `SEGMENT-SNAPSHOT` current RC scope is **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**.
+- Fresh next cursor: `SECTION SEGMENT_SALES_MARKETING / SALES-SCORING`. Existing canonical score truth is already on `leads.opportunity_score`, `leads.intent_score` and `leads.score_reasons`, with deterministic scoring libraries. Do not create a second lead-score store. Fresh audit must add the missing governed fit/engagement/evidence/manual-override/model-suggestion contract over this existing authority.
 
 ## Superseding CRM Customer 360 Support integration Production checkpoint — 2026-09-28
 
