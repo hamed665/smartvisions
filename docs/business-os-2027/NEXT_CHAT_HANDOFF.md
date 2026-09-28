@@ -1,5 +1,36 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+
+## Latest continuation checkpoint — CRM-CUSTOMER360-V2 → CRM-ACCOUNT-V2 — 2026-09-28
+
+Always re-read runtime/current main before mutation. The verified baseline at this checkpoint is:
+
+- canonical main: `77917d7722099b0b998dff8fd3aac94bf1f9fe4b`, PR #313 merged;
+- exact-main CI `36365898775`: SUCCESS;
+- Cloudflare Production Deploy `36366058009`: SUCCESS on that exact SHA;
+- Production Supabase head: `0129_crm_customer360_v2_person_context` version `20260928012548`;
+- Customer 360 Person context is evidence-backed only. Production has 19 Leads and 12 Conversations but zero Person links because Production still has zero canonical People. No synthetic backfill was created;
+- Customer 360 read/mutation functions are SECURITY INVOKER; read is authenticated-only; LINK/UNLINK is service-role-only; RLS remains enabled;
+- the implemented Person-centric composition over Leads/Conversations/Tasks/Deals is Production-verified, but the whole `CRM-CUSTOMER360-V2` Work Package remains partial because Notes linkage and Booking/Quote/Order/Invoice/Payment/Support/Document/Consent depend on still-open modules;
+- `public.businesses` is the canonical external/prospect/customer Company/Account authority. Do not create `crm_accounts`;
+- `tenant_businesses` / `branches` are the tenant's own operating hierarchy and must remain separate from external CRM Account hierarchy;
+- Production currently has 19 `businesses`, 0 `tenant_businesses`, 0 `brands`, 0 `branches`, 0 `departments`, 0 `teams`, and 0 Person-Business relationship rows.
+
+Current bounded Work Package: `SECTION IDENTITY_CRM / CRM-ACCOUNT-V2`.
+
+Implementation branch `feat/crm-account-v2-governance` must:
+1. extend `public.businesses` rather than create a second Account table;
+2. add evidence-backed external Account hierarchy, Account ownership and B2B lifecycle without reclassifying the 19 existing Production Companies;
+3. reuse `crm_person_business_relationships` for Contacts;
+4. keep hierarchy cycle-safe and Organization-bound;
+5. keep browser mutation fail-closed behind service-role commands with OWNER/ADMIN/SALES_MANAGER governance;
+6. provide bounded RLS-governed read/API/UI surfaces;
+7. run dedicated PostgreSQL 17 smoke plus full CI before merge;
+8. apply Production migration only after exact PR head is green and merged;
+9. verify Production row counts/grants/RLS/advisors with no synthetic Account governance data;
+10. reconcile docs only from observed merge/deploy/migration evidence.
+
+
 ## Latest continuation checkpoint — CRM-IDENTITY-GRAPH — 2026-09-28
 
 Always re-read runtime/current main before mutation. The verified baseline at this checkpoint is:
