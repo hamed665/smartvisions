@@ -136,11 +136,11 @@ declare
   v_segment_entity_type text;
 begin
   if tg_table_name='crm_segment_snapshots' then
-    v_snapshot_id := new.id;
-    v_organization_id := new.organization_id;
+    v_snapshot_id := (to_jsonb(new)->>'id')::uuid;
+    v_organization_id := (to_jsonb(new)->>'organization_id')::uuid;
   elsif tg_table_name='crm_segment_snapshot_members' then
-    v_snapshot_id := new.snapshot_id;
-    v_organization_id := new.organization_id;
+    v_snapshot_id := (to_jsonb(new)->>'snapshot_id')::uuid;
+    v_organization_id := (to_jsonb(new)->>'organization_id')::uuid;
   else
     raise exception 'CRM Segment Snapshot integrity trigger attached to unexpected table';
   end if;
