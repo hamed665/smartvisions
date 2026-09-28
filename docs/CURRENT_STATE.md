@@ -1,5 +1,20 @@
 # Smart Visions Growth OS — Current Production State
 
+## Superseding CRM Customer 360 Support integration Production checkpoint — 2026-09-28
+
+- Canonical main: `eed2a07b0bda3ec87c57f7ee4c4062d40b351cd7` after PR #321.
+- Exact-main CI `36403380564`: SUCCESS across lint, typecheck, Vitest, PostgreSQL 17 migration/smoke chain, Next build, Vinext and Cloudflare scheduled verification.
+- Cloudflare Production Deploy `36403658680`: SUCCESS on the same SHA, including release-candidate smoke, controlled SSR load, exact bundle promotion, routed Production smoke and safe API/webhook rejection smoke.
+- Production Supabase migration `0135_crm_customer360_support_integration` is live as version `20260928092811`; merged migration file SHA `42e7a4bd56b9577840827757a3b1460deae26e66`.
+- Existing `get_crm_customer360_v2` now includes canonical Support Cases only when `crm_support_cases.person_id` explicitly equals the requested Person. Company relationship alone does not attribute a Case to a Person.
+- Support Case identity/context remains immutable after creation; Customer 360 does not add a parallel LINK/UNLINK mutation path or weaken Support governance.
+- The Support collection omits description, resolution-summary and CSAT-comment prose; scoped internal Notes remain `CANONICAL_LINK_PENDING` rather than being widened into Organization-level Customer 360 visibility.
+- Production stayed honest: `crm_people=0`, `crm_support_cases=0`, `crm_support_sla_policies=0`, `crm_data_import_batches=0`; no synthetic Person/Case/import evidence was created.
+- `get_crm_customer360_v2` remains SECURITY INVOKER, authenticated-only; anon/service-role direct execute is denied. Post-0135 advisors show no Customer360/Support-specific security or unindexed-FK regression.
+- Disposition: Person/Lead/Conversation/Task/Deal/Support composition is **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**. The whole `CRM-CUSTOMER360-V2` remains **PARTIAL / REQUIRED** because scoped Notes linkage and Booking/Quote/Order/Invoice/Payment/Document/Consent authorities remain absent or intentionally authorization-gated.
+- Fresh read-only audit of `SEGMENT-V2` found canonical `crm_segments + crm_segment_versions` live with RLS and zero Production rows. Existing functions/evaluator are LEAD/DYNAMIC-only. Next code-first cursor is `SECTION SEGMENT_SALES_MARKETING / SEGMENT-V2`: extend the existing governed engine to justified Person/Deal/Account entities rather than creating another Segment store.
+
+
 ## Superseding CRM Data Quality Production checkpoint — 2026-09-28
 
 - Canonical main: `4a1cf8d0064bf6f35f82987e6b5f78c2ee2f3bc1` after PR #319.
