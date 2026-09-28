@@ -27,7 +27,7 @@ export default async function AccountsPage() {
       {accounts.map((account) => <Link className="settingsRow" href={`/accounts/${account.id}`} key={account.id}>
         <div>
           <strong>{account.name}</strong>
-          <span className="muted smallText">{[account.city, account.country_code, account.category].filter(Boolean).join(' · ') || account.id}</span>
+          <span className="muted smallText">{account.country_code || account.id}</span>
           {account.parent_business_id ? <span className="muted smallText">{account.hierarchy_relation || 'CHILD_OF'} {account.parent_business_id}</span> : null}
         </div>
         <div>
