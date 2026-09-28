@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import {
   CrmSegmentMutationError,
-  evaluateCrmLeadSegment,
+  evaluateCrmSegment,
 } from '@/lib/crm/segments';
 import { createClient } from '@/lib/supabase/server';
 
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
   const segmentId = body.segmentId;
   const segmentVersion = body.segmentVersion ?? null;
   const limit = body.limit === undefined ? 50 : Number(body.limit);
-  const afterLeadId = body.afterLeadId ?? null;
+  const afterEntityId = body.afterEntityId ?? body.afterLeadId ?? null;
 
   if (!isUuid(organizationId)
       || !isUuid(segmentId)
@@ -56,20 +56,23 @@ export async function POST(request: Request) {
       || !Number.isInteger(limit)
       || limit < 1
       || limit > 100
-      || (afterLeadId !== null && !isUuid(afterLeadId))) {
+      || (afterEntityId !== null && !isUuid(afterEntityId))) {
     return NextResponse.json({ error: 'Invalid CRM Segment evaluation payload' }, { status: 400 });
   }
 
   try {
-    const evaluation = await evaluateCrmLeadSegment({
+    const evaluation = await evaluateCrmSegment({
       supabase,
       organizationId,
       segmentId,
       segmentVersion: segmentVersion === null ? null : Number(segmentVersion),
       limit,
-      afterLeadId: afterLeadId as string | null,
+      afterEntityId: afterEntityId as string | null,
     });
-    return NextResponse.json(evaluation, {
+    const response = evaluation.entityType === 'LEAD'
+      ? { ...evaluation, leadIds: evaluation.entityIds }
+      : evaluation;
+    return NextResponse.json(response, {
       headers: { 'Cache-Control': 'private, no-store' },
     });
   } catch (error) {
