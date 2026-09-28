@@ -56,7 +56,8 @@ describe('CRM-CUSTOMER360-V2 Person context', () => {
 
   it('preserves direct Customer 360 links across governed Person merge', () => {
     expect(migration).toContain('reconcile_crm_customer360_person_merge');
-    expect(migration).toContain("'merged_from_person_id'");
+    expect(migration).toContain('set person_id = new.merged_into_person_id');
+    expect(migration).not.toContain("'merged_from_person_id'");
     for (const table of ['public.leads', 'public.sales_conversations', 'public.crm_tasks', 'public.crm_deals']) {
       expect(migration).toContain(`update ${table}`);
     }
