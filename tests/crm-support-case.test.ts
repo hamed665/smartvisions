@@ -83,7 +83,8 @@ describe('CRM-SUPPORT-CASE', () => {
     expect(api).toContain('createSupabaseServiceClient()');
   });
 
-  it('runs dedicated PostgreSQL 17 acceptance', () => {
+  it('runs dedicated PostgreSQL 17 acceptance and FK-index hardening', () => {
     expect(ci).toContain('crm-support-case-smoke.sql');
+    expect(ci).toContain('crm-support-case-fk-index-hardening-smoke.sql');
   });
 });
