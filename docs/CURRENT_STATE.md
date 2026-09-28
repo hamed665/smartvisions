@@ -1,5 +1,26 @@
 # Smart Visions Growth OS — Current Production State
 
+## Superseding CRM Person / Identity Graph Production checkpoint — 2026-09-28
+
+This checkpoint supersedes older Phase 3 continuation notes where they still name `CRM-PERSON-CONTACT` as the next Work Package.
+
+- Canonical runtime main at verification: `c5710ac556faea883745f8656bf0b6c0afc2506f` after PR #311.
+- PR #309 / migration `0126_crm_person_contact_foundation` established the canonical Person/Contact foundation on `crm_people`, `crm_identities`, `crm_person_identity_links` and `crm_person_business_relationships` without creating a second CRM, Person store, Account store or identity authority.
+- PR #310 / migration `0127_crm_person_contact_fk_index_hardening` closed the Person/Contact foreign-key index findings without changing authorization semantics.
+- PR #311 implements `SECTION IDENTITY_CRM / CRM-IDENTITY-GRAPH` over those existing authorities: deterministic exact-identity conflict candidates; evidence/confidence state; governed manual MERGE, SPLIT and UNLINK; cross-Organization fail-closed behavior; anti-orphan guards; bounded evidence/audit; and the `/identity-review` operator surface. No fuzzy/display-name-only auto-merge was added.
+- Production migration `0128_crm_identity_graph_resolution` is live as version `20260928004331`.
+- Exact-head PR CI and exact-main CI #1495 both passed lint, typecheck, Vitest, the PostgreSQL 17 migration chain, dedicated CRM identity-graph smoke, Next build, Vinext build and Cloudflare scheduled verification.
+- Cloudflare Production Deploy #975 succeeded on the exact main SHA. Release-candidate Worker version: `7a4f60cc-d9fa-41af-ae0d-9094e9ffe3fb`; Production Worker version: `e641d560-637f-4d65-9f6b-7cbc2a1c12d1`. Candidate smoke, controlled SSR load, exact-bundle promotion, Production Worker Route verification and safe routed Production smoke passed. `/login` returned HTTP 200 with Cloudflare evidence, root returned HTTP 307, and a missing route returned HTTP 404. No outbound provider send was invoked.
+- Post-`0128` Production verification: RLS remains enabled on `crm_identities`, `crm_identity_links`, `crm_people`, `crm_person_identity_links` and `crm_person_business_relationships`. Candidate read is authenticated-only; MERGE/SPLIT/UNLINK execution is service-role-only; all four functions remain SECURITY INVOKER.
+- Production data remains honest: `crm_people=0`, `crm_person_identity_links=0`, `crm_person_business_relationships=0`, `crm_identities=47`, `crm_identity_links=47`. No Person, conflict or acceptance row was fabricated for a green result.
+- Production safety remains Shadow Mode ON and Global Kill Switch OFF. The Chatwoot Platform token GitHub secret is still unconfigured and Production Chatwoot provisioning remains disabled.
+- The Supabase advisor finding counts did not increase after `0128`; existing security/performance findings are unrelated baseline work and are not folded into this Work Package.
+- Disposition: `CRM-PERSON-CONTACT` and the internally controlled `CRM-IDENTITY-GRAPH` schema/security/runtime paths are **PRODUCTION_VERIFIED**; deterministic merge/split/unlink behavior is also **CONTROLLED_TEST_VERIFIED** on PostgreSQL 17. A real Production happy-path Person resolution action remains unclaimed because Production currently contains zero real People. Creating synthetic People merely to produce acceptance evidence is prohibited.
+- Exact automatic “unmerge” is **DEFERRED_WITH_REASON**: merge lineage and retired evidence are preserved, and governed split/unlink correction paths exist, but a generic lossless inverse cannot be promised after coalescing potentially overlapping relationship evidence.
+- `crm_customer_timeline`, `leads` and `sales_conversations` currently have no canonical `person_id` foreign key. PR #311 deliberately does not rewrite those histories. The next Work Package must integrate existing authorities rather than manufacture links.
+- Next code-first cursor: fresh dependency audit of `SECTION IDENTITY_CRM / CRM-CUSTOMER360-V2`. If that audit proves an Account/Data-Quality dependency must precede a safe Customer 360 slice, follow the verified dependency rather than the stale planning order.
+
+
 ## Superseding OMNICHANNEL TikTok / SMS-RCS / controlled Voice checkpoint — 2026-09-28
 
 This checkpoint supersedes older TikTok, SMS/RCS and partial Voice continuation notes where they conflict with the evidence below.
