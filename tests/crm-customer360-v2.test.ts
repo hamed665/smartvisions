@@ -76,6 +76,10 @@ describe('CRM-CUSTOMER360-V2 Person context', () => {
     expect(migration).toContain('A Company relationship alone never attributes activity');
   });
 
+  it('bounds every Customer 360 collection by the requested limit', () => {
+    expect((migration.match(/limit p_limit/g) ?? []).length).toBeGreaterThanOrEqual(10);
+  });
+
   it('keeps unavailable canonical modules explicit instead of fabricating them', () => {
     for (const module of ['bookings', 'quotes', 'orders', 'invoices', 'payments', 'supportCases', 'documents', 'consent']) {
       expect(migration).toContain(`'${module}', 'MODULE_NOT_IMPLEMENTED'`);
