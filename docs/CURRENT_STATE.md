@@ -1,5 +1,24 @@
 # Smart Visions Growth OS — Current Production State
 
+
+## Superseding CRM Customer 360 v2 Person-context Production checkpoint — 2026-09-28
+
+This checkpoint supersedes older Identity/CRM continuation notes where they still name `CRM-CUSTOMER360-V2` as the next unaudited slice.
+
+- Canonical runtime main at verification: `77917d7722099b0b998dff8fd3aac94bf1f9fe4b` after PR #313.
+- Production migration `0129_crm_customer360_v2_person_context` is live as version `20260928012548`.
+- Exact-main CI run `36365898775` succeeded on the same SHA, including the dynamic PostgreSQL 17 late-migration chain and dedicated Customer 360 smoke.
+- Cloudflare Production Deploy run `36366058009` succeeded on the exact same SHA; release-candidate Worker version observed during promotion was `ac78994c-064e-42ca-aece-22898c629423`. Candidate smoke, controlled load, exact-bundle promotion, Production route verification and safe API/webhook rejection smoke passed without invoking an outbound provider send.
+- `CRM-CUSTOMER360-V2` now composes canonical Person identity/relationships with existing Lead, Conversation, Task and Deal authorities. It adds evidence-backed Person context to those authorities, not a second Customer/activity/conversation/deal/task store.
+- Person attribution is explicit only. A Company relationship alone never attributes Company activity to a Person. Authorized manual LINK/UNLINK is service-bound; authenticated direct mutation is denied; merge reconciliation preserves explicit Person linkage.
+- Production remained honest after migration: `crm_people=0`, `crm_person_identity_links=0`, `crm_person_business_relationships=0`; `leads=19` with 0 Person links; `sales_conversations=12` with 0 Person links; `crm_tasks=0`; `crm_deals=0`. No synthetic Person or link was created.
+- Production RLS remains enabled on People, Leads, Conversations, Tasks and Deals. `get_crm_customer360_v2` is authenticated-only and SECURITY INVOKER; trusted LINK/UNLINK mutations are service-role-only and SECURITY INVOKER.
+- Supabase security/performance advisor classes relevant to this slice did not introduce a new blocking finding. Existing advisor debt remains tracked separately.
+- Disposition: the internally controlled Person-centric composition over currently implemented CRM modules is **PRODUCTION_VERIFIED**; the broader `CRM-CUSTOMER360-V2` requirement is **PARTIAL / REQUIRED** because Notes canonical linkage and Booking/Quote/Order/Invoice/Payment/Support/Document/Consent modules are not yet complete. Missing modules remain explicit; no placeholder truth is fabricated.
+- Fresh dependency audit selected `SECTION IDENTITY_CRM / CRM-ACCOUNT-V2` as the next bounded Work Package. Canonical external Company/Account authority is `public.businesses`; `tenant_businesses` and `branches` are the tenant's internal operating hierarchy and must not be repurposed as customer Accounts.
+- Current implementation branch `feat/crm-account-v2-governance` extends `public.businesses` for governed external Account hierarchy, ownership and B2B lifecycle. It is **IMPLEMENTATION IN PROGRESS**, not Production evidence until CI, merge, migration and exact-main deploy are verified.
+
+
 ## Superseding CRM Person / Identity Graph Production checkpoint — 2026-09-28
 
 This checkpoint supersedes older Phase 3 continuation notes where they still name `CRM-PERSON-CONTACT` as the next Work Package.

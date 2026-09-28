@@ -426,6 +426,12 @@ Unify:
 - lifecycle;
 - relationship history.
 
+**Current evidence checkpoint — PARTIAL / PRODUCTION_VERIFIED for implemented authorities (2026-09-28):**
+- PR #313 / Production migration `0129_crm_customer360_v2_person_context` composes canonical People with existing Lead, Conversation, Task and Deal authorities through explicit evidence-backed Person context.
+- Production contains 0 canonical People, so 19 Leads and 12 Conversations remain unlinked by design; no synthetic backfill is allowed.
+- Person read/link correction is RLS/role governed; Company relationship alone never attributes activity to a Person.
+- Notes canonical linkage remains pending, and Booking/Quote/Order/Invoice/Payment/Support/Document/Consent remain REQUIRED under their owning Work Packages. Do not mark this whole Work Package complete from the implemented subset.
+
 ## CRM-ACCOUNT-V2
 
 - Company/Account;
@@ -434,6 +440,13 @@ Unify:
 - ownership;
 - branch/business relationship;
 - B2B lifecycle.
+
+**Current implementation decision — ACTIVE (not yet Production evidence):**
+- Reuse canonical external Company/Account authority `public.businesses`; do not create a second `crm_accounts` store.
+- Reuse `crm_person_business_relationships` for evidence-backed contacts.
+- External Account hierarchy may relate Business records as branch/subsidiary/division with cycle and tenant guards.
+- Keep `tenant_businesses` / `branches` exclusively for the tenant's own operating hierarchy.
+- Existing Companies must remain `UNCLASSIFIED` until governed lifecycle evidence exists; discovery/Lead existence is not Customer status.
 
 ## CRM-CUSTOM-OBJECTS
 
