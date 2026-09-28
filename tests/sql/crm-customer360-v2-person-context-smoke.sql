@@ -261,13 +261,13 @@ begin
     raise exception 'Customer 360 Person merge did not preserve Lead attribution';
   end if;
 
-  if not (
-    select coalesce(person_link_evidence ? 'merged_from_person_id', false)
+  if (
+    select person_link_evidence ->> 'reason'
     from public.leads
     where organization_id = '00000000-0000-0000-0000-000000000c01'
       and id = '20000000-0000-0000-0000-000000000c01'
-  ) then
-    raise exception 'Customer 360 Person merge did not preserve merge provenance';
+  ) <> 'controlled-test' then
+    raise exception 'Customer 360 Person merge rewrote original link evidence';
   end if;
 end;
 $customer360_unlink_relink_merge$;
