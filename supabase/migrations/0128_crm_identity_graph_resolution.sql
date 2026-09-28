@@ -68,7 +68,10 @@ begin
         where l.status <> 'RETIRED'
           and l.verification_method in ('MANUAL_CONFIRMED','PROVIDER_AUTHENTICATED','IMPORT_VERIFIED')
       )::integer as verified_person_links,
-      coalesce(bool_or(l.status = 'CONFLICTED' or p.status <> 'ACTIVE'), false) as has_person_conflict,
+      coalesce(
+        bool_or(l.status <> 'RETIRED' and (l.status = 'CONFLICTED' or p.status <> 'ACTIVE')),
+        false
+      ) as has_person_conflict,
       coalesce(
         array_agg(distinct l.verification_method order by l.verification_method)
           filter (where l.status <> 'RETIRED'),
