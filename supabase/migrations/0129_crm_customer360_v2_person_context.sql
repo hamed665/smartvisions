@@ -142,6 +142,26 @@ create index if not exists crm_deals_org_person_link_actor_fk_idx
   on public.crm_deals(organization_id, person_linked_by_user_id)
   where person_linked_by_user_id is not null;
 
+-- Keep the historical service_role deny on CRM Tasks/Deals broad access.
+-- Customer 360 receives only the columns required by its trusted Person-context
+-- mutation path. Existing authenticated policies and module authorities remain
+-- unchanged.
+grant select (
+  id, organization_id, business_id, lead_id, conversation_id, person_id
+) on public.crm_tasks to service_role;
+grant update (
+  person_id, person_link_method, person_link_source_ref, person_link_evidence,
+  person_linked_by_user_id, person_linked_at, updated_at
+) on public.crm_tasks to service_role;
+
+grant select (
+  id, organization_id, business_id, person_id
+) on public.crm_deals to service_role;
+grant update (
+  person_id, person_link_method, person_link_source_ref, person_link_evidence,
+  person_linked_by_user_id, person_linked_at, updated_at
+) on public.crm_deals to service_role;
+
 create or replace function public.guard_crm_customer360_person_context()
 returns trigger
 language plpgsql
