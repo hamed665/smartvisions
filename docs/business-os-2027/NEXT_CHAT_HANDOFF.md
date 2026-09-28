@@ -1,5 +1,25 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## Latest continuation checkpoint — SALES-SCORING → SALES-PIPELINE-V2 — 2026-09-28
+
+Always re-read runtime/current main before mutation.
+
+Verified Production baseline:
+- PR #326 merged to `main@f6b08675d8c3a83aa6dccd8790fe9b9077e1c7ea`;
+- exact-head CI `36424281940`: SUCCESS;
+- exact-main CI `36424607322`: SUCCESS;
+- Cloudflare Production Deploy `36424885898`: SUCCESS on the same SHA;
+- Production migration `0138_sales_scoring_governance` version `20260928125243`;
+- `SALES-SCORING`: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**;
+- canonical accepted score truth remains on `public.leads`; no second score store/engine;
+- Production has 19 real Leads and zero migration-created scoring revision/fit/engagement/override/model-suggestion/provenance rows;
+- deterministic score, explicit human override and advisory model suggestion are separate authorities by contract;
+- no SALES-SCORING-specific Supabase advisor regression.
+
+Next bounded Work Package: `SECTION SEGMENT_SALES_MARKETING / SALES-PIPELINE-V2`.
+
+Fresh pipeline audit must start from existing `crm_pipelines` / `crm_pipeline_stages` / `crm_deals` authority and current UI/API/runtime writers. Do not create a second pipeline/deal store. Verify multiple pipelines, configurable stages, weighted amount/probability/forecast, owner/team, expected close, stage policies, Won/Lost evidence and forecasting read models before choosing the smallest safe vertical slice.
+
 ## Latest continuation checkpoint — SEGMENT-SNAPSHOT → SALES-SCORING — 2026-09-28
 
 Always re-read runtime/current main before mutation.

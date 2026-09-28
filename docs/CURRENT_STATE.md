@@ -1,5 +1,22 @@
 # Smart Visions Growth OS — Current Production State
 
+## Superseding SALES-SCORING Production checkpoint — 2026-09-28
+
+- PR #326 merged to canonical `main@f6b08675d8c3a83aa6dccd8790fe9b9077e1c7ea`.
+- Exact-head CI `36424281940` succeeded before merge. Exact-main CI `36424607322` also succeeded across lint, typecheck, Vitest, PostgreSQL 17 migration/smoke, Next build, Vinext and Cloudflare scheduled verification.
+- Cloudflare Production Deploy `36424885898` succeeded on the same exact main SHA, including release-candidate smoke, controlled SSR load, exact bundle promotion, routed Production smoke and safe API/webhook rejection smoke.
+- Production Supabase migration `0138_sales_scoring_governance` is live as version `20260928125243`; merged migration file SHA is `78e37903711be84971a7c01a7ab4b21885720124`.
+- Canonical accepted Lead scoring truth remains on `public.leads`; no `lead_scores` table, competing scoring engine or second scoring authority was created.
+- Governance now covers deterministic opportunity score, fit, intent, bounded engagement evidence, structured provenance/policy version, optimistic scoring revision, explicit manual override with reason/expiry/correction, and advisory-only model suggestions that cannot silently overwrite canonical accepted score truth.
+- Existing Hunter score writers now stamp bounded source provenance and use the trusted service boundary; Hunter acquisition evidence remains source-attributed rather than silently redefined as generic CRM truth.
+- Scoring mutation RPCs are SECURITY INVOKER and service-role-only for OWNER/ADMIN/SALES_MANAGER attribution. Authenticated users have RLS-governed read through `get_crm_lead_scoring`; browser execution of trusted score/override mutations is denied.
+- PostgreSQL 17 controlled smoke proved idempotent request replay, request-key semantic conflict rejection, manual override preserving deterministic base truth, advisory model separation, bounded engagement recompute, cross-tenant actor/read isolation, audit privacy and zero outbound-message side effects.
+- Production stayed honest: 19 real Leads remain, while governed scoring revisions=0, fit non-null=0, engagement non-null=0, active overrides=0, model suggestions=0 and scoring source provenance=0 for pre-existing rows. Migration did not fabricate or rescore Production Leads.
+- Production Lead RLS remains enabled; governance trigger and all five new supporting indexes are live. Authenticated execution is false for deterministic/override mutations while service-role execution is true.
+- Post-0138 Supabase advisors show no SALES-SCORING-specific regression. Existing advisor debt remains separate: historical RLS-enabled/no-policy info findings, leaked-password-protection warning, older unindexed FKs and auth RLS initPlan warnings.
+- Disposition: `SALES-SCORING` current RC scope is **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**.
+- Fresh next cursor: `SECTION SEGMENT_SALES_MARKETING / SALES-PIPELINE-V2`. Fresh runtime/main audit is required before any schema or authority change.
+
 ## Superseding SEGMENT-SNAPSHOT Production checkpoint — 2026-09-28
 
 - PR #324 merged to canonical `main@0e5e4e61be1d30c2ba134ed66a4ad1b2457a7c98`.
