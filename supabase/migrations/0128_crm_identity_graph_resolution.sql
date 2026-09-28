@@ -11,6 +11,8 @@ returns table (
   identity_type text,
   display_value text,
   identity_status text,
+  business_ids uuid[],
+  person_ids uuid[],
   business_count integer,
   person_count integer,
   verified_business_links integer,
@@ -39,6 +41,11 @@ begin
     select
       l.organization_id,
       l.identity_id,
+      coalesce(
+        array_agg(distinct l.business_id order by l.business_id)
+          filter (where l.status <> 'RETIRED'),
+        array[]::uuid[]
+      ) as business_ids,
       count(distinct l.business_id) filter (where l.status <> 'RETIRED')::integer as business_count,
       count(*) filter (where l.status <> 'RETIRED' and l.evidence_strength = 'VERIFIED')::integer as verified_business_links,
       count(*) filter (where l.status <> 'RETIRED' and l.evidence_strength = 'OBSERVED')::integer as observed_business_links,
@@ -51,6 +58,11 @@ begin
     select
       l.organization_id,
       l.identity_id,
+      coalesce(
+        array_agg(distinct l.person_id order by l.person_id)
+          filter (where l.status <> 'RETIRED'),
+        array[]::uuid[]
+      ) as person_ids,
       count(distinct l.person_id) filter (where l.status <> 'RETIRED')::integer as person_count,
       count(*) filter (
         where l.status <> 'RETIRED'
@@ -74,6 +86,8 @@ begin
     i.identity_type,
     i.display_value,
     i.status,
+    coalesce(b.business_ids, array[]::uuid[]),
+    coalesce(p.person_ids, array[]::uuid[]),
     coalesce(b.business_count, 0),
     coalesce(p.person_count, 0),
     coalesce(b.verified_business_links, 0),
@@ -153,6 +167,9 @@ begin
   end if;
   if p_evidence is null or jsonb_typeof(p_evidence) <> 'object' or p_evidence = '{}'::jsonb then
     raise exception 'CRM Person merge requires non-empty evidence';
+  end if;
+  if octet_length(p_evidence::text) > 8192 then
+    raise exception 'CRM Person merge evidence exceeds the bounded limit';
   end if;
 
   select m.role
@@ -351,6 +368,25 @@ begin
    where organization_id = p_organization_id
      and id = p_source_person_id;
 
+  insert into public.audit_logs(
+    organization_id, actor_type, actor_id, action, entity_type, entity_id,
+    before_data, after_data, correlation_id
+  ) values (
+    p_organization_id,
+    'USER',
+    p_actor_user_id::text,
+    'CRM_PERSON_MANUAL_MERGE',
+    'crm_people',
+    p_target_person_id::text,
+    jsonb_build_object('source_person_id', p_source_person_id::text),
+    jsonb_build_object(
+      'target_person_id', p_target_person_id::text,
+      'reason_present', true,
+      'evidence_present', true
+    ),
+    'dbtx:' || txid_current()::text
+  );
+
   return query select p_target_person_id, false;
 end;
 $crm_people_merge$;
@@ -393,6 +429,9 @@ begin
   end if;
   if p_evidence is null or jsonb_typeof(p_evidence) <> 'object' or p_evidence = '{}'::jsonb then
     raise exception 'CRM Person split requires non-empty evidence';
+  end if;
+  if octet_length(p_evidence::text) > 8192 then
+    raise exception 'CRM Person split evidence exceeds the bounded limit';
   end if;
 
   select m.role
@@ -484,6 +523,21 @@ begin
       and p.status = 'ACTIVE'
   ) then
     raise exception 'CRM Person split identity already has another active Person conflict';
+  end if;
+
+  if not exists (
+    select 1
+    from public.crm_person_identity_links l
+    join public.crm_identities i
+      on i.organization_id = l.organization_id
+     and i.id = l.identity_id
+     and i.status = 'ACTIVE'
+    where l.organization_id = p_organization_id
+      and l.person_id = p_source_person_id
+      and l.identity_id <> p_identity_id
+      and l.status = 'ACTIVE'
+  ) then
+    raise exception 'CRM Person split would leave source Person without an active identity';
   end if;
 
   insert into public.crm_people(
@@ -590,9 +644,159 @@ begin
      and identity_id = p_identity_id
      and status <> 'RETIRED';
 
+  insert into public.audit_logs(
+    organization_id, actor_type, actor_id, action, entity_type, entity_id,
+    before_data, after_data, correlation_id
+  ) values (
+    p_organization_id,
+    'USER',
+    p_actor_user_id::text,
+    'CRM_PERSON_MANUAL_SPLIT',
+    'crm_people',
+    p_new_person_id::text,
+    jsonb_build_object(
+      'source_person_id', p_source_person_id::text,
+      'identity_id', p_identity_id::text
+    ),
+    jsonb_build_object(
+      'new_person_id', p_new_person_id::text,
+      'reason_present', true,
+      'evidence_present', true
+    ),
+    'dbtx:' || txid_current()::text
+  );
+
   return query select p_new_person_id, false;
 end;
 $crm_person_split$;
+
+create or replace function public.unlink_crm_person_identity_manual(
+  p_organization_id uuid,
+  p_actor_user_id uuid,
+  p_person_id uuid,
+  p_identity_id uuid,
+  p_reason text,
+  p_evidence jsonb
+)
+returns table (
+  resolved_person_id uuid,
+  replayed boolean
+)
+language plpgsql
+security invoker
+set search_path = public, pg_catalog
+as $crm_person_unlink$
+declare
+  v_actor_role text;
+  v_person_status text;
+  v_identity_status text;
+begin
+  if nullif(trim(p_reason), '') is null or length(trim(p_reason)) > 500 then
+    raise exception 'CRM Person unlink reason is required';
+  end if;
+  if p_evidence is null or jsonb_typeof(p_evidence) <> 'object' or p_evidence = '{}'::jsonb then
+    raise exception 'CRM Person unlink requires non-empty evidence';
+  end if;
+  if octet_length(p_evidence::text) > 8192 then
+    raise exception 'CRM Person unlink evidence exceeds the bounded limit';
+  end if;
+
+  select m.role into v_actor_role
+  from public.organization_members m
+  where m.organization_id = p_organization_id
+    and m.user_id = p_actor_user_id;
+
+  if v_actor_role is null
+     or v_actor_role not in ('OWNER','ADMIN','SALES_MANAGER') then
+    raise exception 'CRM Person unlink requires an authorized resolution role';
+  end if;
+
+  select i.status into v_identity_status
+  from public.crm_identities i
+  where i.organization_id = p_organization_id
+    and i.id = p_identity_id
+  for update;
+
+  select p.status into v_person_status
+  from public.crm_people p
+  where p.organization_id = p_organization_id
+    and p.id = p_person_id
+  for update;
+
+  if v_identity_status is null or v_identity_status <> 'ACTIVE'
+     or v_person_status is null or v_person_status <> 'ACTIVE' then
+    raise exception 'CRM Person unlink requires active same-Organization Person and identity';
+  end if;
+
+  if not exists (
+    select 1
+    from public.crm_person_identity_links l
+    where l.organization_id = p_organization_id
+      and l.person_id = p_person_id
+      and l.identity_id = p_identity_id
+      and l.status = 'ACTIVE'
+  ) then
+    if exists (
+      select 1
+      from public.crm_person_identity_links l
+      where l.organization_id = p_organization_id
+        and l.person_id = p_person_id
+        and l.identity_id = p_identity_id
+        and l.status = 'RETIRED'
+        and l.evidence ->> 'manual_unlink_from_person_id' = p_person_id::text
+    ) then
+      return query select p_person_id, true;
+      return;
+    end if;
+    raise exception 'CRM Person unlink identity is not actively linked to the Person';
+  end if;
+
+  if not exists (
+    select 1
+    from public.crm_person_identity_links l
+    join public.crm_identities i
+      on i.organization_id = l.organization_id
+     and i.id = l.identity_id
+     and i.status = 'ACTIVE'
+    where l.organization_id = p_organization_id
+      and l.person_id = p_person_id
+      and l.identity_id <> p_identity_id
+      and l.status = 'ACTIVE'
+  ) then
+    raise exception 'CRM Person unlink would leave Person without an active identity';
+  end if;
+
+  update public.crm_person_identity_links
+     set evidence = evidence || jsonb_build_object(
+           'manual_unlink_from_person_id', p_person_id::text,
+           'manual_unlink_reason', trim(p_reason)
+         ) || p_evidence,
+         status = 'RETIRED',
+         updated_by_user_id = p_actor_user_id,
+         updated_at = now()
+   where organization_id = p_organization_id
+     and person_id = p_person_id
+     and identity_id = p_identity_id
+     and status = 'ACTIVE';
+
+  insert into public.audit_logs(
+    organization_id, actor_type, actor_id, action, entity_type, entity_id,
+    before_data, after_data, correlation_id
+  ) values (
+    p_organization_id,
+    'USER',
+    p_actor_user_id::text,
+    'CRM_PERSON_IDENTITY_MANUAL_UNLINK',
+    'crm_people',
+    p_person_id::text,
+    jsonb_build_object('identity_id', p_identity_id::text),
+    jsonb_build_object('reason_present', true, 'evidence_present', true),
+    'dbtx:' || txid_current()::text
+  );
+
+  return query select p_person_id, false;
+end;
+$crm_person_unlink$;
 
 revoke all on function public.list_crm_identity_resolution_candidates(uuid, integer)
   from public, anon, authenticated, service_role;
@@ -609,9 +813,16 @@ revoke all on function public.split_crm_person_identity_manual(uuid, uuid, uuid,
 grant execute on function public.split_crm_person_identity_manual(uuid, uuid, uuid, uuid, uuid, text, text, jsonb)
   to service_role;
 
+revoke all on function public.unlink_crm_person_identity_manual(uuid, uuid, uuid, uuid, text, jsonb)
+  from public, anon, authenticated, service_role;
+grant execute on function public.unlink_crm_person_identity_manual(uuid, uuid, uuid, uuid, text, jsonb)
+  to service_role;
+
 comment on function public.list_crm_identity_resolution_candidates(uuid, integer) is
   'Bounded RLS-governed identity conflict/candidate read model derived from canonical CRM identity evidence.';
 comment on function public.merge_crm_people_manual(uuid, uuid, uuid, uuid, text, jsonb) is
   'Service-only manual Person merge over canonical identity and account relationship evidence; state-idempotent and audit-triggered.';
 comment on function public.split_crm_person_identity_manual(uuid, uuid, uuid, uuid, uuid, text, text, jsonb) is
   'Service-only manual Person identity split using a caller-stable new Person UUID for deterministic retry semantics.';
+comment on function public.unlink_crm_person_identity_manual(uuid, uuid, uuid, uuid, text, jsonb) is
+  'Service-only manual identity unlink that retires evidence without deleting it and refuses to orphan an active Person.';
