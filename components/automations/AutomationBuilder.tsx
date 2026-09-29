@@ -255,6 +255,10 @@ function typedScalar(raw: string, dataType: string) {
     return Number.isFinite(value) ? value : raw;
   }
   if (dataType === 'BOOLEAN') return raw === 'true';
+  if (dataType === 'TIMESTAMP' && raw) {
+    const value = new Date(raw);
+    return Number.isNaN(value.getTime()) ? raw : value.toISOString();
+  }
   return raw;
 }
 
@@ -761,12 +765,11 @@ function RuleEditor(props: {
 }
 
 function RuleHistory(props: {
-  rule: AutomationRule;
   versions: AutomationVersion[];
   runs: AutomationRun[];
   runActions: AutomationRunAction[];
 }) {
-  const { rule, versions, runs, runActions } = props;
+  const { versions, runs, runActions } = props;
   const diagnostics = runActions.filter(action => action.last_error || ['FAILED', 'DEAD_LETTER'].includes(action.status));
 
   return <div className="automationHistoryGrid">
@@ -923,7 +926,7 @@ export function AutomationBuilder(props: {
             </form>
           </div> : null}
 
-          <RuleHistory rule={rule} versions={ruleVersions} runs={ruleRuns} runActions={ruleRunActions} />
+          <RuleHistory versions={ruleVersions} runs={ruleRuns} runActions={ruleRunActions} />
         </section>;
       })}
     </div>
