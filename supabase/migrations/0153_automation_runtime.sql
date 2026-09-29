@@ -297,7 +297,7 @@ begin
 
   return v_count;
 end;
-$;
+$$;
 
 create or replace function public.validate_automation_runtime_action_configs(
   p_actions jsonb
@@ -307,7 +307,7 @@ language plpgsql
 stable
 security invoker
 set search_path = public, pg_catalog
-as $
+as $$
 declare
   v_item jsonb;
   v_key text;
@@ -395,7 +395,7 @@ begin
 
   return v_count;
 end;
-$;
+$$;
 
 create or replace function public.enforce_automation_published_runtime_scope()
 returns trigger
@@ -1802,7 +1802,7 @@ begin
     'replayed',false
   );
 end;
-$;
+$$;
 
 create unique index audit_logs_automation_runtime_pause_request_uidx
   on public.audit_logs(organization_id,entity_id,correlation_id)
