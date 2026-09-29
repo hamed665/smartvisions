@@ -297,7 +297,105 @@ begin
 
   return v_count;
 end;
-$$;
+$;
+
+create or replace function public.validate_automation_runtime_action_configs(
+  p_actions jsonb
+)
+returns integer
+language plpgsql
+stable
+security invoker
+set search_path = public, pg_catalog
+as $
+declare
+  v_item jsonb;
+  v_key text;
+  v_config jsonb;
+  v_score numeric;
+  v_count integer:=0;
+begin
+  if p_actions is null or jsonb_typeof(p_actions)<>'array' then
+    raise exception 'Automation runtime action config payload is invalid';
+  end if;
+
+  for v_item in select value from jsonb_array_elements(p_actions) x(value)
+  loop
+    v_key:=v_item->>'key';
+    v_config:=coalesce(v_item->'config','{}'::jsonb);
+    if jsonb_typeof(v_config)<>'object' then
+      raise exception 'Automation runtime action config must be an object: %',v_key;
+    end if;
+
+    if v_key='CREATE_OPERATOR_BRIEF' then
+      if upper(trim(coalesce(v_config->>'briefType',''))) not in (
+           'INBOUND','OUTBOUND_PREVIEW','HOT_LEAD','HANDOFF','DAILY_REPORT'
+         )
+         or length(trim(coalesce(v_config->>'title',''))) not between 1 and 240
+         or length(trim(coalesce(v_config->>'summary',''))) not between 1 and 4000
+         or (
+           v_config ? 'details'
+           and jsonb_typeof(v_config->'details')<>'object'
+         )
+      then
+        raise exception 'CREATE_OPERATOR_BRIEF runtime config is invalid';
+      end if;
+
+    elsif v_key='MARK_HOT' then
+      if jsonb_typeof(v_config->'minimumScore')<>'number' then
+        raise exception 'MARK_HOT requires numeric minimumScore';
+      end if;
+      v_score:=(v_config->>'minimumScore')::numeric;
+      if v_score<>trunc(v_score) or v_score not between 50 and 100 then
+        raise exception 'MARK_HOT minimumScore must be an integer between 50 and 100';
+      end if;
+
+    elsif v_key='SEND_FOLLOWUP' then
+      if length(trim(coalesce(v_config->>'body',''))) not between 1 and 10000
+         or jsonb_typeof(v_config->'sendContext')<>'object'
+         or nullif(trim(v_config->'sendContext'->>'to'),'') is null
+         or nullif(trim(v_config->'sendContext'->>'market_code'),'') is null
+      then
+        raise exception 'SEND_FOLLOWUP runtime config requires body and canonical sendContext';
+      end if;
+
+    elsif v_key='HANDOFF_HUMAN' then
+      if v_config ? 'reasons' then
+        if jsonb_typeof(v_config->'reasons')<>'array'
+           or jsonb_array_length(v_config->'reasons')>20
+           or exists(
+             select 1
+             from jsonb_array_elements(v_config->'reasons') r(value)
+             where jsonb_typeof(r.value)<>'string'
+                or length(trim(r.value#>>'{}')) not between 1 and 200
+           )
+        then
+          raise exception 'HANDOFF_HUMAN reasons config is invalid';
+        end if;
+      end if;
+
+    elsif v_key='PAUSE_AUTOMATION' then
+      if v_config<>'{}'::jsonb then
+        raise exception 'PAUSE_AUTOMATION does not accept runtime config';
+      end if;
+
+    elsif v_key='GENERATE_PREVIEW' then
+      if (v_config ? 'explicitRequest' and jsonb_typeof(v_config->'explicitRequest')<>'boolean')
+         or (
+           v_config ? 'ownerApprovedHeavyGeneration'
+           and jsonb_typeof(v_config->'ownerApprovedHeavyGeneration')<>'boolean'
+         )
+      then
+        raise exception 'GENERATE_PREVIEW runtime config is invalid';
+      end if;
+    end if;
+
+    v_count:=v_count+1;
+  end loop;
+
+  return v_count;
+end;
+$;
 
 create or replace function public.enforce_automation_published_runtime_scope()
 returns trigger
@@ -309,6 +407,7 @@ begin
   perform public.validate_automation_runtime_action_scopes(
     new.trigger_key,new.actions
   );
+  perform public.validate_automation_runtime_action_configs(new.actions);
   return new;
 end;
 $$;
@@ -344,6 +443,7 @@ begin
     perform public.validate_automation_runtime_action_scopes(
       v_trigger,v_actions
     );
+    perform public.validate_automation_runtime_action_configs(v_actions);
   end if;
   return new;
 end;
@@ -538,6 +638,7 @@ begin
     perform public.validate_automation_runtime_action_scopes(
       p_trigger_key,v_rule.actions
     );
+    perform public.validate_automation_runtime_action_configs(v_rule.actions);
 
     if jsonb_array_length(v_rule.conditions)>0 then
       if p_subject_type is null or p_subject_id is null then
@@ -1761,6 +1862,8 @@ revoke all on function public.guard_automation_runtime_mutation()
   from public,anon,authenticated,service_role;
 revoke all on function public.validate_automation_runtime_action_scopes(text,jsonb)
   from public,anon,authenticated;
+revoke all on function public.validate_automation_runtime_action_configs(jsonb)
+  from public,anon,authenticated;
 revoke all on function public.enforce_automation_published_runtime_scope()
   from public,anon,authenticated,service_role;
 revoke all on function public.enforce_automation_enable_runtime_scope()
@@ -1799,6 +1902,8 @@ revoke all on function public.pause_automation_rule_from_runtime(
 ) from public,anon,authenticated;
 
 grant execute on function public.validate_automation_runtime_action_scopes(text,jsonb)
+  to service_role;
+grant execute on function public.validate_automation_runtime_action_configs(jsonb)
   to service_role;
 grant execute on function public.enqueue_automation_runtime_event(
   uuid,text,text,text,uuid,jsonb,timestamptz
