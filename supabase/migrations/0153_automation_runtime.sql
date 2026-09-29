@@ -342,7 +342,7 @@ begin
       end if;
 
     elsif v_key='MARK_HOT' then
-      if jsonb_typeof(v_config->'minimumScore')<>'number' then
+      if coalesce(jsonb_typeof(v_config->'minimumScore'),'null')<>'number' then
         raise exception 'MARK_HOT requires numeric minimumScore';
       end if;
       v_score:=(v_config->>'minimumScore')::numeric;
