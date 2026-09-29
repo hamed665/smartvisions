@@ -51,7 +51,26 @@ values
   )
 on conflict (organization_id,user_id) do update set role=excluded.role;
 
--- Historical evidence before the Organization cutover must never be replayed.
+-- Earlier Automation smokes legitimately create runtime audit evidence after
+-- migration 0155. Isolate this acceptance window without altering product code.
+set role service_role;
+select set_config('app.notification_projection_mutation','allowed',false);
+insert into public.notification_projection_checkpoints(
+  organization_id,cutover_at,last_scanned_at,last_scanned_id,updated_at
+) values (
+  '00000000-0000-0000-0000-000000000c01',
+  now(),now(),null,now()
+)
+on conflict(organization_id) do update
+set
+  cutover_at=excluded.cutover_at,
+  last_scanned_at=excluded.last_scanned_at,
+  last_scanned_id=null,
+  updated_at=now();
+select set_config('app.notification_projection_mutation','0',false);
+reset role;
+
+-- Historical evidence before the isolated notification cutover must never be replayed.
 insert into public.audit_logs(
   id,organization_id,actor_type,actor_id,action,entity_type,entity_id,
   after_data,correlation_id,created_at
@@ -62,7 +81,7 @@ insert into public.audit_logs(
   'automation_run','historical-run',
   '{"actionKey":"GENERATE_PREVIEW","compensationRequired":0}'::jsonb,
   'automation-notification-historical',
-  (select created_at-interval '1 second' from public.organizations where id='00000000-0000-0000-0000-000000000c01')
+  (select last_scanned_at-interval '1 second' from public.notification_projection_checkpoints where organization_id='00000000-0000-0000-0000-000000000c01')
 )
 on conflict (id) do nothing;
 
