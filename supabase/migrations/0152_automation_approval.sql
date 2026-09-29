@@ -295,6 +295,23 @@ create trigger conversation_messages_approval_mutation_guard
 before update on public.conversation_messages
 for each row execute function public.guard_message_approval_mutation();
 
+-- Clean installs must not depend on historical Production table grants.
+-- Approval commands get only the message columns they read/mutate.
+grant select (
+  id,organization_id,requires_approval,status,approval_policy_mode,
+  approval_expires_at,approval_reviewer_user_id,approval_reviewer_roles,
+  approval_allow_delegation,approval_delegation_roles,
+  approval_escalates_at,approval_escalated_at,created_at
+) on public.conversation_messages to service_role;
+
+grant update (
+  requires_approval,status,approval_reason,processed_at,
+  approval_escalated_at,approval_reviewer_user_id,
+  approval_delegated_by_user_id,approval_delegated_at,
+  approval_decision,approval_decided_by_user_id,approval_decided_at,
+  approval_denial_reason
+) on public.conversation_messages to service_role;
+
 create or replace function public.message_approval_replay(
   p_organization_id uuid,
   p_message_id uuid,
@@ -377,34 +394,45 @@ set search_path = public, pg_catalog
 as $$
 declare
   v_role text;
-  v_message public.conversation_messages%rowtype;
+  v_requires_approval boolean;
+  v_status text;
+  v_policy_mode text;
+  v_expires_at timestamptz;
+  v_reviewer_user_id uuid;
+  v_reviewer_roles text[];
 begin
   v_role := public.message_approval_actor_role(
     p_organization_id,p_actor_user_id
   );
 
-  select * into v_message
+  select
+    m.requires_approval,m.status,m.approval_policy_mode,
+    m.approval_expires_at,m.approval_reviewer_user_id,
+    m.approval_reviewer_roles
+  into
+    v_requires_approval,v_status,v_policy_mode,
+    v_expires_at,v_reviewer_user_id,v_reviewer_roles
   from public.conversation_messages m
   where m.organization_id=p_organization_id
     and m.id=p_message_id;
 
   if not found
-     or not v_message.requires_approval
-     or v_message.status not in ('APPROVAL_REQUIRED','READY')
-     or v_message.approval_policy_mode not in ('REVIEW','STRICT')
-     or v_message.approval_expires_at is null
-     or v_message.approval_expires_at<=now()
+     or not v_requires_approval
+     or v_status not in ('APPROVAL_REQUIRED','READY')
+     or v_policy_mode not in ('REVIEW','STRICT')
+     or v_expires_at is null
+     or v_expires_at<=now()
   then
     return false;
   end if;
 
   if v_role='OWNER' then return true; end if;
 
-  if v_message.approval_reviewer_user_id is not null then
-    return v_message.approval_reviewer_user_id=p_actor_user_id;
+  if v_reviewer_user_id is not null then
+    return v_reviewer_user_id=p_actor_user_id;
   end if;
 
-  return v_role=any(coalesce(v_message.approval_reviewer_roles,'{}'::text[]));
+  return v_role=any(coalesce(v_reviewer_roles,'{}'::text[]));
 end;
 $$;
 
@@ -423,7 +451,11 @@ security invoker
 set search_path = public, pg_catalog
 as $$
 declare
-  v_message public.conversation_messages%rowtype;
+  v_message_id uuid;
+  v_approval_expires_at timestamptz;
+  v_approval_decision text;
+  v_message_status text;
+  v_policy_mode text;
   v_decision text := upper(btrim(coalesce(p_decision,'')));
   v_reason text := nullif(btrim(coalesce(p_reason,'')),'');
   v_request_key text := btrim(coalesce(p_request_key,''));
@@ -464,7 +496,8 @@ begin
     )
   );
 
-  select * into v_message
+  select m.id,m.approval_expires_at
+  into v_message_id,v_approval_expires_at
   from public.conversation_messages m
   where m.organization_id=p_organization_id
     and m.id=p_message_id
@@ -475,8 +508,8 @@ begin
   if not public.can_review_message_approval(
     p_organization_id,p_message_id,p_actor_user_id
   ) then
-    if v_message.approval_expires_at is not null
-       and v_message.approval_expires_at<=now()
+    if v_approval_expires_at is not null
+       and v_approval_expires_at<=now()
     then
       raise exception 'Approval request has expired';
     end if;
@@ -515,16 +548,17 @@ begin
     end
   where organization_id=p_organization_id
     and id=p_message_id
-  returning * into v_message;
+  returning id,approval_decision,status,approval_policy_mode
+  into v_message_id,v_approval_decision,v_message_status,v_policy_mode;
 
   perform set_config('app.message_approval_mutation','0',true);
 
   v_result := jsonb_build_object(
-    'messageId',v_message.id,
-    'decision',v_message.approval_decision,
-    'status',v_message.status,
+    'messageId',v_message_id,
+    'decision',v_approval_decision,
+    'status',v_message_status,
     'reviewerUserId',p_actor_user_id,
-    'policyMode',v_message.approval_policy_mode,
+    'policyMode',v_policy_mode,
     'replayed',false,
     'requestHash',v_request_hash
   );
@@ -562,7 +596,9 @@ as $$
 declare
   v_actor_role text;
   v_target_role text;
-  v_message public.conversation_messages%rowtype;
+  v_message_id uuid;
+  v_allow_delegation boolean;
+  v_delegation_roles text[];
   v_request_key text := btrim(coalesce(p_request_key,''));
   v_request_hash text;
   v_replay jsonb;
@@ -596,7 +632,8 @@ begin
     )
   );
 
-  select * into v_message
+  select m.id,m.approval_allow_delegation,m.approval_delegation_roles
+  into v_message_id,v_allow_delegation,v_delegation_roles
   from public.conversation_messages m
   where m.organization_id=p_organization_id
     and m.id=p_message_id
@@ -608,7 +645,7 @@ begin
     p_organization_id,p_message_id,p_actor_user_id
   )
      or v_actor_role not in ('OWNER','ADMIN')
-     or not coalesce(v_message.approval_allow_delegation,false)
+     or not coalesce(v_allow_delegation,false)
   then
     raise exception 'Approval delegation is not permitted';
   end if;
@@ -621,7 +658,7 @@ begin
   if v_target_role is null
      or not (
        v_target_role=any(
-         coalesce(v_message.approval_delegation_roles,'{}'::text[])
+         coalesce(v_delegation_roles,'{}'::text[])
        )
      )
   then
@@ -637,12 +674,12 @@ begin
     approval_delegated_at=now()
   where organization_id=p_organization_id
     and id=p_message_id
-  returning * into v_message;
+  returning id into v_message_id;
 
   perform set_config('app.message_approval_mutation','0',true);
 
   v_result := jsonb_build_object(
-    'messageId',v_message.id,
+    'messageId',v_message_id,
     'decision','DELEGATED',
     'reviewerUserId',p_delegate_to_user_id,
     'delegatedByUserId',p_actor_user_id,
@@ -691,7 +728,10 @@ begin
   end if;
 
   for v_row in
-    select m.*
+    select
+      m.id,m.approval_expires_at,m.approval_escalates_at,
+      m.approval_escalated_at,m.approval_policy_mode,
+      m.approval_reviewer_user_id,m.created_at
     from public.conversation_messages m
     where m.organization_id=p_organization_id
       and m.requires_approval=true
