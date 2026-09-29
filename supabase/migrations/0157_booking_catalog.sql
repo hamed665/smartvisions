@@ -401,8 +401,8 @@ declare
   v_existing jsonb;
   v_after jsonb;
 begin
-  if current_user not in ('authenticated','service_role') then
-    raise exception 'Booking catalog configuration requires trusted owner boundary';
+  if current_user<>'service_role' then
+    raise exception 'Booking catalog configuration requires trusted server boundary';
   end if;
 
   select role into v_actor_role
@@ -413,9 +413,6 @@ begin
     raise exception 'Booking catalog configuration requires Organization OWNER';
   end if;
 
-  if current_user='authenticated' and auth.uid() is distinct from p_actor_user_id then
-    raise exception 'Booking catalog actor does not match authenticated user';
-  end if;
 
   if not exists(
     select 1 from public.services
@@ -697,11 +694,11 @@ revoke all on function public.validate_service_booking_rules(jsonb)
 revoke all on function public.configure_service_booking_catalog(
   uuid,uuid,text,boolean,integer,integer,integer,integer,
   text,text,text[],jsonb,uuid[],uuid[],jsonb,text
-) from public,anon;
+) from public,anon,authenticated;
 
 grant execute on function public.validate_service_booking_rules(jsonb)
   to authenticated,service_role;
 grant execute on function public.configure_service_booking_catalog(
   uuid,uuid,text,boolean,integer,integer,integer,integer,
   text,text,text[],jsonb,uuid[],uuid[],jsonb,text
-) to authenticated,service_role;
+) to service_role;
