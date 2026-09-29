@@ -40,6 +40,9 @@ describe('BOOKING-CATALOG contract',()=>{
 
   it('keeps booking profile mutation atomic and replay safe',()=>{
     expect(migration).toContain('configure_service_booking_catalog');
+    expect(migration).toContain("current_user<>'service_role'");
+    expect(migration).toContain("from public,anon,authenticated");
+    expect(actions).toContain('createSupabaseServiceClient');
     expect(migration).toContain('Booking catalog request key conflict');
     expect(migration).toContain('pg_advisory_xact_lock');
     expect(migration).toContain('audit_logs_booking_catalog_request_uidx');
