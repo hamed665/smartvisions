@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 const migration=readFileSync('supabase/migrations/0150_automation_condition_engine.sql','utf8');
 const page=readFileSync('app/automations/page.tsx','utf8');
+const builder=readFileSync('components/automations/AutomationBuilder.tsx','utf8');
 const ci=readFileSync('.github/workflows/ci.yml','utf8');
 const workflowSmoke=readFileSync('tests/sql/automation-workflow-model-smoke.sql','utf8');
 
@@ -54,10 +55,12 @@ describe('AUTO-CONDITION-ENGINE contract',()=>{
     expect(workflowSmoke).not.toContain('"field":"status"');
   });
 
-  it('surfaces condition catalog metadata without pretending AUTO-BUILDER is complete',()=>{
+  it('surfaces typed condition metadata through the governed visual builder',()=>{
     expect(page).toContain("from('automation_condition_fact_catalog')");
-    expect(page).toContain('Typed condition engine');
-    expect(page).toContain('AUTO-BUILDER remains separate');
+    expect(builder).toContain('automationConditionRow');
+    expect(builder).toContain('fact?.data_type');
+    expect(builder).toContain('fact?.operators');
+    expect(builder).toContain('Advanced condition graph preserved');
   });
 
   it('runs PostgreSQL controlled acceptance in CI',()=>{
