@@ -18,6 +18,7 @@ grant select,insert,update on automation_runtime_side_effect_baseline,automation
 -- uses the existing governed Sales Scoring authority and needs the same
 -- service-role Lead mutation authority that Production already has.
 grant select,insert,update on public.leads to service_role;
+grant select,insert,update on public.conversation_messages to service_role;
 
 reset role;
 set role authenticated;
