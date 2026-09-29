@@ -239,6 +239,87 @@ Events:
 - crm.custom_field.value_cleared.v1
 - crm.custom_field.value_restored.v1
 
+## Customer / Account lifecycle
+
+Events:
+
+- customer.lifecycle_changed.v1
+
+This event is emitted only from governed canonical Account lifecycle evidence. Discovery, enrichment or Lead state is not Customer lifecycle truth.
+
+## Lead
+
+Events:
+
+- lead.qualified.v1
+- lead.hot.v1
+- lead.positive_reply.v1
+
+Lead trigger contracts describe canonical CRM evidence only. They do not grant outreach permission or bypass consent/suppression.
+
+## Segment
+
+Events:
+
+- segment.member.entered.v1
+- segment.snapshot.created.v1
+
+`segment.snapshot.created.v1` is cataloged over the canonical immutable Snapshot authority. `segment.member.entered.v1` remains dependency-pending until durable entry detection exists; dynamic evaluation alone is not silently treated as an event.
+
+## Quote
+
+Events:
+
+- quote.accepted.v1
+
+The event name is reserved by the trigger catalog, but its producer remains dependency-pending until `QUOTE-ENGINE` owns canonical Quote truth.
+
+## Order
+
+Events:
+
+- order.created.v1
+- order.status_changed.v1
+
+These event contracts remain dependency-pending until `ORDER-ENGINE` exists.
+
+## Invoice
+
+Events:
+
+- invoice.issued.v1
+- invoice.overdue.v1
+
+These event contracts remain dependency-pending until `INVOICE-ENGINE` exists.
+
+## Support Case
+
+Events:
+
+- support.case.created.v1
+- support.case.status_changed.v1
+
+These events refer only to canonical Smart Core Support Case state.
+
+## Automation schedule
+
+Events:
+
+- automation.schedule.due.v1
+- automation.schedule.no_reply_48h.v1
+
+Schedule trigger contracts do not execute workflows themselves. Durable scheduling/execution remains owned by `AUTO-RUNTIME`.
+
+## Integration trigger boundary
+
+Events:
+
+- integration.provider_webhook.received.v1
+- integration.custom_event.received.v1
+- integration.demo.approved.v1
+
+Provider webhook triggers require verified canonical webhook evidence. Custom integration events and the legacy demo approval trigger remain dependency-pending until governed integration ingress exists; raw external payload arrival alone is not a trusted workflow event.
+
 ## Event envelope
 
 All future domain events use:
