@@ -40,6 +40,7 @@ describe('AUTO-APPROVAL contract',()=>{
     expect(migration).toContain('length(v_reason) not between 3 and 500');
     expect(migration).toContain('Pending message approval must use governed approval commands');
     expect(migration).toContain('conversation_messages_approval_mutation_guard');
+    expect(migration).toContain("coalesce(current_setting('app.message_approval_mutation',true),'')<>'allowed'");
   });
 
   it('removes AUTO-APPROVAL from SEND_FOLLOWUP dependency without pretending runtime exists',()=>{
