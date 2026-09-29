@@ -54,6 +54,10 @@ describe('AUTO-RUNTIME contract',()=>{
   it('keeps runtime mutations service-only and SECURITY INVOKER',()=>{
     expect(migration).toContain("current_user<>'service_role'");
     expect(migration).toContain("coalesce(current_setting('app.automation_runtime_mutation',true),'')<>'allowed'");
+    expect(migration).toContain('Automation runtime refresh requires governed mutation context');
+    expect(migration).toContain('Automation runtime compensation requires governed mutation context');
+    expect(migration).toContain('grant execute on function public.automation_runtime_refresh_run(uuid)');
+    expect(migration).toContain('grant execute on function public.automation_runtime_require_compensation(uuid,integer,text)');
     expect(migration).not.toMatch(/security definer/i);
     expect(migration).toContain('grant execute on function public.claim_automation_runtime_actions');
   });
