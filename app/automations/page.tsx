@@ -14,7 +14,7 @@ const ACTIONS=[
 
 export default async function AutomationsPage(){
   const {supabase,organizationId,role}=await getCurrentOrganization();
-  const [rulesResult,catalogResult]=await Promise.all([
+  const [rulesResult,catalogResult,conditionFactsResult]=await Promise.all([
     supabase.from('automation_rules')
       .select('id,name,owner_user_id,trigger_key,action_key,conditions,actions,enabled,priority,config,publication_state,draft_revision,published_revision,latest_published_version,execution_state,last_published_at,created_at,updated_at')
       .eq('organization_id',organizationId)
@@ -23,12 +23,18 @@ export default async function AutomationsPage(){
       .select('trigger_key,family,source_kind,event_name,schema_version,availability,required_work_package,description')
       .order('family',{ascending:true})
       .order('trigger_key',{ascending:true}),
+    supabase.from('automation_condition_fact_catalog')
+      .select('fact_key,subject_type,data_type,operators,nullable,description')
+      .order('subject_type',{ascending:true})
+      .order('fact_key',{ascending:true}),
   ]);
   if(rulesResult.error)throw new Error(rulesResult.error.message);
   if(catalogResult.error)throw new Error(catalogResult.error.message);
+  if(conditionFactsResult.error)throw new Error(conditionFactsResult.error.message);
 
   const rows=rulesResult.data??[];
   const triggers=catalogResult.data??[];
+  const conditionFacts=conditionFactsResult.data??[];
   const triggerByKey=new Map(triggers.map(trigger=>[trigger.trigger_key,trigger]));
   const editable=role==='OWNER';
   const ready=rows.filter(rule=>rule.execution_state==='READY').length;
@@ -55,6 +61,15 @@ export default async function AutomationsPage(){
       <p className="muted">
         {triggers.filter(trigger=>trigger.availability==='AVAILABLE').length} publishable trigger contracts of {triggers.length} cataloged.
         Dependency-pending triggers may be designed in a draft, but Publish fails closed until their canonical domain authority exists.
+      </p>
+    </section>
+
+    <section className="panel">
+      <h2>Typed condition engine</h2>
+      <p className="muted">
+        {conditionFacts.length} allowlisted canonical facts across {new Set(conditionFacts.map(fact=>fact.subject_type)).size} subject types.
+        Conditions use bounded AND/OR groups and typed operators over Organization-scoped canonical records. No arbitrary SQL/eval.
+        AUTO-BUILDER remains separate; this page intentionally keeps the raw definition visible until the governed visual builder exists.
       </p>
     </section>
 
