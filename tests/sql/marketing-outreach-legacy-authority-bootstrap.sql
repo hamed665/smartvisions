@@ -89,6 +89,22 @@ create table if not exists public.message_variants (
 alter table public.leads
   add column if not exists recommended_offer text;
 
+-- Production also carries the canonical approval_rules authority from the
+-- pre-Business-OS lineage. Reconstruct only its stable schema/read contract so
+-- late Automation migrations can verify references without inventing a second
+-- approval engine in CI.
+create table if not exists public.approval_rules (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  action_key text not null,
+  requires_approval boolean not null default true,
+  config jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now(),
+  unique (organization_id,action_key)
+);
+
+grant select on table public.approval_rules to service_role;
+
 create table if not exists public.outreach_messages (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
