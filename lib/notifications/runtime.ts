@@ -256,7 +256,19 @@ async function deliverEmail(
   }
 
   const provider = new ResendEmailProvider();
+  const providerHealth = await provider.health();
+  if (!providerHealth.ok) {
+    return {
+      candidates: rows.length,
+      sent: 0,
+      blocked: rows.length,
+      failed: 0,
+      blocker: 'EMAIL_PROVIDER_CREDENTIALS_NOT_READY',
+    };
+  }
+
   let sent = 0;
+  let blocked = 0;
   let failed = 0;
 
   for (const candidate of rows) {
@@ -269,6 +281,13 @@ async function deliverEmail(
 
     try {
       assertPaidOperationAllowed(await getCostGuardState(organizationId), 'CRITICAL');
+    } catch {
+      // Budget/safety state may recover. Do not create a terminal delivery receipt.
+      blocked += 1;
+      continue;
+    }
+
+    try {
       const result = await provider.sendEmail({
         mailboxId: readiness.mailboxId,
         to: readiness.to,
@@ -276,18 +295,9 @@ async function deliverEmail(
         text: formatNotification(candidate),
         idempotencyKey,
       });
-      await recordUsage({
-        organizationId,
-        provider: 'EMAIL_PROVIDER',
-        operation: 'INTERNAL_NOTIFICATION_EMAIL',
-        costUsd: 0,
-        units: 1,
-        metadata: {
-          notificationId: candidate.notification_id,
-          escalationLevel: candidate.escalation_level,
-          providerMessageId: result.providerMessageId,
-        },
-      });
+
+      // Persist provider acceptance before ancillary accounting. If usage
+      // telemetry later fails, the delivery fact remains truthful.
       await recordDelivery(supabase, {
         organizationId,
         notificationId: candidate.notification_id,
@@ -297,6 +307,24 @@ async function deliverEmail(
         providerMessageId: result.providerMessageId,
         payload: { idempotencyKey },
       });
+
+      try {
+        await recordUsage({
+          organizationId,
+          provider: 'EMAIL_PROVIDER',
+          operation: 'INTERNAL_NOTIFICATION_EMAIL',
+          costUsd: 0,
+          units: 1,
+          metadata: {
+            notificationId: candidate.notification_id,
+            escalationLevel: candidate.escalation_level,
+            providerMessageId: result.providerMessageId,
+          },
+        });
+      } catch (usageError) {
+        console.error('Notification email usage persistence failed', usageError);
+      }
+
       sent += 1;
     } catch (error) {
       await recordDelivery(supabase, {
@@ -312,7 +340,7 @@ async function deliverEmail(
     }
   }
 
-  return { candidates: rows.length, sent, blocked: 0, failed };
+  return { candidates: rows.length, sent, blocked, failed };
 }
 
 export async function runAutomationNotifications(input: {
