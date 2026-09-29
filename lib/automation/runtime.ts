@@ -468,11 +468,10 @@ export async function runAutomationRuntimeTick(input: {
   limit?: number;
 }) {
   const limit = Math.max(1, Math.min(25, Math.round(input.limit ?? 10)));
-  const [waiting, timeouts] = await Promise.all([
-    input.supabase.rpc('reconcile_automation_runtime_waiting', { p_limit: 100 }),
-    input.supabase.rpc('reap_automation_runtime_timeouts', { p_limit: 100 }),
-  ]);
+  const waiting = await input.supabase.rpc('reconcile_automation_runtime_waiting', { p_limit: 100 });
   if (waiting.error) throw new Error(`Automation waiting reconciliation failed: ${waiting.error.message}`);
+
+  const timeouts = await input.supabase.rpc('reap_automation_runtime_timeouts', { p_limit: 100 });
   if (timeouts.error) throw new Error(`Automation timeout reap failed: ${timeouts.error.message}`);
 
   const { data: claimed, error: claimError } = await input.supabase.rpc('claim_automation_runtime_actions', {
