@@ -41,6 +41,7 @@ describe('BOOKING-CATALOG contract',()=>{
   it('keeps booking profile mutation atomic and replay safe',()=>{
     expect(migration).toContain('configure_service_booking_catalog');
     expect(migration).toContain('Booking catalog request key conflict');
+    expect(migration).toContain('pg_advisory_xact_lock');
     expect(migration).toContain('audit_logs_booking_catalog_request_uidx');
     expect(migration).toContain('Booking catalog child state requires governed configuration command');
     expect(migration).toContain("set_config('app.booking_catalog_mutation','allowed',true)");
@@ -64,6 +65,7 @@ describe('BOOKING-CATALOG contract',()=>{
     expect(migration).toContain('Explicit branch mode requires at least one branch');
     expect(migration).toContain('Explicit staff mode requires at least one staff member');
     expect(migration).toContain('Booking resource is missing, inactive, over capacity, or incompatible with location scope');
+    expect(migration).toContain("rb.status='ACTIVE'");
   });
 
   it('extends the existing Services surface and governed actions',()=>{
