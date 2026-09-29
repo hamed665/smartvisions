@@ -251,7 +251,7 @@ as $$
 begin
   if old.requires_approval
      and old.status in ('APPROVAL_REQUIRED','READY')
-     and current_setting('app.message_approval_mutation',true)<>'allowed'
+     and coalesce(current_setting('app.message_approval_mutation',true),'')<>'allowed'
      and (
        new.requires_approval is distinct from old.requires_approval
        or new.status is distinct from old.status
