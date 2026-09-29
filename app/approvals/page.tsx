@@ -7,6 +7,7 @@ import {
 import { processLatestWhatsAppInboundPilot, sendApprovedWhatsAppCatalogPilot } from '@/app/whatsapp-pilot-actions';
 import { sendApprovedWhatsAppOptInFirstTouch } from '@/app/whatsapp-opt-in-actions';
 import { getCurrentOrganization } from '@/lib/supabase/org';
+import { createSupabaseServiceClient } from '@/lib/supabase/service';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +17,7 @@ function recordValue(value: unknown) {
 
 export default async function ApprovalsPage() {
   const { supabase, organizationId, role, userId } = await getCurrentOrganization();
+  const reviewerDirectory = createSupabaseServiceClient();
   const [
     { data: messages },
     { data: briefs },
@@ -61,7 +63,7 @@ export default async function ApprovalsPage() {
       .eq('channel', 'WHATSAPP')
       .order('created_at', { ascending: false })
       .limit(50),
-    supabase.from('organization_members')
+    reviewerDirectory.from('organization_members')
       .select('user_id,role')
       .eq('organization_id', organizationId)
       .in('role', ['OWNER', 'ADMIN', 'SALES_MANAGER', 'SALES_AGENT']),
