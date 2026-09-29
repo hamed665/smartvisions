@@ -25,6 +25,25 @@ create table public.notification_preferences (
 comment on table public.notification_preferences is
   'Per-member notification delivery preferences only. This table owns no business event or alert truth.';
 
+
+create table public.notification_projection_checkpoints (
+  organization_id uuid primary key references public.organizations(id) on delete cascade,
+  cutover_at timestamptz not null,
+  last_scanned_at timestamptz not null,
+  updated_at timestamptz not null default now(),
+  check (last_scanned_at>=cutover_at)
+);
+
+comment on table public.notification_projection_checkpoints is
+  'Internal projection watermark over canonical audit_logs. Existing Organizations start at migration cutover so historical alerts are never replayed on AUTO-NOTIFICATIONS activation.';
+
+insert into public.notification_projection_checkpoints(
+  organization_id,cutover_at,last_scanned_at
+)
+select id,now(),now()
+from public.organizations
+on conflict(organization_id) do nothing;
+
 create table public.notification_inbox (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
@@ -132,6 +151,7 @@ create index notification_delivery_recipient_idx
   );
 
 alter table public.notification_preferences enable row level security;
+alter table public.notification_projection_checkpoints enable row level security;
 alter table public.notification_inbox enable row level security;
 alter table public.notification_delivery_receipts enable row level security;
 
@@ -143,6 +163,13 @@ using (
   user_id=(select auth.uid())
   and public.is_org_member(organization_id)
 );
+
+create policy notification_projection_checkpoints_service
+on public.notification_projection_checkpoints
+for all
+to service_role
+using (true)
+with check (true);
 
 create policy notification_inbox_recipient_read
 on public.notification_inbox
@@ -164,6 +191,8 @@ using (
 
 revoke all on table public.notification_preferences
   from public,anon,authenticated,service_role;
+revoke all on table public.notification_projection_checkpoints
+  from public,anon,authenticated,service_role;
 revoke all on table public.notification_inbox
   from public,anon,authenticated,service_role;
 revoke all on table public.notification_delivery_receipts
@@ -176,6 +205,8 @@ grant select on table public.notification_preferences,
 grant insert,update on table public.notification_preferences,
   public.notification_inbox,
   public.notification_delivery_receipts
+  to service_role;
+grant select,insert,update on table public.notification_projection_checkpoints
   to service_role;
 
 create or replace function public.guard_notification_projection_mutation()
@@ -196,6 +227,10 @@ $$;
 
 create trigger notification_preferences_mutation_guard
 before insert or update or delete on public.notification_preferences
+for each row execute function public.guard_notification_projection_mutation();
+
+create trigger notification_projection_checkpoints_mutation_guard
+before insert or update or delete on public.notification_projection_checkpoints
 for each row execute function public.guard_notification_projection_mutation();
 
 create trigger notification_inbox_mutation_guard
@@ -380,6 +415,8 @@ declare
   v_body text;
   v_roles text[];
   v_payload jsonb;
+  v_from timestamptz;
+  v_until timestamptz:=now();
   v_projected integer:=0;
   v_duplicates integer:=0;
 begin
@@ -392,11 +429,33 @@ begin
 
   perform set_config('app.notification_projection_mutation','allowed',true);
 
+  select c.last_scanned_at into v_from
+  from public.notification_projection_checkpoints c
+  where c.organization_id=p_organization_id
+  for update;
+
+  if not found then
+    select o.created_at into v_from
+    from public.organizations o
+    where o.id=p_organization_id;
+
+    if v_from is null then
+      raise exception 'Automation notification Organization was not found';
+    end if;
+
+    insert into public.notification_projection_checkpoints(
+      organization_id,cutover_at,last_scanned_at,updated_at
+    ) values (
+      p_organization_id,v_from,v_from,now()
+    );
+  end if;
+
   for v_event in
     select a.*
     from public.audit_logs a
     where a.organization_id=p_organization_id
-      and a.created_at>=now()-interval '48 hours'
+      and a.created_at>v_from
+      and a.created_at<=v_until
       and a.action in (
         'MESSAGE_APPROVAL_ESCALATED',
         'MESSAGE_APPROVAL_EXPIRED',
@@ -488,11 +547,17 @@ begin
     end loop;
   end loop;
 
+  update public.notification_projection_checkpoints
+  set last_scanned_at=v_until,updated_at=now()
+  where organization_id=p_organization_id;
+
   perform set_config('app.notification_projection_mutation','0',true);
 
   return jsonb_build_object(
     'projected',v_projected,
-    'duplicates',v_duplicates
+    'duplicates',v_duplicates,
+    'scannedFrom',v_from,
+    'scannedThrough',v_until
   );
 exception
   when others then
