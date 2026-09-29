@@ -323,10 +323,12 @@ begin
   if not exists(
     select 1 from public.tool_action_registry
     where action_key='SEND_FOLLOWUP'
-      and availability='DEPENDENCY_PENDING'
-      and required_work_packages=array['AUTO-RUNTIME']::text[]
+      and availability='AVAILABLE'
+      and approval_requirement='REQUIRED'
+      and approval_policy_key='OUTBOUND_SEND'
+      and cardinality(required_work_packages)=0
   ) then
-    raise exception 'SEND_FOLLOWUP approval dependency was not closed correctly';
+    raise exception 'SEND_FOLLOWUP approval/runtime contract was not closed correctly';
   end if;
 
   if not has_column_privilege('service_role','public.conversation_messages','approval_policy_mode','SELECT')

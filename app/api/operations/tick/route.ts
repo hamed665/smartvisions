@@ -39,6 +39,7 @@ async function loadRules(supabase: SupabaseClient, organizationIds: string[]) {
     .select('id,organization_id,trigger_key,action_key,priority,config')
     .in('organization_id', organizationIds)
     .eq('enabled', true)
+    .eq('latest_published_version', 0)
     .order('priority', { ascending: false });
   if (error) throw new Error(`Automation rule lookup failed: ${error.message}`);
   const byOrganization = new Map<string, AutomationRuleSnapshot[]>();
