@@ -502,7 +502,15 @@ begin
         and r.capacity>=v_quantity
         and (
           r.branch_id is null
-          or v_location_mode='ANY_ACTIVE_BRANCH'
+          or (
+            v_location_mode='ANY_ACTIVE_BRANCH'
+            and exists(
+              select 1 from public.branches rb
+              where rb.organization_id=p_organization_id
+                and rb.id=r.branch_id
+                and rb.status='ACTIVE'
+            )
+          )
           or (
             v_location_mode='EXPLICIT_BRANCHES'
             and r.branch_id=any(v_branch_ids)
@@ -528,6 +536,13 @@ begin
   select coalesce(jsonb_agg(value order by value->>'resourceId'),'[]'::jsonb)
   into v_resources
   from jsonb_array_elements(v_resources) x(value);
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(
+      p_organization_id::text||':'||p_service_id||':'||v_request_key,
+      0
+    )
+  );
 
   v_request_hash:=md5(jsonb_build_object(
     'organizationId',p_organization_id,
