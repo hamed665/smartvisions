@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 const migration=readFileSync('supabase/migrations/0151_automation_tool_action_registry.sql','utf8');
 const page=readFileSync('app/automations/page.tsx','utf8');
+const builder=readFileSync('components/automations/AutomationBuilder.tsx','utf8');
 const ci=readFileSync('.github/workflows/ci.yml','utf8');
 const workflowSmoke=readFileSync('tests/sql/automation-workflow-model-smoke.sql','utf8');
 const triggerSmoke=readFileSync('tests/sql/automation-trigger-catalog-smoke.sql','utf8');
@@ -48,11 +49,13 @@ describe('AUTO-TOOL-ACTION-REGISTRY contract',()=>{
     expect(migration).toContain('automation_rules_enable_action_registry_guard');
   });
 
-  it('uses the database registry in the workflow UI instead of a hardcoded action list',()=>{
+  it('uses the database registry in the visual builder instead of a hardcoded action list',()=>{
     expect(page).toContain("from('tool_action_registry')");
-    expect(page).toContain('Tool / action registry');
-    expect(page).toContain('action.availability');
+    expect(builder).toContain('Action contracts');
+    expect(builder).toContain("action.availability === 'AVAILABLE'");
+    expect(builder).toContain('compatibleActions');
     expect(page).not.toContain('const ACTIONS=[');
+    expect(builder).not.toContain('const ACTIONS=[');
   });
 
   it('keeps prior publish smokes on an AVAILABLE action contract',()=>{
