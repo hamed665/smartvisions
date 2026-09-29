@@ -470,6 +470,14 @@ function RuleEditor(props: {
   const trigger = triggers.find(item => item.trigger_key === triggerKey);
   const triggerSubject = trigger ? SUBJECT_BY_FAMILY[trigger.family] ?? null : null;
   const visibleFacts = triggerSubject ? facts.filter(fact => fact.subject_type === triggerSubject) : [];
+  const compatibleActions = actions.filter(action =>
+    action.availability === 'AVAILABLE'
+    && (
+      action.scope_type === 'AUTOMATION_RULE'
+      || triggerSubject === null
+      || action.scope_type === triggerSubject
+    )
+  );
   const effectiveConditions = preserveAdvancedConditions
     ? (rule?.conditions ?? [])
     : buildConditions(conditions, groupOp, facts);
@@ -502,7 +510,7 @@ function RuleEditor(props: {
   };
 
   const addAction = () => {
-    const first = actions.find(item => item.availability === 'AVAILABLE');
+    const first = compatibleActions[0];
     if (!first || actionRows.length >= 20) return;
     setActionRows(current => [...current, { id: crypto.randomUUID(), key: first.action_key, config: {} }]);
   };
@@ -566,7 +574,7 @@ function RuleEditor(props: {
         <input type="hidden" name="id" value={rule.id} />
         <input type="hidden" name="draft_revision" value={rule.draft_revision} />
         <input type="hidden" name="owner_user_id" value={rule.owner_user_id ?? ''} />
-      </> : <input type="hidden" name="request_key" value="automation-builder-create" />}
+      </> : null}
       <input type="hidden" name="action_key" value={actionRows[0]?.key ?? ''} />
       <input type="hidden" name="conditions_json" value={JSON.stringify(effectiveConditions)} />
       <input type="hidden" name="actions_json" value={JSON.stringify(effectiveActions)} />
@@ -687,7 +695,7 @@ function RuleEditor(props: {
           <div className="automationNodeBody">
             <div className="automationNodeHeader">
               <div><strong>Then</strong><b>{actionRows.length} ordered action(s)</b></div>
-              <button type="button" onClick={addAction} disabled={actionRows.length >= 20}>+ Action</button>
+              <button type="button" onClick={addAction} disabled={actionRows.length >= 20 || compatibleActions.length === 0}>+ Action</button>
             </div>
             <div className="automationActionList">
               {actionRows.map((row, index) => {
@@ -696,8 +704,16 @@ function RuleEditor(props: {
                   <div className="automationActionHeader">
                     <span className="automationActionOrder">{index + 1}</span>
                     <select value={row.key} onChange={event => updateAction(row.id, { key: event.target.value, config: {} })}>
-                      {actions.map(item =>
-                        <option key={item.action_key} value={item.action_key}>{item.action_key} · {item.scope_type}</option>)}
+                      {(compatibleActions.some(item => item.action_key === row.key)
+                        ? compatibleActions
+                        : [
+                            ...compatibleActions,
+                            ...actions.filter(item => item.action_key === row.key),
+                          ]
+                      ).map(item =>
+                        <option key={item.action_key} value={item.action_key}>
+                          {item.action_key} · {item.scope_type}{compatibleActions.some(allowed => allowed.action_key === item.action_key) ? '' : ' · incompatible'}
+                        </option>)}
                     </select>
                     <div className="automationActionButtons">
                       <button type="button" onClick={() => moveAction(index, -1)} disabled={index === 0}>↑</button>
