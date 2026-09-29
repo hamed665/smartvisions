@@ -52,7 +52,7 @@ begin
     into v_available,v_pending
   from public.tool_action_registry;
 
-  if v_available<>2 or v_pending<>4 then
+  if v_available<>6 or v_pending<>0 then
     raise exception 'Unexpected action availability split: available %, pending %',
       v_available,v_pending;
   end if;
@@ -80,7 +80,8 @@ begin
       and approval_policy_key='OUTBOUND_SEND'
       and side_effect_class='EXTERNAL_PROVIDER'
       and cost_class='PROVIDER_METERED'
-      and required_work_packages @> array['AUTO-RUNTIME']::text[]
+      and availability='AVAILABLE'
+      and cardinality(required_work_packages)=0
   ) then
     raise exception 'SEND_FOLLOWUP provider/runtime contract is incomplete';
   end if;
@@ -89,7 +90,7 @@ begin
     select 1 from public.tool_action_registry
     where action_key='MARK_HOT'
       and authority_key='SALES_SCORING_GOVERNANCE'
-      and availability='DEPENDENCY_PENDING'
+      and availability='AVAILABLE'
   ) then
     raise exception 'MARK_HOT is not bound to Sales Scoring governance';
   end if;
@@ -129,15 +130,13 @@ end;
 $unknown_action_draft_fails_closed$;
 
 create temp table automation_action_results(
-  available_rule_id uuid,
-  pending_rule_id uuid
+  available_rule_id uuid
 );
 grant select,insert,update on automation_action_results to service_role;
 
 do $available_publish_and_pending_gate$
 declare
   v_available uuid;
-  v_pending uuid;
   v_version integer;
   v_enabled boolean;
   v_state text;
@@ -177,34 +176,7 @@ begin
     raise exception 'AVAILABLE published action did not become enableable';
   end if;
 
-  select resolved_rule_id into v_pending
-  from public.create_automation_rule_draft(
-    '00000000-0000-0000-0000-000000000c01',
-    '00000000-0000-0000-0000-00000000c001',
-    'Pending send workflow',
-    'MESSAGE_RECEIVED',
-    '[]'::jsonb,
-    '[{"key":"SEND_FOLLOWUP","config":{}}]'::jsonb,
-    45,
-    '{}'::jsonb,
-    '00000000-0000-0000-0000-00000000c001',
-    'automation-action-registry-pending'
-  );
-
-  begin
-    perform * from public.publish_automation_rule(
-      '00000000-0000-0000-0000-000000000c01',
-      '00000000-0000-0000-0000-00000000c001',
-      v_pending,1
-    );
-    raise exception 'DEPENDENCY_PENDING action was published';
-  exception when others then
-    if sqlerrm not like 'Automation action is not publishable: SEND_FOLLOWUP (DEPENDENCY_PENDING)%' then
-      raise;
-    end if;
-  end;
-
-  insert into automation_action_results values(v_available,v_pending);
+  insert into automation_action_results values(v_available);
 end;
 $available_publish_and_pending_gate$;
 
