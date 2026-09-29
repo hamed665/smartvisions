@@ -8,6 +8,7 @@ const eventRoute=readFileSync('app/api/operations/automation-runtime/event/route
 const worker=readFileSync('worker/index.ts','utf8');
 const tick=readFileSync('app/api/operations/tick/route.ts','utf8');
 const ci=readFileSync('.github/workflows/ci.yml','utf8');
+const runtimeSmoke=readFileSync('tests/sql/automation-runtime-smoke.sql','utf8');
 
 describe('AUTO-RUNTIME contract',()=>{
   it('adds durable child runtime state without a second workflow definition authority or scheduler',()=>{
@@ -31,6 +32,7 @@ describe('AUTO-RUNTIME contract',()=>{
     expect(migration).toContain('join public.system_controls controls on controls.organization_id=run.organization_id');
     expect(migration).toContain('and controls.global_kill_switch=false');
     expect(migration).toContain('and controls.agents_paused=false');
+    expect(runtimeSmoke).toContain('Agents Pause did not block Automation runtime claim');
     expect(migration).toContain('reconcile_automation_runtime_approval_deadlines');
     expect(runtime).toContain("rpc(\n    'reconcile_automation_runtime_approval_deadlines'");
     expect(migration).toContain("waiting.status in ('WAITING_APPROVAL','WAITING_RELEASE','VERIFYING')");
