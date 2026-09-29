@@ -136,7 +136,7 @@ begin
     '00000000-0000-0000-0000-000000000c01',
     'LEAD',
     '00000000-0000-0000-0000-00000000c150',
-    '[{"kind":"PREDICATE","fact":"LEAD.OPPORTUNITY_SCORE","operator":"LT","value":10}]'::jsonb
+    '[{"kind":"PREDICATE","fact":"LEAD.OPPORTUNITY_SCORE","operator":"GT","value":10}]'::jsonb
   );
   if v_match then
     raise exception 'Expected false condition evaluation returned true';
