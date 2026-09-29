@@ -83,6 +83,12 @@ create table if not exists public.message_variants (
   unique (organization_id,country_code,industry,service_id,variant_key)
 );
 
+-- Production carries this Lead field from the pre-Business-OS lineage.
+-- The compact Customer 360 bootstrap intentionally does not reproduce every
+-- legacy Lead column, so restore only the field needed by late-migration parity.
+alter table public.leads
+  add column if not exists recommended_offer text;
+
 create table if not exists public.outreach_messages (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
