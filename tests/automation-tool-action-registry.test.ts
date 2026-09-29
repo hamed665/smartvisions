@@ -57,7 +57,7 @@ describe('AUTO-TOOL-ACTION-REGISTRY contract',()=>{
 
   it('keeps prior publish smokes on an AVAILABLE action contract',()=>{
     expect(workflowSmoke).toContain('GENERATE_PREVIEW');
-    expect(triggerSmoke).toContain('GENERATE_PREVIEW');
+    expect(triggerSmoke).toContain('PAUSE_AUTOMATION');
   });
 
   it('runs controlled PostgreSQL acceptance in CI',()=>{
