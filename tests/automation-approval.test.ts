@@ -43,6 +43,8 @@ describe('AUTO-APPROVAL contract',()=>{
     expect(migration).toContain("coalesce(current_setting('app.message_approval_mutation',true),'')<>'allowed'");
     expect(migration).toContain('grant select (');
     expect(migration).toContain('grant update (');
+    expect(migration).toContain('on public.organization_members to service_role');
+    expect(migration).toContain('on public.audit_logs to service_role');
     expect(migration).not.toContain('select * into v_message');
     expect(migration).not.toContain('returning * into v_message');
   });
