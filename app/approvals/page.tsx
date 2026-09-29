@@ -196,7 +196,6 @@ export default async function ApprovalsPage() {
         const catalogContentId = sendContext.catalog_content_id;
         const expiresAt = message.approval_expires_at ? new Date(message.approval_expires_at) : null;
         const escalatesAt = message.approval_escalates_at ? new Date(message.approval_escalates_at) : null;
-        const expired = Boolean(expiresAt && expiresAt.getTime() <= Date.now());
         const reviewerRoles = Array.isArray(message.approval_reviewer_roles)
           ? message.approval_reviewer_roles.filter((value): value is string => typeof value === 'string')
           : [];
@@ -204,15 +203,12 @@ export default async function ApprovalsPage() {
           ? message.approval_delegation_roles.filter((value): value is string => typeof value === 'string')
           : [];
         const canReview = Boolean(
-          !expired
-          && (
-            role === 'OWNER'
+          role === 'OWNER'
             || (
               message.approval_reviewer_user_id
                 ? message.approval_reviewer_user_id === userId
                 : reviewerRoles.includes(role)
-            )
-          ),
+            ),
         );
         const canDelegate = Boolean(
           canReview
@@ -241,7 +237,6 @@ export default async function ApprovalsPage() {
             {message.approval_escalated_at ? <span>Escalated {new Date(message.approval_escalated_at).toLocaleString()}</span> : null}
             {message.approval_reviewer_user_id ? <span>Delegated reviewer {String(message.approval_reviewer_user_id).slice(0, 8)}</span> : null}
           </div>
-          {expired ? <p className="muted">This approval has expired and cannot be accepted. Deadline reconciliation will fail it closed.</p> : null}
           {canReview ? <div className="approvalActions">
             <form action={approveMessage}>
               <input type="hidden" name="id" value={message.id} />
