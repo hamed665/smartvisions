@@ -136,9 +136,31 @@ begin
   end if;
 
   if (select count(*) from public.notification_inbox
-      where organization_id='00000000-0000-0000-0000-000000000c01')<>3
+      where organization_id='00000000-0000-0000-0000-000000000c01')<3
   then
-    raise exception 'Expected two approval recipients plus one OWNER DLQ projection';
+    raise exception 'Notification projection did not create the required reviewer/OWNER rows';
+  end if;
+
+  if not exists(
+    select 1 from public.notification_inbox
+    where source_audit_log_id='00000000-0000-0000-0000-00000000c190'
+      and recipient_user_id='00000000-0000-0000-0000-00000000c001'
+      and notification_type='APPROVAL_ESCALATED'
+  ) or not exists(
+    select 1 from public.notification_inbox
+    where source_audit_log_id='00000000-0000-0000-0000-00000000c190'
+      and recipient_user_id='00000000-0000-0000-0000-00000000c002'
+      and notification_type='APPROVAL_ESCALATED'
+  ) then
+    raise exception 'Approval notification did not reach required OWNER/SALES_MANAGER recipients';
+  end if;
+
+  if exists(
+    select 1 from public.notification_inbox
+    where source_audit_log_id='00000000-0000-0000-0000-00000000c191'
+      and recipient_user_id='00000000-0000-0000-0000-00000000c002'
+  ) then
+    raise exception 'Runtime DLQ notification leaked to SALES_MANAGER';
   end if;
 
   if exists(
@@ -162,15 +184,33 @@ $lossless_projection$;
 
 do $default_telegram_boundary$
 declare
-  v_count integer;
+  v_owner_count integer;
 begin
-  select count(*) into v_count
+  if exists(
+    select 1
+    from public.get_notification_delivery_candidates(
+      '00000000-0000-0000-0000-000000000c01','TELEGRAM',100
+    )
+    where member_role<>'OWNER'
+  ) then
+    raise exception 'Default Telegram delivery leaked to a non-OWNER member';
+  end if;
+
+  select count(*) into v_owner_count
   from public.get_notification_delivery_candidates(
     '00000000-0000-0000-0000-000000000c01','TELEGRAM',100
-  );
+  )
+  where recipient_user_id='00000000-0000-0000-0000-00000000c001'
+    and notification_id in (
+      select id from public.notification_inbox
+      where source_audit_log_id in (
+        '00000000-0000-0000-0000-00000000c190',
+        '00000000-0000-0000-0000-00000000c191'
+      )
+    );
 
-  if v_count<>2 then
-    raise exception 'Default Telegram delivery must target only the OWNER notifications';
+  if v_owner_count<>2 then
+    raise exception 'Required OWNER Telegram candidates were not produced';
   end if;
 end;
 $default_telegram_boundary$;
