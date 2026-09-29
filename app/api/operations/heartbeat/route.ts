@@ -37,6 +37,11 @@ type HeartbeatMetrics = {
   chatwootReconciled?: number;
   chatwootIgnored?: number;
   chatwootReconcileFailed?: number;
+  automationRuntimeStatus?: number;
+  automationRuntimeClaimed?: number;
+  automationRuntimeSucceeded?: number;
+  automationRuntimeWaiting?: number;
+  automationRuntimeFailed?: number;
 };
 
 type WorkerVersion = {
@@ -105,6 +110,11 @@ function sanitizeMetrics(value: unknown): HeartbeatMetrics {
     chatwootReconciled: boundedInteger(raw.chatwootReconciled),
     chatwootIgnored: boundedInteger(raw.chatwootIgnored),
     chatwootReconcileFailed: boundedInteger(raw.chatwootReconcileFailed),
+    automationRuntimeStatus: boundedInteger(raw.automationRuntimeStatus),
+    automationRuntimeClaimed: boundedInteger(raw.automationRuntimeClaimed),
+    automationRuntimeSucceeded: boundedInteger(raw.automationRuntimeSucceeded),
+    automationRuntimeWaiting: boundedInteger(raw.automationRuntimeWaiting),
+    automationRuntimeFailed: boundedInteger(raw.automationRuntimeFailed),
   };
 }
 
