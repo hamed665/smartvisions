@@ -39,7 +39,7 @@ describe('AUTO-TRIGGER-CATALOG contract',()=>{
     expect(page).toContain("from('automation_trigger_catalog')");
     expect(builder).toContain('Trigger contracts');
     expect(builder).toContain("item.availability === 'AVAILABLE'");
-    expect(builder).toContain('trigger.trigger_key');
+    expect(builder).toContain('triggers.find(item => item.trigger_key === triggerKey)');
     expect(page).not.toContain('const TRIGGERS=[');
     expect(builder).not.toContain('const TRIGGERS=[');
   });
