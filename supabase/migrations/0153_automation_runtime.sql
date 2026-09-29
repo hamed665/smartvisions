@@ -1820,7 +1820,7 @@ language plpgsql
 volatile
 security invoker
 set search_path = public, pg_catalog
-as $
+as $$
 declare
   v_rule public.automation_rules%rowtype;
   v_request_key text:=trim(coalesce(p_request_key,''));
@@ -1830,108 +1830,7 @@ begin
   if current_user<>'service_role'
      or p_organization_id is null
      or p_rule_id is null
-     or v_request_key !~ '^[A-Za-z0-9._:-]{8,200}
--- these already-cataloged actions. Provider sends still route through the
--- existing approved-send authority; no new provider authority is introduced.
-update public.tool_action_registry
-set
-  availability='AVAILABLE',
-  required_work_packages='{}'::text[],
-  description=case action_key
-    when 'CREATE_OPERATOR_BRIEF' then
-      'Create an idempotent operator brief through canonical operator_briefs storage under durable Automation runtime.'
-    when 'PAUSE_AUTOMATION' then
-      'Pause the canonical automation rule through the existing enablement authority from durable Automation runtime.'
-    when 'MARK_HOT' then
-      'Apply HOT lifecycle only when governed Sales Scoring evidence meets the configured threshold; direct Lead status writes remain forbidden to runtime adapters.'
-    when 'SEND_FOLLOWUP' then
-      'Create a governed approval artifact and, only after approval and safety release, dispatch through the canonical approved-send authority with reconciliation-only handling after provider acceptance.'
-    else description
-  end
-where action_key in (
-  'CREATE_OPERATOR_BRIEF','PAUSE_AUTOMATION','MARK_HOT','SEND_FOLLOWUP'
-)
-  and availability='DEPENDENCY_PENDING'
-  and required_work_packages @> array['AUTO-RUNTIME']::text[];
-
--- SEGMENT_MEMBER_ENTERED remains dependency-pending. AUTO-RUNTIME provides
--- durable event ingestion, but this Work Package does not invent a Segment
--- membership producer that does not yet exist in the canonical snapshot plane.
-
-revoke all on function public.guard_automation_runtime_mutation()
-  from public,anon,authenticated,service_role;
-revoke all on function public.validate_automation_runtime_action_scopes(text,jsonb)
-  from public,anon,authenticated;
-revoke all on function public.validate_automation_runtime_action_configs(jsonb)
-  from public,anon,authenticated;
-revoke all on function public.enforce_automation_published_runtime_scope()
-  from public,anon,authenticated,service_role;
-revoke all on function public.enforce_automation_enable_runtime_scope()
-  from public,anon,authenticated,service_role;
-revoke all on function public.automation_runtime_refresh_run(uuid)
-  from public,anon,authenticated,service_role;
-revoke all on function public.automation_runtime_require_compensation(uuid,integer,text)
-  from public,anon,authenticated,service_role;
-
-revoke all on function public.enqueue_automation_runtime_event(
-  uuid,text,text,text,uuid,jsonb,timestamptz
-) from public,anon,authenticated;
-revoke all on function public.claim_automation_runtime_actions(text,integer,integer)
-  from public,anon,authenticated;
-revoke all on function public.complete_automation_runtime_action(
-  uuid,text,text,jsonb,jsonb,text,boolean,integer
-) from public,anon,authenticated;
-revoke all on function public.reconcile_automation_runtime_waiting(integer)
-  from public,anon,authenticated;
-revoke all on function public.reap_automation_runtime_timeouts(integer,timestamptz)
-  from public,anon,authenticated;
-revoke all on function public.resolve_automation_runtime_compensation(uuid,text,text)
-  from public,anon,authenticated;
-revoke all on function public.create_automation_operator_brief(
-  uuid,uuid,uuid,text,text,text,text,jsonb,boolean
-) from public,anon,authenticated;
-revoke all on function public.mark_crm_lead_hot_from_automation(
-  uuid,uuid,uuid,integer,text
-) from public,anon,authenticated;
-revoke all on function public.create_automation_approval_message(
-  uuid,uuid,uuid,text,text,jsonb,text
-) from public,anon,authenticated;
-
-revoke all on function public.pause_automation_rule_from_runtime(
-  uuid,uuid,text
-) from public,anon,authenticated;
-
-grant execute on function public.validate_automation_runtime_action_scopes(text,jsonb)
-  to service_role;
-grant execute on function public.validate_automation_runtime_action_configs(jsonb)
-  to service_role;
-grant execute on function public.enqueue_automation_runtime_event(
-  uuid,text,text,text,uuid,jsonb,timestamptz
-) to service_role;
-grant execute on function public.claim_automation_runtime_actions(text,integer,integer)
-  to service_role;
-grant execute on function public.complete_automation_runtime_action(
-  uuid,text,text,jsonb,jsonb,text,boolean,integer
-) to service_role;
-grant execute on function public.reconcile_automation_runtime_waiting(integer)
-  to service_role;
-grant execute on function public.reap_automation_runtime_timeouts(integer,timestamptz)
-  to service_role;
-grant execute on function public.resolve_automation_runtime_compensation(uuid,text,text)
-  to service_role;
-grant execute on function public.create_automation_operator_brief(
-  uuid,uuid,uuid,text,text,text,text,jsonb,boolean
-) to service_role;
-grant execute on function public.mark_crm_lead_hot_from_automation(
-  uuid,uuid,uuid,integer,text
-) to service_role;
-grant execute on function public.create_automation_approval_message(
-  uuid,uuid,uuid,text,text,jsonb,text
-) to service_role;
-grant execute on function public.pause_automation_rule_from_runtime(
-  uuid,uuid,text
-) to service_role;
-
+     or v_request_key !~ '^[A-Za-z0-9._:-]{8,200}$'
   then
     raise exception 'Automation runtime pause payload is invalid';
   end if;
@@ -1995,7 +1894,7 @@ grant execute on function public.pause_automation_rule_from_runtime(
 
   return v_after-'requestHash';
 end;
-$;
+$$;
 
 -- AUTO-RUNTIME supplies the missing durable command/execution boundary for
 -- these already-cataloged actions. Provider sends still route through the
@@ -2008,7 +1907,7 @@ set
     when 'CREATE_OPERATOR_BRIEF' then
       'Create an idempotent operator brief through canonical operator_briefs storage under durable Automation runtime.'
     when 'PAUSE_AUTOMATION' then
-      'Pause the canonical automation rule through the existing enablement authority from durable Automation runtime.'
+      'Pause the canonical automation rule through a SYSTEM-actor governed command in durable Automation runtime.'
     when 'MARK_HOT' then
       'Apply HOT lifecycle only when governed Sales Scoring evidence meets the configured threshold; direct Lead status writes remain forbidden to runtime adapters.'
     when 'SEND_FOLLOWUP' then
@@ -2021,22 +1920,15 @@ where action_key in (
   and availability='DEPENDENCY_PENDING'
   and required_work_packages @> array['AUTO-RUNTIME']::text[];
 
--- SEGMENT_MEMBER_ENTERED is now produced by the durable runtime discovery
--- path over immutable Segment Snapshot membership. The producer records an
--- audit correlation even when no rule matches so historical entries are not
--- replayed after a rule is created later.
-update public.automation_trigger_catalog
-set
-  availability='AVAILABLE',
-  required_work_package=null,
-  description='Durable runtime producer detects entities newly entering an immutable Segment Snapshot relative to the prior snapshot.'
-where trigger_key='SEGMENT_MEMBER_ENTERED'
-  and availability='DEPENDENCY_PENDING'
-  and required_work_package='AUTO-RUNTIME';
+-- SEGMENT_MEMBER_ENTERED remains dependency-pending. AUTO-RUNTIME provides
+-- durable event ingestion, but this Work Package does not invent a Segment
+-- membership producer that does not yet exist in the canonical snapshot plane.
 
 revoke all on function public.guard_automation_runtime_mutation()
   from public,anon,authenticated,service_role;
 revoke all on function public.validate_automation_runtime_action_scopes(text,jsonb)
+  from public,anon,authenticated;
+revoke all on function public.validate_automation_runtime_action_configs(jsonb)
   from public,anon,authenticated;
 revoke all on function public.enforce_automation_published_runtime_scope()
   from public,anon,authenticated,service_role;
@@ -2070,8 +1962,13 @@ revoke all on function public.mark_crm_lead_hot_from_automation(
 revoke all on function public.create_automation_approval_message(
   uuid,uuid,uuid,text,text,jsonb,text
 ) from public,anon,authenticated;
+revoke all on function public.pause_automation_rule_from_runtime(
+  uuid,uuid,text
+) from public,anon,authenticated;
 
 grant execute on function public.validate_automation_runtime_action_scopes(text,jsonb)
+  to service_role;
+grant execute on function public.validate_automation_runtime_action_configs(jsonb)
   to service_role;
 grant execute on function public.enqueue_automation_runtime_event(
   uuid,text,text,text,uuid,jsonb,timestamptz
@@ -2095,4 +1992,7 @@ grant execute on function public.mark_crm_lead_hot_from_automation(
 ) to service_role;
 grant execute on function public.create_automation_approval_message(
   uuid,uuid,uuid,text,text,jsonb,text
+) to service_role;
+grant execute on function public.pause_automation_rule_from_runtime(
+  uuid,uuid,text
 ) to service_role;
