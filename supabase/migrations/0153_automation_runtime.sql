@@ -1437,7 +1437,9 @@ begin
      or p_organization_id is null
      or p_conversation_id is null
      or v_request_key !~ '^[A-Za-z0-9._:-]{8,240}$'
-     or length(trim(coalesce(p_brief_type,''))) not between 1 and 80
+     or upper(trim(coalesce(p_brief_type,''))) not in (
+       'INBOUND','OUTBOUND_PREVIEW','HOT_LEAD','HANDOFF','DAILY_REPORT'
+     )
      or length(trim(coalesce(p_title,''))) not between 1 and 240
      or length(trim(coalesce(p_summary,''))) not between 1 and 4000
      or p_details is null
@@ -1699,7 +1701,196 @@ begin
     'replayed',false
   );
 end;
-$$;
+$;
+
+create unique index audit_logs_automation_runtime_pause_request_uidx
+  on public.audit_logs(organization_id,entity_id,correlation_id)
+  where entity_type='automation_rule'
+    and action='AUTOMATION_RULE_PAUSED_BY_RUNTIME'
+    and correlation_id is not null;
+
+create or replace function public.pause_automation_rule_from_runtime(
+  p_organization_id uuid,
+  p_rule_id uuid,
+  p_request_key text
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = public, pg_catalog
+as $
+declare
+  v_rule public.automation_rules%rowtype;
+  v_request_key text:=trim(coalesce(p_request_key,''));
+  v_hash text;
+  v_after jsonb;
+begin
+  if current_user<>'service_role'
+     or p_organization_id is null
+     or p_rule_id is null
+     or v_request_key !~ '^[A-Za-z0-9._:-]{8,200}
+-- these already-cataloged actions. Provider sends still route through the
+-- existing approved-send authority; no new provider authority is introduced.
+update public.tool_action_registry
+set
+  availability='AVAILABLE',
+  required_work_packages='{}'::text[],
+  description=case action_key
+    when 'CREATE_OPERATOR_BRIEF' then
+      'Create an idempotent operator brief through canonical operator_briefs storage under durable Automation runtime.'
+    when 'PAUSE_AUTOMATION' then
+      'Pause the canonical automation rule through the existing enablement authority from durable Automation runtime.'
+    when 'MARK_HOT' then
+      'Apply HOT lifecycle only when governed Sales Scoring evidence meets the configured threshold; direct Lead status writes remain forbidden to runtime adapters.'
+    when 'SEND_FOLLOWUP' then
+      'Create a governed approval artifact and, only after approval and safety release, dispatch through the canonical approved-send authority with reconciliation-only handling after provider acceptance.'
+    else description
+  end
+where action_key in (
+  'CREATE_OPERATOR_BRIEF','PAUSE_AUTOMATION','MARK_HOT','SEND_FOLLOWUP'
+)
+  and availability='DEPENDENCY_PENDING'
+  and required_work_packages @> array['AUTO-RUNTIME']::text[];
+
+-- SEGMENT_MEMBER_ENTERED remains dependency-pending. AUTO-RUNTIME provides
+-- durable event ingestion, but this Work Package does not invent a Segment
+-- membership producer that does not yet exist in the canonical snapshot plane.
+
+revoke all on function public.guard_automation_runtime_mutation()
+  from public,anon,authenticated,service_role;
+revoke all on function public.validate_automation_runtime_action_scopes(text,jsonb)
+  from public,anon,authenticated;
+revoke all on function public.enforce_automation_published_runtime_scope()
+  from public,anon,authenticated,service_role;
+revoke all on function public.enforce_automation_enable_runtime_scope()
+  from public,anon,authenticated,service_role;
+revoke all on function public.automation_runtime_refresh_run(uuid)
+  from public,anon,authenticated,service_role;
+revoke all on function public.automation_runtime_require_compensation(uuid,integer,text)
+  from public,anon,authenticated,service_role;
+
+revoke all on function public.enqueue_automation_runtime_event(
+  uuid,text,text,text,uuid,jsonb,timestamptz
+) from public,anon,authenticated;
+revoke all on function public.claim_automation_runtime_actions(text,integer,integer)
+  from public,anon,authenticated;
+revoke all on function public.complete_automation_runtime_action(
+  uuid,text,text,jsonb,jsonb,text,boolean,integer
+) from public,anon,authenticated;
+revoke all on function public.reconcile_automation_runtime_waiting(integer)
+  from public,anon,authenticated;
+revoke all on function public.reap_automation_runtime_timeouts(integer,timestamptz)
+  from public,anon,authenticated;
+revoke all on function public.resolve_automation_runtime_compensation(uuid,text,text)
+  from public,anon,authenticated;
+revoke all on function public.create_automation_operator_brief(
+  uuid,uuid,uuid,text,text,text,text,jsonb,boolean
+) from public,anon,authenticated;
+revoke all on function public.mark_crm_lead_hot_from_automation(
+  uuid,uuid,uuid,integer,text
+) from public,anon,authenticated;
+revoke all on function public.create_automation_approval_message(
+  uuid,uuid,uuid,text,text,jsonb,text
+) from public,anon,authenticated;
+
+revoke all on function public.pause_automation_rule_from_runtime(
+  uuid,uuid,text
+) from public,anon,authenticated;
+
+grant execute on function public.validate_automation_runtime_action_scopes(text,jsonb)
+  to service_role;
+grant execute on function public.enqueue_automation_runtime_event(
+  uuid,text,text,text,uuid,jsonb,timestamptz
+) to service_role;
+grant execute on function public.claim_automation_runtime_actions(text,integer,integer)
+  to service_role;
+grant execute on function public.complete_automation_runtime_action(
+  uuid,text,text,jsonb,jsonb,text,boolean,integer
+) to service_role;
+grant execute on function public.reconcile_automation_runtime_waiting(integer)
+  to service_role;
+grant execute on function public.reap_automation_runtime_timeouts(integer,timestamptz)
+  to service_role;
+grant execute on function public.resolve_automation_runtime_compensation(uuid,text,text)
+  to service_role;
+grant execute on function public.create_automation_operator_brief(
+  uuid,uuid,uuid,text,text,text,text,jsonb,boolean
+) to service_role;
+grant execute on function public.mark_crm_lead_hot_from_automation(
+  uuid,uuid,uuid,integer,text
+) to service_role;
+grant execute on function public.create_automation_approval_message(
+  uuid,uuid,uuid,text,text,jsonb,text
+) to service_role;
+grant execute on function public.pause_automation_rule_from_runtime(
+  uuid,uuid,text
+) to service_role;
+
+  then
+    raise exception 'Automation runtime pause payload is invalid';
+  end if;
+
+  v_hash:=md5(concat_ws('|',
+    p_organization_id::text,p_rule_id::text,'PAUSE'
+  ));
+
+  select a.after_data into v_after
+  from public.audit_logs a
+  where a.organization_id=p_organization_id
+    and a.entity_type='automation_rule'
+    and a.entity_id=p_rule_id::text
+    and a.action='AUTOMATION_RULE_PAUSED_BY_RUNTIME'
+    and a.correlation_id=v_request_key
+  order by a.created_at desc,a.id desc
+  limit 1;
+
+  if v_after is not null then
+    if coalesce(v_after->>'requestHash','')<>v_hash then
+      raise exception 'Automation runtime pause request key conflict';
+    end if;
+    return (v_after-'requestHash')||jsonb_build_object('replayed',true);
+  end if;
+
+  select * into v_rule
+  from public.automation_rules r
+  where r.organization_id=p_organization_id
+    and r.id=p_rule_id
+  for update;
+
+  if not found then
+    raise exception 'Automation runtime pause rule was not found';
+  end if;
+
+  update public.automation_rules
+  set
+    enabled=false,
+    execution_state='DISABLED',
+    updated_at=now()
+  where organization_id=p_organization_id
+    and id=p_rule_id
+  returning * into v_rule;
+
+  v_after:=jsonb_build_object(
+    'ruleId',v_rule.id,
+    'enabled',v_rule.enabled,
+    'executionState',v_rule.execution_state,
+    'requestHash',v_hash,
+    'replayed',false
+  );
+
+  insert into public.audit_logs(
+    organization_id,actor_type,actor_id,action,entity_type,entity_id,
+    after_data,correlation_id
+  ) values (
+    p_organization_id,'SYSTEM','automation_runtime',
+    'AUTOMATION_RULE_PAUSED_BY_RUNTIME','automation_rule',p_rule_id::text,
+    v_after,v_request_key
+  );
+
+  return v_after-'requestHash';
+end;
+$;
 
 -- AUTO-RUNTIME supplies the missing durable command/execution boundary for
 -- these already-cataloged actions. Provider sends still route through the
