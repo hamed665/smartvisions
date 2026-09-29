@@ -95,7 +95,8 @@ export async function updateAutomationRule(f:FormData){
     if(error)throw new Error(error.message);
   }
 
-  const nextEnabled=bool(f,'enabled');
+  const enabledRaw=text(f,'enabled').toLowerCase();
+  const nextEnabled=['on','true','1','yes'].includes(enabledRaw);
   if(nextEnabled!==rule.enabled){
     const {error}=await service.rpc('set_automation_rule_enabled',{
       p_organization_id:ctx.organizationId,
