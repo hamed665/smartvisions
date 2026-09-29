@@ -40,6 +40,11 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
   'app/marketing-consent-actions.ts': {
     recordMarketingPreference:'SPECIALIZED:MARKETING_CONSENT_GOVERNANCE',
   },
+  'app/notification-actions.ts': {
+    saveNotificationPreferences:'SPECIALIZED:AUTOMATION_NOTIFICATIONS',
+    markNotificationRead:'SPECIALIZED:AUTOMATION_NOTIFICATIONS',
+    acknowledgeNotification:'SPECIALIZED:AUTOMATION_NOTIFICATIONS',
+  },
   'app/management-actions.ts': {
     updateSystemControls:'SPECIALIZED:SAFE_CONTROLS',
     createCampaign:'campaign.create', updateCampaign:'campaign.update', updateOutreachPolicy:'outreach.update',
@@ -157,6 +162,9 @@ describe('Control Center ↔ Telegram action coverage', () => {
     expect(CLASSIFICATION['app/management-actions.ts'].saveAutomationRuleDraft).toBe('SPECIALIZED:AUTOMATION_WORKFLOW_MODEL');
     expect(CLASSIFICATION['app/management-actions.ts'].publishAutomationRule).toBe('SPECIALIZED:AUTOMATION_WORKFLOW_MODEL');
     expect(CLASSIFICATION['app/management-actions.ts'].setAutomationRuleEnabled).toBe('SPECIALIZED:AUTOMATION_WORKFLOW_MODEL');
+    expect(CLASSIFICATION['app/notification-actions.ts'].saveNotificationPreferences).toBe('SPECIALIZED:AUTOMATION_NOTIFICATIONS');
+    expect(CLASSIFICATION['app/notification-actions.ts'].markNotificationRead).toBe('SPECIALIZED:AUTOMATION_NOTIFICATIONS');
+    expect(CLASSIFICATION['app/notification-actions.ts'].acknowledgeNotification).toBe('SPECIALIZED:AUTOMATION_NOTIFICATIONS');
 
     expect(CLASSIFICATION['app/daily-target-actions.ts'].setDailyOutreachTarget).toBe('SPECIALIZED:DAILY_OUTREACH_TARGET');
     expect(CLASSIFICATION['app/business-os-actions.ts'].bootstrapCanonicalOperatingHierarchy).toBe('SPECIALIZED:BUSINESS_OS_HIERARCHY_BOOTSTRAP');
