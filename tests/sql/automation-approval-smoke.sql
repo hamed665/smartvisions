@@ -329,6 +329,14 @@ begin
     raise exception 'SEND_FOLLOWUP approval dependency was not closed correctly';
   end if;
 
+  if not has_column_privilege('service_role','public.conversation_messages','approval_policy_mode','SELECT')
+     or not has_column_privilege('service_role','public.conversation_messages','approval_expires_at','SELECT')
+     or not has_column_privilege('service_role','public.conversation_messages','approval_decision','UPDATE')
+     or not has_column_privilege('service_role','public.conversation_messages','approval_reviewer_user_id','UPDATE')
+  then
+    raise exception 'Approval service-role column grants are incomplete';
+  end if;
+
   if has_function_privilege(
        'authenticated',
        'public.decide_message_approval(uuid,uuid,uuid,text,text,text)',
