@@ -813,6 +813,7 @@ begin
     from public.automation_run_actions a
     join public.automation_runs run on run.id=a.automation_run_id
     join public.automation_rules rule on rule.id=run.automation_rule_id
+    join public.system_controls controls on controls.organization_id=run.organization_id
     where a.status in ('PENDING','RETRY_WAIT')
       and a.next_attempt_at<=now()
       and run.status not in ('COMPLETED','FAILED','DEAD_LETTER','CANCELLED')
@@ -820,6 +821,8 @@ begin
       and run.deadline_at>now()
       and rule.enabled=true
       and rule.execution_state='READY'
+      and controls.global_kill_switch=false
+      and controls.agents_paused=false
       and not exists(
         select 1
         from public.automation_run_actions prior
@@ -1113,6 +1116,78 @@ exception
 end;
 $$;
 
+create or replace function public.reconcile_automation_runtime_approval_deadlines(
+  p_limit integer default 100
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = public, pg_catalog
+as $
+declare
+  v_org record;
+  v_expired integer:=0;
+  v_escalated integer:=0;
+  v_org_expired integer:=0;
+  v_org_escalated integer:=0;
+  v_remaining integer:=p_limit;
+  v_organizations integer:=0;
+begin
+  if current_user<>'service_role'
+     or p_limit not between 1 and 500
+  then
+    raise exception 'Automation runtime approval reconciliation is not permitted';
+  end if;
+
+  for v_org in
+    select
+      m.organization_id,
+      min(
+        least(
+          coalesce(m.approval_expires_at,'infinity'::timestamptz),
+          coalesce(m.approval_escalates_at,'infinity'::timestamptz)
+        )
+      ) as due_at
+    from public.conversation_messages m
+    where m.requires_approval=true
+      and m.status in ('APPROVAL_REQUIRED','READY')
+      and (
+        m.approval_expires_at<=now()
+        or (
+          m.approval_escalates_at<=now()
+          and m.approval_escalated_at is null
+        )
+      )
+    group by m.organization_id
+    order by due_at,m.organization_id
+    limit least(p_limit,100)
+  loop
+    exit when v_remaining<=0;
+
+    select r.expired_count,r.escalated_count
+      into v_org_expired,v_org_escalated
+    from public.reconcile_due_message_approvals(
+      v_org.organization_id,
+      least(v_remaining,100)
+    ) r;
+
+    v_org_expired:=coalesce(v_org_expired,0);
+    v_org_escalated:=coalesce(v_org_escalated,0);
+    v_expired:=v_expired+v_org_expired;
+    v_escalated:=v_escalated+v_org_escalated;
+    v_remaining:=greatest(0,v_remaining-v_org_expired-v_org_escalated);
+    v_organizations:=v_organizations+1;
+  end loop;
+
+  return jsonb_build_object(
+    'organizations',v_organizations,
+    'expired',v_expired,
+    'escalated',v_escalated
+  );
+end;
+$;
+
 create or replace function public.reconcile_automation_runtime_waiting(
   p_limit integer default 100
 )
@@ -1242,6 +1317,19 @@ begin
         update public.automation_run_actions
         set status='PENDING',next_attempt_at=now(),updated_at=now()
         where id=v_row.id;
+
+        -- Approval/Shadow waiting time is not charged against the active
+        -- execution deadline. Restore the workflow's original runtime budget
+        -- when the durable external wait releases.
+        update public.automation_runs
+        set
+          deadline_at=now()+greatest(
+            deadline_at-scheduled_at,
+            interval '60 seconds'
+          ),
+          updated_at=now()
+        where id=v_row.automation_run_id;
+
         v_ready:=v_ready+1;
       end if;
     end if;
@@ -1389,6 +1477,12 @@ begin
     where run.status not in ('COMPLETED','FAILED','DEAD_LETTER','CANCELLED')
       and run.deadline_at<=p_as_of
       and a.status not in ('SUCCEEDED','DEAD_LETTER','CANCELLED')
+      and not exists(
+        select 1
+        from public.automation_run_actions waiting
+        where waiting.automation_run_id=run.id
+          and waiting.status in ('WAITING_APPROVAL','WAITING_RELEASE','VERIFYING')
+      )
     order by run.deadline_at,a.action_index
     limit p_limit
     for update of a skip locked
@@ -1947,6 +2041,8 @@ revoke all on function public.claim_automation_runtime_actions(text,integer,inte
 revoke all on function public.complete_automation_runtime_action(
   uuid,text,text,jsonb,jsonb,text,boolean,integer
 ) from public,anon,authenticated;
+revoke all on function public.reconcile_automation_runtime_approval_deadlines(integer)
+  from public,anon,authenticated;
 revoke all on function public.reconcile_automation_runtime_waiting(integer)
   from public,anon,authenticated;
 revoke all on function public.reap_automation_runtime_timeouts(integer,timestamptz)
@@ -1978,6 +2074,8 @@ grant execute on function public.claim_automation_runtime_actions(text,integer,i
 grant execute on function public.complete_automation_runtime_action(
   uuid,text,text,jsonb,jsonb,text,boolean,integer
 ) to service_role;
+grant execute on function public.reconcile_automation_runtime_approval_deadlines(integer)
+  to service_role;
 grant execute on function public.reconcile_automation_runtime_waiting(integer)
   to service_role;
 grant execute on function public.reap_automation_runtime_timeouts(integer,timestamptz)
