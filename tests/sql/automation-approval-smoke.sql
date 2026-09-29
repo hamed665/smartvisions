@@ -8,13 +8,6 @@ select
 
 grant select on automation_approval_side_effect_baseline to service_role;
 
--- Reconstruct only the existing Production service-role authority required by
--- AUTO-APPROVAL. The historical CI bootstrap omits these legacy grants even
--- though Production already carries them.
-grant select,update on public.conversation_messages to service_role;
-grant select on public.organization_members to service_role;
-grant select,insert on public.audit_logs to service_role;
-
 insert into auth.users(id)
 values ('00000000-0000-0000-0000-00000000c002')
 on conflict (id) do nothing;
@@ -340,6 +333,9 @@ begin
      or not has_column_privilege('service_role','public.conversation_messages','approval_expires_at','SELECT')
      or not has_column_privilege('service_role','public.conversation_messages','approval_decision','UPDATE')
      or not has_column_privilege('service_role','public.conversation_messages','approval_reviewer_user_id','UPDATE')
+     or not has_column_privilege('service_role','public.organization_members','role','SELECT')
+     or not has_column_privilege('service_role','public.audit_logs','correlation_id','SELECT')
+     or not has_column_privilege('service_role','public.audit_logs','correlation_id','INSERT')
   then
     raise exception 'Approval service-role column grants are incomplete';
   end if;
