@@ -98,7 +98,7 @@ export default async function ApprovalsPage() {
   );
   const pilotReady = Boolean(ownerEditable && latestInbound && controlsClear && !pilotMessage);
   const pilotSendReady = Boolean(
-    editable
+    ownerEditable
     && controlsClear
     && pilotMessage?.status === 'APPROVED'
     && !pilotMessage.requires_approval,
