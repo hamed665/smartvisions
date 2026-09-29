@@ -13,6 +13,12 @@ create temp table automation_runtime_results(
 );
 grant select,insert,update on automation_runtime_side_effect_baseline,automation_runtime_results to service_role;
 
+-- The compact CI lineage does not fully reconstruct the legacy service-role
+-- table grants that are already present in Production. AUTO-RUNTIME MARK_HOT
+-- uses the existing governed Sales Scoring authority and needs the same
+-- service-role Lead mutation authority that Production already has.
+grant select,insert,update on public.leads to service_role;
+
 reset role;
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000c001',false);
