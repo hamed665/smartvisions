@@ -468,6 +468,15 @@ export async function runAutomationRuntimeTick(input: {
   limit?: number;
 }) {
   const limit = Math.max(1, Math.min(25, Math.round(input.limit ?? 10)));
+
+  const approvalDeadlines = await input.supabase.rpc(
+    'reconcile_automation_runtime_approval_deadlines',
+    { p_limit: 100 },
+  );
+  if (approvalDeadlines.error) {
+    throw new Error(`Automation approval deadline reconciliation failed: ${approvalDeadlines.error.message}`);
+  }
+
   const waiting = await input.supabase.rpc('reconcile_automation_runtime_waiting', { p_limit: 100 });
   if (waiting.error) throw new Error(`Automation waiting reconciliation failed: ${waiting.error.message}`);
 
@@ -521,6 +530,7 @@ export async function runAutomationRuntimeTick(input: {
     succeeded,
     waiting: waitingCount,
     failed,
+    approvalDeadlines: record(approvalDeadlines.data),
     reconciliation: record(waiting.data),
     timeoutRecovery: record(timeouts.data),
   };
