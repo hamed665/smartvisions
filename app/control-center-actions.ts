@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { getCurrentOrganization } from '@/lib/supabase/org';
+import { createSupabaseServiceClient } from '@/lib/supabase/service';
 
 function requiredText(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? '').trim();
@@ -117,7 +118,8 @@ export async function updateServiceBookingCatalog(formData: FormData) {
   if (cancellationNoticeMinutes !== null) bookingRules.cancellationNoticeMinutes = cancellationNoticeMinutes;
   if (slotIncrementMinutes !== null) bookingRules.slotIncrementMinutes = slotIncrementMinutes;
 
-  const { error } = await ctx.supabase.rpc('configure_service_booking_catalog', {
+  const bookingService = createSupabaseServiceClient();
+  const { error } = await bookingService.rpc('configure_service_booking_catalog', {
     p_organization_id: ctx.organizationId,
     p_actor_user_id: ctx.userId,
     p_service_id: serviceId,
