@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { getCurrentOrganization } from '@/lib/supabase/org';
+import { createSupabaseServiceClient } from '@/lib/supabase/service';
 
 const text=(f:FormData,k:string)=>String(f.get(k)??'').trim();
 const required=(f:FormData,k:string)=>{const v=text(f,k);if(!v)throw new Error(`${k} is required`);return v};
@@ -28,9 +29,132 @@ export async function createMessageTemplate(f:FormData){const ctx=await owner();
 
 export async function updateMessageTemplate(f:FormData){const ctx=await owner();const id=required(f,'id');const payload={name:required(f,'name'),subject:text(f,'subject')||null,body:required(f,'body'),enabled:bool(f,'enabled'),is_default:bool(f,'is_default'),updated_at:now()};const{error}=await ctx.supabase.from('message_templates').update(payload).eq('organization_id',ctx.organizationId).eq('id',id);if(error)throw error;await audit(ctx,'UPDATE_MESSAGE_TEMPLATE','message_template',id,{...payload,body:'[stored]'});revalidatePath('/messages')}
 
-export async function createAutomationRule(f:FormData){const ctx=await owner();const payload={organization_id:ctx.organizationId,name:required(f,'name'),trigger_key:required(f,'trigger_key'),action_key:required(f,'action_key'),enabled:true,priority:Math.min(100,Math.max(0,Math.round(number(f,'priority',50)))),config:{}};const{data,error}=await ctx.supabase.from('automation_rules').insert(payload).select('id').single();if(error)throw error;await audit(ctx,'CREATE_AUTOMATION_RULE','automation_rule',data.id,payload);revalidatePath('/automations')}
+function automationJsonArray(f:FormData,key:string,fallback:unknown[]=[]){
+  const raw=text(f,key);
+  if(!raw)return fallback;
+  const parsed=JSON.parse(raw);
+  if(!Array.isArray(parsed))throw new Error(`${key} must be a JSON array`);
+  return parsed;
+}
+function automationJsonObject(f:FormData,key:string){
+  const raw=text(f,key);
+  if(!raw)return {};
+  const parsed=JSON.parse(raw);
+  if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))throw new Error(`${key} must be a JSON object`);
+  return parsed as Record<string,unknown>;
+}
+const automationPriority=(f:FormData)=>Math.min(100,Math.max(0,Math.round(number(f,'priority',50))));
+const automationService=()=>createSupabaseServiceClient();
 
-export async function updateAutomationRule(f:FormData){const ctx=await owner();const id=required(f,'id');const payload={enabled:bool(f,'enabled'),priority:Math.min(100,Math.max(0,Math.round(number(f,'priority',50)))),updated_at:now()};const{error}=await ctx.supabase.from('automation_rules').update(payload).eq('organization_id',ctx.organizationId).eq('id',id);if(error)throw error;await audit(ctx,'UPDATE_AUTOMATION_RULE','automation_rule',id,payload);revalidatePath('/automations')}
+export async function createAutomationRule(f:FormData){
+  const ctx=await owner();
+  const actionKey=required(f,'action_key').toUpperCase();
+  const conditions=automationJsonArray(f,'conditions_json',[]);
+  const actions=automationJsonArray(f,'actions_json',[{key:actionKey,config:{}}]);
+  const requestKey=text(f,'request_key')||`automation-create:${crypto.randomUUID()}`;
+  const {error}=await automationService().rpc('create_automation_rule_draft',{
+    p_organization_id:ctx.organizationId,
+    p_actor_user_id:ctx.userId,
+    p_name:required(f,'name'),
+    p_trigger_key:required(f,'trigger_key').toUpperCase(),
+    p_conditions:conditions,
+    p_actions:actions,
+    p_priority:automationPriority(f),
+    p_config:automationJsonObject(f,'config_json'),
+    p_owner_user_id:text(f,'owner_user_id')||ctx.userId,
+    p_request_key:requestKey,
+  });
+  if(error)throw new Error(error.message);
+  revalidatePath('/automations');
+}
+
+export async function updateAutomationRule(f:FormData){
+  const ctx=await owner();
+  const id=required(f,'id');
+  const service=automationService();
+  const {data:rule,error:readError}=await service.from('automation_rules')
+    .select('id,name,owner_user_id,trigger_key,conditions,actions,priority,config,draft_revision,enabled')
+    .eq('organization_id',ctx.organizationId).eq('id',id).single();
+  if(readError||!rule)throw new Error(readError?.message||'Automation rule was not found');
+
+  const nextPriority=automationPriority(f);
+  if(nextPriority!==rule.priority){
+    const {error}=await service.rpc('update_automation_rule_draft',{
+      p_organization_id:ctx.organizationId,
+      p_actor_user_id:ctx.userId,
+      p_rule_id:id,
+      p_expected_draft_revision:rule.draft_revision,
+      p_name:rule.name,
+      p_trigger_key:rule.trigger_key,
+      p_conditions:rule.conditions,
+      p_actions:rule.actions,
+      p_priority:nextPriority,
+      p_config:rule.config,
+      p_owner_user_id:rule.owner_user_id||ctx.userId,
+    });
+    if(error)throw new Error(error.message);
+  }
+
+  const enabledRaw=text(f,'enabled').toLowerCase();
+  const nextEnabled=['on','true','1','yes'].includes(enabledRaw);
+  if(nextEnabled!==rule.enabled){
+    const {error}=await service.rpc('set_automation_rule_enabled',{
+      p_organization_id:ctx.organizationId,
+      p_actor_user_id:ctx.userId,
+      p_rule_id:id,
+      p_enabled:nextEnabled,
+    });
+    if(error)throw new Error(error.message);
+  }
+  revalidatePath('/automations');
+}
+
+export async function saveAutomationRuleDraft(f:FormData){
+  const ctx=await owner();
+  const id=required(f,'id');
+  const actions=automationJsonArray(f,'actions_json');
+  if(actions.length===0)throw new Error('actions_json must contain at least one action');
+  const {error}=await automationService().rpc('update_automation_rule_draft',{
+    p_organization_id:ctx.organizationId,
+    p_actor_user_id:ctx.userId,
+    p_rule_id:id,
+    p_expected_draft_revision:Math.max(1,Math.round(number(f,'draft_revision',1))),
+    p_name:required(f,'name'),
+    p_trigger_key:required(f,'trigger_key').toUpperCase(),
+    p_conditions:automationJsonArray(f,'conditions_json',[]),
+    p_actions:actions,
+    p_priority:automationPriority(f),
+    p_config:automationJsonObject(f,'config_json'),
+    p_owner_user_id:text(f,'owner_user_id')||ctx.userId,
+  });
+  if(error)throw new Error(error.message);
+  revalidatePath('/automations');
+}
+
+export async function publishAutomationRule(f:FormData){
+  const ctx=await owner();
+  const {error}=await automationService().rpc('publish_automation_rule',{
+    p_organization_id:ctx.organizationId,
+    p_actor_user_id:ctx.userId,
+    p_rule_id:required(f,'id'),
+    p_expected_draft_revision:Math.max(1,Math.round(number(f,'draft_revision',1))),
+  });
+  if(error)throw new Error(error.message);
+  revalidatePath('/automations');
+}
+
+export async function setAutomationRuleEnabled(f:FormData){
+  const ctx=await owner();
+  const enabled=required(f,'enabled')==='true';
+  const {error}=await automationService().rpc('set_automation_rule_enabled',{
+    p_organization_id:ctx.organizationId,
+    p_actor_user_id:ctx.userId,
+    p_rule_id:required(f,'id'),
+    p_enabled:enabled,
+  });
+  if(error)throw new Error(error.message);
+  revalidatePath('/automations');
+}
 
 export async function updateIntegration(f:FormData){const ctx=await owner();const id=required(f,'id');const payload={enabled:bool(f,'enabled'),account_label:text(f,'account_label')||null,updated_at:now()};const{error}=await ctx.supabase.from('integration_connections').update(payload).eq('organization_id',ctx.organizationId).eq('id',id);if(error)throw error;await audit(ctx,'UPDATE_INTEGRATION','integration',id,payload);revalidatePath('/integrations')}
 

@@ -44,7 +44,11 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
     updateSystemControls:'SPECIALIZED:SAFE_CONTROLS',
     createCampaign:'campaign.create', updateCampaign:'campaign.update', updateOutreachPolicy:'outreach.update',
     createMessageTemplate:'template.create', updateMessageTemplate:'template.update',
-    createAutomationRule:'automation.create', updateAutomationRule:'automation.update', updateIntegration:'integration.update', updateOrganizationSettings:'organization.update',
+    createAutomationRule:'automation.create', updateAutomationRule:'automation.update',
+    saveAutomationRuleDraft:'SPECIALIZED:AUTOMATION_WORKFLOW_MODEL',
+    publishAutomationRule:'SPECIALIZED:AUTOMATION_WORKFLOW_MODEL',
+    setAutomationRuleEnabled:'SPECIALIZED:AUTOMATION_WORKFLOW_MODEL',
+    updateIntegration:'integration.update', updateOrganizationSettings:'organization.update',
     createKnowledge:'CANONICAL_ALIAS:knowledge.publish', createPromptVersion:'CANONICAL_ALIAS:prompt.publish',
     updateLead:'lead.update', addSuppression:'suppression.add', updatePortfolioItem:'portfolio.update', updatePreviewTemplate:'preview_template.update',
     approveMessage:'SPECIALIZED:/approve', rejectMessage:'SPECIALIZED:/reject', updateConversation:'conversation.update',
@@ -145,6 +149,10 @@ describe('Control Center ↔ Telegram action coverage', () => {
     expect(CLASSIFICATION['app/management-actions.ts'].approveMessage).toBe('SPECIALIZED:/approve');
     expect(CLASSIFICATION['app/management-actions.ts'].rejectMessage).toBe('SPECIALIZED:/reject');
     expect(CLASSIFICATION['app/management-actions.ts'].releaseHumanTakeover).toBe('SPECIALIZED:OWNER_RELEASE');
+    expect(CLASSIFICATION['app/management-actions.ts'].saveAutomationRuleDraft).toBe('SPECIALIZED:AUTOMATION_WORKFLOW_MODEL');
+    expect(CLASSIFICATION['app/management-actions.ts'].publishAutomationRule).toBe('SPECIALIZED:AUTOMATION_WORKFLOW_MODEL');
+    expect(CLASSIFICATION['app/management-actions.ts'].setAutomationRuleEnabled).toBe('SPECIALIZED:AUTOMATION_WORKFLOW_MODEL');
+
     expect(CLASSIFICATION['app/daily-target-actions.ts'].setDailyOutreachTarget).toBe('SPECIALIZED:DAILY_OUTREACH_TARGET');
     expect(CLASSIFICATION['app/business-os-actions.ts'].bootstrapCanonicalOperatingHierarchy).toBe('SPECIALIZED:BUSINESS_OS_HIERARCHY_BOOTSTRAP');
     expect(CLASSIFICATION['app/business-os-actions.ts'].bootstrapCanonicalTenant).toBe('SPECIALIZED:BUSINESS_OS_TENANT_BOOTSTRAP');
