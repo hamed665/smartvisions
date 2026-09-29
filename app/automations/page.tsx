@@ -8,22 +8,28 @@ import { getCurrentOrganization } from '@/lib/supabase/org';
 
 export const dynamic='force-dynamic';
 
-const TRIGGERS=[
-  'LEAD_QUALIFIED','HOT_LEAD','POSITIVE_REPLY','NO_REPLY_48H','DEMO_APPROVED','PAYMENT_INTENT',
-];
 const ACTIONS=[
   'GENERATE_PREVIEW','SEND_FOLLOWUP','CREATE_OPERATOR_BRIEF','HANDOFF_HUMAN','PAUSE_AUTOMATION','MARK_HOT',
 ];
 
 export default async function AutomationsPage(){
   const {supabase,organizationId,role}=await getCurrentOrganization();
-  const {data,error}=await supabase.from('automation_rules')
-    .select('id,name,owner_user_id,trigger_key,action_key,conditions,actions,enabled,priority,config,publication_state,draft_revision,published_revision,latest_published_version,execution_state,last_published_at,created_at,updated_at')
-    .eq('organization_id',organizationId)
-    .order('priority',{ascending:false});
-  if(error)throw new Error(error.message);
+  const [rulesResult,catalogResult]=await Promise.all([
+    supabase.from('automation_rules')
+      .select('id,name,owner_user_id,trigger_key,action_key,conditions,actions,enabled,priority,config,publication_state,draft_revision,published_revision,latest_published_version,execution_state,last_published_at,created_at,updated_at')
+      .eq('organization_id',organizationId)
+      .order('priority',{ascending:false}),
+    supabase.from('automation_trigger_catalog')
+      .select('trigger_key,family,source_kind,event_name,schema_version,availability,required_work_package,description')
+      .order('family',{ascending:true})
+      .order('trigger_key',{ascending:true}),
+  ]);
+  if(rulesResult.error)throw new Error(rulesResult.error.message);
+  if(catalogResult.error)throw new Error(catalogResult.error.message);
 
-  const rows=data??[];
+  const rows=rulesResult.data??[];
+  const triggers=catalogResult.data??[];
+  const triggerByKey=new Map(triggers.map(trigger=>[trigger.trigger_key,trigger]));
   const editable=role==='OWNER';
   const ready=rows.filter(rule=>rule.execution_state==='READY').length;
 
@@ -44,9 +50,18 @@ export default async function AutomationsPage(){
       </p>
     </section>
 
+    <section className="panel">
+      <h2>Trigger catalog</h2>
+      <p className="muted">
+        {triggers.filter(trigger=>trigger.availability==='AVAILABLE').length} publishable trigger contracts of {triggers.length} cataloged.
+        Dependency-pending triggers may be designed in a draft, but Publish fails closed until their canonical domain authority exists.
+      </p>
+    </section>
+
     <div className="settingsList">
       {rows.map(rule=>{
         const hasUnpublishedDraft=rule.publication_state!=='PUBLISHED'||rule.published_revision!==rule.draft_revision;
+        const trigger=triggerByKey.get(rule.trigger_key);
         return <section className="panel" key={rule.id}>
           <div className="headerRow">
             <div>
@@ -59,6 +74,7 @@ export default async function AutomationsPage(){
           </div>
 
           <div className="healthList">
+            <span>Trigger contract <strong>{trigger?.family??'UNKNOWN'} / {trigger?.availability??'UNKNOWN'}</strong></span>
             <span>Publication <strong>{rule.publication_state}</strong></span>
             <span>Execution eligibility <strong>{rule.execution_state}</strong></span>
             <span>Enabled <strong>{rule.enabled?'YES':'NO'}</strong></span>
@@ -73,7 +89,7 @@ export default async function AutomationsPage(){
             <label>Name<input name="name" required maxLength={160} defaultValue={rule.name}/></label>
             <label>Trigger
               <select name="trigger_key" defaultValue={rule.trigger_key}>
-                {TRIGGERS.map(key=><option key={key}>{key}</option>)}
+                {triggers.map(trigger=><option key={trigger.trigger_key} value={trigger.trigger_key}>{trigger.trigger_key} · {trigger.family} · {trigger.availability}</option>)}
               </select>
             </label>
             <label>Priority<input type="number" min="0" max="100" name="priority" defaultValue={rule.priority}/></label>
@@ -118,7 +134,7 @@ export default async function AutomationsPage(){
         <input type="hidden" name="request_key" value={`automation-create:${crypto.randomUUID()}`}/>
         <label>Name<input name="name" required maxLength={160} placeholder="Hot lead operator handoff"/></label>
         <label>Trigger
-          <select name="trigger_key">{TRIGGERS.map(key=><option key={key}>{key}</option>)}</select>
+          <select name="trigger_key">{triggers.map(trigger=><option key={trigger.trigger_key} value={trigger.trigger_key}>{trigger.trigger_key} · {trigger.family} · {trigger.availability}</option>)}</select>
         </label>
         <label>Initial action
           <select name="action_key">{ACTIONS.map(key=><option key={key}>{key}</option>)}</select>
