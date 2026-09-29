@@ -30,6 +30,7 @@ create table public.notification_projection_checkpoints (
   organization_id uuid primary key references public.organizations(id) on delete cascade,
   cutover_at timestamptz not null,
   last_scanned_at timestamptz not null,
+  last_scanned_id uuid,
   updated_at timestamptz not null default now(),
   check (last_scanned_at>=cutover_at)
 );
@@ -38,9 +39,9 @@ comment on table public.notification_projection_checkpoints is
   'Internal projection watermark over canonical audit_logs. Existing Organizations start at migration cutover so historical alerts are never replayed on AUTO-NOTIFICATIONS activation.';
 
 insert into public.notification_projection_checkpoints(
-  organization_id,cutover_at,last_scanned_at
+  organization_id,cutover_at,last_scanned_at,last_scanned_id
 )
-select id,now(),now()
+select id,now(),now(),null
 from public.organizations
 on conflict(organization_id) do nothing;
 
@@ -434,7 +435,10 @@ declare
   v_roles text[];
   v_payload jsonb;
   v_from timestamptz;
-  v_until timestamptz:=now();
+  v_from_id uuid;
+  v_last_at timestamptz;
+  v_last_id uuid;
+  v_scanned integer:=0;
   v_projected integer:=0;
   v_duplicates integer:=0;
 begin
@@ -447,7 +451,7 @@ begin
 
   perform set_config('app.notification_projection_mutation','allowed',true);
 
-  select c.last_scanned_at into v_from
+  select c.last_scanned_at,c.last_scanned_id into v_from,v_from_id
   from public.notification_projection_checkpoints c
   where c.organization_id=p_organization_id
   for update;
@@ -462,18 +466,25 @@ begin
     end if;
 
     insert into public.notification_projection_checkpoints(
-      organization_id,cutover_at,last_scanned_at,updated_at
+      organization_id,cutover_at,last_scanned_at,last_scanned_id,updated_at
     ) values (
-      p_organization_id,v_from,v_from,now()
+      p_organization_id,v_from,v_from,null,now()
     );
+    v_from_id:=null;
   end if;
 
   for v_event in
     select a.*
     from public.audit_logs a
     where a.organization_id=p_organization_id
-      and a.created_at>v_from
-      and a.created_at<=v_until
+      and (
+        a.created_at>v_from
+        or (
+          a.created_at=v_from
+          and v_from_id is not null
+          and a.id>v_from_id
+        )
+      )
       and a.action in (
         'MESSAGE_APPROVAL_ESCALATED',
         'MESSAGE_APPROVAL_EXPIRED',
@@ -482,6 +493,9 @@ begin
     order by a.created_at,a.id
     limit p_limit
   loop
+    v_scanned:=v_scanned+1;
+    v_last_at:=v_event.created_at;
+    v_last_id:=v_event.id;
     v_reviewer:=null;
 
     if v_event.action='MESSAGE_APPROVAL_ESCALATED' then
@@ -565,17 +579,24 @@ begin
     end loop;
   end loop;
 
-  update public.notification_projection_checkpoints
-  set last_scanned_at=v_until,updated_at=now()
-  where organization_id=p_organization_id;
+  if v_scanned>0 then
+    update public.notification_projection_checkpoints
+    set
+      last_scanned_at=v_last_at,
+      last_scanned_id=v_last_id,
+      updated_at=now()
+    where organization_id=p_organization_id;
+  end if;
 
   perform set_config('app.notification_projection_mutation','0',true);
 
   return jsonb_build_object(
+    'scanned',v_scanned,
     'projected',v_projected,
     'duplicates',v_duplicates,
     'scannedFrom',v_from,
-    'scannedThrough',v_until
+    'scannedThrough',v_last_at,
+    'scannedThroughId',v_last_id
   );
 exception
   when others then
