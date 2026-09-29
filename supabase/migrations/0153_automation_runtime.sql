@@ -1124,7 +1124,7 @@ language plpgsql
 volatile
 security invoker
 set search_path = public, pg_catalog
-as $
+as $runtime_approval$
 declare
   v_org record;
   v_expired integer:=0;
@@ -1186,7 +1186,7 @@ begin
     'escalated',v_escalated
   );
 end;
-$;
+$runtime_approval$;
 
 create or replace function public.reconcile_automation_runtime_waiting(
   p_limit integer default 100
