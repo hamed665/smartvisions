@@ -85,6 +85,10 @@ begin
 end;
 $direct_partial_booking_profile_mutation_is_blocked$;
 
+reset role;
+select set_config('request.jwt.claim.sub','',false);
+set role service_role;
+
 do $configure_full_booking_catalog_and_replay$
 declare
   v_result jsonb;
@@ -301,9 +305,12 @@ begin
 end;
 $booking_catalog_security_and_indexes$;
 
--- Non-owner members may read governed booking catalog state but cannot configure it.
+-- Browser callers may read governed Booking catalog state, but mutation RPC is trusted-server only.
+reset role;
+set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000c003',false);
-do $non_owner_cannot_configure$
+
+do $browser_booking_catalog_mutation_is_closed$
 begin
   if not exists(
     select 1 from public.service_booking_profiles
@@ -313,22 +320,15 @@ begin
     raise exception 'Organization member cannot read Booking catalog profile';
   end if;
 
-  begin
-    perform public.configure_service_booking_catalog(
-      '00000000-0000-0000-0000-000000000c01',
-      '00000000-0000-0000-0000-00000000c003',
-      'booking_ci_service',
-      false,null,0,0,1,
-      'REMOTE','ANY_ELIGIBLE_ROLE',array['SALES_AGENT']::text[],
-      '{}'::jsonb,'{}'::uuid[],'{}'::uuid[],'[]'::jsonb,
-      'booking-catalog-ci-non-owner'
-    );
-    raise exception 'Non-owner configured Booking catalog';
-  exception when others then
-    if sqlerrm not like 'Booking catalog configuration requires Organization OWNER%' then raise; end if;
-  end;
+  if has_function_privilege(
+    'authenticated',
+    'public.configure_service_booking_catalog(uuid,uuid,text,boolean,integer,integer,integer,integer,text,text,text[],jsonb,uuid[],uuid[],jsonb,text)',
+    'EXECUTE'
+  ) then
+    raise exception 'Authenticated browser can execute trusted Booking catalog mutation';
+  end if;
 end;
-$non_owner_cannot_configure$;
+$browser_booking_catalog_mutation_is_closed$;
 
 reset role;
 select set_config('request.jwt.claim.sub','',false);
