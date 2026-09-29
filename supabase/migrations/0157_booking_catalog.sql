@@ -422,7 +422,7 @@ begin
   from unnest(coalesce(p_eligible_staff_roles,'{}'::text[])) x
   where nullif(btrim(x),'') is not null;
 
-  if v_roles !<@ array['OWNER','ADMIN','SALES_MANAGER','SALES_AGENT','VIEWER']::text[] then
+  if not (v_roles <@ array['OWNER','ADMIN','SALES_MANAGER','SALES_AGENT','VIEWER']::text[]) then
     raise exception 'Booking catalog staff role is invalid';
   end if;
 
