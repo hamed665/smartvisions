@@ -20,6 +20,8 @@ describe('Cloudflare scheduled pilot invocation', () => {
     expect(source).toContain('return handler.fetch(request)');
     expect(source).toContain('if (!shouldRunScheduledOperations(env)) return');
     expect(source).toContain("internalPost(env, '/api/operations/tick', {})");
+    expect(source).toContain("internalPost(env, '/api/operations/automation-runtime', { limit: 10 })");
+    expect(source).toContain("internalPost(env, '/api/operations/automation-notifications', { limit: 50 })");
   });
 
   it('routes inbound agent tasks through the channel guard before the canonical Agent endpoint', () => {
