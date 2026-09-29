@@ -26,7 +26,7 @@ describe('AUTO-TOOL-ACTION-REGISTRY contract',()=>{
     for(const key of [
       'GENERATE_PREVIEW','SEND_FOLLOWUP','CREATE_OPERATOR_BRIEF',
       'HANDOFF_HUMAN','PAUSE_AUTOMATION','MARK_HOT',
-    ]) expect(migration).toContain(`('${key}'`);
+    ]) expect(migration).toContain(`'${key}','`);
 
     expect(migration).toContain("'AVAILABLE'");
     expect(migration).toContain("'DEPENDENCY_PENDING'");
