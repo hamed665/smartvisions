@@ -8,13 +8,9 @@ import { getCurrentOrganization } from '@/lib/supabase/org';
 
 export const dynamic='force-dynamic';
 
-const ACTIONS=[
-  'GENERATE_PREVIEW','SEND_FOLLOWUP','CREATE_OPERATOR_BRIEF','HANDOFF_HUMAN','PAUSE_AUTOMATION','MARK_HOT',
-];
-
 export default async function AutomationsPage(){
   const {supabase,organizationId,role}=await getCurrentOrganization();
-  const [rulesResult,catalogResult,conditionFactsResult]=await Promise.all([
+  const [rulesResult,catalogResult,conditionFactsResult,actionRegistryResult]=await Promise.all([
     supabase.from('automation_rules')
       .select('id,name,owner_user_id,trigger_key,action_key,conditions,actions,enabled,priority,config,publication_state,draft_revision,published_revision,latest_published_version,execution_state,last_published_at,created_at,updated_at')
       .eq('organization_id',organizationId)
@@ -27,15 +23,22 @@ export default async function AutomationsPage(){
       .select('fact_key,subject_type,data_type,operators,nullable,description')
       .order('subject_type',{ascending:true})
       .order('fact_key',{ascending:true}),
+    supabase.from('tool_action_registry')
+      .select('action_key,tool_key,authority_key,permission_key,scope_type,idempotency_required,idempotency_key_contract,cost_class,side_effect_class,approval_requirement,approval_policy_key,verifier_key,audit_contract,availability,required_work_packages,description')
+      .order('tool_key',{ascending:true})
+      .order('action_key',{ascending:true}),
   ]);
   if(rulesResult.error)throw new Error(rulesResult.error.message);
   if(catalogResult.error)throw new Error(catalogResult.error.message);
   if(conditionFactsResult.error)throw new Error(conditionFactsResult.error.message);
+  if(actionRegistryResult.error)throw new Error(actionRegistryResult.error.message);
 
   const rows=rulesResult.data??[];
   const triggers=catalogResult.data??[];
   const conditionFacts=conditionFactsResult.data??[];
+  const actions=actionRegistryResult.data??[];
   const triggerByKey=new Map(triggers.map(trigger=>[trigger.trigger_key,trigger]));
+  const actionByKey=new Map(actions.map(action=>[action.action_key,action]));
   const editable=role==='OWNER';
   const ready=rows.filter(rule=>rule.execution_state==='READY').length;
 
@@ -73,10 +76,20 @@ export default async function AutomationsPage(){
       </p>
     </section>
 
+    <section className="panel">
+      <h2>Tool / action registry</h2>
+      <p className="muted">
+        {actions.filter(action=>action.availability==='AVAILABLE').length} publishable action contracts of {actions.length} cataloged.
+        Every action carries typed I/O, permission, scope, idempotency, cost, side-effect, approval, verifier and audit metadata.
+        Dependency-pending actions remain draftable but cannot Publish. AUTO-RUNTIME remains a separate Work Package.
+      </p>
+    </section>
+
     <div className="settingsList">
       {rows.map(rule=>{
         const hasUnpublishedDraft=rule.publication_state!=='PUBLISHED'||rule.published_revision!==rule.draft_revision;
         const trigger=triggerByKey.get(rule.trigger_key);
+        const primaryAction=actionByKey.get(rule.action_key);
         return <section className="panel" key={rule.id}>
           <div className="headerRow">
             <div>
@@ -90,6 +103,7 @@ export default async function AutomationsPage(){
 
           <div className="healthList">
             <span>Trigger contract <strong>{trigger?.family??'UNKNOWN'} / {trigger?.availability??'UNKNOWN'}</strong></span>
+            <span>Action contract <strong>{primaryAction?.tool_key??'UNKNOWN'} / {primaryAction?.availability??'UNKNOWN'}</strong></span>
             <span>Publication <strong>{rule.publication_state}</strong></span>
             <span>Execution eligibility <strong>{rule.execution_state}</strong></span>
             <span>Enabled <strong>{rule.enabled?'YES':'NO'}</strong></span>
@@ -152,7 +166,7 @@ export default async function AutomationsPage(){
           <select name="trigger_key">{triggers.map(trigger=><option key={trigger.trigger_key} value={trigger.trigger_key}>{trigger.trigger_key} · {trigger.family} · {trigger.availability}</option>)}</select>
         </label>
         <label>Initial action
-          <select name="action_key">{ACTIONS.map(key=><option key={key}>{key}</option>)}</select>
+          <select name="action_key">{actions.map(action=><option key={action.action_key} value={action.action_key}>{action.action_key} · {action.tool_key} · {action.availability}</option>)}</select>
         </label>
         <label>Priority<input type="number" name="priority" defaultValue="50" min="0" max="100"/></label>
         <label className="wideField">Conditions JSON

@@ -28,8 +28,8 @@ begin
       organization_id,name,trigger_key,action_key,conditions,actions,priority,config
     ) values (
       '00000000-0000-0000-0000-000000000c01',
-      'Browser fabricated workflow','HOT_LEAD','CREATE_OPERATOR_BRIEF',
-      '[]'::jsonb,'[{"key":"CREATE_OPERATOR_BRIEF","config":{}}]'::jsonb,50,'{}'::jsonb
+      'Browser fabricated workflow','HOT_LEAD','GENERATE_PREVIEW',
+      '[]'::jsonb,'[{"key":"GENERATE_PREVIEW","config":{}}]'::jsonb,50,'{}'::jsonb
     );
     raise exception 'Authenticated browser inserted an automation rule directly';
   exception when insufficient_privilege then null;
@@ -62,7 +62,7 @@ begin
     'Controlled workflow model',
     'HOT_LEAD',
     '[{"kind":"PREDICATE","fact":"LEAD.STATUS","operator":"EQ","value":"HOT"},{"kind":"PREDICATE","fact":"LEAD.RECOMMENDED_OFFER","operator":"EQ","value":"workflow-private-marker"}]'::jsonb,
-    '[{"key":"CREATE_OPERATOR_BRIEF","config":{}},{"key":"HANDOFF_HUMAN","config":{}}]'::jsonb,
+    '[{"key":"GENERATE_PREVIEW","config":{}},{"key":"HANDOFF_HUMAN","config":{}}]'::jsonb,
     60,
     '{"mode":"CONTROLLED"}'::jsonb,
     '00000000-0000-0000-0000-00000000c001',
@@ -81,7 +81,7 @@ begin
     'Controlled workflow model',
     'HOT_LEAD',
     '[{"kind":"PREDICATE","fact":"LEAD.STATUS","operator":"EQ","value":"HOT"},{"kind":"PREDICATE","fact":"LEAD.RECOMMENDED_OFFER","operator":"EQ","value":"workflow-private-marker"}]'::jsonb,
-    '[{"key":"CREATE_OPERATOR_BRIEF","config":{}},{"key":"HANDOFF_HUMAN","config":{}}]'::jsonb,
+    '[{"key":"GENERATE_PREVIEW","config":{}},{"key":"HANDOFF_HUMAN","config":{}}]'::jsonb,
     60,
     '{"mode":"CONTROLLED"}'::jsonb,
     '00000000-0000-0000-0000-00000000c001',
@@ -103,7 +103,7 @@ begin
       and execution_state='NOT_READY'
       and enabled=false
       and owner_user_id='00000000-0000-0000-0000-00000000c001'
-      and action_key='CREATE_OPERATOR_BRIEF'
+      and action_key='GENERATE_PREVIEW'
       and jsonb_array_length(actions)=2
   ) then
     raise exception 'Initial automation draft state is incorrect';
@@ -145,7 +145,7 @@ begin
     'Controlled workflow model',
     'HOT_LEAD',
     '[{"kind":"PREDICATE","fact":"LEAD.STATUS","operator":"EQ","value":"HOT"},{"kind":"PREDICATE","fact":"LEAD.RECOMMENDED_OFFER","operator":"EQ","value":"workflow-private-marker"}]'::jsonb,
-    '[{"key":"CREATE_OPERATOR_BRIEF","config":{}},{"key":"HANDOFF_HUMAN","config":{"reason":"qualified"}}]'::jsonb,
+    '[{"key":"GENERATE_PREVIEW","config":{}},{"key":"HANDOFF_HUMAN","config":{"reason":"qualified"}}]'::jsonb,
     70,
     '{"mode":"CONTROLLED"}'::jsonb,
     '00000000-0000-0000-0000-00000000c001'
@@ -205,7 +205,7 @@ begin
     'Controlled workflow model r3',
     'HOT_LEAD',
     '[{"kind":"PREDICATE","fact":"LEAD.STATUS","operator":"EQ","value":"HOT"},{"kind":"PREDICATE","fact":"LEAD.RECOMMENDED_OFFER","operator":"EQ","value":"workflow-private-marker"}]'::jsonb,
-    '[{"key":"CREATE_OPERATOR_BRIEF","config":{}},{"key":"HANDOFF_HUMAN","config":{"reason":"qualified"}}]'::jsonb,
+    '[{"key":"GENERATE_PREVIEW","config":{}},{"key":"HANDOFF_HUMAN","config":{"reason":"qualified"}}]'::jsonb,
     75,
     '{"mode":"CONTROLLED"}'::jsonb,
     '00000000-0000-0000-0000-00000000c001'
