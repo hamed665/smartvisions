@@ -231,7 +231,7 @@ begin
     if not v_nullable then
       raise exception 'Automation condition set-state operator requires a nullable fact: %',v_fact;
     end if;
-    if v_has_value then
+    if p_node ? 'value' then
       raise exception 'Automation condition set-state operator cannot include value';
     end if;
     return 1;
