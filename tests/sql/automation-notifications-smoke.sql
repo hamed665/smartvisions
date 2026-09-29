@@ -1,5 +1,25 @@
 \set ON_ERROR_STOP on
 
+-- Production has this canonical Telegram owner-delivery authority from the
+-- long-lived pre-modern migration lineage. The compact CI chain omits it, so
+-- reconstruct only its durable evidence contract in this disposable database.
+create table if not exists public.telegram_notification_events (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  event_key text not null,
+  notification_type text not null,
+  entity_type text,
+  entity_id text,
+  payload jsonb not null default '{}'::jsonb,
+  status text not null default 'PROCESSING'
+    check (status in ('PROCESSING','SENT','FAILED')),
+  telegram_message_id bigint,
+  error text,
+  created_at timestamptz not null default now(),
+  sent_at timestamptz,
+  unique (organization_id,event_key)
+);
+
 create temp table automation_notification_side_effect_baseline as
 select
   (select count(*) from public.outreach_messages) as outreach_count,
