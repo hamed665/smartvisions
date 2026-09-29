@@ -27,6 +27,16 @@ describe('AUTO-RUNTIME contract',()=>{
     expect(tick).toContain(".eq('latest_published_version', 0)");
   });
 
+  it('fails closed on global runtime safety controls and schedules approval deadlines',()=>{
+    expect(migration).toContain('join public.system_controls controls on controls.organization_id=run.organization_id');
+    expect(migration).toContain('and controls.global_kill_switch=false');
+    expect(migration).toContain('and controls.agents_paused=false');
+    expect(migration).toContain('reconcile_automation_runtime_approval_deadlines');
+    expect(runtime).toContain("rpc(\n    'reconcile_automation_runtime_approval_deadlines'");
+    expect(migration).toContain("waiting.status in ('WAITING_APPROVAL','WAITING_RELEASE','VERIFYING')");
+    expect(migration).toContain('deadline_at=now()+greatest(');
+  });
+
   it('provides leases retries DLQ timeouts compensation idempotency and verification',()=>{
     for(const marker of [
       'claim_automation_runtime_actions',
