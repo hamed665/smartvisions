@@ -103,15 +103,8 @@ async function deliverTelegram(
       || config.organizationId !== organizationId
       || config.ownerUserId !== candidate.recipient_user_id
     ) {
-      await recordDelivery(supabase, {
-        organizationId,
-        notificationId: candidate.notification_id,
-        channel: 'TELEGRAM',
-        escalationLevel: candidate.escalation_level,
-        status: 'BLOCKED_EXTERNAL',
-        reason: 'TELEGRAM_OWNER_NOTIFICATION_NOT_CONFIGURED_FOR_RECIPIENT',
-        payload: { providerConfigured: Boolean(config) },
-      });
+      // Configuration blockers are intentionally not terminal receipts.
+      // The candidate remains eligible after configuration is fixed.
       blocked += 1;
       continue;
     }
@@ -164,14 +157,6 @@ async function deliverTelegram(
       });
       duplicate += 1;
     } else if ('reason' in result && result.reason === 'NOT_CONFIGURED') {
-      await recordDelivery(supabase, {
-        organizationId,
-        notificationId: candidate.notification_id,
-        channel: 'TELEGRAM',
-        escalationLevel: candidate.escalation_level,
-        status: 'BLOCKED_EXTERNAL',
-        reason: 'TELEGRAM_OWNER_NOTIFICATION_NOT_CONFIGURED',
-      });
       blocked += 1;
     } else {
       await recordDelivery(supabase, {
@@ -259,17 +244,15 @@ async function deliverEmail(
 
   const readiness = await emailReadiness(supabase, organizationId);
   if (!readiness.ready) {
-    for (const candidate of rows) {
-      await recordDelivery(supabase, {
-        organizationId,
-        notificationId: candidate.notification_id,
-        channel: 'EMAIL',
-        escalationLevel: candidate.escalation_level,
-        status: 'BLOCKED_EXTERNAL',
-        reason: readiness.reason,
-      });
-    }
-    return { candidates: rows.length, sent: 0, blocked: rows.length, failed: 0 };
+    // Configuration blockers are not terminal receipts. Once the canonical
+    // destination/mailbox/provider becomes ready, these candidates can send.
+    return {
+      candidates: rows.length,
+      sent: 0,
+      blocked: rows.length,
+      failed: 0,
+      blocker: readiness.reason,
+    };
   }
 
   const provider = new ResendEmailProvider();
