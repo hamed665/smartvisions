@@ -212,6 +212,59 @@ begin
 end;
 $claim_requires_verified_success_and_completes_run$;
 
+do $runtime_kill_switch_blocks_claim$
+declare
+  v_rule uuid;
+  v_run uuid;
+  v_action uuid;
+begin
+  select rule_id into v_rule
+  from automation_runtime_results
+  where label='preview';
+
+  update public.system_controls
+  set global_kill_switch=true
+  where organization_id='00000000-0000-0000-0000-000000000c01';
+
+  perform public.enqueue_automation_runtime_event(
+    '00000000-0000-0000-0000-000000000c01',
+    'HOT_LEAD','runtime-smoke.kill-switch.1','LEAD',
+    '00000000-0000-0000-0000-00000000c150','{}'::jsonb,now()
+  );
+
+  select id into v_run
+  from public.automation_runs
+  where automation_rule_id=v_rule
+    and source_event_key='runtime-smoke.kill-switch.1';
+
+  select id into v_action
+  from public.claim_automation_runtime_actions('runtime-smoke-worker-kill',10,120)
+  where automation_run_id=v_run;
+
+  if v_action is not null then
+    raise exception 'Global Kill Switch did not block Automation runtime claim';
+  end if;
+
+  update public.system_controls
+  set global_kill_switch=false
+  where organization_id='00000000-0000-0000-0000-000000000c01';
+
+  select id into v_action
+  from public.claim_automation_runtime_actions('runtime-smoke-worker-resume',10,120)
+  where automation_run_id=v_run;
+
+  if v_action is null then
+    raise exception 'Automation runtime did not resume after Kill Switch release';
+  end if;
+
+  perform public.complete_automation_runtime_action(
+    v_action,'runtime-smoke-worker-resume','CANCELLED',
+    '{}'::jsonb,'{"verified":false}'::jsonb,
+    'CONTROLLED_TEST_CLEANUP',false,null
+  );
+end;
+$runtime_kill_switch_blocks_claim$;
+
 do $ordered_actions_dlq_and_compensation$
 declare
   v_rule uuid;
@@ -469,8 +522,90 @@ begin
   ) then
     raise exception 'Runtime smoke caused a provider send under Shadow Mode';
   end if;
+
+  -- Waiting for human approval / Shadow release is an external durable wait,
+  -- not active execution time. It must not be DLQ'd by the short run budget.
+  perform public.reap_automation_runtime_timeouts(
+    100,
+    now()+interval '2 hours'
+  );
+  if not exists(
+    select 1 from public.automation_run_actions
+    where id=v_action and status='WAITING_RELEASE'
+  ) then
+    raise exception 'Shadow wait was incorrectly dead-lettered by runtime deadline';
+  end if;
+
+  update public.system_controls
+  set shadow_mode=false
+  where organization_id='00000000-0000-0000-0000-000000000c01';
+
+  perform public.reconcile_automation_runtime_waiting(100);
+
+  if not exists(
+    select 1
+    from public.automation_run_actions a
+    join public.automation_runs r on r.id=a.automation_run_id
+    where a.id=v_action
+      and a.status='PENDING'
+      and r.deadline_at>now()
+  ) then
+    raise exception 'Released approval did not restore active runtime deadline budget';
+  end if;
+
+  update public.system_controls
+  set shadow_mode=true
+  where organization_id='00000000-0000-0000-0000-000000000c01';
+
+  perform public.pause_automation_rule_from_runtime(
+    '00000000-0000-0000-0000-000000000c01',
+    v_rule,'runtime-smoke-send-cleanup-1'
+  );
+  perform public.reconcile_automation_runtime_waiting(100);
 end;
 $approval_waits_for_shadow_release$;
+
+do $scheduled_approval_deadline_reconciliation$
+declare
+  v_message jsonb;
+  v_message_id uuid;
+  v_result jsonb;
+begin
+  v_message:=public.create_automation_approval_message(
+    '00000000-0000-0000-0000-000000000c01',
+    '00000000-0000-0000-0000-00000000c160',
+    '00000000-0000-0000-0000-00000000c150',
+    'WHATSAPP','Controlled runtime expiry',
+    '{"to":"+96890000000","market_code":"OM"}'::jsonb,
+    'runtime-smoke-approval-expiry-1'
+  );
+  v_message_id:=(v_message->>'messageId')::uuid;
+
+  perform set_config('app.message_approval_mutation','allowed',true);
+  update public.conversation_messages
+  set
+    approval_escalates_at=now()-interval '2 minutes',
+    approval_expires_at=now()-interval '1 minute'
+  where id=v_message_id;
+  perform set_config('app.message_approval_mutation','0',true);
+
+  v_result:=public.reconcile_automation_runtime_approval_deadlines(100);
+
+  if coalesce((v_result->>'expired')::integer,0)<1 then
+    raise exception 'AUTO-RUNTIME did not schedule due approval expiry reconciliation';
+  end if;
+
+  if not exists(
+    select 1 from public.conversation_messages
+    where id=v_message_id
+      and status='BLOCKED'
+      and approval_decision='EXPIRED'
+      and requires_approval=false
+  ) then
+    raise exception 'Scheduled approval expiry did not fail closed';
+  end if;
+end;
+$scheduled_approval_deadline_reconciliation$;
 
 do $runtime_security_and_side_effects$
 declare
@@ -494,6 +629,7 @@ begin
         'enqueue_automation_runtime_event',
         'claim_automation_runtime_actions',
         'complete_automation_runtime_action',
+        'reconcile_automation_runtime_approval_deadlines',
         'reconcile_automation_runtime_waiting',
         'reap_automation_runtime_timeouts',
         'resolve_automation_runtime_compensation',
@@ -514,6 +650,10 @@ begin
      or not has_function_privilege(
        'service_role',
        'public.complete_automation_runtime_action(uuid,text,text,jsonb,jsonb,text,boolean,integer)','EXECUTE'
+     )
+     or not has_function_privilege(
+       'service_role',
+       'public.reconcile_automation_runtime_approval_deadlines(integer)','EXECUTE'
      )
   then
     raise exception 'Automation runtime service-role grants are incomplete';
