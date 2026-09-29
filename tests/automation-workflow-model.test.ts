@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 const migration=readFileSync('supabase/migrations/0148_automation_workflow_model.sql','utf8');
 const page=readFileSync('app/automations/page.tsx','utf8');
+const builder=readFileSync('components/automations/AutomationBuilder.tsx','utf8');
 const actions=readFileSync('app/management-actions.ts','utf8');
 const ci=readFileSync('.github/workflows/ci.yml','utf8');
 
@@ -44,12 +45,13 @@ describe('AUTO-WORKFLOW-MODEL contract',()=>{
     expect(actions).toContain("rpc('set_automation_rule_enabled'");
   });
 
-  it('exposes draft/publish/version/enable controls without pretending the runtime is complete',()=>{
-    expect(page).toContain('Draft & published model');
-    expect(page).toContain('Publish draft');
-    expect(page).toContain('Published v');
-    expect(page).toContain('Execution eligibility');
-    expect(page).toContain('AUTO-RUNTIME is a separate Work Package');
+  it('exposes explicit draft publish version and enable controls through the builder',()=>{
+    expect(builder).toContain('Create disabled draft');
+    expect(builder).toContain('Save draft revision');
+    expect(builder).toContain('Publish tested draft');
+    expect(builder).toContain('Enable published workflow');
+    expect(builder).toContain('Version comparison');
+    expect(page).toContain("from('automation_rule_versions')");
   });
 
   it('runs the PostgreSQL acceptance smoke in CI',()=>{

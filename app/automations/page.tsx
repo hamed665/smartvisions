@@ -1,22 +1,25 @@
-import {
-  createAutomationRule,
-  publishAutomationRule,
-  saveAutomationRuleDraft,
-  setAutomationRuleEnabled,
-} from '@/app/management-actions';
+import { AutomationBuilder } from '@/components/automations/AutomationBuilder';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 
 export const dynamic='force-dynamic';
 
 export default async function AutomationsPage(){
   const {supabase,organizationId,role}=await getCurrentOrganization();
-  const [rulesResult,catalogResult,conditionFactsResult,actionRegistryResult]=await Promise.all([
+
+  const [
+    rulesResult,
+    catalogResult,
+    conditionFactsResult,
+    actionRegistryResult,
+    versionsResult,
+    runsResult,
+  ]=await Promise.all([
     supabase.from('automation_rules')
       .select('id,name,owner_user_id,trigger_key,action_key,conditions,actions,enabled,priority,config,publication_state,draft_revision,published_revision,latest_published_version,execution_state,last_published_at,created_at,updated_at')
       .eq('organization_id',organizationId)
       .order('priority',{ascending:false}),
     supabase.from('automation_trigger_catalog')
-      .select('trigger_key,family,source_kind,event_name,schema_version,availability,required_work_package,description')
+      .select('trigger_key,family,source_kind,event_name,availability,description')
       .order('family',{ascending:true})
       .order('trigger_key',{ascending:true}),
     supabase.from('automation_condition_fact_catalog')
@@ -24,156 +27,53 @@ export default async function AutomationsPage(){
       .order('subject_type',{ascending:true})
       .order('fact_key',{ascending:true}),
     supabase.from('tool_action_registry')
-      .select('action_key,tool_key,authority_key,permission_key,scope_type,idempotency_required,idempotency_key_contract,cost_class,side_effect_class,approval_requirement,approval_policy_key,verifier_key,audit_contract,availability,required_work_packages,description')
+      .select('action_key,tool_key,scope_type,cost_class,side_effect_class,approval_requirement,availability,description')
       .order('tool_key',{ascending:true})
       .order('action_key',{ascending:true}),
+    supabase.from('automation_rule_versions')
+      .select('id,automation_rule_id,version,draft_revision,name,trigger_key,conditions,actions,priority,config,published_at')
+      .eq('organization_id',organizationId)
+      .order('published_at',{ascending:false})
+      .limit(200),
+    supabase.from('automation_runs')
+      .select('id,automation_rule_id,rule_version,trigger_key,source_event_key,subject_type,subject_id,status,scheduled_at,started_at,completed_at,last_error,compensation_state,created_at')
+      .eq('organization_id',organizationId)
+      .order('created_at',{ascending:false})
+      .limit(100),
   ]);
-  if(rulesResult.error)throw new Error(rulesResult.error.message);
-  if(catalogResult.error)throw new Error(catalogResult.error.message);
-  if(conditionFactsResult.error)throw new Error(conditionFactsResult.error.message);
-  if(actionRegistryResult.error)throw new Error(actionRegistryResult.error.message);
 
-  const rows=rulesResult.data??[];
-  const triggers=catalogResult.data??[];
-  const conditionFacts=conditionFactsResult.data??[];
-  const actions=actionRegistryResult.data??[];
-  const triggerByKey=new Map(triggers.map(trigger=>[trigger.trigger_key,trigger]));
-  const actionByKey=new Map(actions.map(action=>[action.action_key,action]));
-  const editable=role==='OWNER';
-  const ready=rows.filter(rule=>rule.execution_state==='READY').length;
+  for(const result of [
+    rulesResult,
+    catalogResult,
+    conditionFactsResult,
+    actionRegistryResult,
+    versionsResult,
+    runsResult,
+  ]){
+    if(result.error)throw new Error(result.error.message);
+  }
 
-  return <div>
-    <div className="headerRow">
-      <div>
-        <h1>Automation Workflows</h1>
-        <p className="muted">Draft & published model over the canonical automation_rules authority. Published versions are immutable.</p>
-      </div>
-      <span className="status">{ready} execution-ready</span>
-    </div>
+  const runs=runsResult.data??[];
+  const runIds=runs.map(run=>run.id);
+  const runActionsResult=runIds.length
+    ? await supabase.from('automation_run_actions')
+        .select('id,automation_run_id,action_index,action_key,status,attempt_count,max_attempts,last_error,compensation_status,created_at,updated_at')
+        .eq('organization_id',organizationId)
+        .in('automation_run_id',runIds)
+        .order('created_at',{ascending:false})
+        .limit(500)
+    : {data:[],error:null};
 
-    <section className="panel">
-      <h2>Model boundary</h2>
-      <p className="muted">
-        Trigger, conditions, ordered actions, ownership, immutable publish history and enable/disable state live here.
-        AUTO-RUNTIME is a separate Work Package: this screen does not execute a workflow, enqueue work, send a provider message or bypass approval policy.
-      </p>
-    </section>
+  if(runActionsResult.error)throw new Error(runActionsResult.error.message);
 
-    <section className="panel">
-      <h2>Trigger catalog</h2>
-      <p className="muted">
-        {triggers.filter(trigger=>trigger.availability==='AVAILABLE').length} publishable trigger contracts of {triggers.length} cataloged.
-        Dependency-pending triggers may be designed in a draft, but Publish fails closed until their canonical domain authority exists.
-      </p>
-    </section>
-
-    <section className="panel">
-      <h2>Typed condition engine</h2>
-      <p className="muted">
-        {conditionFacts.length} allowlisted canonical facts across {new Set(conditionFacts.map(fact=>fact.subject_type)).size} subject types.
-        Conditions use bounded AND/OR groups and typed operators over Organization-scoped canonical records. No arbitrary SQL/eval.
-        AUTO-BUILDER remains separate; this page intentionally keeps the raw definition visible until the governed visual builder exists.
-      </p>
-    </section>
-
-    <section className="panel">
-      <h2>Tool / action registry</h2>
-      <p className="muted">
-        {actions.filter(action=>action.availability==='AVAILABLE').length} publishable action contracts of {actions.length} cataloged.
-        Every action carries typed I/O, permission, scope, idempotency, cost, side-effect, approval, verifier and audit metadata.
-        Dependency-pending actions remain draftable but cannot Publish. AUTO-RUNTIME remains a separate Work Package.
-      </p>
-    </section>
-
-    <div className="settingsList">
-      {rows.map(rule=>{
-        const hasUnpublishedDraft=rule.publication_state!=='PUBLISHED'||rule.published_revision!==rule.draft_revision;
-        const trigger=triggerByKey.get(rule.trigger_key);
-        const primaryAction=actionByKey.get(rule.action_key);
-        return <section className="panel" key={rule.id}>
-          <div className="headerRow">
-            <div>
-              <h2>{rule.name}</h2>
-              <p className="muted smallText">
-                {rule.trigger_key} → {rule.action_key} · draft r{rule.draft_revision} · Published v{rule.latest_published_version||0}
-              </p>
-            </div>
-            <span className="status">{rule.execution_state}</span>
-          </div>
-
-          <div className="healthList">
-            <span>Trigger contract <strong>{trigger?.family??'UNKNOWN'} / {trigger?.availability??'UNKNOWN'}</strong></span>
-            <span>Action contract <strong>{primaryAction?.tool_key??'UNKNOWN'} / {primaryAction?.availability??'UNKNOWN'}</strong></span>
-            <span>Publication <strong>{rule.publication_state}</strong></span>
-            <span>Execution eligibility <strong>{rule.execution_state}</strong></span>
-            <span>Enabled <strong>{rule.enabled?'YES':'NO'}</strong></span>
-            <span>Owner <strong>{rule.owner_user_id?String(rule.owner_user_id).slice(0,8):'UNASSIGNED'}</strong></span>
-            <span>Published <strong>{rule.last_published_at?new Date(rule.last_published_at).toLocaleString():'Never'}</strong></span>
-          </div>
-
-          {editable?<form action={saveAutomationRuleDraft} className="settingsGrid">
-            <input type="hidden" name="id" value={rule.id}/>
-            <input type="hidden" name="draft_revision" value={rule.draft_revision}/>
-            <input type="hidden" name="owner_user_id" value={rule.owner_user_id??''}/>
-            <label>Name<input name="name" required maxLength={160} defaultValue={rule.name}/></label>
-            <label>Trigger
-              <select name="trigger_key" defaultValue={rule.trigger_key}>
-                {triggers.map(trigger=><option key={trigger.trigger_key} value={trigger.trigger_key}>{trigger.trigger_key} · {trigger.family} · {trigger.availability}</option>)}
-              </select>
-            </label>
-            <label>Priority<input type="number" min="0" max="100" name="priority" defaultValue={rule.priority}/></label>
-            <label className="wideField">Conditions JSON
-              <textarea name="conditions_json" rows={6} spellCheck={false} defaultValue={JSON.stringify(rule.conditions??[],null,2)}/>
-            </label>
-            <label className="wideField">Ordered actions JSON
-              <textarea name="actions_json" rows={8} spellCheck={false} defaultValue={JSON.stringify(rule.actions??[],null,2)}/>
-            </label>
-            <label className="wideField">Workflow config JSON
-              <textarea name="config_json" rows={4} spellCheck={false} defaultValue={JSON.stringify(rule.config??{},null,2)}/>
-            </label>
-            <button>Save new draft revision</button>
-          </form>:null}
-
-          {editable?<div className="approvalActions">
-            <form action={publishAutomationRule}>
-              <input type="hidden" name="id" value={rule.id}/>
-              <input type="hidden" name="draft_revision" value={rule.draft_revision}/>
-              <button className="approveButton" disabled={!hasUnpublishedDraft}>Publish draft</button>
-            </form>
-            <form action={setAutomationRuleEnabled}>
-              <input type="hidden" name="id" value={rule.id}/>
-              <input type="hidden" name="enabled" value={rule.enabled?'false':'true'}/>
-              <button disabled={!rule.enabled&&rule.latest_published_version===0}>
-                {rule.enabled?'Disable published workflow':'Enable published workflow'}
-              </button>
-            </form>
-          </div>:null}
-        </section>;
-      })}
-    </div>
-
-    {rows.length===0?<section className="panel">
-      <p className="muted">No automation workflow exists in this Organization. Production is not seeded merely to make the page look busy.</p>
-    </section>:null}
-
-    {editable?<section className="panel settingsCreate">
-      <h2>Create workflow draft</h2>
-      <p className="muted">Creation makes a disabled DRAFT only. Publish and enable are separate explicit actions.</p>
-      <form action={createAutomationRule} className="settingsGrid">
-        <input type="hidden" name="request_key" value={`automation-create:${crypto.randomUUID()}`}/>
-        <label>Name<input name="name" required maxLength={160} placeholder="Hot lead operator handoff"/></label>
-        <label>Trigger
-          <select name="trigger_key">{triggers.map(trigger=><option key={trigger.trigger_key} value={trigger.trigger_key}>{trigger.trigger_key} · {trigger.family} · {trigger.availability}</option>)}</select>
-        </label>
-        <label>Initial action
-          <select name="action_key">{actions.map(action=><option key={action.action_key} value={action.action_key}>{action.action_key} · {action.tool_key} · {action.availability}</option>)}</select>
-        </label>
-        <label>Priority<input type="number" name="priority" defaultValue="50" min="0" max="100"/></label>
-        <label className="wideField">Conditions JSON
-          <textarea name="conditions_json" rows={5} spellCheck={false} defaultValue="[]"/>
-        </label>
-        <button>Create disabled draft</button>
-      </form>
-    </section>:null}
-  </div>;
+  return <AutomationBuilder
+    editable={role==='OWNER'}
+    rules={rulesResult.data??[]}
+    triggers={catalogResult.data??[]}
+    facts={conditionFactsResult.data??[]}
+    actions={actionRegistryResult.data??[]}
+    versions={versionsResult.data??[]}
+    runs={runs}
+    runActions={runActionsResult.data??[]}
+  />;
 }

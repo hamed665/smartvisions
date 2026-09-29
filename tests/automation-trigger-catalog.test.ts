@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 const migration=readFileSync('supabase/migrations/0149_automation_trigger_catalog.sql','utf8');
 const page=readFileSync('app/automations/page.tsx','utf8');
+const builder=readFileSync('components/automations/AutomationBuilder.tsx','utf8');
 const events=readFileSync('docs/business-os-2027/STATE_EVENT_CATALOG.md','utf8');
 const ci=readFileSync('.github/workflows/ci.yml','utf8');
 
@@ -34,11 +35,13 @@ describe('AUTO-TRIGGER-CATALOG contract',()=>{
     }
   });
 
-  it('uses the database catalog in the operator UI instead of a hardcoded trigger array',()=>{
+  it('uses the database catalog in the visual builder instead of a hardcoded trigger array',()=>{
     expect(page).toContain("from('automation_trigger_catalog')");
-    expect(page).toContain('trigger.availability');
-    expect(page).toContain('Trigger catalog');
+    expect(builder).toContain('Trigger contracts');
+    expect(builder).toContain("item.availability === 'AVAILABLE'");
+    expect(builder).toContain('triggers.find(item => item.trigger_key === triggerKey)');
     expect(page).not.toContain('const TRIGGERS=[');
+    expect(builder).not.toContain('const TRIGGERS=[');
   });
 
   it('aligns catalog event contracts with the reviewed state/event catalog',()=>{
