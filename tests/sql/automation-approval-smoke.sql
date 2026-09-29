@@ -8,6 +8,18 @@ select
 
 grant select on automation_approval_side_effect_baseline to service_role;
 
+insert into auth.users(id)
+values ('00000000-0000-0000-0000-00000000c002')
+on conflict (id) do nothing;
+
+insert into public.organization_members(organization_id,user_id,role)
+values (
+  '00000000-0000-0000-0000-000000000c01',
+  '00000000-0000-0000-0000-00000000c002',
+  'SALES_MANAGER'
+)
+on conflict (organization_id,user_id) do update set role=excluded.role;
+
 -- Reuse the disposable Automation CI Organization/OWNER and Lead created by
 -- earlier controlled smokes. No Production fixture is involved.
 insert into public.approval_rules(
@@ -85,6 +97,16 @@ insert into public.conversation_messages(
   'WHATSAPP','OUTBOUND','TEXT','approval smoke escalate',
   true,'SHADOW_MODE_REVIEW','APPROVAL_REQUIRED',
   '{"source":"SHADOW_MODE"}'::jsonb
+),
+(
+  '00000000-0000-0000-0000-00000000c174',
+  '00000000-0000-0000-0000-000000000c01',
+  '00000000-0000-0000-0000-00000000c160',
+  '00000000-0000-0000-0000-00000000c150',
+  'shadow:auto-approval-ci-delegate',
+  'WHATSAPP','OUTBOUND','TEXT','approval smoke delegate',
+  true,'SHADOW_MODE_REVIEW','APPROVAL_REQUIRED',
+  '{"source":"SHADOW_MODE"}'::jsonb
 );
 
 do $policy_snapshot_and_direct_mutation_guard$
@@ -95,7 +117,8 @@ begin
       '00000000-0000-0000-0000-00000000c170',
       '00000000-0000-0000-0000-00000000c171',
       '00000000-0000-0000-0000-00000000c172',
-      '00000000-0000-0000-0000-00000000c173'
+      '00000000-0000-0000-0000-00000000c173',
+      '00000000-0000-0000-0000-00000000c174'
     )
       and (
         approval_action_key<>'OUTBOUND_SEND'
@@ -185,6 +208,48 @@ begin
   end if;
 end;
 $approve_reject_and_replay$;
+
+do $delegate_and_assigned_reviewer$
+declare
+  v_result jsonb;
+begin
+  v_result:=public.delegate_message_approval(
+    '00000000-0000-0000-0000-000000000c01',
+    '00000000-0000-0000-0000-00000000c001',
+    '00000000-0000-0000-0000-00000000c174',
+    '00000000-0000-0000-0000-00000000c002',
+    'approval-ci-delegate-0001'
+  );
+  if v_result->>'decision'<>'DELEGATED'
+     or v_result->>'reviewerUserId'<>'00000000-0000-0000-0000-00000000c002'
+  then
+    raise exception 'Approval delegation failed';
+  end if;
+
+  v_result:=public.delegate_message_approval(
+    '00000000-0000-0000-0000-000000000c01',
+    '00000000-0000-0000-0000-00000000c001',
+    '00000000-0000-0000-0000-00000000c174',
+    '00000000-0000-0000-0000-00000000c002',
+    'approval-ci-delegate-0001'
+  );
+  if coalesce((v_result->>'replayed')::boolean,false) is distinct from true then
+    raise exception 'Approval delegation replay failed';
+  end if;
+
+  v_result:=public.decide_message_approval(
+    '00000000-0000-0000-0000-000000000c01',
+    '00000000-0000-0000-0000-00000000c002',
+    '00000000-0000-0000-0000-00000000c174',
+    'APPROVE',null,'approval-ci-delegate-approve-0001'
+  );
+  if v_result->>'decision'<>'APPROVED'
+     or v_result->>'reviewerUserId'<>'00000000-0000-0000-0000-00000000c002'
+  then
+    raise exception 'Assigned delegated reviewer could not decide approval';
+  end if;
+end;
+$delegate_and_assigned_reviewer$;
 
 reset role;
 
