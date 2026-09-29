@@ -2,13 +2,11 @@
 
 -- Controlled test fixture lives only in the disposable PostgreSQL CI database.
 insert into public.leads(
-  id,organization_id,status,opportunity_score,intent_score,agent_mode,
-  recommended_offer,score_reasons,fit_score,engagement_score
+  id,organization_id,recommended_offer
 ) values (
   '00000000-0000-0000-0000-00000000c150',
   '00000000-0000-0000-0000-000000000c01',
-  'HOT',88,72,'AUTO',
-  'workflow-private-marker','[]'::jsonb,81,64
+  'workflow-private-marker'
 )
 on conflict (id) do nothing;
 
@@ -66,8 +64,8 @@ begin
   select public.validate_automation_conditions(
     '[
       {"kind":"GROUP","op":"AND","children":[
-        {"kind":"PREDICATE","fact":"LEAD.STATUS","operator":"EQ","value":"HOT"},
-        {"kind":"PREDICATE","fact":"LEAD.OPPORTUNITY_SCORE","operator":"GTE","value":80}
+        {"kind":"PREDICATE","fact":"LEAD.STATUS","operator":"EQ","value":"NEW"},
+        {"kind":"PREDICATE","fact":"LEAD.OPPORTUNITY_SCORE","operator":"GTE","value":0}
       ]},
       {"kind":"PREDICATE","fact":"LEAD.RECOMMENDED_OFFER","operator":"EQ","value":"workflow-private-marker"}
     ]'::jsonb
@@ -88,7 +86,7 @@ begin
 
   begin
     perform public.validate_automation_conditions(
-      '[{"kind":"PREDICATE","fact":"LEAD.STATUS","operator":"GT","value":"HOT"}]'::jsonb
+      '[{"kind":"PREDICATE","fact":"LEAD.STATUS","operator":"GT","value":"NEW"}]'::jsonb
     );
     raise exception 'Wrong typed operator was accepted';
   exception when others then
@@ -98,7 +96,7 @@ begin
   begin
     perform public.validate_automation_conditions(
       '[
-        {"kind":"PREDICATE","fact":"LEAD.STATUS","operator":"EQ","value":"HOT"},
+        {"kind":"PREDICATE","fact":"LEAD.STATUS","operator":"EQ","value":"NEW"},
         {"kind":"PREDICATE","fact":"DEAL.STATE","operator":"EQ","value":"OPEN"}
       ]'::jsonb
     );
@@ -122,8 +120,8 @@ begin
     '00000000-0000-0000-0000-00000000c150',
     '[
       {"kind":"GROUP","op":"AND","children":[
-        {"kind":"PREDICATE","fact":"LEAD.STATUS","operator":"EQ","value":"HOT"},
-        {"kind":"PREDICATE","fact":"LEAD.OPPORTUNITY_SCORE","operator":"GTE","value":80}
+        {"kind":"PREDICATE","fact":"LEAD.STATUS","operator":"EQ","value":"NEW"},
+        {"kind":"PREDICATE","fact":"LEAD.OPPORTUNITY_SCORE","operator":"GTE","value":0}
       ]},
       {"kind":"PREDICATE","fact":"LEAD.RECOMMENDED_OFFER","operator":"EQ","value":"workflow-private-marker"}
     ]'::jsonb
@@ -149,7 +147,7 @@ begin
       '00000000-0000-0000-0000-000000000c02',
       'LEAD',
       '00000000-0000-0000-0000-00000000c150',
-      '[{"kind":"PREDICATE","fact":"LEAD.STATUS","operator":"EQ","value":"HOT"}]'::jsonb
+      '[{"kind":"PREDICATE","fact":"LEAD.STATUS","operator":"EQ","value":"NEW"}]'::jsonb
     );
     raise exception 'Cross-Organization subject lookup succeeded';
   exception when others then
@@ -168,7 +166,7 @@ begin
     '00000000-0000-0000-0000-00000000c001',
     'Typed Lead condition workflow',
     'HOT_LEAD',
-    '[{"kind":"PREDICATE","fact":"LEAD.STATUS","operator":"EQ","value":"HOT"}]'::jsonb,
+    '[{"kind":"PREDICATE","fact":"LEAD.STATUS","operator":"EQ","value":"NEW"}]'::jsonb,
     '[{"key":"CREATE_OPERATOR_BRIEF","config":{}}]'::jsonb,
     50,
     '{}'::jsonb,
@@ -186,7 +184,7 @@ begin
       '00000000-0000-0000-0000-00000000c001',
       'Mismatched message condition workflow',
       'MESSAGE_RECEIVED',
-      '[{"kind":"PREDICATE","fact":"LEAD.STATUS","operator":"EQ","value":"HOT"}]'::jsonb,
+      '[{"kind":"PREDICATE","fact":"LEAD.STATUS","operator":"EQ","value":"NEW"}]'::jsonb,
       '[{"key":"CREATE_OPERATOR_BRIEF","config":{}}]'::jsonb,
       50,
       '{}'::jsonb,
