@@ -159,46 +159,76 @@ create policy service_booking_profiles_member_read
 on public.service_booking_profiles for select to authenticated
 using (public.is_org_member(organization_id));
 
-create policy service_booking_profiles_owner_write
-on public.service_booking_profiles for all to authenticated
+create policy service_booking_profiles_owner_insert
+on public.service_booking_profiles for insert to authenticated
+with check (public.is_org_owner(organization_id));
+create policy service_booking_profiles_owner_update
+on public.service_booking_profiles for update to authenticated
 using (public.is_org_owner(organization_id))
 with check (public.is_org_owner(organization_id));
+create policy service_booking_profiles_owner_delete
+on public.service_booking_profiles for delete to authenticated
+using (public.is_org_owner(organization_id));
 
 create policy service_booking_branches_member_read
 on public.service_booking_branches for select to authenticated
 using (public.is_org_member(organization_id));
 
-create policy service_booking_branches_owner_write
-on public.service_booking_branches for all to authenticated
+create policy service_booking_branches_owner_insert
+on public.service_booking_branches for insert to authenticated
+with check (public.is_org_owner(organization_id));
+create policy service_booking_branches_owner_update
+on public.service_booking_branches for update to authenticated
 using (public.is_org_owner(organization_id))
 with check (public.is_org_owner(organization_id));
+create policy service_booking_branches_owner_delete
+on public.service_booking_branches for delete to authenticated
+using (public.is_org_owner(organization_id));
 
 create policy service_booking_staff_member_read
 on public.service_booking_staff for select to authenticated
 using (public.is_org_member(organization_id));
 
-create policy service_booking_staff_owner_write
-on public.service_booking_staff for all to authenticated
+create policy service_booking_staff_owner_insert
+on public.service_booking_staff for insert to authenticated
+with check (public.is_org_owner(organization_id));
+create policy service_booking_staff_owner_update
+on public.service_booking_staff for update to authenticated
 using (public.is_org_owner(organization_id))
 with check (public.is_org_owner(organization_id));
+create policy service_booking_staff_owner_delete
+on public.service_booking_staff for delete to authenticated
+using (public.is_org_owner(organization_id));
 
 create policy booking_resources_member_read
 on public.booking_resources for select to authenticated
 using (public.is_org_member(organization_id));
 
-create policy booking_resources_owner_write
-on public.booking_resources for all to authenticated
+create policy booking_resources_owner_insert
+on public.booking_resources for insert to authenticated
+with check (public.is_org_owner(organization_id));
+create policy booking_resources_owner_update
+on public.booking_resources for update to authenticated
 using (public.is_org_owner(organization_id))
 with check (public.is_org_owner(organization_id));
+create policy booking_resources_owner_delete
+on public.booking_resources for delete to authenticated
+using (public.is_org_owner(organization_id));
 
 create policy service_booking_resource_requirements_member_read
 on public.service_booking_resource_requirements for select to authenticated
 using (public.is_org_member(organization_id));
 
-create policy service_booking_resource_requirements_owner_write
-on public.service_booking_resource_requirements for all to authenticated
+create policy service_booking_resource_requirements_owner_insert
+on public.service_booking_resource_requirements for insert to authenticated
+with check (public.is_org_owner(organization_id));
+create policy service_booking_resource_requirements_owner_update
+on public.service_booking_resource_requirements for update to authenticated
 using (public.is_org_owner(organization_id))
 with check (public.is_org_owner(organization_id));
+create policy service_booking_resource_requirements_owner_delete
+on public.service_booking_resource_requirements for delete to authenticated
+using (public.is_org_owner(organization_id));
 
 revoke all on table
   public.service_booking_profiles,
