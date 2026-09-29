@@ -18,7 +18,11 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
     reduceCommunicationPlaneScopedAssignment:'SPECIALIZED:CHATWOOT_EXTERNAL_FIRST_SCOPE_REDUCTION',
   },
   'app/control-center-actions.ts': {
-    updateService:'service.update', createService:'service.create', updatePrice:'price.update', updateMarket:'market.update', updateAgent:'agent.update', updateApprovalRule:'approval.require',
+    updateService:'service.update', createService:'service.create',
+    updateServiceBookingCatalog:'SPECIALIZED:BOOKING_CATALOG',
+    createBookingResource:'SPECIALIZED:BOOKING_CATALOG',
+    updateBookingResource:'SPECIALIZED:BOOKING_CATALOG',
+    updatePrice:'price.update', updateMarket:'market.update', updateAgent:'agent.update', updateApprovalRule:'approval.require',
   },
   'app/customer-success/customer-success-actions.ts': {
     acceptCustomerSuccessTask:'SPECIALIZED:CUSTOMER_SUCCESS_GOVERNANCE',
@@ -165,6 +169,10 @@ describe('Control Center ↔ Telegram action coverage', () => {
     expect(CLASSIFICATION['app/notification-actions.ts'].saveNotificationPreferences).toBe('SPECIALIZED:AUTOMATION_NOTIFICATIONS');
     expect(CLASSIFICATION['app/notification-actions.ts'].markNotificationRead).toBe('SPECIALIZED:AUTOMATION_NOTIFICATIONS');
     expect(CLASSIFICATION['app/notification-actions.ts'].acknowledgeNotification).toBe('SPECIALIZED:AUTOMATION_NOTIFICATIONS');
+    expect(CLASSIFICATION['app/control-center-actions.ts'].updateServiceBookingCatalog).toBe('SPECIALIZED:BOOKING_CATALOG');
+    expect(CLASSIFICATION['app/control-center-actions.ts'].createBookingResource).toBe('SPECIALIZED:BOOKING_CATALOG');
+    expect(CLASSIFICATION['app/control-center-actions.ts'].updateBookingResource).toBe('SPECIALIZED:BOOKING_CATALOG');
+
 
     expect(CLASSIFICATION['app/daily-target-actions.ts'].setDailyOutreachTarget).toBe('SPECIALIZED:DAILY_OUTREACH_TARGET');
     expect(CLASSIFICATION['app/business-os-actions.ts'].bootstrapCanonicalOperatingHierarchy).toBe('SPECIALIZED:BUSINESS_OS_HIERARCHY_BOOTSTRAP');
