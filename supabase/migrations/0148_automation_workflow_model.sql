@@ -96,6 +96,9 @@ alter table public.automation_rules
        and owner_user_id is not null)
     );
 
+create index if not exists automation_rules_active_idx
+  on public.automation_rules(organization_id,enabled,priority desc);
+
 create unique index if not exists automation_rules_org_id_id_uidx
   on public.automation_rules(organization_id,id);
 
@@ -384,6 +387,9 @@ begin
   if nullif(btrim(p_request_key),'') is null or length(p_request_key)>200 then
     raise exception 'Automation creation request key is required and bounded';
   end if;
+  perform pg_advisory_xact_lock(
+    hashtextextended(p_organization_id::text||':'||p_request_key,0)
+  );
   if p_priority not between 0 and 100 then
     raise exception 'Automation priority must be between 0 and 100';
   end if;
