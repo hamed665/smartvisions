@@ -51,7 +51,10 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
     updateIntegration:'integration.update', updateOrganizationSettings:'organization.update',
     createKnowledge:'CANONICAL_ALIAS:knowledge.publish', createPromptVersion:'CANONICAL_ALIAS:prompt.publish',
     updateLead:'lead.update', addSuppression:'suppression.add', updatePortfolioItem:'portfolio.update', updatePreviewTemplate:'preview_template.update',
-    approveMessage:'SPECIALIZED:/approve', rejectMessage:'SPECIALIZED:/reject', updateConversation:'conversation.update',
+    approveMessage:'SPECIALIZED:/approve', rejectMessage:'SPECIALIZED:/reject',
+    delegateMessageApproval:'SPECIALIZED:AUTOMATION_APPROVAL',
+    reconcileApprovalDeadlines:'SPECIALIZED:AUTOMATION_APPROVAL',
+    updateConversation:'conversation.update',
     releaseHumanTakeover:'SPECIALIZED:OWNER_RELEASE',
   },
   'app/extended-actions.ts': {
@@ -148,6 +151,8 @@ describe('Control Center ↔ Telegram action coverage', () => {
     expect(CLASSIFICATION['app/management-actions.ts'].updateSystemControls).toBe('SPECIALIZED:SAFE_CONTROLS');
     expect(CLASSIFICATION['app/management-actions.ts'].approveMessage).toBe('SPECIALIZED:/approve');
     expect(CLASSIFICATION['app/management-actions.ts'].rejectMessage).toBe('SPECIALIZED:/reject');
+    expect(CLASSIFICATION['app/management-actions.ts'].delegateMessageApproval).toBe('SPECIALIZED:AUTOMATION_APPROVAL');
+    expect(CLASSIFICATION['app/management-actions.ts'].reconcileApprovalDeadlines).toBe('SPECIALIZED:AUTOMATION_APPROVAL');
     expect(CLASSIFICATION['app/management-actions.ts'].releaseHumanTakeover).toBe('SPECIALIZED:OWNER_RELEASE');
     expect(CLASSIFICATION['app/management-actions.ts'].saveAutomationRuleDraft).toBe('SPECIALIZED:AUTOMATION_WORKFLOW_MODEL');
     expect(CLASSIFICATION['app/management-actions.ts'].publishAutomationRule).toBe('SPECIALIZED:AUTOMATION_WORKFLOW_MODEL');
