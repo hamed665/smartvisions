@@ -312,6 +312,20 @@ grant update (
   approval_denial_reason
 ) on public.conversation_messages to service_role;
 
+grant select (
+  organization_id,user_id,role
+) on public.organization_members to service_role;
+
+grant select (
+  organization_id,action,entity_type,entity_id,
+  correlation_id,after_data,created_at
+) on public.audit_logs to service_role;
+
+grant insert (
+  organization_id,actor_type,actor_id,action,
+  entity_type,entity_id,after_data,correlation_id
+) on public.audit_logs to service_role;
+
 create or replace function public.message_approval_replay(
   p_organization_id uuid,
   p_message_id uuid,
