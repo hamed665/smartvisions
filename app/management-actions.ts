@@ -172,9 +172,65 @@ export async function updatePortfolioItem(f:FormData){const ctx=await owner();co
 
 export async function updatePreviewTemplate(f:FormData){const ctx=await owner();const id=required(f,'id');const payload={name:required(f,'name'),active:bool(f,'active'),quality_tier:required(f,'quality_tier'),updated_at:now()};const{error}=await ctx.supabase.from('preview_templates').update(payload).eq('organization_id',ctx.organizationId).eq('id',id);if(error)throw error;await audit(ctx,'UPDATE_PREVIEW_TEMPLATE','preview_template',id,payload);revalidatePath('/preview-studio')}
 
-export async function approveMessage(f:FormData){const ctx=await owner();const id=required(f,'id');const payload={requires_approval:false,status:'APPROVED',approval_reason:null,processed_at:now()};const{error}=await ctx.supabase.from('conversation_messages').update(payload).eq('organization_id',ctx.organizationId).eq('id',id);if(error)throw error;await audit(ctx,'APPROVE_MESSAGE','conversation_message',id,payload);revalidatePath('/approvals');revalidatePath('/conversations')}
+const approvalService=()=>createSupabaseServiceClient();
 
-export async function rejectMessage(f:FormData){const ctx=await owner();const id=required(f,'id');const payload={requires_approval:false,status:'BLOCKED',approval_reason:text(f,'reason')||'Rejected by owner',processed_at:now()};const{error}=await ctx.supabase.from('conversation_messages').update(payload).eq('organization_id',ctx.organizationId).eq('id',id);if(error)throw error;await audit(ctx,'REJECT_MESSAGE','conversation_message',id,payload);revalidatePath('/approvals');revalidatePath('/conversations')}
+export async function approveMessage(f:FormData){
+  const ctx=await getCurrentOrganization();
+  const id=required(f,'id');
+  const {error}=await approvalService().rpc('decide_message_approval',{
+    p_organization_id:ctx.organizationId,
+    p_actor_user_id:ctx.userId,
+    p_message_id:id,
+    p_decision:'APPROVE',
+    p_reason:null,
+    p_request_key:text(f,'request_key')||`approval:approve:${id}:${crypto.randomUUID()}`,
+  });
+  if(error)throw new Error(error.message);
+  revalidatePath('/approvals');
+  revalidatePath('/conversations');
+}
+
+export async function rejectMessage(f:FormData){
+  const ctx=await getCurrentOrganization();
+  const id=required(f,'id');
+  const reason=required(f,'reason');
+  const {error}=await approvalService().rpc('decide_message_approval',{
+    p_organization_id:ctx.organizationId,
+    p_actor_user_id:ctx.userId,
+    p_message_id:id,
+    p_decision:'REJECT',
+    p_reason:reason,
+    p_request_key:text(f,'request_key')||`approval:reject:${id}:${crypto.randomUUID()}`,
+  });
+  if(error)throw new Error(error.message);
+  revalidatePath('/approvals');
+  revalidatePath('/conversations');
+}
+
+export async function delegateMessageApproval(f:FormData){
+  const ctx=await getCurrentOrganization();
+  const id=required(f,'id');
+  const {error}=await approvalService().rpc('delegate_message_approval',{
+    p_organization_id:ctx.organizationId,
+    p_actor_user_id:ctx.userId,
+    p_message_id:id,
+    p_delegate_to_user_id:required(f,'delegate_user_id'),
+    p_request_key:text(f,'request_key')||`approval:delegate:${id}:${crypto.randomUUID()}`,
+  });
+  if(error)throw new Error(error.message);
+  revalidatePath('/approvals');
+}
+
+export async function reconcileApprovalDeadlines(){
+  const ctx=await owner();
+  const {error}=await approvalService().rpc('reconcile_due_message_approvals',{
+    p_organization_id:ctx.organizationId,
+    p_limit:100,
+  });
+  if(error)throw new Error(error.message);
+  revalidatePath('/approvals');
+  revalidatePath('/conversations');
+}
 
 export async function updateConversation(f:FormData){const ctx=await owner();const id=required(f,'id');const stages=['NEW','ACTIVE','CLOSING','WAITING_CUSTOMER','UNANSWERED','HOT','NEEDS_HUMAN','FOLLOW_UP_DUE','WON','LOST','DO_NOT_CONTACT','SPAM','PAUSED'];const stage=required(f,'stage');if(!stages.includes(stage))throw new Error('invalid conversation stage');const requires_human=bool(f,'requires_human');const payload={stage,requires_human,awaiting_party:requires_human?'HUMAN':stage==='WAITING_CUSTOMER'?'CUSTOMER':'NONE',priority:Math.min(100,Math.max(0,Math.round(number(f,'priority',50)))),updated_at:now()};const{error}=await ctx.supabase.from('sales_conversations').update(payload).eq('organization_id',ctx.organizationId).eq('id',id);if(error)throw error;await audit(ctx,'UPDATE_CONVERSATION','sales_conversation',id,payload);revalidatePath('/conversations');revalidatePath(`/conversations/${id}`)}
 
