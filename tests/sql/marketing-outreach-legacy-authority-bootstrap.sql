@@ -83,6 +83,12 @@ create table if not exists public.message_variants (
   unique (organization_id,country_code,industry,service_id,variant_key)
 );
 
+-- Production carries the canonical UUID default on conversation_messages.id.
+-- The compact timeline bootstrap creates the column but omits that historical
+-- default, so restore Production parity before late Automation migrations.
+alter table public.conversation_messages
+  alter column id set default gen_random_uuid();
+
 -- Production carries this Lead field from the pre-Business-OS lineage.
 -- The compact Customer 360 bootstrap intentionally does not reproduce every
 -- legacy Lead column, so restore only the field needed by late-migration parity.
