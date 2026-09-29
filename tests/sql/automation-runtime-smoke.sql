@@ -272,6 +272,59 @@ begin
 end;
 $runtime_kill_switch_blocks_claim$;
 
+do $runtime_agents_pause_blocks_claim$
+declare
+  v_rule uuid;
+  v_run uuid;
+  v_action uuid;
+begin
+  select rule_id into v_rule
+  from automation_runtime_results
+  where label='preview';
+
+  update public.system_controls
+  set agents_paused=true
+  where organization_id='00000000-0000-0000-0000-000000000c01';
+
+  perform public.enqueue_automation_runtime_event(
+    '00000000-0000-0000-0000-000000000c01',
+    'HOT_LEAD','runtime-smoke.agents-pause.1','LEAD',
+    '00000000-0000-0000-0000-00000000c150','{}'::jsonb,now()
+  );
+
+  select id into v_run
+  from public.automation_runs
+  where automation_rule_id=v_rule
+    and source_event_key='runtime-smoke.agents-pause.1';
+
+  select id into v_action
+  from public.claim_automation_runtime_actions('runtime-smoke-worker-agents-paused',10,120)
+  where automation_run_id=v_run;
+
+  if v_action is not null then
+    raise exception 'Agents Pause did not block Automation runtime claim';
+  end if;
+
+  update public.system_controls
+  set agents_paused=false
+  where organization_id='00000000-0000-0000-0000-000000000c01';
+
+  select id into v_action
+  from public.claim_automation_runtime_actions('runtime-smoke-worker-agents-resume',10,120)
+  where automation_run_id=v_run;
+
+  if v_action is null then
+    raise exception 'Automation runtime did not resume after Agents Pause release';
+  end if;
+
+  perform public.complete_automation_runtime_action(
+    v_action,'runtime-smoke-worker-agents-resume','CANCELLED',
+    '{}'::jsonb,'{"verified":false}'::jsonb,
+    'CONTROLLED_TEST_CLEANUP',false,null
+  );
+end;
+$runtime_agents_pause_blocks_claim$;
+
 do $ordered_actions_dlq_and_compensation$
 declare
   v_rule uuid;
