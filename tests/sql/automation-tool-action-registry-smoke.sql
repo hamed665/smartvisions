@@ -80,9 +80,9 @@ begin
       and approval_policy_key='OUTBOUND_SEND'
       and side_effect_class='EXTERNAL_PROVIDER'
       and cost_class='PROVIDER_METERED'
-      and required_work_packages @> array['AUTO-APPROVAL','AUTO-RUNTIME']::text[]
+      and required_work_packages @> array['AUTO-RUNTIME']::text[]
   ) then
-    raise exception 'SEND_FOLLOWUP approval/runtime contract is incomplete';
+    raise exception 'SEND_FOLLOWUP provider/runtime contract is incomplete';
   end if;
 
   if not exists(
