@@ -151,14 +151,19 @@ declare
   v_rule public.approval_rules%rowtype;
   v_entering_queue boolean;
 begin
-  v_entering_queue :=
-    new.requires_approval
-    and new.status in ('APPROVAL_REQUIRED','READY')
-    and (
-      tg_op='INSERT'
-      or old.requires_approval is distinct from true
-      or old.status not in ('APPROVAL_REQUIRED','READY')
-    );
+  if tg_op='INSERT' then
+    v_entering_queue :=
+      new.requires_approval
+      and new.status in ('APPROVAL_REQUIRED','READY');
+  else
+    v_entering_queue :=
+      new.requires_approval
+      and new.status in ('APPROVAL_REQUIRED','READY')
+      and (
+        old.requires_approval is distinct from true
+        or old.status not in ('APPROVAL_REQUIRED','READY')
+      );
+  end if;
 
   if not v_entering_queue then
     return new;
