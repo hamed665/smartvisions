@@ -178,6 +178,24 @@ to authenticated
 using (
   recipient_user_id=(select auth.uid())
   and public.is_org_member(organization_id)
+  and coalesce((
+    select p.in_app_enabled
+    from public.notification_preferences p
+    where p.organization_id=notification_inbox.organization_id
+      and p.user_id=(select auth.uid())
+  ),true)
+  and (
+    case severity
+      when 'LOW' then 1 when 'MEDIUM' then 2 when 'HIGH' then 3 when 'CRITICAL' then 4 else 0
+    end
+  ) >= coalesce((
+    select case p.minimum_severity
+      when 'LOW' then 1 when 'MEDIUM' then 2 when 'HIGH' then 3 when 'CRITICAL' then 4 else 2
+    end
+    from public.notification_preferences p
+    where p.organization_id=notification_inbox.organization_id
+      and p.user_id=(select auth.uid())
+  ),2)
 );
 
 create policy notification_delivery_recipient_read
@@ -713,7 +731,7 @@ begin
     and case v_channel
       when 'TELEGRAM' then
         m.role='OWNER' and coalesce(p.telegram_enabled,m.role='OWNER')
-      when 'EMAIL' then coalesce(p.email_enabled,false)
+      when 'EMAIL' then m.role='OWNER' and coalesce(p.email_enabled,false)
       when 'PUSH' then coalesce(p.push_enabled,false)
       when 'SMS' then coalesce(p.sms_enabled,false)
       else false
