@@ -1,4 +1,9 @@
-import { approveMessage, rejectMessage } from '@/app/management-actions';
+import {
+  approveMessage,
+  delegateMessageApproval,
+  reconcileApprovalDeadlines,
+  rejectMessage,
+} from '@/app/management-actions';
 import { processLatestWhatsAppInboundPilot, sendApprovedWhatsAppCatalogPilot } from '@/app/whatsapp-pilot-actions';
 import { sendApprovedWhatsAppOptInFirstTouch } from '@/app/whatsapp-opt-in-actions';
 import { getCurrentOrganization } from '@/lib/supabase/org';
@@ -10,7 +15,7 @@ function recordValue(value: unknown) {
 }
 
 export default async function ApprovalsPage() {
-  const { supabase, organizationId, role } = await getCurrentOrganization();
+  const { supabase, organizationId, role, userId } = await getCurrentOrganization();
   const [
     { data: messages },
     { data: briefs },
@@ -18,9 +23,10 @@ export default async function ApprovalsPage() {
     { data: controls },
     { data: latestInbound },
     { data: pilotCandidates },
+    { data: eligibleReviewers },
   ] = await Promise.all([
     supabase.from('conversation_messages')
-      .select('id,conversation_id,channel,original_text,transcript,persian_translation,persian_summary,approval_reason,status,created_at,metadata')
+      .select('id,conversation_id,channel,original_text,transcript,persian_translation,persian_summary,approval_reason,status,created_at,metadata,approval_action_key,approval_policy_mode,approval_requested_at,approval_escalates_at,approval_expires_at,approval_escalated_at,approval_reviewer_roles,approval_allow_delegation,approval_delegation_roles,approval_reviewer_user_id,approval_delegated_by_user_id,approval_delegated_at')
       .eq('organization_id', organizationId)
       .eq('requires_approval', true)
       .in('status', ['APPROVAL_REQUIRED', 'READY'])
@@ -33,7 +39,7 @@ export default async function ApprovalsPage() {
       .order('created_at', { ascending: false })
       .limit(100),
     supabase.from('approval_rules')
-      .select('action_key,requires_approval')
+      .select('action_key,requires_approval,mode,expiry_minutes,escalation_minutes,allow_delegation,reviewer_roles,delegation_roles')
       .eq('organization_id', organizationId),
     supabase.from('system_controls')
       .select('shadow_mode,global_kill_switch,agents_paused,whatsapp_ai_paused')
@@ -55,11 +61,16 @@ export default async function ApprovalsPage() {
       .eq('channel', 'WHATSAPP')
       .order('created_at', { ascending: false })
       .limit(50),
+    supabase.from('organization_members')
+      .select('user_id,role')
+      .eq('organization_id', organizationId)
+      .in('role', ['OWNER', 'ADMIN', 'SALES_MANAGER', 'SALES_AGENT']),
   ]);
 
   const queue = messages ?? [];
   const operator = briefs ?? [];
-  const editable = role === 'OWNER';
+  const ownerEditable = role === 'OWNER';
+  const reviewers = eligibleReviewers ?? [];
   const latestPilotIdempotencyKey = latestInbound
     ? `agent:whatsapp-pilot:${latestInbound.id}:shadow`
     : null;
@@ -85,7 +96,7 @@ export default async function ApprovalsPage() {
     && !controls?.agents_paused
     && !controls?.whatsapp_ai_paused,
   );
-  const pilotReady = Boolean(editable && latestInbound && controlsClear && !pilotMessage);
+  const pilotReady = Boolean(ownerEditable && latestInbound && controlsClear && !pilotMessage);
   const pilotSendReady = Boolean(
     editable
     && controlsClear
@@ -99,10 +110,15 @@ export default async function ApprovalsPage() {
         <h1>Approvals</h1>
         <p className="muted">Only exceptional or high-risk decisions should land here. Routine replies stay autonomous.</p>
       </div>
-      <span className="status">{queue.length + operator.length} waiting</span>
+      <div className="approvalActions">
+        <span className="status">{queue.length + operator.length} waiting</span>
+        {ownerEditable ? <form action={reconcileApprovalDeadlines}>
+          <button>Reconcile due approvals</button>
+        </form> : null}
+      </div>
     </div>
 
-    {editable ? <section className="panel">
+    {ownerEditable ? <section className="panel">
       <div className="conversationTopline">
         <strong>Controlled WhatsApp Agent Pilot</strong>
         <span className="humanBadge">SHADOW MODE</span>
@@ -118,7 +134,7 @@ export default async function ApprovalsPage() {
       {!controls?.shadow_mode ? <p className="muted">Blocked because Shadow Mode is OFF.</p> : null}
     </section> : null}
 
-    {editable && pilotMessage && pilotMessage.status !== 'APPROVAL_REQUIRED' ? <section className="panel">
+    {ownerEditable && pilotMessage && pilotMessage.status !== 'APPROVAL_REQUIRED' ? <section className="panel">
       <div className="conversationTopline">
         <strong>Controlled WhatsApp {pilotMode === 'CATALOG' ? 'Catalog' : 'Text'} Send</strong>
         <span className="humanBadge">{pilotMessage.status}</span>
@@ -135,7 +151,7 @@ export default async function ApprovalsPage() {
       {pilotMessage.status === 'FAILED' ? <p className="muted">The send failed before provider acceptance. Review the recorded failure before any manual retry: {pilotMessage.approval_reason || 'No detail recorded.'}</p> : null}
     </section> : null}
 
-    {editable && optInPilotMessages.length ? <section className="panel">
+    {ownerEditable && optInPilotMessages.length ? <section className="panel">
       <div className="conversationTopline">
         <strong>Oman WhatsApp Opt-in Pilot</strong>
         <span className="humanBadge">VERIFIED OPT-IN ONLY</span>
@@ -176,6 +192,38 @@ export default async function ApprovalsPage() {
       {queue.map((message) => {
         const sendContext = recordValue(recordValue(message.metadata).send_context);
         const catalogContentId = sendContext.catalog_content_id;
+        const expiresAt = message.approval_expires_at ? new Date(message.approval_expires_at) : null;
+        const escalatesAt = message.approval_escalates_at ? new Date(message.approval_escalates_at) : null;
+        const expired = Boolean(expiresAt && expiresAt.getTime() <= Date.now());
+        const reviewerRoles = Array.isArray(message.approval_reviewer_roles)
+          ? message.approval_reviewer_roles.filter((value): value is string => typeof value === 'string')
+          : [];
+        const delegationRoles = Array.isArray(message.approval_delegation_roles)
+          ? message.approval_delegation_roles.filter((value): value is string => typeof value === 'string')
+          : [];
+        const canReview = Boolean(
+          !expired
+          && (
+            role === 'OWNER'
+            || (
+              message.approval_reviewer_user_id
+                ? message.approval_reviewer_user_id === userId
+                : reviewerRoles.includes(role)
+            )
+          ),
+        );
+        const canDelegate = Boolean(
+          canReview
+          && (role === 'OWNER' || role === 'ADMIN')
+          && message.approval_allow_delegation,
+        );
+        const delegationCandidates = canDelegate
+          ? reviewers.filter((reviewer) => (
+              reviewer.user_id !== userId
+              && delegationRoles.includes(reviewer.role)
+            ))
+          : [];
+
         return <section className="conversationCard" key={message.id}>
           <div className="conversationTopline"><strong>{message.channel}</strong><span className="humanBadge">APPROVAL</span></div>
           <p>{message.transcript || message.original_text || 'Media message'}</p>
@@ -184,12 +232,38 @@ export default async function ApprovalsPage() {
           {message.persian_summary ? <p className="muted" dir="rtl">{message.persian_summary}</p> : null}
           <div className="conversationMeta">
             <span>{message.approval_reason || 'Policy review'}</span>
-            <span>{new Date(message.created_at).toLocaleString()}</span>
+            <span>{message.approval_action_key || 'OUTBOUND_SEND'} · {message.approval_policy_mode || 'LEGACY'}</span>
+            <span>Requested {message.approval_requested_at ? new Date(message.approval_requested_at).toLocaleString() : new Date(message.created_at).toLocaleString()}</span>
+            <span>Escalates {escalatesAt ? escalatesAt.toLocaleString() : 'Not configured'}</span>
+            <span>Expires {expiresAt ? expiresAt.toLocaleString() : 'Not configured'}</span>
+            {message.approval_escalated_at ? <span>Escalated {new Date(message.approval_escalated_at).toLocaleString()}</span> : null}
+            {message.approval_reviewer_user_id ? <span>Delegated reviewer {String(message.approval_reviewer_user_id).slice(0, 8)}</span> : null}
           </div>
-          {editable ? <div className="approvalActions">
-            <form action={approveMessage}><input type="hidden" name="id" value={message.id} /><button className="approveButton">Approve</button></form>
-            <form action={rejectMessage}><input type="hidden" name="id" value={message.id} /><input name="reason" placeholder="Reason (optional)" /><button className="rejectButton">Reject</button></form>
-          </div> : null}
+          {expired ? <p className="muted">This approval has expired and cannot be accepted. Deadline reconciliation will fail it closed.</p> : null}
+          {canReview ? <div className="approvalActions">
+            <form action={approveMessage}>
+              <input type="hidden" name="id" value={message.id} />
+              <input type="hidden" name="request_key" value={`approval:approve:${message.id}:${crypto.randomUUID()}`} />
+              <button className="approveButton">Approve</button>
+            </form>
+            <form action={rejectMessage}>
+              <input type="hidden" name="id" value={message.id} />
+              <input type="hidden" name="request_key" value={`approval:reject:${message.id}:${crypto.randomUUID()}`} />
+              <input name="reason" required minLength={3} maxLength={500} placeholder="Denial reason (required)" />
+              <button className="rejectButton">Reject</button>
+            </form>
+            {delegationCandidates.length ? <form action={delegateMessageApproval}>
+              <input type="hidden" name="id" value={message.id} />
+              <input type="hidden" name="request_key" value={`approval:delegate:${message.id}:${crypto.randomUUID()}`} />
+              <select name="delegate_user_id" required defaultValue="">
+                <option value="" disabled>Delegate reviewer</option>
+                {delegationCandidates.map((reviewer) => <option key={reviewer.user_id} value={reviewer.user_id}>
+                  {reviewer.role} · {String(reviewer.user_id).slice(0, 8)}
+                </option>)}
+              </select>
+              <button>Delegate</button>
+            </form> : null}
+          </div> : <p className="muted">Your role is not an eligible reviewer for this approval.</p>}
         </section>;
       })}
       {operator.map((brief) => <section className="conversationCard" key={brief.id}><strong>{brief.title}</strong><div className="persianBrief">{brief.summary}</div></section>)}
