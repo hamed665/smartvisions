@@ -59,6 +59,14 @@ type ScheduledMetrics = {
   automationRuntimeSucceeded?: number;
   automationRuntimeWaiting?: number;
   automationRuntimeFailed?: number;
+  automationNotificationStatus?: number;
+  automationNotificationOrganizations?: number;
+  automationNotificationProjected?: number;
+  automationNotificationEscalated?: number;
+  automationNotificationTelegramSent?: number;
+  automationNotificationEmailSent?: number;
+  automationNotificationBlocked?: number;
+  automationNotificationFailed?: number;
 };
 
 function organizationIdFromTask(task: AgentTask) {
@@ -181,6 +189,43 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
   } catch {
     metrics.automationRuntimeStatus = 503;
     metrics.automationRuntimeFailed = 1;
+    metrics.failed += 1;
+  }
+
+  try {
+    const notificationResponse = await internalPost(env, '/api/operations/automation-notifications', { limit: 50 });
+    metrics.automationNotificationStatus = notificationResponse.status;
+    const notification = await notificationResponse.json().catch(() => null) as {
+      organizations?: number;
+      failed?: number;
+      results?: Array<{
+        ok?: boolean;
+        projection?: { projected?: number };
+        escalation?: { escalated?: number };
+        telegram?: { sent?: number; blocked?: number; failed?: number };
+        email?: { sent?: number; blocked?: number; failed?: number };
+      }>;
+    } | null;
+    const results = notification?.results ?? [];
+    metrics.automationNotificationOrganizations = Number(notification?.organizations ?? 0);
+    metrics.automationNotificationProjected = results.reduce((sum, row) => sum + Number(row.projection?.projected ?? 0), 0);
+    metrics.automationNotificationEscalated = results.reduce((sum, row) => sum + Number(row.escalation?.escalated ?? 0), 0);
+    metrics.automationNotificationTelegramSent = results.reduce((sum, row) => sum + Number(row.telegram?.sent ?? 0), 0);
+    metrics.automationNotificationEmailSent = results.reduce((sum, row) => sum + Number(row.email?.sent ?? 0), 0);
+    metrics.automationNotificationBlocked = results.reduce(
+      (sum, row) => sum + Number(row.telegram?.blocked ?? 0) + Number(row.email?.blocked ?? 0),
+      0,
+    );
+    metrics.automationNotificationFailed = Number(notification?.failed ?? 0)
+      + results.reduce(
+        (sum, row) => sum + Number(row.telegram?.failed ?? 0) + Number(row.email?.failed ?? 0),
+        0,
+      );
+    if (!notificationResponse.ok) metrics.failed += 1;
+    else metrics.failed += metrics.automationNotificationFailed;
+  } catch {
+    metrics.automationNotificationStatus = 503;
+    metrics.automationNotificationFailed = 1;
     metrics.failed += 1;
   }
 
