@@ -54,6 +54,11 @@ type ScheduledMetrics = {
   chatwootReconciled?: number;
   chatwootIgnored?: number;
   chatwootReconcileFailed?: number;
+  automationRuntimeStatus?: number;
+  automationRuntimeClaimed?: number;
+  automationRuntimeSucceeded?: number;
+  automationRuntimeWaiting?: number;
+  automationRuntimeFailed?: number;
 };
 
 function organizationIdFromTask(task: AgentTask) {
@@ -156,6 +161,27 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
     metrics.failed += 1;
     await recordScheduledHeartbeat(env, controller, 'RESULT', metrics);
     throw new Error(`Operational tick failed with HTTP ${tickResponse.status}`);
+  }
+
+  try {
+    const runtimeResponse = await internalPost(env, '/api/operations/automation-runtime', { limit: 10 });
+    metrics.automationRuntimeStatus = runtimeResponse.status;
+    const runtime = await runtimeResponse.json().catch(() => null) as {
+      claimed?: number;
+      succeeded?: number;
+      waiting?: number;
+      failed?: number;
+    } | null;
+    metrics.automationRuntimeClaimed = Number(runtime?.claimed ?? 0);
+    metrics.automationRuntimeSucceeded = Number(runtime?.succeeded ?? 0);
+    metrics.automationRuntimeWaiting = Number(runtime?.waiting ?? 0);
+    metrics.automationRuntimeFailed = Number(runtime?.failed ?? 0);
+    if (!runtimeResponse.ok) metrics.failed += 1;
+    else metrics.failed += metrics.automationRuntimeFailed;
+  } catch {
+    metrics.automationRuntimeStatus = 503;
+    metrics.automationRuntimeFailed = 1;
+    metrics.failed += 1;
   }
 
   const tick = await tickResponse.json() as TickResponse;
