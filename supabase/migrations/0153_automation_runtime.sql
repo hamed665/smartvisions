@@ -470,6 +470,12 @@ declare
   v_dead integer;
   v_cancelled integer;
 begin
+  if current_user<>'service_role'
+     or coalesce(current_setting('app.automation_runtime_mutation',true),'')<>'allowed'
+  then
+    raise exception 'Automation runtime refresh requires governed mutation context';
+  end if;
+
   select
     count(*)::integer,
     count(*) filter(where status='SUCCEEDED')::integer,
@@ -518,6 +524,12 @@ as $$
 declare
   v_count integer;
 begin
+  if current_user<>'service_role'
+     or coalesce(current_setting('app.automation_runtime_mutation',true),'')<>'allowed'
+  then
+    raise exception 'Automation runtime compensation requires governed mutation context';
+  end if;
+
   update public.automation_run_actions
   set
     compensation_status='REQUIRED',
@@ -2032,6 +2044,10 @@ revoke all on function public.automation_runtime_refresh_run(uuid)
   from public,anon,authenticated,service_role;
 revoke all on function public.automation_runtime_require_compensation(uuid,integer,text)
   from public,anon,authenticated,service_role;
+grant execute on function public.automation_runtime_refresh_run(uuid)
+  to service_role;
+grant execute on function public.automation_runtime_require_compensation(uuid,integer,text)
+  to service_role;
 
 revoke all on function public.enqueue_automation_runtime_event(
   uuid,text,text,text,uuid,jsonb,timestamptz
