@@ -875,22 +875,20 @@ begin
   if p_rules ? 'depositCurrency'
      and (
        jsonb_typeof(p_rules->'depositCurrency')<>'string'
-       or (p_rules->>'depositCurrency') !~ '^[A-Z]{3}exception
-  when invalid_text_representation or numeric_value_out_of_range then
-    raise exception 'Booking rule numeric value is invalid';
-end;
-$$;
+       or (p_rules->>'depositCurrency') !~ '^[A-Z]{3}$'
      )
   then raise exception 'depositCurrency is invalid'; end if;
 
   if coalesce((p_rules->>'depositRequired')::boolean,false) then
-    if ((p_rules ? 'depositPercent')::integer + (p_rules ? 'depositAmount')::integer)<>1 then
+    if (case when p_rules ? 'depositPercent' then 1 else 0 end)
+       + (case when p_rules ? 'depositAmount' then 1 else 0 end) <> 1
+    then
       raise exception 'Deposit policy requires exactly one of depositPercent or depositAmount';
     end if;
-    if p_rules ? 'depositAmount' and not (p_rules ? 'depositCurrency') then
+    if (p_rules ? 'depositAmount') and not (p_rules ? 'depositCurrency') then
       raise exception 'Fixed depositAmount requires depositCurrency';
     end if;
-  elsif p_rules ? 'depositPercent' or p_rules ? 'depositAmount' or p_rules ? 'depositCurrency' then
+  elsif (p_rules ? 'depositPercent') or (p_rules ? 'depositAmount') or (p_rules ? 'depositCurrency') then
     raise exception 'Deposit value cannot be configured unless depositRequired is true';
   end if;
 
