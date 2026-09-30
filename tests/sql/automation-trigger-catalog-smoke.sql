@@ -155,8 +155,8 @@ begin
   from public.create_automation_rule_draft(
     '00000000-0000-0000-0000-000000000c01',
     '00000000-0000-0000-0000-00000000c001',
-    'Future booking workflow',
-    'BOOKING_CONFIRMED',
+    'Future segment workflow',
+    'SEGMENT_MEMBER_ENTERED',
     '[]'::jsonb,
     '[{"key":"PAUSE_AUTOMATION","config":{}}]'::jsonb,
     45,
@@ -173,7 +173,7 @@ begin
     );
     raise exception 'DEPENDENCY_PENDING trigger was published';
   exception when others then
-    if sqlerrm not like 'Automation trigger is not publishable: BOOKING_CONFIRMED (DEPENDENCY_PENDING)%' then
+    if sqlerrm not like 'Automation trigger is not publishable: SEGMENT_MEMBER_ENTERED (DEPENDENCY_PENDING)%' then
       raise;
     end if;
   end;
