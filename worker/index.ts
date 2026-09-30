@@ -67,6 +67,8 @@ type ScheduledMetrics = {
   automationNotificationEmailSent?: number;
   automationNotificationBlocked?: number;
   automationNotificationFailed?: number;
+  bookingHoldExpiryStatus?: number;
+  bookingHoldsExpired?: number;
 };
 
 function organizationIdFromTask(task: AgentTask) {
@@ -226,6 +228,17 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
   } catch {
     metrics.automationNotificationStatus = 503;
     metrics.automationNotificationFailed = 1;
+    metrics.failed += 1;
+  }
+
+  try {
+    const holdResponse = await internalPost(env, '/api/operations/booking-holds', { limit: 200 });
+    metrics.bookingHoldExpiryStatus = holdResponse.status;
+    const holdResult = await holdResponse.json().catch(() => null) as { expired?: number } | null;
+    metrics.bookingHoldsExpired = Number(holdResult?.expired ?? 0);
+    if (!holdResponse.ok) metrics.failed += 1;
+  } catch {
+    metrics.bookingHoldExpiryStatus = 503;
     metrics.failed += 1;
   }
 
