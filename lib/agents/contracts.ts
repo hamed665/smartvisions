@@ -186,6 +186,7 @@ export type AgentCollaboration = {
   orchestratorResult?: AgentResult | null;
   commercialDecision?: CommercialDecision;
   proposedReply?: ReplyDraft;
+  bookingToolResult?: Record<string, unknown>;
 };
 
 export type AgentContext = {
@@ -253,4 +254,5 @@ export type PipelineTrace = {
   delivery: 'SEND' | 'REVIEW' | 'BLOCK';
   catalogRecommendation: CatalogRecommendation | null;
   salesEfficiency?: SalesEfficiencyTrace;
+  bookingToolResult?: Record<string, unknown>;
 };
