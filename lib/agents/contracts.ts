@@ -148,6 +148,28 @@ export type ServiceKnowledgeSnapshot = {
   };
 };
 
+export type BookingContextSnapshot = {
+  nowIso: string;
+  personId?: string;
+  bookableServices: Array<{
+    serviceId: string;
+    name: string;
+    durationMinutes?: number;
+    locationMode: string;
+    bookingRules: Record<string, unknown>;
+  }>;
+  activeBookings: Array<{
+    bookingId: string;
+    bookingReference: string;
+    serviceId: string;
+    status: string;
+    branchId?: string;
+    staffUserId?: string;
+    startsAt?: string;
+    endsAt?: string;
+  }>;
+};
+
 export type MarketLocaleStyleSnapshot = {
   countryCode: string;
   primaryLocale: string;
@@ -182,6 +204,7 @@ export type AgentContext = {
   salesState?: SalesStateSnapshot;
   knowledgeContext?: KnowledgeSnapshot[];
   serviceKnowledge?: ServiceKnowledgeSnapshot[];
+  bookingContext?: BookingContextSnapshot;
   activePrompts?: Partial<Record<AgentName, ActivePromptSnapshot>>;
   agentSettings?: Partial<Record<AgentName, AgentSettingSnapshot>>;
   collaboration?: AgentCollaboration;
