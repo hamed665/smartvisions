@@ -361,7 +361,7 @@ begin
   end if;
 
   if new.task_type<>'FIELD_SERVICE'
-     or new.status is not distinct from 'DONE'
+     or new.status is distinct from 'DONE'
      or old.status='DONE'
   then return new; end if;
 
