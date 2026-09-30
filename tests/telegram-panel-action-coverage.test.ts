@@ -11,6 +11,14 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
     createBookingAvailabilityHold:'SPECIALIZED:BOOKING_AVAILABILITY',
     releaseBookingAvailabilityHold:'SPECIALIZED:BOOKING_AVAILABILITY',
   },
+  'app/booking/lifecycle-actions.ts': {
+    createBookingRequest:'SPECIALIZED:BOOKING_LIFECYCLE',
+    holdBookingRequest:'SPECIALIZED:BOOKING_LIFECYCLE',
+    confirmBooking:'SPECIALIZED:BOOKING_LIFECYCLE',
+    rescheduleBooking:'SPECIALIZED:BOOKING_LIFECYCLE',
+    cancelBooking:'SPECIALIZED:BOOKING_LIFECYCLE',
+    finalizeBooking:'SPECIALIZED:BOOKING_LIFECYCLE',
+  },
   'app/business-os-actions.ts': {
     bootstrapCanonicalOperatingHierarchy:'SPECIALIZED:BUSINESS_OS_HIERARCHY_BOOTSTRAP',
     bootstrapCanonicalTenant:'SPECIALIZED:BUSINESS_OS_TENANT_BOOTSTRAP',
@@ -180,6 +188,13 @@ describe('Control Center ↔ Telegram action coverage', () => {
     expect(CLASSIFICATION['app/booking/availability-actions.ts'].configureBookingAvailabilityCalendar).toBe('SPECIALIZED:BOOKING_AVAILABILITY');
     expect(CLASSIFICATION['app/booking/availability-actions.ts'].createBookingAvailabilityHold).toBe('SPECIALIZED:BOOKING_AVAILABILITY');
     expect(CLASSIFICATION['app/booking/availability-actions.ts'].releaseBookingAvailabilityHold).toBe('SPECIALIZED:BOOKING_AVAILABILITY');
+
+    expect(CLASSIFICATION['app/booking/lifecycle-actions.ts'].createBookingRequest).toBe('SPECIALIZED:BOOKING_LIFECYCLE');
+    expect(CLASSIFICATION['app/booking/lifecycle-actions.ts'].holdBookingRequest).toBe('SPECIALIZED:BOOKING_LIFECYCLE');
+    expect(CLASSIFICATION['app/booking/lifecycle-actions.ts'].confirmBooking).toBe('SPECIALIZED:BOOKING_LIFECYCLE');
+    expect(CLASSIFICATION['app/booking/lifecycle-actions.ts'].rescheduleBooking).toBe('SPECIALIZED:BOOKING_LIFECYCLE');
+    expect(CLASSIFICATION['app/booking/lifecycle-actions.ts'].cancelBooking).toBe('SPECIALIZED:BOOKING_LIFECYCLE');
+    expect(CLASSIFICATION['app/booking/lifecycle-actions.ts'].finalizeBooking).toBe('SPECIALIZED:BOOKING_LIFECYCLE');
 
 
     expect(CLASSIFICATION['app/daily-target-actions.ts'].setDailyOutreachTarget).toBe('SPECIALIZED:DAILY_OUTREACH_TARGET');
