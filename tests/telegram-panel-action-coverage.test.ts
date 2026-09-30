@@ -6,6 +6,11 @@ import { PANEL_PARITY_ACTION_NAMES } from '../lib/telegram/panel-parity-types';
 const PANEL_ACTIONS = new Set<string>(PANEL_PARITY_ACTION_NAMES);
 
 const CLASSIFICATION: Record<string, Record<string, string>> = {
+  'app/booking/availability-actions.ts': {
+    configureBookingAvailabilityCalendar:'SPECIALIZED:BOOKING_AVAILABILITY',
+    createBookingAvailabilityHold:'SPECIALIZED:BOOKING_AVAILABILITY',
+    releaseBookingAvailabilityHold:'SPECIALIZED:BOOKING_AVAILABILITY',
+  },
   'app/business-os-actions.ts': {
     bootstrapCanonicalOperatingHierarchy:'SPECIALIZED:BUSINESS_OS_HIERARCHY_BOOTSTRAP',
     bootstrapCanonicalTenant:'SPECIALIZED:BUSINESS_OS_TENANT_BOOTSTRAP',
@@ -172,6 +177,9 @@ describe('Control Center ↔ Telegram action coverage', () => {
     expect(CLASSIFICATION['app/control-center-actions.ts'].updateServiceBookingCatalog).toBe('SPECIALIZED:BOOKING_CATALOG');
     expect(CLASSIFICATION['app/control-center-actions.ts'].createBookingResource).toBe('SPECIALIZED:BOOKING_CATALOG');
     expect(CLASSIFICATION['app/control-center-actions.ts'].updateBookingResource).toBe('SPECIALIZED:BOOKING_CATALOG');
+    expect(CLASSIFICATION['app/booking/availability-actions.ts'].configureBookingAvailabilityCalendar).toBe('SPECIALIZED:BOOKING_AVAILABILITY');
+    expect(CLASSIFICATION['app/booking/availability-actions.ts'].createBookingAvailabilityHold).toBe('SPECIALIZED:BOOKING_AVAILABILITY');
+    expect(CLASSIFICATION['app/booking/availability-actions.ts'].releaseBookingAvailabilityHold).toBe('SPECIALIZED:BOOKING_AVAILABILITY');
 
 
     expect(CLASSIFICATION['app/daily-target-actions.ts'].setDailyOutreachTarget).toBe('SPECIALIZED:DAILY_OUTREACH_TARGET');
