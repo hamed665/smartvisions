@@ -1094,6 +1094,14 @@ begin
 end;
 $$;
 
+alter table public.automation_condition_fact_catalog
+  drop constraint automation_condition_fact_catalog_subject_type_check,
+  add constraint automation_condition_fact_catalog_subject_type_check
+    check (subject_type in (
+      'LEAD','DEAL','TASK','ACCOUNT','CONVERSATION',
+      'SEGMENT_SNAPSHOT','CASE','BOOKING'
+    ));
+
 insert into public.automation_condition_fact_catalog
   (fact_key,subject_type,data_type,operators,nullable,description)
 values
