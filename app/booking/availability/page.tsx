@@ -17,6 +17,22 @@ type Search = {
   timezone?: string;
 };
 
+type WindowRow = {
+  calendar_id:string;
+  weekday:number;
+  start_local:string;
+  end_local:string;
+};
+
+type ExceptionRow = {
+  calendar_id:string;
+  exception_kind:string;
+  availability:string;
+  starts_at:string;
+  ends_at:string;
+  reason:string|null;
+};
+
 const DAYS=[
   ['0','Sunday'],['1','Monday'],['2','Tuesday'],['3','Wednesday'],
   ['4','Thursday'],['5','Friday'],['6','Saturday'],
@@ -104,16 +120,16 @@ export default async function BookingAvailabilityPage({
     'UTC',
   ])).sort();
 
-  const windowByCalendar=new Map<string,typeof windows>();
+  const windowByCalendar=new Map<string,WindowRow[]>();
   for(const row of windows??[]){
     const list=windowByCalendar.get(String(row.calendar_id))??[];
-    list.push(row);
+    list.push(row as WindowRow);
     windowByCalendar.set(String(row.calendar_id),list);
   }
-  const exceptionByCalendar=new Map<string,typeof exceptions>();
+  const exceptionByCalendar=new Map<string,ExceptionRow[]>();
   for(const row of exceptions??[]){
     const list=exceptionByCalendar.get(String(row.calendar_id))??[];
-    list.push(row);
+    list.push(row as ExceptionRow);
     exceptionByCalendar.set(String(row.calendar_id),list);
   }
 
