@@ -71,6 +71,9 @@ create index booking_availability_calendars_resource_idx
   on public.booking_availability_calendars(organization_id,resource_id,service_id)
   where resource_id is not null;
 
+create unique index booking_availability_calendars_org_id_uidx
+  on public.booking_availability_calendars(organization_id,id);
+
 create table public.booking_availability_windows (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
@@ -191,6 +194,9 @@ create index booking_holds_expiry_idx
   on public.booking_holds(expires_at,id)
   where status='ACTIVE';
 
+create unique index booking_holds_org_id_uidx
+  on public.booking_holds(organization_id,id);
+
 create table public.booking_hold_resources (
   organization_id uuid not null,
   hold_id uuid not null,
@@ -210,12 +216,6 @@ create table public.booking_hold_resources (
 
 create index booking_hold_resources_resource_idx
   on public.booking_hold_resources(organization_id,resource_id,hold_id);
-
--- Composite uniqueness required by governed child FKs.
-create unique index booking_availability_calendars_org_id_uidx
-  on public.booking_availability_calendars(organization_id,id);
-create unique index booking_holds_org_id_uidx
-  on public.booking_holds(organization_id,id);
 
 alter table public.booking_availability_calendars enable row level security;
 alter table public.booking_availability_windows enable row level security;
@@ -742,14 +742,19 @@ declare
   v_resource_calendar uuid;
   v_reason text;
 begin
-  select p.*,s.enabled
-    into v_profile,v_service_enabled
+  select * into v_profile
   from public.service_booking_profiles p
-  join public.services s
-    on s.organization_id=p.organization_id and s.id=p.service_id
   where p.organization_id=p_organization_id and p.service_id=p_service_id;
 
-  if not found or not v_service_enabled or not v_profile.booking_enabled or v_profile.duration_minutes is null then
+  if not found then
+    return jsonb_build_object('available',false,'reason','SERVICE_NOT_BOOKABLE');
+  end if;
+
+  select s.enabled into v_service_enabled
+  from public.services s
+  where s.organization_id=p_organization_id and s.id=p_service_id;
+
+  if coalesce(v_service_enabled,false)=false or not v_profile.booking_enabled or not v_profile.booking_enabled or v_profile.duration_minutes is null then
     return jsonb_build_object('available',false,'reason','SERVICE_NOT_BOOKABLE');
   end if;
 
