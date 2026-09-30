@@ -433,7 +433,10 @@ begin
     'booking_availability_exceptions_overlap_idx',
     'booking_holds_service_overlap_idx',
     'booking_holds_staff_overlap_idx',
-    'booking_hold_resources_resource_idx'
+    'booking_hold_resources_resource_idx',
+    'booking_hold_resources_org_hold_fk_idx',
+    'booking_holds_org_branch_fk_idx',
+    'booking_holds_org_created_by_fk_idx'
   ]::text[]) expected
   where not exists(
     select 1 from pg_indexes where schemaname='public' and indexname=expected
