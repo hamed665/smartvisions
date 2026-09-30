@@ -5,6 +5,7 @@ import { matchPortfolio, type PortfolioItem } from '@/lib/portfolio/matcher';
 import type {
   ActivePromptSnapshot,
   AgentContext,
+  BookingContextSnapshot,
   AgentName,
   AgentSettingSnapshot,
   KnowledgeSnapshot,
@@ -57,6 +58,8 @@ export type HydratedRuntimeEvidence = {
   promptVersions: Partial<Record<AgentName, number>>;
   knowledgeVersions: Record<string, number>;
   serviceKnowledgeCount: number;
+  bookableServiceCount: number;
+  activeBookingCount: number;
   portfolioCount: number;
 };
 
@@ -71,7 +74,7 @@ export async function hydrateAgentContext(input: {
   if (!organizationId) throw new Error('organizationId is required to hydrate agent context');
 
   let conversation: Record<string, unknown> | null = null;
-  const conversationSelect = 'id,lead_id,channel,summary,persian_summary,stage,agent_mode,detected_language,detected_dialect,last_message_at,sales_state,sales_state_updated_at';
+  const conversationSelect = 'id,lead_id,person_id,channel,summary,persian_summary,stage,agent_mode,detected_language,detected_dialect,last_message_at,sales_state,sales_state_updated_at';
   if (input.trustedConversationId) {
     const result = await supabase
       .from('sales_conversations')
@@ -103,7 +106,7 @@ export async function hydrateAgentContext(input: {
   if (authoritativeLeadId) {
     const result = await supabase
       .from('leads')
-      .select('id,business_id,status,agent_mode,opportunity_score,intent_score,recommended_offer')
+      .select('id,business_id,person_id,status,agent_mode,opportunity_score,intent_score,recommended_offer')
       .eq('organization_id', organizationId)
       .eq('id', authoritativeLeadId)
       .maybeSingle();
@@ -131,7 +134,7 @@ export async function hydrateAgentContext(input: {
   const conversationId = clip(conversation?.id, 80) || input.trustedConversationId || base.conversationId;
   const conversationChannel = clip(conversation?.channel, 40).toUpperCase();
 
-  const [outreachMessagesResult, conversationMessagesResult, knowledgeResult, promptsResult, settingsResult, servicesResult, pricesResult, portfolioResult] = await Promise.all([
+  const [outreachMessagesResult, conversationMessagesResult, knowledgeResult, promptsResult, settingsResult, servicesResult, bookingProfilesResult, pricesResult, portfolioResult] = await Promise.all([
     authoritativeLeadId && conversationId && conversationChannel
       ? supabase
         .from('outreach_messages')
@@ -177,6 +180,11 @@ export async function hydrateAgentContext(input: {
       .select('id,name,enabled,config')
       .eq('organization_id', organizationId)
       .eq('enabled', true),
+    supabase
+      .from('service_booking_profiles')
+      .select('service_id,booking_enabled,duration_minutes,location_mode,booking_rules')
+      .eq('organization_id', organizationId)
+      .eq('booking_enabled', true),
     countryCode
       ? supabase
         .from('service_prices')
@@ -194,7 +202,7 @@ export async function hydrateAgentContext(input: {
       : Promise.resolve({ data: [], error: null }),
   ]);
 
-  const firstError = [outreachMessagesResult, conversationMessagesResult, knowledgeResult, promptsResult, settingsResult, servicesResult, pricesResult, portfolioResult]
+  const firstError = [outreachMessagesResult, conversationMessagesResult, knowledgeResult, promptsResult, settingsResult, servicesResult, bookingProfilesResult, pricesResult, portfolioResult]
     .map((result) => result.error)
     .find(Boolean);
   if (firstError) throw new Error(`Agent context hydration failed: ${firstError.message}`);
@@ -261,6 +269,53 @@ export async function hydrateAgentContext(input: {
     })
     .filter((service) => service.id && service.name);
 
+  const personId = clip(conversation?.person_id, 80) || clip(lead?.person_id, 80) || undefined;
+  const bookingProfileByService = new Map<string, Record<string, unknown>>();
+  for (const row of (bookingProfilesResult.data ?? []) as Array<Record<string, unknown>>) {
+    bookingProfileByService.set(clip(row.service_id, 120), row);
+  }
+  const bookableServices: BookingContextSnapshot['bookableServices'] = serviceKnowledge
+    .map((service) => {
+      const profile = bookingProfileByService.get(service.id);
+      if (!profile) return null;
+      return {
+        serviceId: service.id,
+        name: service.name,
+        durationMinutes: profile.duration_minutes == null ? undefined : numberOrZero(profile.duration_minutes),
+        locationMode: clip(profile.location_mode, 40),
+        bookingRules: safeRecord(profile.booking_rules) ?? {},
+      };
+    })
+    .filter((row): row is BookingContextSnapshot['bookableServices'][number] => Boolean(row));
+
+  let activeBookings: BookingContextSnapshot['activeBookings'] = [];
+  if (personId) {
+    const bookingResult = await supabase.from('bookings')
+      .select('id,booking_reference,service_id,status,branch_id,staff_user_id,starts_at,ends_at')
+      .eq('organization_id', organizationId)
+      .eq('person_id', personId)
+      .in('status', ['REQUESTED','HELD','CONFIRMED','RESCHEDULED'])
+      .order('updated_at', { ascending: false })
+      .limit(20);
+    if (bookingResult.error) throw new Error(`Canonical Booking context lookup failed: ${bookingResult.error.message}`);
+    activeBookings = ((bookingResult.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+      bookingId: clip(row.id, 80),
+      bookingReference: clip(row.booking_reference, 80),
+      serviceId: clip(row.service_id, 120),
+      status: clip(row.status, 40),
+      branchId: clip(row.branch_id, 80) || undefined,
+      staffUserId: clip(row.staff_user_id, 80) || undefined,
+      startsAt: clip(row.starts_at, 80) || undefined,
+      endsAt: clip(row.ends_at, 80) || undefined,
+    }));
+  }
+  const bookingContext: BookingContextSnapshot = {
+    nowIso: new Date().toISOString(),
+    personId,
+    bookableServices,
+    activeBookings,
+  };
+
   const portfolioItems: PortfolioItem[] = ((portfolioResult.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
     id: clip(row.id, 80),
     title: clip(row.title, 240),
@@ -312,6 +367,7 @@ export async function hydrateAgentContext(input: {
       salesState,
       knowledgeContext,
       serviceKnowledge,
+      bookingContext,
       activePrompts,
       agentSettings,
       approvedPortfolio,
@@ -331,6 +387,8 @@ export async function hydrateAgentContext(input: {
       promptVersions,
       knowledgeVersions,
       serviceKnowledgeCount: serviceKnowledge.length,
+      bookableServiceCount: bookableServices.length,
+      activeBookingCount: activeBookings.length,
       portfolioCount: approvedPortfolio.length,
     },
   };
