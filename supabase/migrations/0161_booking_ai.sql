@@ -61,7 +61,6 @@ declare
 begin
   if current_user<>'service_role'
      or p_organization_id is null
-     or p_actor_user_id is null
      or p_person_id is null
      or nullif(btrim(p_service_id),'') is null
      or length(v_request_key) not between 8 and 200
@@ -970,7 +969,7 @@ insert into public.tool_action_registry(
   '{"event":"BOOKING_AI_REMINDER_SCHEDULED","entityType":"booking","correlationRequired":true}'::jsonb,
   'AVAILABLE','{}'::text[],
   'Schedule a governed SCHEDULE_DUE runtime event; any customer reminder send still crosses existing SEND_FOLLOWUP approval/provider authority.',
-  '{"executionSurfaces":["AI"],"providerSend":false,"downstreamProviderSendAuthority":"SEND_FOLLOWUP"}'::jsonb
+  '{"executionSurfaces":["AI"],"providerSend":false,"downstreamProviderSendAuthority":"SEND_FOLLOWUP","shadowMutationBlocked":true}'::jsonb
 ),
 (
   'BOOKING_ESCALATE','BOOKING','OPERATOR_BRIEFS',1,
