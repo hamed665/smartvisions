@@ -49,6 +49,7 @@ describe('BOOKING-AI contract',()=>{
   it('keeps mutations fail closed behind current inbound evidence and Shadow Mode',()=>{
     expect(tools).toContain('explicitCustomerRequest');
     expect(tools).toContain('inboundVerified');
+    expect(tools).toContain("['CREATE','RESCHEDULE','CANCEL','SCHEDULE_REMINDER']");
     expect(tools).toContain("if (mutation && input.shadowMode)");
     expect(tools).toContain("status:'SHADOW_BLOCKED'");
     expect(route).toContain('afterOrchestrator');
