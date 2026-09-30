@@ -10,6 +10,7 @@ export type CrmTaskType =
   | 'MEETING'
   | 'REVIEW'
   | 'FOLLOW_UP'
+  | 'FIELD_SERVICE'
   | 'OTHER';
 
 export type CrmTaskRow = {
@@ -143,6 +144,7 @@ export async function createCrmTask(input: {
   leadId?: string | null;
   conversationId?: string | null;
   dealId?: string | null;
+  personId?: string | null;
   taskType?: CrmTaskType;
   title: string;
   description?: string | null;
@@ -173,6 +175,7 @@ export async function createCrmTask(input: {
       lead_id: input.leadId ?? null,
       conversation_id: input.conversationId ?? null,
       deal_id: input.dealId ?? null,
+      person_id: input.personId ?? null,
       task_type: input.taskType ?? 'GENERAL',
       title: input.title.trim(),
       description: input.description?.trim() || null,
