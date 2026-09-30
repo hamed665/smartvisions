@@ -275,18 +275,18 @@ export async function hydrateAgentContext(input: {
     bookingProfileByService.set(clip(row.service_id, 120), row);
   }
   const bookableServices: BookingContextSnapshot['bookableServices'] = serviceKnowledge
-    .map((service) => {
+    .flatMap((service) => {
       const profile = bookingProfileByService.get(service.id);
-      if (!profile) return null;
-      return {
+      if (!profile) return [];
+      const durationMinutes = profile.duration_minutes == null ? undefined : numberOrZero(profile.duration_minutes);
+      return [{
         serviceId: service.id,
         name: service.name,
-        durationMinutes: profile.duration_minutes == null ? undefined : numberOrZero(profile.duration_minutes),
+        ...(durationMinutes == null ? {} : { durationMinutes }),
         locationMode: clip(profile.location_mode, 40),
         bookingRules: safeRecord(profile.booking_rules) ?? {},
-      };
-    })
-    .filter((row): row is BookingContextSnapshot['bookableServices'][number] => Boolean(row));
+      }];
+    });
 
   let activeBookings: BookingContextSnapshot['activeBookings'] = [];
   if (personId) {
