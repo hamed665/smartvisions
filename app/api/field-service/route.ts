@@ -102,9 +102,18 @@ export async function POST(request:Request){
     }
 
     const task=await createCrmTask({
-      supabase,organizationId,actorUserId:userId,businessId,personId,
-      taskType:'FIELD_SERVICE',title,priority:priority as 'LOW'|'NORMAL'|'HIGH'|'URGENT',
-      assigneeUserId,dueAt,requestKey,metadata:{fieldService:true,bookingId:bookingId??null},
+      supabase,
+      organizationId,
+      actorUserId:userId,
+      businessId:businessId as string|null,
+      personId:personId as string|null,
+      taskType:'FIELD_SERVICE',
+      title,
+      priority:priority as 'LOW'|'NORMAL'|'HIGH'|'URGENT',
+      assigneeUserId:assigneeUserId as string|null,
+      dueAt,
+      requestKey,
+      metadata:{fieldService:true,bookingId:bookingId??null},
     });
 
     const {data:workOrder,error:workError}=await supabase.from('field_service_work_orders').upsert({
