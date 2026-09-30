@@ -3,6 +3,35 @@
 -- BOOKING-CATALOG, BOOKING-AVAILABILITY and BOOKING-LIFECYCLE smoke run first.
 -- This file uses only disposable CI authorities and never calls a provider.
 
+reset role;
+
+-- Seed only the disposable CI conversation as the database owner. This is test
+-- fixture setup, not BOOKING-AI runtime authority. The runtime itself remains
+-- exercised as service_role and no broader sales_conversations grant is needed
+-- merely to make this smoke pass.
+do $booking_ai_conversation_fixture$
+declare
+  v_person uuid;
+begin
+  select id into v_person
+  from public.crm_people
+  where organization_id='00000000-0000-0000-0000-000000000c01'
+    and status='ACTIVE'
+  order by created_at
+  limit 1;
+  if v_person is null then raise exception 'BOOKING-AI Person fixture missing'; end if;
+
+  insert into public.sales_conversations(
+    id,organization_id,lead_id,channel,person_id,last_message_at
+  ) values (
+    '00000000-0000-0000-0000-00000000ba01',
+    '00000000-0000-0000-0000-000000000c01',
+    null,'EMAIL',v_person,now()
+  )
+  on conflict (id) do update set person_id=excluded.person_id,last_message_at=excluded.last_message_at;
+end;
+$booking_ai_conversation_fixture$;
+
 set role service_role;
 
 do $booking_ai_fixture_and_governed_lifecycle$
@@ -23,15 +52,6 @@ begin
   order by created_at
   limit 1;
   if v_person is null then raise exception 'BOOKING-AI Person fixture missing'; end if;
-
-  insert into public.sales_conversations(
-    id,organization_id,lead_id,channel,person_id,last_message_at
-  ) values (
-    '00000000-0000-0000-0000-00000000ba01',
-    '00000000-0000-0000-0000-000000000c01',
-    null,'EMAIL',v_person,now()
-  )
-  on conflict (id) do update set person_id=excluded.person_id,last_message_at=excluded.last_message_at;
 
   -- Extend only the disposable service policy. Deposit requirement is policy
   -- truth; no payment intent/link/ledger is created here.
