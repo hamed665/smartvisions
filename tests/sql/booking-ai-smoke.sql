@@ -5,11 +5,24 @@
 
 reset role;
 
--- Seed only the disposable CI conversation as the database owner. This is test
--- fixture setup, not BOOKING-AI runtime authority. The runtime itself remains
--- exercised as service_role and no broader sales_conversations grant is needed
--- merely to make this smoke pass.
-do $booking_ai_conversation_fixture$
+-- Seed only the base disposable CI conversation as the database owner. Person
+-- context is deliberately left null here because the canonical Customer 360
+-- guard permits Person linkage only through the trusted server boundary.
+insert into public.sales_conversations(
+  id,organization_id,lead_id,channel,person_id,last_message_at
+) values (
+  '00000000-0000-0000-0000-00000000ba01',
+  '00000000-0000-0000-0000-000000000c01',
+  null,'EMAIL',null,now()
+)
+on conflict (id) do update set last_message_at=excluded.last_message_at;
+
+set role service_role;
+
+-- Complete only the Person-context part of the disposable fixture through the
+-- same trusted role that Production Customer 360 requires. This uses the narrow
+-- existing column grant and does not broaden sales_conversations permissions.
+do $booking_ai_conversation_person_fixture$
 declare
   v_person uuid;
 begin
@@ -21,18 +34,15 @@ begin
   limit 1;
   if v_person is null then raise exception 'BOOKING-AI Person fixture missing'; end if;
 
-  insert into public.sales_conversations(
-    id,organization_id,lead_id,channel,person_id,last_message_at
-  ) values (
-    '00000000-0000-0000-0000-00000000ba01',
-    '00000000-0000-0000-0000-000000000c01',
-    null,'EMAIL',v_person,now()
-  )
-  on conflict (id) do update set person_id=excluded.person_id,last_message_at=excluded.last_message_at;
-end;
-$booking_ai_conversation_fixture$;
+  update public.sales_conversations
+  set person_id=v_person,
+      updated_at=now()
+  where organization_id='00000000-0000-0000-0000-000000000c01'
+    and id='00000000-0000-0000-0000-00000000ba01';
 
-set role service_role;
+  if not found then raise exception 'BOOKING-AI Conversation fixture missing'; end if;
+end;
+$booking_ai_conversation_person_fixture$;
 
 do $booking_ai_fixture_and_governed_lifecycle$
 declare
