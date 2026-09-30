@@ -192,7 +192,7 @@ async function assertBookingLinked(input: {
 }) {
   if (!input.personId) throw new Error('Canonical CRM Person linkage is required for Booking action');
   const {data,error} = await input.supabase.from('bookings')
-    .select('id,service_id,status,person_id,starts_at')
+    .select('id,service_id,status,person_id,branch_id,starts_at')
     .eq('organization_id',input.organizationId)
     .eq('id',input.bookingId)
     .eq('person_id',input.personId)
