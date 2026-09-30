@@ -36,6 +36,11 @@ begin
 
   update public.sales_conversations
   set person_id=v_person,
+      person_link_method='IMPORT_VERIFIED',
+      person_link_source_ref='booking-ai-smoke:disposable-ci-fixture',
+      person_link_evidence='{"source":"BOOKING_AI_SMOKE","disposable":true}'::jsonb,
+      person_linked_by_user_id=null,
+      person_linked_at=now(),
       updated_at=now()
   where organization_id='00000000-0000-0000-0000-000000000c01'
     and id='00000000-0000-0000-0000-00000000ba01';
