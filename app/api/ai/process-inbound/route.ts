@@ -14,6 +14,7 @@ import { assertRuntimeControlsAllow, getRuntimeSafetyControls } from '@/lib/reli
 import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { notifyTelegramOwner } from '@/lib/telegram/notifications';
 import { buildSalesTelegramAlert } from '@/lib/telegram/sales-alerts';
+import { executeBookingAiTool, extractBookingAiProposal } from '@/lib/booking/ai-tools';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -362,9 +363,42 @@ export async function POST(request: Request) {
   const runtimeName = runtime === deterministicAgentRuntime ? 'deterministic' : 'openai_responses';
 
   try {
-    const result = await processInboundMessage(effectiveContext, { agentsPaused: controls.agents_paused }, runtime);
+    const result = await processInboundMessage(
+      effectiveContext,
+      { agentsPaused: controls.agents_paused },
+      runtime,
+      {
+        afterOrchestrator: async ({ specialistResults, orchestratorResult }) => {
+          const proposal = extractBookingAiProposal(
+            orchestratorResult ? [...specialistResults, orchestratorResult] : specialistResults,
+          );
+          if (!proposal || proposal.action === 'NONE') return undefined;
+          if (!effectiveContext.conversationId) {
+            return {
+              action: proposal.action,
+              status: 'BLOCKED',
+              executed: false,
+              mutation: false,
+              requiresReview: true,
+              error: 'Canonical conversation is required for Booking AI tool execution',
+            };
+          }
+          return executeBookingAiTool({
+            supabase,
+            organizationId,
+            conversationId: effectiveContext.conversationId,
+            leadId: effectiveContext.leadId,
+            message: effectiveContext.message,
+            requestKey,
+            shadowMode: controls.shadow_mode,
+            proposal,
+          });
+        },
+      },
+    );
     const payload = {
       ...result,
+      ...(result.trace.bookingToolResult ? { bookingTool: result.trace.bookingToolResult } : {}),
       runtime: runtimeName,
       runtimeContext: runtimeEvidence,
     };

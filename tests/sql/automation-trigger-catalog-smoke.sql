@@ -49,13 +49,23 @@ begin
     raise exception 'Trigger catalog does not cover all 15 required families: %',v_family_count;
   end if;
 
+  if (
+    select count(*)
+    from public.automation_trigger_catalog
+    where trigger_key in ('BOOKING_CREATED','BOOKING_CONFIRMED','BOOKING_CANCELLED')
+      and availability='AVAILABLE'
+      and required_work_package is null
+  ) <> 3 then
+    raise exception 'Booking trigger promotion contract is incomplete';
+  end if;
+
   if not exists(
     select 1 from public.automation_trigger_catalog
-    where trigger_key='BOOKING_CONFIRMED'
+    where trigger_key='SEGMENT_MEMBER_ENTERED'
       and availability='DEPENDENCY_PENDING'
-      and required_work_package='BOOKING-LIFECYCLE'
+      and required_work_package is not null
   ) then
-    raise exception 'Booking dependency-pending trigger contract is missing';
+    raise exception 'Unresolved dependency-pending trigger contract is missing';
   end if;
 
   if has_table_privilege('service_role','public.automation_trigger_catalog','INSERT')
@@ -145,8 +155,8 @@ begin
   from public.create_automation_rule_draft(
     '00000000-0000-0000-0000-000000000c01',
     '00000000-0000-0000-0000-00000000c001',
-    'Future booking workflow',
-    'BOOKING_CONFIRMED',
+    'Future segment workflow',
+    'SEGMENT_MEMBER_ENTERED',
     '[]'::jsonb,
     '[{"key":"PAUSE_AUTOMATION","config":{}}]'::jsonb,
     45,
@@ -163,7 +173,7 @@ begin
     );
     raise exception 'DEPENDENCY_PENDING trigger was published';
   exception when others then
-    if sqlerrm not like 'Automation trigger is not publishable: BOOKING_CONFIRMED (DEPENDENCY_PENDING)%' then
+    if sqlerrm not like 'Automation trigger is not publishable: SEGMENT_MEMBER_ENTERED (DEPENDENCY_PENDING)%' then
       raise;
     end if;
   end;

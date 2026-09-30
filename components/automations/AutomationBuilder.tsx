@@ -146,6 +146,7 @@ const SUBJECT_BY_FAMILY: Record<string, string | null> = {
   TASK: 'TASK',
   SEGMENT: 'SEGMENT_SNAPSHOT',
   CASE: 'CASE',
+  BOOKING: 'BOOKING',
   SCHEDULE: null,
   PROVIDER_WEBHOOK: null,
 };

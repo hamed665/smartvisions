@@ -148,6 +148,28 @@ export type ServiceKnowledgeSnapshot = {
   };
 };
 
+export type BookingContextSnapshot = {
+  nowIso: string;
+  personId?: string;
+  bookableServices: Array<{
+    serviceId: string;
+    name: string;
+    durationMinutes?: number;
+    locationMode: string;
+    bookingRules: Record<string, unknown>;
+  }>;
+  activeBookings: Array<{
+    bookingId: string;
+    bookingReference: string;
+    serviceId: string;
+    status: string;
+    branchId?: string;
+    staffUserId?: string;
+    startsAt?: string;
+    endsAt?: string;
+  }>;
+};
+
 export type MarketLocaleStyleSnapshot = {
   countryCode: string;
   primaryLocale: string;
@@ -164,6 +186,7 @@ export type AgentCollaboration = {
   orchestratorResult?: AgentResult | null;
   commercialDecision?: CommercialDecision;
   proposedReply?: ReplyDraft;
+  bookingToolResult?: Record<string, unknown>;
 };
 
 export type AgentContext = {
@@ -182,6 +205,7 @@ export type AgentContext = {
   salesState?: SalesStateSnapshot;
   knowledgeContext?: KnowledgeSnapshot[];
   serviceKnowledge?: ServiceKnowledgeSnapshot[];
+  bookingContext?: BookingContextSnapshot;
   activePrompts?: Partial<Record<AgentName, ActivePromptSnapshot>>;
   agentSettings?: Partial<Record<AgentName, AgentSettingSnapshot>>;
   collaboration?: AgentCollaboration;
@@ -230,4 +254,5 @@ export type PipelineTrace = {
   delivery: 'SEND' | 'REVIEW' | 'BLOCK';
   catalogRecommendation: CatalogRecommendation | null;
   salesEfficiency?: SalesEfficiencyTrace;
+  bookingToolResult?: Record<string, unknown>;
 };

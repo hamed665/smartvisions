@@ -61,8 +61,16 @@ set role service_role;
 
 do $runtime_registry_and_config_contract$
 begin
-  if (select count(*) from public.tool_action_registry where availability='AVAILABLE')<>6 then
-    raise exception 'AUTO-RUNTIME did not close all six current action contracts';
+  if (
+    select count(*)
+    from public.tool_action_registry
+    where availability='AVAILABLE'
+      and (
+        jsonb_typeof(metadata->'executionSurfaces') is distinct from 'array'
+        or metadata->'executionSurfaces' @> '["AUTOMATION"]'::jsonb
+      )
+  )<>6 then
+    raise exception 'AUTO-RUNTIME did not close all six AUTOMATION-surface action contracts';
   end if;
 
   if not exists(

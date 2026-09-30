@@ -27,7 +27,7 @@ export default async function AutomationsPage(){
       .order('subject_type',{ascending:true})
       .order('fact_key',{ascending:true}),
     supabase.from('tool_action_registry')
-      .select('action_key,tool_key,scope_type,cost_class,side_effect_class,approval_requirement,availability,description')
+      .select('action_key,tool_key,scope_type,cost_class,side_effect_class,approval_requirement,availability,description,metadata')
       .order('tool_key',{ascending:true})
       .order('action_key',{ascending:true}),
     supabase.from('automation_rule_versions')
@@ -66,12 +66,22 @@ export default async function AutomationsPage(){
 
   if(runActionsResult.error)throw new Error(runActionsResult.error.message);
 
+  const automationActions=(actionRegistryResult.data??[]).filter(action=>{
+    const metadata=action.metadata && typeof action.metadata==='object' && !Array.isArray(action.metadata)
+      ? action.metadata as Record<string,unknown>
+      : {};
+    const surfaces=Array.isArray(metadata.executionSurfaces)
+      ? metadata.executionSurfaces.map(String)
+      : null;
+    return !surfaces || surfaces.includes('AUTOMATION');
+  });
+
   return <AutomationBuilder
     editable={role==='OWNER'}
     rules={rulesResult.data??[]}
     triggers={catalogResult.data??[]}
     facts={conditionFactsResult.data??[]}
-    actions={actionRegistryResult.data??[]}
+    actions={automationActions}
     versions={versionsResult.data??[]}
     runs={runs}
     runActions={runActionsResult.data??[]}

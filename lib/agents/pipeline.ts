@@ -27,10 +27,20 @@ export function checkHumanReplyQuality(draft: ReplyDraft) {
   return { passed: reasons.length === 0, reasons };
 }
 
+export type PipelineHooks = {
+  afterOrchestrator?: (input: {
+    context: AgentContext;
+    specialistResults: AgentResult[];
+    orchestratorResult: AgentResult | null;
+    decision: ReturnType<typeof decideCommercialAction>;
+  }) => Promise<Record<string, unknown> | undefined>;
+};
+
 export async function processInboundMessage(
   context: AgentContext,
   controls?: { agentsPaused?: boolean },
   runtime: AgentRuntime = deterministicAgentRuntime,
+  hooks?: PipelineHooks,
 ) {
   const routePlan = buildSelectiveRoutePlan(context);
   const routedAgents = routePlan.agents.filter((agent) => context.agentSettings?.[agent]?.enabled !== false);
@@ -56,6 +66,9 @@ export async function processInboundMessage(
 
   const agentResults: AgentResult[] = orchestratorResult ? [...specialistResults, orchestratorResult] : [...specialistResults];
   const decision = decideCommercialAction(context, agentResults);
+  const bookingToolResult = hooks?.afterOrchestrator
+    ? await hooks.afterOrchestrator({ context, specialistResults, orchestratorResult, decision })
+    : undefined;
   const confidence = agentResults.length ? Math.min(...agentResults.map((result) => result.confidence)) : 0.9;
   const inferred = inferSalesHandoffSignals(context.message, context.salesState);
   const handoff = evaluateHandoff({
@@ -71,6 +84,7 @@ export async function processInboundMessage(
       specialistResults,
       orchestratorResult,
       commercialDecision: decision,
+      ...(bookingToolResult ? { bookingToolResult } : {}),
     },
   };
   const secretaryResult = routedAgents.includes('secretary')
@@ -98,6 +112,7 @@ export async function processInboundMessage(
       orchestratorResult,
       commercialDecision: decision,
       proposedReply: draft,
+      ...(bookingToolResult ? { bookingToolResult } : {}),
     },
   };
   const relevanceResult = routedAgents.includes('relevance_checker')
@@ -123,10 +138,11 @@ export async function processInboundMessage(
   if (!routedAgents.includes('secretary')) guardrails.push('SECRETARY_DISABLED');
   if (sendGate.reason !== 'AUTO_ALLOWED') guardrails.push(sendGate.reason);
   if (decision.useDiscount && decision.discountPct == null) guardrails.push('DISCOUNT_WITHOUT_CONFIGURED_VALUE');
+  if (bookingToolResult?.requiresReview === true) guardrails.push('BOOKING_TOOL_REQUIRES_REVIEW');
 
   let delivery: PipelineTrace['delivery'];
   if (!relevancePassed || !routedAgents.includes('secretary')) delivery = 'BLOCK';
-  else if (!humanStyle.passed && sendGate.delivery === 'SEND') delivery = 'REVIEW';
+  else if ((!humanStyle.passed || bookingToolResult?.requiresReview === true) && sendGate.delivery === 'SEND') delivery = 'REVIEW';
   else delivery = sendGate.delivery;
 
   const catalogRecommendation = delivery === 'BLOCK'
@@ -148,6 +164,7 @@ export async function processInboundMessage(
     delivery,
     catalogRecommendation,
     salesEfficiency: salesBehavior.metrics,
+    ...(bookingToolResult ? { bookingToolResult } : {}),
   };
 
   return {
