@@ -7,7 +7,6 @@ import {
   rescheduleBooking,
 } from '@/app/booking/lifecycle-actions';
 import { getCurrentOrganization } from '@/lib/supabase/org';
-import { createSupabaseServiceClient } from '@/lib/supabase/service';
 
 export const dynamic='force-dynamic';
 
@@ -15,8 +14,6 @@ const TERMINAL=new Set(['CANCELED','COMPLETED','NO_SHOW']);
 
 export default async function BookingLifecyclePage(){
   const ctx=await getCurrentOrganization();
-  const directory=createSupabaseServiceClient();
-
   const [
     {data:bookings},
     {data:events},
@@ -124,9 +121,7 @@ export default async function BookingLifecyclePage(){
         {(bookings??[]).map(booking=>{
           const bookingEvents=eventByBooking.get(String(booking.id))??[];
           const matchingHolds=(holds??[]).filter(hold=>hold.service_id===booking.service_id);
-          const canFinalize=['CONFIRMED','RESCHEDULED'].includes(String(booking.status))
-            && Boolean(booking.starts_at)
-            && new Date(String(booking.starts_at)).getTime()<=Date.now();
+          const canFinalize=['CONFIRMED','RESCHEDULED'].includes(String(booking.status));
 
           return <div className="settingsRow" key={booking.id}>
             <div>
