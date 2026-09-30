@@ -9,7 +9,7 @@ import { isPublicShellPath } from '@/lib/public-paths';
 const groups = [
   ['Sales', [['Dashboard', '/'], ['Hunters', '/hunters'], ['Leads', '/leads'], ['Customers', '/customers'], ['Accounts', '/accounts'], ['Segments', '/segments'], ['Tasks', '/tasks'], ['Next Actions', '/next-actions'], ['Support Cases', '/support-cases'], ['Customer Success', '/customer-success'], ['Data Quality', '/data-quality'], ['Identity Review', '/identity-review'], ['Intent Leads', '/intent-leads'], ['Campaigns', '/campaigns'], ['Conversations', '/conversations'], ['Hot Leads', '/hot-leads']]],
   ['Growth', [['Outreach', '/outreach'], ['Message Studio', '/messages'], ['Marketing Preferences', '/preferences'], ['Marketing Attribution', '/marketing-attribution'], ['Automations', '/automations'], ['Approvals', '/approvals'], ['Notifications', '/notifications'], ['Portfolio', '/portfolio'], ['Preview Studio', '/preview-studio']]],
-  ['Control', [['Command Center', '/command-center'], ['Services', '/services'], ['Pricing', '/pricing'], ['Markets', '/markets'], ['AI Agents', '/agents'], ['Knowledge Base', '/knowledge'], ['Integrations', '/integrations'], ['Suppression / DNC', '/suppression']]],
+  ['Control', [['Command Center', '/command-center'], ['Services', '/services'], ['Booking Availability', '/booking/availability'], ['Pricing', '/pricing'], ['Markets', '/markets'], ['AI Agents', '/agents'], ['Knowledge Base', '/knowledge'], ['Integrations', '/integrations'], ['Suppression / DNC', '/suppression']]],
   ['Operations', [['Reports', '/reports'], ['Cost & Usage', '/cost-usage'], ['Audit Log', '/audit'], ['System', '/system'], ['Settings', '/settings']]],
 ] as const;
 
