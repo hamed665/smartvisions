@@ -829,6 +829,7 @@ declare
   v_hold public.booking_holds%rowtype;
   v_old_start timestamptz;
   v_old_end timestamptz;
+  v_from text;
   v_result jsonb;
 begin
   if current_user<>'service_role'
@@ -877,6 +878,7 @@ begin
 
   v_old_start:=v_booking.starts_at;
   v_old_end:=v_booking.ends_at;
+  v_from:=v_booking.status;
 
   perform set_config('app.booking_lifecycle_mutation','allowed',true);
   perform set_config('app.booking_availability_mutation','allowed',true);
@@ -926,8 +928,7 @@ begin
     actor_user_id,request_key,request_hash,evidence,result_payload
   ) values (
     p_organization_id,p_booking_id,'RESCHEDULED',
-    case when v_booking.rescheduled_at is null then 'CONFIRMED' else 'CONFIRMED' end,
-    'RESCHEDULED',v_reason,
+    v_from,'RESCHEDULED',v_reason,
     p_actor_user_id,v_request_key,v_hash,
     jsonb_build_object(
       'oldStartsAt',v_old_start,'oldEndsAt',v_old_end,
