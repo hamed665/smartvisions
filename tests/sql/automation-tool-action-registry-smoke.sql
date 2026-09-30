@@ -15,8 +15,27 @@ select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000c001'
 
 do $authenticated_registry_boundary$
 begin
-  if (select count(*) from public.tool_action_registry)<>6 then
-    raise exception 'Authenticated Tool/Action registry read did not return six contracts';
+  if (
+    select count(*) from public.tool_action_registry
+    where action_key in (
+      'CREATE_OPERATOR_BRIEF','GENERATE_PREVIEW','HANDOFF_HUMAN',
+      'MARK_HOT','PAUSE_AUTOMATION','SEND_FOLLOWUP'
+    )
+  )<>6 then
+    raise exception 'Authenticated Tool/Action registry read lost a core Automation contract';
+  end if;
+
+  if (
+    select count(*) from public.tool_action_registry
+    where action_key in (
+      'BOOKING_CHECK_AVAILABILITY','BOOKING_CREATE','BOOKING_RESCHEDULE',
+      'BOOKING_CANCEL','BOOKING_SCHEDULE_REMINDER','BOOKING_ESCALATE',
+      'BOOKING_DEPOSIT_REQUIREMENT'
+    )
+      and availability='AVAILABLE'
+      and metadata->'executionSurfaces' @> '["AI"]'::jsonb
+  )<>7 then
+    raise exception 'Authenticated Tool/Action registry read lost a BOOKING-AI contract';
   end if;
 
   if has_table_privilege('authenticated','public.tool_action_registry','INSERT')
@@ -52,9 +71,28 @@ begin
     into v_available,v_pending
   from public.tool_action_registry;
 
-  if v_available<>6 or v_pending<>0 then
+  if v_available<13 or v_pending<>0 then
     raise exception 'Unexpected action availability split: available %, pending %',
       v_available,v_pending;
+  end if;
+
+  if (
+    select count(*) from public.tool_action_registry
+    where action_key in (
+      'CREATE_OPERATOR_BRIEF','GENERATE_PREVIEW','HANDOFF_HUMAN',
+      'MARK_HOT','PAUSE_AUTOMATION','SEND_FOLLOWUP'
+    ) and availability='AVAILABLE'
+  )<>6 then
+    raise exception 'Core Automation action contracts were changed unexpectedly';
+  end if;
+
+  if (
+    select count(*) from public.tool_action_registry
+    where action_key like 'BOOKING_%'
+      and availability='AVAILABLE'
+      and metadata->'executionSurfaces' @> '["AI"]'::jsonb
+  )<7 then
+    raise exception 'BOOKING-AI action contracts are incomplete';
   end if;
 
   if exists(
