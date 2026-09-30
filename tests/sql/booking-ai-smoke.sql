@@ -220,6 +220,7 @@ begin
 
   begin
     perform public.validate_automation_actions(
+      '00000000-0000-0000-0000-000000000c01',
       '[{"key":"BOOKING_CREATE","config":{"serviceId":"booking_ci_service"}}]'::jsonb,
       true
     );
