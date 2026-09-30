@@ -46,7 +46,7 @@ const ACTION_KEY: Record<Exclude<BookingAiProposalAction,'NONE'>, string> = {
   DEPOSIT_REQUIREMENT: 'BOOKING_DEPOSIT_REQUIREMENT',
 };
 
-const MUTATIONS = new Set<BookingAiProposalAction>(['CREATE','RESCHEDULE','CANCEL']);
+const MUTATIONS = new Set<BookingAiProposalAction>(['CREATE','RESCHEDULE','CANCEL','SCHEDULE_REMINDER']);
 const EXPLICIT_REQUEST_ACTIONS = new Set<BookingAiProposalAction>(['CREATE','RESCHEDULE','CANCEL','SCHEDULE_REMINDER']);
 
 function record(value: unknown): Record<string, unknown> {
