@@ -103,8 +103,11 @@ export async function POST(request:Request){
       const {data:business,error}=await supabase.from('businesses').select('id,formatted_address,city,country_code')
         .eq('organization_id',organizationId).eq('id',businessId).maybeSingle();
       if(error||!business) return NextResponse.json({error:'Business was not found'},{status:400});
+      if(typeof business.formatted_address!=='string'||!business.formatted_address.trim()){
+        return NextResponse.json({error:'Business address location requires formattedAddress'},{status:400});
+      }
       locationSnapshot={
-        formattedAddress: business.formatted_address??undefined,
+        formattedAddress: business.formatted_address.trim(),
         city: business.city??undefined,
         countryCode: business.country_code??undefined,
         source:'CANONICAL_BUSINESS',
