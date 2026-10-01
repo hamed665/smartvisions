@@ -5,13 +5,14 @@ import { createSupabaseServiceClient } from '@/lib/supabase/service';
 import { metaGraphVersion } from '@/lib/whatsapp/meta-onboarding';
 import {
   provisionMetaWhatsAppBinding,
+  registerMetaWhatsAppPhone,
   safeMetaWhatsAppProvisioningError,
 } from '@/lib/whatsapp/meta-provisioning';
 import { resolveMetaWhatsAppProvider } from '@/lib/whatsapp/tenant-routing';
 
 export const runtime = 'nodejs';
 
-type Body = { bindingId?: string };
+type Body = { bindingId?: string; attemptId?: string; pin?: string };
 
 function clean(value: unknown) {
   const text = typeof value === 'string' ? value.trim() : '';
@@ -28,7 +29,8 @@ export async function POST(request: Request) {
     organizationId = ctx.organizationId;
     const body = await request.json() as Body;
     bindingId = clean(body.bindingId);
-    if (!bindingId) return NextResponse.json({ error: 'Invalid WhatsApp binding' }, { status: 400 });
+    const attemptId = clean(body.attemptId);
+    if (!bindingId || !attemptId) return NextResponse.json({ error: 'Invalid WhatsApp provisioning request' }, { status: 400 });
 
     const { data: binding, error } = await ctx.supabase
       .from('communication_channel_bindings')
@@ -42,6 +44,22 @@ export async function POST(request: Request) {
       || binding.provider !== 'META' || !binding.provider_account_id || !binding.provider_destination_id
     ) {
       return NextResponse.json({ error: 'WhatsApp binding is not ready for provider provisioning' }, { status: 409 });
+    }
+
+    const { data: attempt, error: attemptError } = await service
+      .from('communication_channel_setup_attempts')
+      .select('id,status,connection_mode,communication_channel_binding_id,provider_account_id,provider_destination_id')
+      .eq('organization_id', ctx.organizationId)
+      .eq('id', attemptId)
+      .eq('communication_channel_binding_id', binding.id)
+      .maybeSingle();
+
+    if (
+      attemptError || !attempt || attempt.status !== 'COMPLETED'
+      || attempt.provider_account_id !== binding.provider_account_id
+      || attempt.provider_destination_id !== binding.provider_destination_id
+    ) {
+      return NextResponse.json({ error: 'Completed WhatsApp setup attempt no longer matches this binding' }, { status: 409 });
     }
 
     const appId = process.env.META_APP_ID?.trim() || process.env.NEXT_PUBLIC_META_APP_ID?.trim();
@@ -69,6 +87,37 @@ export async function POST(request: Request) {
       phoneNumberId: binding.provider_destination_id,
     });
 
+    let registrationConfirmed = attempt.connection_mode !== 'API_NEW_NUMBER';
+    if (attempt.connection_mode === 'API_NEW_NUMBER') {
+      const pin = typeof body.pin === 'string' ? body.pin.trim() : '';
+      if (!pin) {
+        await service
+          .from('communication_channel_bindings')
+          .update({
+            last_error_code: 'META_PHONE_REGISTRATION_REQUIRED',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('organization_id', ctx.organizationId)
+          .eq('id', binding.id);
+        return NextResponse.json({
+          ok: false,
+          provisioned: false,
+          subscriptionConfirmed: true,
+          registrationRequired: true,
+          displayPhoneNumber: evidence.displayPhoneNumber,
+          message: 'Choose a 6-digit WhatsApp two-step verification PIN to finish Cloud API registration.',
+        }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
+      }
+
+      await registerMetaWhatsAppPhone({
+        graphVersion: metaGraphVersion(),
+        accessToken: resolved.accessToken,
+        phoneNumberId: binding.provider_destination_id,
+        pin,
+      });
+      registrationConfirmed = true;
+    }
+
     const now = new Date().toISOString();
     const { error: bindingError } = await service
       .from('communication_channel_bindings')
@@ -92,6 +141,7 @@ export async function POST(request: Request) {
         phone_number_id: evidence.phoneNumberId,
         subscription_confirmed: evidence.subscriptionConfirmed,
         subscription_created: evidence.subscriptionCreated,
+        registration_confirmed: registrationConfirmed,
         quality_rating: evidence.qualityRating,
         platform_type: evidence.platformType,
         code_verification_status: evidence.codeVerificationStatus,
@@ -104,6 +154,8 @@ export async function POST(request: Request) {
       ok: true,
       provisioned: true,
       subscriptionConfirmed: true,
+      registrationRequired: false,
+      registrationConfirmed,
       displayPhoneNumber: evidence.displayPhoneNumber,
       verifiedName: evidence.verifiedName,
       qualityRating: evidence.qualityRating,
