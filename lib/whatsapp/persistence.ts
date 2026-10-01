@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
-import { applyWhatsAppInboundLifecycle, applyWhatsAppStatusLifecycle } from './lifecycle';
+import { applyWhatsAppInboundLifecycle, applyWhatsAppNativeEchoLifecycle, applyWhatsAppStatusLifecycle } from './lifecycle';
 import { resolveMetaWhatsAppDestination } from './tenant-routing';
-import type { NormalizedWhatsAppInbound, NormalizedWhatsAppStatus } from './webhook';
+import type { NormalizedWhatsAppInbound, NormalizedWhatsAppNativeEcho, NormalizedWhatsAppStatus } from './webhook';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -12,13 +12,15 @@ function serviceClient() {
 
 export async function persistWhatsAppWebhookEvents(input: {
   inbound: NormalizedWhatsAppInbound[];
+  nativeEchoes: NormalizedWhatsAppNativeEcho[];
   statuses: NormalizedWhatsAppStatus[];
 }) {
-  if (input.inbound.length === 0 && input.statuses.length === 0) {
+  if (input.inbound.length === 0 && input.nativeEchoes.length === 0 && input.statuses.length === 0) {
     return {
       inserted: 0,
       duplicates: 0,
       linkedInbound: 0,
+      linkedNative: 0,
       statusUpdates: 0,
       organizationIds: [] as string[],
     };
@@ -30,6 +32,10 @@ export async function persistWhatsAppWebhookEvents(input: {
     route: await resolveMetaWhatsAppDestination({ service: supabase, destination: event.destination }),
   })));
   const routedStatuses = await Promise.all(input.statuses.map(async (event) => ({
+    event,
+    route: await resolveMetaWhatsAppDestination({ service: supabase, destination: event.destination }),
+  })));
+  const routedNative = await Promise.all(input.nativeEchoes.map(async (event) => ({
     event,
     route: await resolveMetaWhatsAppDestination({ service: supabase, destination: event.destination }),
   })));
@@ -70,6 +76,23 @@ export async function persistWhatsAppWebhookEvents(input: {
         },
       },
     })),
+    ...routedNative.map(({ event, route }) => ({
+      organization_id: route.organizationId,
+      provider_message_id: event.providerMessageId,
+      direction: 'OUTBOUND',
+      event_type: `SMB_MESSAGE_ECHO_${event.type.toUpperCase()}`,
+      payload: {
+        ...event,
+        routing: {
+          tenantBusinessId: route.tenantBusinessId,
+          branchId: route.branchId,
+          bindingId: route.bindingId,
+          integrationConnectionId: route.integrationConnectionId,
+          phoneNumberId: route.phoneNumberId,
+          wabaId: route.wabaId,
+        },
+      },
+    })),
   ];
 
   const { data, error } = await supabase
@@ -94,6 +117,19 @@ export async function persistWhatsAppWebhookEvents(input: {
     if (lifecycle.linked) linkedInbound += 1;
   }
 
+  let linkedNative = 0;
+  for (const { event, route } of routedNative) {
+    const lifecycle = await applyWhatsAppNativeEchoLifecycle(route.organizationId, event, {
+      tenantBusinessId: route.tenantBusinessId,
+      branchId: route.branchId,
+      bindingId: route.bindingId,
+      integrationConnectionId: route.integrationConnectionId,
+      phoneNumberId: route.phoneNumberId,
+      wabaId: route.wabaId,
+    });
+    if (lifecycle.linked) linkedNative += 1;
+  }
+
   let statusUpdates = 0;
   for (const { event, route } of routedStatuses) {
     const lifecycle = await applyWhatsAppStatusLifecycle(route.organizationId, event, {
@@ -111,6 +147,7 @@ export async function persistWhatsAppWebhookEvents(input: {
   const organizationIds = Array.from(new Set([
     ...routedInbound.map(item => item.route.organizationId),
     ...routedStatuses.map(item => item.route.organizationId),
+    ...routedNative.map(item => item.route.organizationId),
   ]));
 
   return {
@@ -118,6 +155,7 @@ export async function persistWhatsAppWebhookEvents(input: {
     duplicates: Math.max(0, rows.length - inserted),
     organizationIds,
     linkedInbound,
+    linkedNative,
     statusUpdates,
   };
 }
