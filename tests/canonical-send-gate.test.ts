@@ -74,6 +74,33 @@ describe('canonical send safety', () => {
     expect(result).toEqual({ allowed: true, blocks: [] });
   });
 
+  it('allows a verified Chatwoot human agent only during full human takeover', () => {
+    const result = evaluateCanonicalSendSafety({
+      ...base,
+      channel: 'WHATSAPP',
+      shadowMode: true,
+      humanAgentSendVerified: true,
+      leadAgentMode: 'HUMAN',
+      conversationAgentMode: 'HUMAN',
+      conversationRequiresHuman: true,
+      whatsappPolicyAllowed: true,
+    });
+    expect(result).toEqual({ allowed: true, blocks: [] });
+  });
+
+  it('does not disguise a Chatwoot human agent as an owner exception', () => {
+    const result = evaluateCanonicalSendSafety({
+      ...base,
+      channel: 'WHATSAPP',
+      shadowMode: true,
+      humanAgentSendVerified: true,
+      whatsappPolicyAllowed: true,
+    });
+    expect(result.allowed).toBe(false);
+    expect(result.blocks).toContain('HUMAN_AGENT_REQUIRES_HUMAN_TAKEOVER');
+    expect(result.blocks).not.toContain('OWNER_MANUAL_REQUIRES_HUMAN_TAKEOVER');
+  });
+
   it('fails owner manual send closed if takeover was released before the final boundary', () => {
     const result = evaluateCanonicalSendSafety({
       ...base,

@@ -11,7 +11,7 @@ type ProjectionContext = {
 };
 
 type PublicContact = { source_id?: string; id?: number; name?: string | null };
-type PublicConversation = { id?: number; uuid?: string; inbox_id?: number; status?: string };
+type PublicConversation = { id?: number; uuid?: string; inbox_id?: number; status?: string; custom_attributes?: Record<string, unknown> };
 
 function baseUrl() {
   const raw = process.env.CHATWOOT_BASE_URL?.trim();
@@ -125,6 +125,7 @@ export async function ensureChatwootPublicConversationProjection(input: {
   tenantBusinessId: string;
   bindingId: string;
   canonicalIdentityId: string;
+  canonicalConversationId?: string;
   fetchImpl?: typeof fetch;
   contactDisplayName?: string;
 }) {
@@ -132,15 +133,27 @@ export async function ensureChatwootPublicConversationProjection(input: {
   const contactDisplayName = input.contactDisplayName?.trim().slice(0, 120) || 'Customer';
   const contact = await createOrReconcileContact(ctx, contactDisplayName, input.fetchImpl);
   const existing = activeConversation(await conversations(ctx, input.fetchImpl));
-  if (existing) return { contactSourceId: ctx.sourceId, contact, conversation: existing, outcome: 'RECONCILED_EXISTING' as const };
+  if (existing) {
+    if (input.canonicalConversationId) {
+      const marker = typeof existing.custom_attributes?.smartvisions_conversation_id === 'string'
+        ? existing.custom_attributes.smartvisions_conversation_id
+        : null;
+      if (marker !== input.canonicalConversationId) {
+        throw new Error('Existing Chatwoot conversation is missing the canonical Smart Core conversation marker');
+      }
+    }
+    return { contactSourceId: ctx.sourceId, contact, conversation: existing, outcome: 'RECONCILED_EXISTING' as const };
+  }
 
   try {
     const created = await request<PublicConversation>(
       `/public/api/v1/inboxes/${encodeURIComponent(ctx.inboxIdentifier)}/contacts/${encodeURIComponent(ctx.sourceId)}/conversations`,
       { method: 'POST', body: JSON.stringify({ custom_attributes: {
         smartvisions_projection: true,
+        smartvisions_projection_version: '1',
         smartvisions_binding_id: input.bindingId,
         smartvisions_identity_id: input.canonicalIdentityId,
+        ...(input.canonicalConversationId ? { smartvisions_conversation_id: input.canonicalConversationId } : {}),
       } }) },
       input.fetchImpl,
     );
@@ -149,6 +162,12 @@ export async function ensureChatwootPublicConversationProjection(input: {
   } catch (error) {
     const reconciled = activeConversation(await conversations(ctx, input.fetchImpl));
     if (reconciled && Number.isInteger(reconciled.id) && Number(reconciled.id) > 0) {
+      if (input.canonicalConversationId) {
+        const marker = typeof reconciled.custom_attributes?.smartvisions_conversation_id === 'string'
+          ? reconciled.custom_attributes.smartvisions_conversation_id
+          : null;
+        if (marker !== input.canonicalConversationId) throw error;
+      }
       return { contactSourceId: ctx.sourceId, contact, conversation: reconciled, outcome: 'RECONCILED_AFTER_AMBIGUOUS_CREATE' as const };
     }
     throw error;

@@ -12,6 +12,8 @@ import { evaluateLocalWindow, type MarketCode } from '@/lib/outreach/scheduler';
 import { evaluateMailboxHealth } from '@/lib/outreach/mailbox-health';
 import { countMailboxSendsLast24Hours } from '@/lib/outreach/mailbox-usage';
 import { resolveMetaWhatsAppProvider } from '@/lib/whatsapp/tenant-routing';
+import { replayPersistedWhatsAppStatuses } from '@/lib/whatsapp/lifecycle';
+import { mirrorCanonicalWhatsAppOutboundToChatwoot } from '@/lib/chatwoot/conversation-actions';
 import { resolveMetaInstagramProvider } from '@/lib/instagram/tenant-routing';
 import { resolveMetaMessengerProvider } from '@/lib/facebook-messenger/tenant-routing';
 import { resolveTelegramCustomerProvider } from '@/lib/telegram/customer-routing';
@@ -682,7 +684,12 @@ export async function POST(request: Request) {
       }
 
       const accepted = await supabase.from('conversation_messages').update({
-        status: 'SENT', provider_message_id: providerMessageId, sent_at: new Date().toISOString(), processed_at: new Date().toISOString(), approval_reason: null,
+        status: 'SENT',
+        provider_message_id: providerMessageId,
+        provider_delivery_status: 'ACCEPTED',
+        sent_at: new Date().toISOString(),
+        processed_at: new Date().toISOString(),
+        approval_reason: null,
       }).eq('organization_id', body.organizationId).eq('id', body.messageId).eq('status', 'PROCESSING');
       if (accepted.error) throw new Error(`Provider-accepted WhatsApp reconciliation failed: ${accepted.error.message}`);
 
@@ -708,6 +715,39 @@ export async function POST(request: Request) {
         },
       }, { onConflict: 'organization_id,provider_message_id,direction,event_type', ignoreDuplicates: true });
       if (eventWrite.error) throw new Error(`WhatsApp event reconciliation failed: ${eventWrite.error.message}`);
+
+      try {
+        await replayPersistedWhatsAppStatuses({
+          organizationId: body.organizationId,
+          providerMessageId,
+          tenantBusinessId: projection.tenant_business_id,
+          branchId: projection.branch_id,
+          bindingId: tenantProvider.bindingId,
+        });
+      } catch (error) {
+        console.error(
+          'Approved WhatsApp status replay requires reconciliation',
+          error instanceof Error ? error.message : 'unknown status replay error',
+        );
+      }
+
+      try {
+        await mirrorCanonicalWhatsAppOutboundToChatwoot({
+          service: supabase,
+          organizationId: body.organizationId,
+          conversationId: message.conversation_id,
+          canonicalMessageId: String(message.id),
+          providerMessageId,
+          content: message.original_text,
+          provenance: 'AI',
+        });
+      } catch (error) {
+        console.error(
+          'Approved WhatsApp Chatwoot mirror requires reconciliation',
+          error instanceof Error ? error.message : 'unknown Chatwoot mirror error',
+        );
+      }
+
       await recordUsage({ organizationId: body.organizationId, provider: 'WHATSAPP', operation: whatsappOperation, costUsd: 0, units: 1, leadId: message.lead_id ?? undefined, metadata: {
         source: 'APPROVED_SHADOW_DRAFT',
         pricing_status: 'PENDING_RECONCILIATION',

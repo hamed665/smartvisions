@@ -14,6 +14,7 @@ export type CanonicalSendSafetySnapshot = {
   shadowMode: boolean;
   shadowModeExceptionVerified?: boolean;
   ownerManualSendVerified?: boolean;
+  humanAgentSendVerified?: boolean;
   leadStatus?: string | null;
   leadAgentMode?: string | null;
   conversationStage?: string | null;
@@ -32,7 +33,8 @@ export function evaluateCanonicalSendSafety(input: CanonicalSendSafetySnapshot) 
   if (input.globalKillSwitch) blocks.push('GLOBAL_KILL_SWITCH');
   if (input.channelPaused) blocks.push('CHANNEL_PAUSED');
   if (input.agentsPaused) blocks.push('AGENTS_PAUSED');
-  if (input.shadowMode && !input.shadowModeExceptionVerified && !input.ownerManualSendVerified) blocks.push('SHADOW_MODE_ENABLED');
+  const verifiedHumanSend = Boolean(input.ownerManualSendVerified || input.humanAgentSendVerified);
+  if (input.shadowMode && !input.shadowModeExceptionVerified && !verifiedHumanSend) blocks.push('SHADOW_MODE_ENABLED');
   if (input.leadStatus === 'DO_NOT_CONTACT') blocks.push('DO_NOT_CONTACT');
   const humanTakeover = input.leadAgentMode === 'HUMAN'
     || input.conversationAgentMode === 'HUMAN'
@@ -40,8 +42,12 @@ export function evaluateCanonicalSendSafety(input: CanonicalSendSafetySnapshot) 
   const fullHumanTakeover = input.leadAgentMode === 'HUMAN'
     && input.conversationAgentMode === 'HUMAN'
     && input.conversationRequiresHuman === true;
-  if (input.ownerManualSendVerified && !fullHumanTakeover) blocks.push('OWNER_MANUAL_REQUIRES_HUMAN_TAKEOVER');
-  if (humanTakeover && !input.ownerManualSendVerified) blocks.push('HUMAN_TAKEOVER');
+  if (input.ownerManualSendVerified && !fullHumanTakeover) {
+    blocks.push('OWNER_MANUAL_REQUIRES_HUMAN_TAKEOVER');
+  } else if (input.humanAgentSendVerified && !fullHumanTakeover) {
+    blocks.push('HUMAN_AGENT_REQUIRES_HUMAN_TAKEOVER');
+  }
+  if (humanTakeover && !verifiedHumanSend) blocks.push('HUMAN_TAKEOVER');
   if (input.leadAgentMode === 'PAUSED' || input.conversationAgentMode === 'PAUSED' || input.conversationStage === 'PAUSED') blocks.push('AGENT_PAUSED');
   if (input.conversationStage === 'DO_NOT_CONTACT') blocks.push('CONVERSATION_DO_NOT_CONTACT');
   if (input.conversationStage === 'SPAM') blocks.push('CONVERSATION_SPAM');
@@ -81,6 +87,7 @@ type AssertCanonicalSendAllowedInput = {
   templateName?: string | null;
   shadowModeExceptionVerified?: boolean;
   ownerManualSendVerified?: boolean;
+  humanAgentSendVerified?: boolean;
   marketWindowExceptionVerified?: boolean;
   nowUtc?: Date;
   purpose?: string | null;
@@ -293,6 +300,7 @@ export async function assertCanonicalSendAllowed(input: AssertCanonicalSendAllow
     shadowMode: Boolean(controls.shadow_mode),
     shadowModeExceptionVerified: input.shadowModeExceptionVerified,
     ownerManualSendVerified: input.ownerManualSendVerified,
+    humanAgentSendVerified: input.humanAgentSendVerified,
     leadStatus: lead.status,
     leadAgentMode: lead.agent_mode,
     conversationStage: conversation.stage,

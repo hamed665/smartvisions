@@ -180,6 +180,9 @@ export async function queueShadowDraft(input: ShadowDraftInput) {
     requires_approval: true,
     approval_reason: 'SHADOW_MODE_REVIEW',
     status: 'APPROVAL_REQUIRED',
+    provenance: 'AI',
+    source_plane: 'SMART_CORE',
+    source_message_id: input.idempotencyKey,
     metadata: {
       source: 'SHADOW_MODE',
       idempotency_key: input.idempotencyKey,

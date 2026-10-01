@@ -137,7 +137,7 @@ async function getOrCreateLeadForBusiness(organizationId: string, businessId: st
   const supabase = serviceClient();
   const { data: existing, error: existingError } = await supabase
     .from('leads')
-    .select('id,status,agent_mode')
+    .select('id,status,agent_mode,business_id')
     .eq('organization_id', organizationId)
     .eq('business_id', businessId)
     .maybeSingle();
@@ -152,7 +152,7 @@ async function getOrCreateLeadForBusiness(organizationId: string, businessId: st
     opportunity_score: 0,
     intent_score: 0,
     score_reasons: ['Verified customer-initiated WhatsApp inbound'],
-  }).select('id,status,agent_mode').single();
+  }).select('id,status,agent_mode,business_id').single();
   if (!createError) return created;
   if (!isWhatsAppInboundDuplicateError(createError.code)) {
     throw new Error(`WhatsApp inbound lead create failed: ${createError.message}`);
@@ -160,7 +160,7 @@ async function getOrCreateLeadForBusiness(organizationId: string, businessId: st
 
   const { data: raced, error: racedError } = await supabase
     .from('leads')
-    .select('id,status,agent_mode')
+    .select('id,status,agent_mode,business_id')
     .eq('organization_id', organizationId)
     .eq('business_id', businessId)
     .maybeSingle();
@@ -174,7 +174,7 @@ async function resolveOrCreateVerifiedInboundLead(organizationId: string, event:
   if (resolved.ambiguous) return null;
   if (resolved.business) {
     const businessId = String(resolved.business.id);
-    await recordCrmBusinessIdentityEvidence({
+    const identity = await recordCrmBusinessIdentityEvidence({
       supabase,
       organizationId,
       businessId,
@@ -186,7 +186,11 @@ async function resolveOrCreateVerifiedInboundLead(organizationId: string, event:
       evidenceStrength: 'VERIFIED',
       evidence: { provider_message_id: event.providerMessageId },
     });
-    return getOrCreateLeadForBusiness(organizationId, businessId);
+    const lead = await getOrCreateLeadForBusiness(organizationId, businessId);
+    const identityId = typeof identity?.resolved_identity_id === 'string'
+      ? identity.resolved_identity_id
+      : null;
+    return { lead, businessId, identityId };
   }
 
   const seed = buildVerifiedInboundBusinessSeed(event);
@@ -225,7 +229,7 @@ async function resolveOrCreateVerifiedInboundLead(organizationId: string, event:
     }
   }
 
-  await recordCrmBusinessIdentityEvidence({
+  const identity = await recordCrmBusinessIdentityEvidence({
     supabase,
     organizationId,
     businessId,
@@ -238,13 +242,20 @@ async function resolveOrCreateVerifiedInboundLead(organizationId: string, event:
     evidence: { provider_message_id: event.providerMessageId },
   });
 
-  return getOrCreateLeadForBusiness(organizationId, businessId);
+  const lead = await getOrCreateLeadForBusiness(organizationId, businessId);
+  const identityId = typeof identity?.resolved_identity_id === 'string'
+    ? identity.resolved_identity_id
+    : null;
+  return { lead, businessId, identityId };
 }
 
 type WhatsAppTenantScope = {
   tenantBusinessId: string;
   branchId: string | null;
   bindingId: string;
+  integrationConnectionId?: string | null;
+  phoneNumberId?: string | null;
+  wabaId?: string | null;
 };
 
 async function getOrCreateConversation(organizationId: string, leadId: string, receivedAt: string, scope: WhatsAppTenantScope) {
@@ -292,33 +303,15 @@ async function getOrCreateConversation(organizationId: string, leadId: string, r
 
 export async function applyWhatsAppInboundLifecycle(organizationId: string, event: NormalizedWhatsAppInbound, scope: WhatsAppTenantScope) {
   const supabase = serviceClient();
-  const lead = await resolveOrCreateVerifiedInboundLead(organizationId, event);
-  if (!lead) return { linked: false as const };
+  const resolved = await resolveOrCreateVerifiedInboundLead(organizationId, event);
+  if (!resolved) return { linked: false as const };
+  const { lead, businessId, identityId } = resolved;
 
   const receivedAt = event.timestamp ? new Date(Number(event.timestamp) * 1000).toISOString() : new Date().toISOString();
   const conversation = await getOrCreateConversation(organizationId, lead.id, receivedAt, scope);
   const body = event.text?.trim() || event.caption?.trim() || (event.type === 'audio' ? '[WhatsApp voice message]' : `[WhatsApp ${event.type} message]`);
   const idempotencyKey = `whatsapp:inbound:${event.providerMessageId}`;
   const acquisition = inboundAcquisitionMetadata(event);
-
-  const { error: eventLinkError } = await supabase.from('whatsapp_events').update({
-    lead_id: lead.id,
-    conversation_id: conversation.id,
-    payload: {
-      ...event,
-      routing: {
-        tenantBusinessId: scope.tenantBusinessId,
-        branchId: scope.branchId,
-        bindingId: scope.bindingId,
-        phoneNumberId: event.destination.phoneNumberId,
-        wabaId: event.destination.wabaId ?? null,
-      },
-    },
-  }).eq('organization_id', organizationId)
-    .eq('provider_message_id', event.providerMessageId)
-    .eq('direction', 'INBOUND')
-    .eq('event_type', event.type.toUpperCase());
-  if (eventLinkError) throw new Error(`WhatsApp event linkage failed: ${eventLinkError.message}`);
 
   const { error: messageError } = await supabase.from('outreach_messages').insert({
     organization_id: organizationId,
@@ -348,6 +341,101 @@ export async function applyWhatsAppInboundLifecycle(organizationId: string, even
     throw new Error(`WhatsApp inbound message persistence failed: ${messageError.message}`);
   }
 
+  const mediaType = event.type === 'audio'
+    ? event.voice ? 'VOICE' : 'AUDIO'
+    : event.type === 'image'
+      ? 'IMAGE'
+      : event.type === 'video'
+        ? 'VIDEO'
+        : event.type === 'document'
+          ? 'DOCUMENT'
+          : event.type === 'text'
+            ? 'TEXT'
+            : 'OTHER';
+
+  const canonicalMessage = await supabase.from('conversation_messages').insert({
+    organization_id: organizationId,
+    conversation_id: conversation.id,
+    lead_id: lead.id,
+    provider_message_id: event.providerMessageId,
+    channel: 'WHATSAPP',
+    direction: 'INBOUND',
+    media_type: mediaType,
+    original_text: body,
+    status: 'RECEIVED',
+    provenance: 'CUSTOMER',
+    source_plane: 'META_WHATSAPP',
+    source_message_id: event.providerMessageId,
+    metadata: {
+      source: 'META_WHATSAPP_WEBHOOK',
+      from: event.from,
+      contact_name: event.contactName ?? null,
+      type: event.type,
+      media_id: event.mediaId ?? null,
+      mime_type: event.mimeType ?? null,
+      filename: event.filename ?? null,
+      caption: event.caption ?? null,
+      voice: Boolean(event.voice),
+      tenant_business_id: scope.tenantBusinessId,
+      branch_id: scope.branchId,
+      communication_channel_binding_id: scope.bindingId,
+      canonical_business_id: businessId,
+      canonical_identity_id: identityId,
+      ...acquisition,
+    },
+    created_at: receivedAt,
+    processed_at: receivedAt,
+  }).select('id,conversation_id,provenance').single();
+
+  let canonicalMessageId: string;
+  if (canonicalMessage.error) {
+    if (!isWhatsAppInboundDuplicateError(canonicalMessage.error.code)) {
+      throw new Error(`WhatsApp canonical inbound message persistence failed: ${canonicalMessage.error.message}`);
+    }
+    const replay = await supabase.from('conversation_messages')
+      .select('id,conversation_id,provenance')
+      .eq('organization_id', organizationId)
+      .eq('channel', 'WHATSAPP')
+      .eq('provider_message_id', event.providerMessageId)
+      .maybeSingle();
+    if (
+      replay.error
+      || !replay.data
+      || replay.data.conversation_id !== conversation.id
+      || replay.data.provenance !== 'CUSTOMER'
+    ) {
+      throw new Error('WhatsApp canonical inbound replay does not match its original conversation');
+    }
+    canonicalMessageId = String(replay.data.id);
+  } else {
+    canonicalMessageId = String(canonicalMessage.data.id);
+  }
+
+  const { error: eventLinkError } = await supabase.from('whatsapp_events').update({
+    lead_id: lead.id,
+    conversation_id: conversation.id,
+    payload: {
+      ...event,
+      routing: {
+        tenantBusinessId: scope.tenantBusinessId,
+        branchId: scope.branchId,
+        bindingId: scope.bindingId,
+        integrationConnectionId: scope.integrationConnectionId ?? null,
+        phoneNumberId: scope.phoneNumberId ?? event.destination.phoneNumberId ?? null,
+        wabaId: scope.wabaId ?? event.destination.wabaId ?? null,
+      },
+      canonical: {
+        businessId,
+        identityId,
+        messageId: canonicalMessageId,
+      },
+    },
+  }).eq('organization_id', organizationId)
+    .eq('provider_message_id', event.providerMessageId)
+    .eq('direction', 'INBOUND')
+    .eq('event_type', event.type.toUpperCase());
+  if (eventLinkError) throw new Error(`WhatsApp event linkage failed: ${eventLinkError.message}`);
+
   if (isDoNotContactReply(body)) {
     await persistCustomerDoNotContact({
       supabase,
@@ -357,7 +445,17 @@ export async function applyWhatsAppInboundLifecycle(organizationId: string, even
       phone: event.from,
       source: 'WHATSAPP_INBOUND',
     });
-    return { linked: true as const, leadId: lead.id, conversationId: conversation.id, agentMode: 'PAUSED' as const, doNotContact: true as const, acquisitionSource: acquisition.acquisition_source };
+    return {
+      linked: true as const,
+      leadId: lead.id,
+      businessId,
+      identityId,
+      conversationId: conversation.id,
+      messageId: canonicalMessageId,
+      agentMode: 'PAUSED' as const,
+      doNotContact: true as const,
+      acquisitionSource: acquisition.acquisition_source,
+    };
   }
 
   const terminal = new Set(['WON','LOST','DO_NOT_CONTACT','HUMAN']);
@@ -376,16 +474,100 @@ export async function applyWhatsAppInboundLifecycle(organizationId: string, even
   const { error: followupError } = await supabase.from('followup_jobs').update({ status: 'CANCELLED', stop_reason: 'CUSTOMER_REPLIED' }).eq('organization_id', organizationId).eq('lead_id', lead.id).eq('status', 'PENDING');
   if (followupError) throw new Error(`WhatsApp follow-up cancellation failed: ${followupError.message}`);
 
-  return { linked: true as const, leadId: lead.id, conversationId: conversation.id, agentMode: lead.agent_mode, acquisitionSource: acquisition.acquisition_source };
+  return {
+    linked: true as const,
+    leadId: lead.id,
+    businessId,
+    identityId,
+    conversationId: conversation.id,
+    messageId: canonicalMessageId,
+    agentMode: lead.agent_mode,
+    acquisitionSource: acquisition.acquisition_source,
+  };
 }
 
 export async function applyWhatsAppStatusLifecycle(organizationId: string, event: NormalizedWhatsAppStatus, scope: WhatsAppTenantScope) {
   const supabase = serviceClient();
-  const status = mapWhatsAppDeliveryStatus(event.status);
-  const { data, error } = await supabase.from('outreach_messages').update({
-    status,
-    metadata: { whatsapp_status: event.status, conversation_id: event.conversationId ?? null, pricing_category: event.pricingCategory ?? null, error_code: event.errorCode ?? null, error_title: event.errorTitle ?? null, tenant_business_id: scope.tenantBusinessId, branch_id: scope.branchId, communication_channel_binding_id: scope.bindingId },
-  }).eq('organization_id', organizationId).eq('provider_message_id', event.providerMessageId).eq('channel', 'WHATSAPP').select('id');
-  if (error) throw new Error(`WhatsApp delivery status update failed: ${error.message}`);
-  return { matched: data?.length ?? 0, status };
+  const occurredAt = event.timestamp && /^\d+$/.test(event.timestamp)
+    ? new Date(Number(event.timestamp) * 1000).toISOString()
+    : new Date().toISOString();
+  const { data, error } = await supabase.rpc('reconcile_whatsapp_delivery_status', {
+    p_organization_id: organizationId,
+    p_provider_message_id: event.providerMessageId,
+    p_status: event.status,
+    p_occurred_at: occurredAt,
+    p_tenant_business_id: scope.tenantBusinessId,
+    p_branch_id: scope.branchId,
+    p_binding_id: scope.bindingId,
+    p_conversation_id: event.conversationId ?? null,
+    p_pricing_category: event.pricingCategory ?? null,
+    p_error_code: event.errorCode ?? null,
+    p_error_title: event.errorTitle ?? null,
+  });
+  if (error) throw new Error(`WhatsApp delivery status reconciliation failed: ${error.message}`);
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    matched: Number(row?.outreach_matched ?? 0) + Number(row?.conversation_matched ?? 0),
+    status: row?.canonical_status ? String(row.canonical_status) : mapWhatsAppDeliveryStatus(event.status),
+  };
+}
+
+
+export async function replayPersistedWhatsAppStatuses(input: {
+  organizationId: string;
+  providerMessageId: string;
+  tenantBusinessId: string;
+  branchId: string | null;
+  bindingId: string;
+}) {
+  const supabase = serviceClient();
+  const { data, error } = await supabase
+    .from('whatsapp_events')
+    .select('payload,created_at')
+    .eq('organization_id', input.organizationId)
+    .eq('provider_message_id', input.providerMessageId)
+    .eq('direction', 'STATUS')
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true });
+  if (error) throw new Error(`WhatsApp status replay discovery failed: ${error.message}`);
+
+  let matched = 0;
+  for (const row of data ?? []) {
+    const payload = row.payload && typeof row.payload === 'object' && !Array.isArray(row.payload)
+      ? row.payload as Record<string, unknown>
+      : null;
+    const status = typeof payload?.status === 'string' ? payload.status : '';
+    if (!['sent','delivered','read','failed','deleted','unknown'].includes(status)) continue;
+
+    const event: NormalizedWhatsAppStatus = {
+      providerMessageId: input.providerMessageId,
+      destination: {
+        phoneNumberId: typeof (payload?.destination as Record<string, unknown> | undefined)?.phoneNumberId === 'string'
+          ? String((payload!.destination as Record<string, unknown>).phoneNumberId)
+          : undefined,
+        displayPhoneNumber: typeof (payload?.destination as Record<string, unknown> | undefined)?.displayPhoneNumber === 'string'
+          ? String((payload!.destination as Record<string, unknown>).displayPhoneNumber)
+          : undefined,
+        wabaId: typeof (payload?.destination as Record<string, unknown> | undefined)?.wabaId === 'string'
+          ? String((payload!.destination as Record<string, unknown>).wabaId)
+          : undefined,
+      },
+      status: status as NormalizedWhatsAppStatus['status'],
+      timestamp: typeof payload?.timestamp === 'string' ? payload.timestamp : undefined,
+      recipientId: typeof payload?.recipientId === 'string' ? payload.recipientId : undefined,
+      conversationId: typeof payload?.conversationId === 'string' ? payload.conversationId : undefined,
+      pricingCategory: typeof payload?.pricingCategory === 'string' ? payload.pricingCategory : undefined,
+      errorCode: typeof payload?.errorCode === 'string' ? payload.errorCode : undefined,
+      errorTitle: typeof payload?.errorTitle === 'string' ? payload.errorTitle : undefined,
+    };
+
+    const result = await applyWhatsAppStatusLifecycle(input.organizationId, event, {
+      tenantBusinessId: input.tenantBusinessId,
+      branchId: input.branchId,
+      bindingId: input.bindingId,
+    });
+    matched += result.matched;
+  }
+
+  return { replayed: data?.length ?? 0, matched };
 }

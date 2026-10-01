@@ -3,6 +3,7 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
 import { reconcileWebChatChatwootOutboundEvent } from '@/lib/web-chat/chatwoot-reconciliation';
+import { reconcileWhatsAppChatwootHumanOutboundEvent } from '@/lib/whatsapp/chatwoot-outbound-sync';
 import {
   parseChatwootUnifiedInboxEvent,
   type ChatwootWebhookJournalEvent,
@@ -55,6 +56,25 @@ export async function reconcileChatwootWebhookEvent(
       return {
         action: webChat.outcome === 'INSERTED' ? 'WEB_CHAT_OUTBOUND_SYNCED' as const : 'WEB_CHAT_OUTBOUND_REPLAY' as const,
         messageId: webChat.messageId,
+      };
+    }
+
+    const whatsapp = await reconcileWhatsAppChatwootHumanOutboundEvent(supabase, event);
+    if (whatsapp.handled) {
+      if (
+        whatsapp.outcome === 'SENT'
+        || whatsapp.outcome === 'REPLAY'
+      ) {
+        return {
+          action: whatsapp.outcome === 'SENT'
+            ? 'WHATSAPP_HUMAN_OUTBOUND_SENT' as const
+            : 'WHATSAPP_HUMAN_OUTBOUND_REPLAY' as const,
+          messageId: whatsapp.messageId,
+        };
+      }
+      return {
+        action: 'FAILED' as const,
+        code: whatsapp.outcome,
       };
     }
   }
@@ -120,7 +140,7 @@ export async function processPendingChatwootInboxEvents(input?: {
 
   const pending = await supabase
     .from('chatwoot_webhook_events')
-    .select('id,event_type,payload,status,received_at')
+    .select('id,organization_id,tenant_business_id,chatwoot_inbox_mapping_id,event_type,payload,status,received_at')
     .eq('status', 'RECEIVED')
     .order('received_at', { ascending: true })
     .order('id', { ascending: true })

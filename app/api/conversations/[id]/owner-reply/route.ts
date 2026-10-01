@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { getCurrentOrganization } from '@/lib/supabase/org';
+import { mirrorCanonicalWhatsAppOutboundToChatwoot } from '@/lib/chatwoot/conversation-actions';
 import {
   evaluateOwnerManualReplyAccess,
   normalizeOwnerReplyText,
@@ -11,6 +12,7 @@ import {
   normalizeCanonicalPhone,
 } from '@/lib/outreach/canonical-send-gate';
 import { resolveMetaWhatsAppProvider } from '@/lib/whatsapp/tenant-routing';
+import { replayPersistedWhatsAppStatuses } from '@/lib/whatsapp/lifecycle';
 import {
   assertPaidOperationAllowed,
   getCostGuardState,
@@ -173,6 +175,9 @@ export async function POST(
         reply_dialect: conversation.detected_dialect ?? null,
         requires_approval: false,
         status: 'PROCESSING',
+        provenance: 'HUMAN_SMARTVISIONS',
+        source_plane: 'SMART_CORE',
+        source_message_id: idempotencyKey,
         processed_at: new Date().toISOString(),
         metadata: {
           source: 'OWNER_MANUAL_REPLY',
@@ -210,7 +215,13 @@ export async function POST(
       }
       throw new Error(`Owner reply journal insert failed: ${insertError?.message ?? 'no row returned'}`);
     }
-    messageId = inserted.id;
+    const canonicalMessageId = typeof inserted.id === 'string' && inserted.id.trim()
+      ? inserted.id
+      : null;
+    if (!canonicalMessageId) {
+      throw new Error('Owner reply journal insert returned no canonical message id');
+    }
+    messageId = canonicalMessageId;
 
     // Re-check every canonical safety condition immediately before crossing the provider boundary.
     const finalGate = await assertCanonicalSendAllowed({
@@ -258,6 +269,7 @@ export async function POST(
       .update({
         status: 'SENT',
         provider_message_id: providerMessageId,
+        provider_delivery_status: 'ACCEPTED',
         sent_at: new Date().toISOString(),
         processed_at: new Date().toISOString(),
         approval_reason: null,
@@ -341,11 +353,41 @@ export async function POST(
       usageError = error instanceof Error ? error.message : 'Usage reconciliation failed';
     }
 
+    let statusReplayError: string | null = null;
+    try {
+      await replayPersistedWhatsAppStatuses({
+        organizationId,
+        providerMessageId: result.providerMessageId,
+        tenantBusinessId: projection.tenant_business_id,
+        branchId: projection.branch_id,
+        bindingId: tenantProvider.bindingId,
+      });
+    } catch (error) {
+      statusReplayError = error instanceof Error ? error.message : 'WhatsApp status replay failed';
+    }
+
+    let chatwootMirrorError: string | null = null;
+    try {
+      await mirrorCanonicalWhatsAppOutboundToChatwoot({
+        service: supabase,
+        organizationId,
+        conversationId,
+        canonicalMessageId,
+        providerMessageId: result.providerMessageId,
+        content: text,
+        provenance: 'HUMAN_SMARTVISIONS',
+      });
+    } catch (error) {
+      chatwootMirrorError = error instanceof Error ? error.message : 'Chatwoot outbound mirror failed';
+    }
+
     const reconciliationWarnings = [
       eventWrite.error ? `whatsapp_events: ${eventWrite.error.message}` : null,
       conversationUpdate.error ? `conversation: ${conversationUpdate.error.message}` : null,
       auditWrite.error ? `audit: ${auditWrite.error.message}` : null,
       usageError ? `usage: ${usageError}` : null,
+      statusReplayError ? `status_replay: ${statusReplayError}` : null,
+      chatwootMirrorError ? `chatwoot_mirror: ${chatwootMirrorError}` : null,
     ].filter(Boolean);
 
     return NextResponse.json({

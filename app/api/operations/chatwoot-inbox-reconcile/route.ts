@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { processPendingChatwootInboxEvents } from '@/lib/chatwoot/unified-inbox-reconciler';
+import { createSupabaseServiceClient } from '@/lib/supabase/service';
+import { processPendingWhatsAppChatwootSync } from '@/lib/whatsapp/chatwoot-inbound-sync';
 
 export async function POST(request: Request) {
   const authError = requireInternalApiKey(request);
@@ -13,8 +15,16 @@ export async function POST(request: Request) {
     : 10;
 
   try {
-    const summary = await processPendingChatwootInboxEvents({ limit });
-    return NextResponse.json(summary);
+    const service = createSupabaseServiceClient();
+    const summary = await processPendingChatwootInboxEvents({ limit, supabase: service });
+    const whatsappInbound = await processPendingWhatsAppChatwootSync({
+      service,
+      limit,
+    });
+    return NextResponse.json({
+      ...summary,
+      whatsappInbound,
+    });
   } catch {
     return NextResponse.json(
       { error: 'Unified Inbox reconciliation temporarily unavailable' },
