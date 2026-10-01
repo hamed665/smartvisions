@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import {
+  normalizeMetaWhatsAppRegistrationPin,
   provisionMetaWhatsAppBinding,
+  registerMetaWhatsAppPhone,
   safeMetaWhatsAppProvisioningError,
 } from '@/lib/whatsapp/meta-provisioning';
 
@@ -25,7 +27,9 @@ describe('Meta WhatsApp provisioning reconciler', () => {
       }
       if (url.includes('/waba-1/subscribed_apps')) {
         expect(init?.method ?? 'GET').toBe('GET');
-        return new Response(JSON.stringify({ data: [{ id: 'app-1', name: 'Smart Visions' }] }), { status: 200 });
+        return new Response(JSON.stringify({
+          data: [{ whatsapp_business_api_data: { id: 'app-1', name: 'Smart Visions' } }],
+        }), { status: 200 });
       }
       return new Response('{}', { status: 404 });
     }) as unknown as typeof fetch;
@@ -124,6 +128,51 @@ describe('Meta WhatsApp provisioning reconciler', () => {
       phoneNumberId: 'phone-1',
       fetchImpl,
     })).rejects.toThrow('no longer assigned');
+  });
+
+  it('rejects untrusted provider pagination during provisioning', async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/waba-1/phone_numbers')) {
+        return new Response(JSON.stringify({
+          data: [],
+          paging: { next: 'https://evil.example/steal-token' },
+        }), { status: 200 });
+      }
+      return new Response('{}', { status: 404 });
+    }) as unknown as typeof fetch;
+
+    await expect(provisionMetaWhatsAppBinding({
+      graphVersion: 'v23.0',
+      accessToken: 'token-with-enough-length-123456789',
+      appId: 'app-1',
+      wabaId: 'waba-1',
+      phoneNumberId: 'phone-1',
+      fetchImpl,
+    })).rejects.toThrow('untrusted pagination URL');
+  });
+
+  it('registers a new Cloud API phone with a bounded 6-digit PIN', async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toContain('/phone-1/register');
+      expect(init?.method).toBe('POST');
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      expect(body).toEqual({ messaging_product: 'whatsapp', pin: '482615' });
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    await expect(registerMetaWhatsAppPhone({
+      graphVersion: 'v23.0',
+      accessToken: 'token-with-enough-length-123456789',
+      phoneNumberId: 'phone-1',
+      pin: '482615',
+      fetchImpl,
+    })).resolves.toEqual({ registered: true });
+
+    expect(normalizeMetaWhatsAppRegistrationPin('482615')).toBe('482615');
+    expect(normalizeMetaWhatsAppRegistrationPin('12345')).toBeNull();
+    expect(normalizeMetaWhatsAppRegistrationPin('1234567')).toBeNull();
+    expect(normalizeMetaWhatsAppRegistrationPin('12a456')).toBeNull();
   });
 
   it('does not leak arbitrary provider details', () => {
