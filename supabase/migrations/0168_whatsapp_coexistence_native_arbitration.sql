@@ -21,7 +21,7 @@ declare
   v_conversation public.sales_conversations%rowtype;
   v_lead public.leads%rowtype;
   v_existing public.handoff_events%rowtype;
-  v_from_mode public.agent_mode;
+  v_from_mode public.handoff_events.from_mode%type;
   v_occurred_at timestamptz:=coalesce(p_occurred_at,statement_timestamp());
 begin
   if p_organization_id is null
@@ -98,7 +98,7 @@ begin
     );
   end if;
 
-  v_from_mode:=coalesce(v_conversation.agent_mode,v_lead.agent_mode,'AUTO'::public.agent_mode);
+  v_from_mode:=coalesce(v_conversation.agent_mode,v_lead.agent_mode,'AUTO');
 
   update public.leads
      set agent_mode='HUMAN',
