@@ -15,6 +15,41 @@ export function normalizeMetaWhatsAppConnectionMode(value: unknown): MetaWhatsAp
     : null;
 }
 
+
+export function metaGraphVersion() {
+  return process.env.META_GRAPH_VERSION?.trim() || 'v23.0';
+}
+
+export async function exchangeMetaAuthorizationCode(input: {
+  code: string;
+  appId: string;
+  appSecret: string;
+  fetchImpl?: typeof fetch;
+}) {
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const tokenUrl = new URL(`https://graph.facebook.com/${metaGraphVersion()}/oauth/access_token`);
+  tokenUrl.searchParams.set('client_id', input.appId);
+  tokenUrl.searchParams.set('client_secret', input.appSecret);
+  tokenUrl.searchParams.set('code', input.code);
+
+  const response = await fetchImpl(tokenUrl.toString(), { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Meta authorization exchange failed (${response.status})`);
+  const token = await response.json() as { access_token?: string };
+  if (!token.access_token || token.access_token.length < 20) {
+    throw new Error('Meta authorization exchange returned no usable credential');
+  }
+  return token.access_token;
+}
+
+export function safeMetaWhatsAppCompletionError(error: unknown) {
+  const message = error instanceof Error ? error.message : '';
+  if (
+    message === 'Selected phone number is not part of the selected WhatsApp Business Account'
+    || message === 'Meta returned assets that do not match the selected WhatsApp assets'
+  ) return message;
+  return 'Unable to complete WhatsApp setup safely. You can retry this setup session without deleting or migrating your existing WhatsApp account.';
+}
+
 type MetaPhone = {
   id?: string;
   display_phone_number?: string;
