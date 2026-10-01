@@ -243,7 +243,7 @@ returns trigger
 language plpgsql
 security invoker
 set search_path=public,auth,pg_catalog
-as $
+as $$
 declare
   v_task public.crm_tasks%rowtype;
   v_booking public.bookings%rowtype;
@@ -455,7 +455,7 @@ returns trigger
 language plpgsql
 security invoker
 set search_path=public,pg_catalog
-as $
+as $$
 begin
   if new.signoff_method='SIGNATURE_EVIDENCE' and not exists(
     select 1
@@ -469,7 +469,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 create or replace function public.audit_field_service_mutation()
 returns trigger
