@@ -1,5 +1,30 @@
 # Smart Visions Growth OS — Current Production State
 
+## WhatsApp customer onboarding Slice 1 Production closeout — 2026-10-01
+
+- Contract slice: **Connection Contract + Attempt/Mode + trusted completion + Meta asset validation**, owned by existing `COMM-TENANT-BRIDGE` / `ENT-SECURITY` / `DEV-INTEGRATIONS` scope. No new Work Package or parallel WhatsApp authority was introduced.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled Slice 1 scope only.
+- Implementation PR #375 was squash-merged at `main@474d7cd72d50a002add2e38a4cff30f7d588f09d`; final implementation head `1c6a47138635037189745615d1f25d387de00897` passed exact-head CI `36855801312`.
+- Advisor-hardening PR #376 was squash-merged at final canonical `main@85774ea16adf20403832771d316e68e56283028d`; head `d0ba891e4646652fea5ba88391de7dfc5471afef` passed exact-head CI `36856807256`.
+- Exact-main push CI `36857112993` succeeded on `85774ea16adf20403832771d316e68e56283028d`. Cloudflare Production Deploy `36857447148` also succeeded on that exact SHA through credential preflight, isolated Candidate deployment/smoke, controlled SSR load, exact-bundle Production promotion, Worker Route verification, routed Production smoke and safe API/webhook rejection smoke.
+- Production migration `0163_meta_whatsapp_onboarding_slice1` is live as version `20261001113758`; merged blob SHA `366bcc271f9d516137a8dc75d50f2339058ad8b5`. Hotfix migration `0164_meta_whatsapp_onboarding_fk_index_hardening` is live as version `20261001114314`; merged blob SHA `c07d058d071b7614edaffa35ff4ddcac0a95c29d`.
+- Canonical logical connection identity remains `communication_channel_bindings.id`. New `communication_channel_setup_attempts` is bounded child operational state only, version-bound to the canonical binding; it is not a second connection source of truth.
+- Supported setup modes are exactly `BUSINESS_APP_COEXISTENCE`, `API_NEW_NUMBER`, and `EXISTING_API_RECONNECT`. `FULL_MIGRATION_FROM_BUSINESS_APP` / Delete Account / uninstall is not represented as an allowed mode.
+- The legacy authenticated `configure_meta_whatsapp_binding` Vault-mutation path is no longer executable by `authenticated`. Setup start/completion are service-role-only commands; the actual Vault write is isolated in the private trusted helper `private.apply_meta_whatsapp_binding_credential_internal`.
+- Meta completion now requires a bounded setup attempt, matching binding version/state, server-side authorization-code exchange, exact phone/WABA readback, and proof that the selected phone is a member of the selected WABA before the trusted credential commit.
+- Official same-number Business App coexistence completion is intentionally **fail-closed** in Slice 1. The UI and DB do not fall back to destructive migration. Actual coexistence/native-activity activation remains a later contract slice and may remain `BLOCKED_EXTERNAL` until current Meta eligibility/provider evidence is available.
+- `communication_channel_setup_attempts` has RLS enabled, authenticated direct SELECT/INSERT/UPDATE/DELETE privileges all remain false, and an explicit authenticated deny-all policy provides defense in depth. All four new composite FK paths have covering indexes.
+- Production remained side-effect clean: Setup Attempts 0, Communication Channel Bindings 0, Chatwoot Inbox Mappings 0, Outreach Messages 43, Conversation Messages 37, Usage Events 108 and Follow-up Jobs 6. No synthetic tenant/binding/credential/message/provider send was created for acceptance.
+- Production safety remains unchanged: Shadow Mode ON; global Kill Switch OFF; Email pause OFF; WhatsApp AI pause OFF; Agents pause OFF.
+- Post-0164 advisors returned to the pre-Slice baseline: security RLS-enabled/no-policy INFO 15 plus leaked-password-protection WARN 1; performance unindexed FKs 14 and auth RLS initPlan 16. The six fresh zero-row setup-attempt indexes contribute expected unused-index INFO until real traffic exists.
+- **Not claimed here:** Secure Remote Setup Invitation, mobile resume wizard, Meta subscription/recovery orchestration, Chatwoot onboarding orchestration changes, message provenance/native activity, Human/AI coexistence arbitration, or real-tenant Coexistence E2E.
+
+**Owner-prioritized WhatsApp continuation:** contract Slice 2 — **Secure Remote Setup Invitation** under existing `UX-BUSINESS-WEB` + `ENT-IAM` + `DEV-INTEGRATIONS`. Reuse canonical auth/IAM and bind invitation authority to the exact Business + binding + purpose; do not grant OWNER/ADMIN/CRM/Billing access and do not create a second IAM.
+
+**Stable program cursor preserved for return after this owner-prioritized WhatsApp work:** `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.
+
+---
+
 ## FIELD-SERVICE Production closeout — 2026-10-01
 
 - Work Package: `SECTION BOOKING_OPERATIONS -> FIELD-SERVICE`.
