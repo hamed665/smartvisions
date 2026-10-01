@@ -13,6 +13,7 @@ import { evaluateMailboxHealth } from '@/lib/outreach/mailbox-health';
 import { countMailboxSendsLast24Hours } from '@/lib/outreach/mailbox-usage';
 import { resolveMetaWhatsAppProvider } from '@/lib/whatsapp/tenant-routing';
 import { replayPersistedWhatsAppStatuses } from '@/lib/whatsapp/lifecycle';
+import { mirrorCanonicalWhatsAppOutboundToChatwoot } from '@/lib/chatwoot/conversation-actions';
 import { resolveMetaInstagramProvider } from '@/lib/instagram/tenant-routing';
 import { resolveMetaMessengerProvider } from '@/lib/facebook-messenger/tenant-routing';
 import { resolveTelegramCustomerProvider } from '@/lib/telegram/customer-routing';
@@ -727,6 +728,23 @@ export async function POST(request: Request) {
         console.error(
           'Approved WhatsApp status replay requires reconciliation',
           error instanceof Error ? error.message : 'unknown status replay error',
+        );
+      }
+
+      try {
+        await mirrorCanonicalWhatsAppOutboundToChatwoot({
+          service: supabase,
+          organizationId: body.organizationId,
+          conversationId: message.conversation_id,
+          canonicalMessageId: String(message.id),
+          providerMessageId,
+          content: message.original_text,
+          provenance: 'AI',
+        });
+      } catch (error) {
+        console.error(
+          'Approved WhatsApp Chatwoot mirror requires reconciliation',
+          error instanceof Error ? error.message : 'unknown Chatwoot mirror error',
         );
       }
 
