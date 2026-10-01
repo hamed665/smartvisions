@@ -52,8 +52,16 @@ async function graphJson<T>(input: {
   body?: Record<string, unknown>;
 }) {
   const fetchImpl = input.fetchImpl ?? fetch;
+  const url = input.path.startsWith('https://')
+    ? new URL(input.path)
+    : new URL(`https://graph.facebook.com/${input.graphVersion}/${input.path}`);
+
+  if (url.protocol !== 'https:' || url.hostname !== 'graph.facebook.com') {
+    throw new Error('Meta returned an untrusted pagination URL');
+  }
+
   const response = await fetchImpl(
-    `https://graph.facebook.com/${input.graphVersion}/${input.path}`,
+    url.toString(),
     {
       method: input.method ?? 'GET',
       headers: {
@@ -84,19 +92,32 @@ async function readPhoneEvidence(input: {
 }) {
   const query = new URLSearchParams({
     fields: 'id,display_phone_number,verified_name,quality_rating,platform_type,code_verification_status',
+    limit: '100',
   });
-  const { response, body } = await graphJson<{ data?: PhoneNumberRow[] }>({
-    graphVersion: input.graphVersion,
-    accessToken: input.accessToken,
-    path: `${encodeURIComponent(input.wabaId)}/phone_numbers?${query.toString()}`,
-    fetchImpl: input.fetchImpl,
-  });
+  let next: string | null =
+    `https://graph.facebook.com/${input.graphVersion}/${encodeURIComponent(input.wabaId)}/phone_numbers?${query.toString()}`;
+  let phone: PhoneNumberRow | null = null;
 
-  if (!response.ok) {
-    throw new Error('Meta phone eligibility readback failed');
+  for (let page = 0; next && page < 10; page += 1) {
+    const { response, body } = await graphJson<{
+      data?: PhoneNumberRow[];
+      paging?: { next?: string };
+    }>({
+      graphVersion: input.graphVersion,
+      accessToken: input.accessToken,
+      path: next,
+      fetchImpl: input.fetchImpl,
+    });
+
+    if (!response.ok) {
+      throw new Error('Meta phone eligibility readback failed');
+    }
+
+    phone = body?.data?.find((row) => clean(row.id) === input.phoneNumberId) ?? null;
+    if (phone) break;
+    next = typeof body?.paging?.next === 'string' ? body.paging.next : null;
   }
 
-  const phone = body?.data?.find((row) => clean(row.id) === input.phoneNumberId) ?? null;
   if (!phone) {
     throw new Error('Selected phone number is no longer assigned to the selected WhatsApp Business Account');
   }
@@ -117,20 +138,32 @@ async function isAppSubscribed(input: {
   appId: string;
   fetchImpl?: typeof fetch;
 }) {
-  const { response, body } = await graphJson<{ data?: SubscribedApp[] }>({
-    graphVersion: input.graphVersion,
-    accessToken: input.accessToken,
-    path: `${encodeURIComponent(input.wabaId)}/subscribed_apps`,
-    fetchImpl: input.fetchImpl,
-  });
+  let next: string | null =
+    `https://graph.facebook.com/${input.graphVersion}/${encodeURIComponent(input.wabaId)}/subscribed_apps?limit=100`;
 
-  if (!response.ok) {
-    throw new Error('Meta webhook subscription readback failed');
+  for (let page = 0; next && page < 10; page += 1) {
+    const { response, body } = await graphJson<{
+      data?: SubscribedApp[];
+      paging?: { next?: string };
+    }>({
+      graphVersion: input.graphVersion,
+      accessToken: input.accessToken,
+      path: next,
+      fetchImpl: input.fetchImpl,
+    });
+
+    if (!response.ok) {
+      throw new Error('Meta webhook subscription readback failed');
+    }
+
+    if (body?.data?.some((row) =>
+      clean(row.whatsapp_business_api_data?.id ?? row.id) === input.appId
+    )) return true;
+
+    next = typeof body?.paging?.next === 'string' ? body.paging.next : null;
   }
 
-  return Boolean(body?.data?.some((row) =>
-    clean(row.whatsapp_business_api_data?.id ?? row.id) === input.appId,
-  ));
+  return false;
 }
 
 export async function provisionMetaWhatsAppBinding(input: {
@@ -251,6 +284,9 @@ export function safeMetaWhatsAppProvisioningError(error: unknown) {
   ) return message;
   if (message === 'Meta phone eligibility readback failed') {
     return 'Meta could not confirm the selected WhatsApp phone number yet. Retry provisioning from the same setup session.';
+  }
+  if (message === 'Meta returned an untrusted pagination URL') {
+    return 'Meta returned an invalid pagination response. Provider provisioning was stopped safely.';
   }
   if (message === 'Meta webhook subscription readback failed') {
     return 'Meta could not confirm the webhook subscription yet. Retry provisioning from the same setup session.';
