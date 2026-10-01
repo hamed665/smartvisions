@@ -1,5 +1,26 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## WhatsApp customer onboarding Slice 5 Production closeout — 2026-10-01
+
+- Slices 1–4 remain **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** and their canonical Meta/binding/Vault/setup authorities remain unchanged.
+- Slice 5 disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled existing-Chatwoot projection/orchestration path.
+- PR #385 final head `0e6ec7a73c8b6d715e6914cb99a2a9f3c501624b` passed exact-head CI `36883590463` and squash-merged to `main@4463c29be4b3cf91fc80136587f6c253a6597f36`.
+- Exact-main CI `36884006244` and Cloudflare Production Deploy `36884481705` both succeeded on the exact merge SHA.
+- No Slice-5 migration was required; Production remains through `0166_meta_whatsapp_mobile_wizard_completion@20261001135536`.
+- Slice 5 reuses canonical `chatwoot_account_mappings`, OWNER User/administrator membership, `chatwoot_inbox_mappings`, marker reconciliation, Vault secret capture and reconciliation receipts. The WhatsApp connection remains owned by Smart Core/Meta, not Chatwoot.
+- OWNER finalization requires matching Slice-4 provider evidence. Remote Meta admins are not projected to Chatwoot and gain no Smart Visions panel authority.
+- Business-wide `branch_id=null` Inbox projection is supported. A remote-completed Meta setup can be finalized by the OWNER without repeating Meta login.
+- Production remained side-effect clean: tenant Businesses 0, WhatsApp bindings 0, all Chatwoot mapping/receipt counts 0 and Slice-5 projection audit rows 0. Real-tenant Chatwoot E2E is therefore intentionally not claimed.
+- Security/performance advisor baseline and Production safety controls remain unchanged.
+
+**Owner-prioritized continuation overlay:** WhatsApp onboarding contract **Slice 6 — Message/status/media bridge + provenance + dedupe**.
+
+Fresh-audit the existing Meta WhatsApp webhook journal/persistence, message/status/media lifecycle, Unified Inbox/CRM projection, Chatwoot webhook journal, outbound send reconciliation, media handling and provider-message idempotency before mutation. Extend those exact authorities only. Required Slice-6 semantics include explicit semantic provenance, cross-plane echo/dedupe, out-of-order status recovery, media provenance and deterministic reconciliation. Do not create another message/conversation store, provider queue, webhook journal or Chatwoot message authority.
+
+**Stable program cursor preserved for return after the owner-prioritized WhatsApp onboarding work:** `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.
+
+---
+
 ## WhatsApp customer onboarding Slice 4 Production closeout — 2026-10-01
 
 - Slices 1–3 remain **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** and their canonical binding/setup-attempt/`WHATSAPP_SETUP` authorities remain unchanged.
