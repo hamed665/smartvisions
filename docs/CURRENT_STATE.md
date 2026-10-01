@@ -1,5 +1,28 @@
 # Smart Visions Growth OS — Current Production State
 
+## WhatsApp customer onboarding Slice 4 Production closeout — 2026-10-01
+
+- Contract slice: **Meta Provisioning / Subscription / Recovery**, implemented by extending the existing canonical WhatsApp binding, Vault credential resolver, Meta adapter, webhook receiver and OMNI channel-health evidence only. No second provider stack, connection authority, secret store, webhook journal, IAM, CRM or health truth was introduced.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled Slice-4 provider provisioning/reconciliation scope.
+- Implementation PR #382 final head `d39ca5db89f1661138dc4709cff8ab60a6bea579` passed exact-head CI `36880398289` and squash-merged to canonical `main@3e0eb5ec585b1be5d65ba48531c5026d38324178`.
+- Exact-main CI `36880881774` succeeded on the merge SHA across lint, typecheck, tests, the PostgreSQL 17 migration chain, Next build, Vinext and Cloudflare scheduled verification. Cloudflare Production Deploy `36881305912` succeeded on the exact same SHA through release-candidate smoke, exact-bundle promotion, routed Production smoke and safe API/webhook rejection smoke.
+- Slice 4 required **no new database migration**. Production schema remains through `0166_meta_whatsapp_mobile_wizard_completion@20261001135536`.
+- Provisioning re-reads the selected phone from the selected WABA, reconciles the Smart Visions Meta app through `subscribed_apps`, and treats ambiguous provider mutation results as recoverable only after a fresh provider readback confirms truth.
+- `API_NEW_NUMBER` supports bounded Cloud API phone registration using an ephemeral six-digit PIN. The PIN is sent only to Meta for registration and is not persisted or audited. `EXISTING_API_RECONNECT` does not unnecessarily re-register the phone.
+- Owner and bounded remote `WHATSAPP_SETUP` flows reuse the same canonical binding/Vault credential. Provider retries do not create a second binding or credential path.
+- Same-number `BUSINESS_APP_COEXISTENCE` remains explicitly fail-closed and non-destructive. No Delete Account, uninstall or destructive full migration fallback was added.
+- Existing OMNI channel health now recognizes tenant Vault-backed WhatsApp credentials rather than incorrectly treating only environment credentials as valid.
+- Read-only Production verification after deploy remained side-effect clean: Setup Attempts 0, `META_WHATSAPP_PROVIDER_PROVISIONED` audit rows 0, provisioning-error bindings 0 and registration-required bindings 0. No synthetic tenant, binding, credential, Meta subscription, provider send or customer message was created for acceptance.
+- Production safety remains unchanged: Shadow Mode ON; global Kill Switch OFF; WhatsApp AI pause OFF; Agents pause OFF.
+- Post-Slice-4 advisors remain at the existing baseline: security RLS-enabled/no-policy INFO 15 plus leaked-password-protection WARN 1; performance unindexed FKs 14, auth RLS initPlan 16 and multiple permissive policies 6. Slice 4 introduced no database objects or indexes.
+- **Not claimed here:** existing Chatwoot provisioning integration, message/status/media provenance bridge, official same-number Coexistence/native activity, Human/AI arbitration, disconnect lifecycle or first real-tenant E2E.
+
+**Owner-prioritized WhatsApp continuation:** contract Slice 5 — **Existing Chatwoot provisioning integration**. Reuse the existing Chatwoot Account/API Inbox mapping, Vault, marker reconciliation and receipt authorities; do not create a second Chatwoot plane or Inbox authority.
+
+**Stable program cursor preserved for return after the owner-prioritized WhatsApp work:** `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.
+
+---
+
 ## WhatsApp customer onboarding Slice 3 Production closeout — 2026-10-01
 
 - Contract slice: **Mobile-first Wizard + Preflight + Setup Later + Resume**, implemented by extending the existing Slice-1 setup attempt and Slice-2 `WHATSAPP_SETUP` session only. No second IAM, invitation/session authority, connection record, provider stack, Vault, CRM, queue, message store or Chatwoot authority was introduced.
