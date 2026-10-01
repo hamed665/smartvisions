@@ -20,38 +20,6 @@ function clean(value: unknown, max = 200) {
   return text && text.length <= max ? text : null;
 }
 
-function graphVersion() {
-  return process.env.META_GRAPH_VERSION?.trim() || 'v23.0';
-}
-
-async function exchangeAuthorizationCode(input: {
-  code: string;
-  appId: string;
-  appSecret: string;
-}) {
-  const tokenUrl = new URL(`https://graph.facebook.com/${graphVersion()}/oauth/access_token`);
-  tokenUrl.searchParams.set('client_id', input.appId);
-  tokenUrl.searchParams.set('client_secret', input.appSecret);
-  tokenUrl.searchParams.set('code', input.code);
-
-  const response = await fetch(tokenUrl.toString(), { cache: 'no-store' });
-  if (!response.ok) throw new Error(`Meta authorization exchange failed (${response.status})`);
-  const token = await response.json() as { access_token?: string };
-  if (!token.access_token || token.access_token.length < 20) {
-    throw new Error('Meta authorization exchange returned no usable credential');
-  }
-  return token.access_token;
-}
-
-function safeCompletionError(error: unknown) {
-  const message = error instanceof Error ? error.message : '';
-  if (
-    message === 'Selected phone number is not part of the selected WhatsApp Business Account'
-    || message === 'Meta returned assets that do not match the selected WhatsApp assets'
-  ) return message;
-  return 'Unable to complete WhatsApp setup safely. Start the connection flow again.';
-}
-
 export async function POST(request: Request) {
   try {
     const ctx = await getCurrentOrganization(true);
