@@ -1,6 +1,6 @@
 # WhatsApp customer onboarding connection contract
 
-Status: **OWNER-APPROVED SCOPE LOCK — SLICE 1 PRODUCTION_VERIFIED; SLICES 2–8 PENDING**
+Status: **OWNER-APPROVED SCOPE LOCK — SLICES 1–2 PRODUCTION_VERIFIED; SLICES 3–8 PENDING**
 
 Date: 2026-10-01
 
@@ -18,7 +18,20 @@ Evidence:
 
 This checkpoint proves only the internally controlled Slice 1 contract: bounded attempt state, non-destructive mode lock, trusted credential completion boundary, WABA/phone membership validation, stale/replay protection, ACL/RLS hardening and fail-closed unverified Coexistence. It does **not** claim Remote Setup Invitation, actual Coexistence/native activity, message provenance/Human-AI arbitration, or real-tenant Meta E2E.
 
-**Next owner-prioritized contract slice:** Slice 2 — Secure Remote Setup Invitation.
+## Production checkpoint — Slice 2
+
+Slice 2 is **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** as of 2026-10-01 for the internally controlled Secure Remote Setup Invitation/session scope.
+
+Evidence:
+- implementation PR #378, final head `fb7018647bf8f632bedff678f450564ee200252c`, exact-head CI `36865430981`, merge `ba837577f38c90b390474de1998a2ce84de3c622`;
+- exact-main CI `36865851776` and Cloudflare Production Deploy `36866185938` succeeded on that exact merge SHA;
+- Production migration `0165_meta_whatsapp_remote_setup_invitation@20261001130718`, merged blob SHA `46ca7d1d3821ed84135013546f64d891cecb8a7a`;
+- Production setup-attempt rows and Slice-2 remote audit rows remain 0; no synthetic setup/provider/customer data or send was used;
+- post-migration advisor counts remain at the pre-Slice baseline for security, unindexed-FK, auth-RLS-initPlan and multiple-permissive findings.
+
+Slice 2 extends only the existing setup-attempt child state with hashed one-time invitation and short-lived session evidence. It does not create a user/member for the remote Meta admin, does not grant panel authority, and does not create a second IAM or connection authority. Actual Meta authorization/provider provisioning is deliberately left to later slices; same-number Business App Coexistence activation remains fail-closed and non-destructive.
+
+**Next owner-prioritized contract slice:** Slice 3 — Mobile-first Wizard + Preflight + Setup Later + Resume.
 
 This contract is an execution overlay for the existing Business OS 2027 roadmap. It does **not** create a new Work Package, integration source of truth, IAM system, secret store, message store, Chatwoot plane, queue, health system, or WhatsApp provider stack.
 
