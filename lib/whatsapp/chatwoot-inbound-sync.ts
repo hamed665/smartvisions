@@ -238,25 +238,42 @@ function inboundFromPayload(value: unknown): NormalizedWhatsAppInbound | null {
 
 export async function processPendingWhatsAppChatwootSync(input: {
   service: SupabaseClient;
-  organizationId: string;
-  bindingId: string;
+  organizationId?: string;
+  bindingId?: string;
   limit?: number;
   fetchImpl?: typeof fetch;
 }) {
+  if (input.bindingId && !input.organizationId) {
+    throw new Error('WhatsApp Chatwoot binding filter requires organization scope');
+  }
+
   const limit = Math.min(25, Math.max(1, Math.trunc(input.limit ?? 10)));
-  const pending = await input.service
+  let query = input.service
     .from('whatsapp_events')
-    .select('provider_message_id,payload,lead_id,conversation_id')
-    .eq('organization_id', input.organizationId)
+    .select('organization_id,provider_message_id,payload,lead_id,conversation_id')
     .eq('direction', 'INBOUND')
-    .eq('chatwoot_sync_status', 'PENDING')
-    .contains('payload', { routing: { bindingId: input.bindingId } })
+    .eq('chatwoot_sync_status', 'PENDING');
+
+  if (input.organizationId) query = query.eq('organization_id', input.organizationId);
+  if (input.bindingId) {
+    query = query.contains('payload', { routing: { bindingId: input.bindingId } });
+  }
+
+  const pending = await query
     .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
     .limit(limit);
   if (pending.error) throw new Error(`Pending WhatsApp Chatwoot sync lookup failed: ${pending.error.message}`);
 
-  const summary = { discovered: pending.data?.length ?? 0, synced: 0, pending: 0, reconciliationRequired: 0 };
+  const summary = {
+    discovered: pending.data?.length ?? 0,
+    synced: 0,
+    pending: 0,
+    reconciliationRequired: 0,
+  };
+
   for (const row of pending.data ?? []) {
+    const organizationId = String(row.organization_id ?? '');
     const payload = row.payload && typeof row.payload === 'object' && !Array.isArray(row.payload)
       ? row.payload as Record<string, unknown>
       : null;
@@ -267,11 +284,13 @@ export async function processPendingWhatsAppChatwootSync(input: {
     const canonical = payload?.canonical && typeof payload.canonical === 'object' && !Array.isArray(payload.canonical)
       ? payload.canonical as Record<string, unknown>
       : null;
+
     if (
-      !event
+      !organizationId
+      || !event
       || typeof routing?.tenantBusinessId !== 'string'
       || typeof routing?.bindingId !== 'string'
-      || routing.bindingId !== input.bindingId
+      || (input.bindingId && routing.bindingId !== input.bindingId)
       || typeof row.lead_id !== 'string'
       || typeof row.conversation_id !== 'string'
       || typeof canonical?.businessId !== 'string'
@@ -279,19 +298,25 @@ export async function processPendingWhatsAppChatwootSync(input: {
       summary.reconciliationRequired += 1;
       continue;
     }
+
     const route: MetaWhatsAppRoute = {
-      organizationId: input.organizationId,
+      organizationId,
       tenantBusinessId: routing.tenantBusinessId,
       branchId: typeof routing.branchId === 'string' ? routing.branchId : null,
       bindingId: routing.bindingId,
-      integrationConnectionId: typeof routing.integrationConnectionId === 'string' ? routing.integrationConnectionId : '',
-      phoneNumberId: typeof routing.phoneNumberId === 'string' ? routing.phoneNumberId : event.destination.phoneNumberId!,
+      integrationConnectionId: typeof routing.integrationConnectionId === 'string'
+        ? routing.integrationConnectionId
+        : '',
+      phoneNumberId: typeof routing.phoneNumberId === 'string'
+        ? routing.phoneNumberId
+        : event.destination.phoneNumberId!,
       wabaId: typeof routing.wabaId === 'string' ? routing.wabaId : null,
     };
+
     try {
       const result = await syncWhatsAppInboundToChatwoot({
         service: input.service,
-        organizationId: input.organizationId,
+        organizationId,
         route,
         event,
         linked: {
@@ -304,6 +329,7 @@ export async function processPendingWhatsAppChatwootSync(input: {
         },
         fetchImpl: input.fetchImpl,
       });
+
       if (result.outcome === 'SYNCED' || result.outcome === 'REPLAY') summary.synced += 1;
       else if (result.outcome === 'RECONCILIATION_REQUIRED') summary.reconciliationRequired += 1;
       else summary.pending += 1;
@@ -311,5 +337,6 @@ export async function processPendingWhatsAppChatwootSync(input: {
       summary.reconciliationRequired += 1;
     }
   }
+
   return summary;
 }
