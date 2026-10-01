@@ -68,7 +68,7 @@ begin
   if v_redeem_def is null
      or v_redeem_def not like '%20 minutes%'
      or v_redeem_def not like '%AUTHORIZED%'
-     or v_redeem_def not like '%already used%'
+     or v_redeem_def not like '%redeemed or revoked%'
      or v_redeem_def like '%vault.%'
   then raise exception 'remote setup one-time redemption boundary drifted'; end if;
 
