@@ -189,6 +189,12 @@ export function RemoteWhatsAppSetup() {
       );
       setErrorMessage('');
     } catch (error) {
+      if (pin) {
+        setState('REGISTRATION_REQUIRED');
+        setMessage('Meta did not confirm phone registration. The authorization and webhook subscription remain saved.');
+        setErrorMessage(error instanceof Error ? error.message : 'Unable to confirm WhatsApp phone registration.');
+        return;
+      }
       setState('PROVISIONING_ERROR');
       setMessage('Authorization is saved, but provider provisioning is not confirmed yet.');
       setErrorMessage(error instanceof Error ? error.message : 'Unable to confirm WhatsApp provider provisioning.');
