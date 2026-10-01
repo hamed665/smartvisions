@@ -83,8 +83,10 @@ function setupSupabase(input?: { createMapping?: Record<string, unknown> }) {
       };
     }
     if (name === 'activate_chatwoot_inbox_mapping_verified') {
+      const created = input?.createMapping ?? mapping();
       return {
         data: mapping({
+          branch_id: created.branch_id ?? null,
           chatwoot_inbox_id: 701,
           chatwoot_channel_identifier: 'channel-identifier-701',
           status: 'ACTIVE',
