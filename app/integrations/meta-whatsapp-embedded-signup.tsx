@@ -93,6 +93,11 @@ export function MetaWhatsAppEmbeddedSignup(props: {
       window.setTimeout(() => window.location.reload(), 900);
     } catch (error) {
       savingRef.current = false;
+      if (pin) {
+        setState('REGISTRATION_REQUIRED');
+        setMessage(error instanceof Error ? error.message : 'Meta did not confirm WhatsApp phone registration');
+        return;
+      }
       setState('PROVISIONING_ERROR');
       setMessage(error instanceof Error ? error.message : 'Unable to confirm WhatsApp provider provisioning');
     }
