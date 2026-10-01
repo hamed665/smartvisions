@@ -77,6 +77,11 @@ describe('FIELD-SERVICE contract',()=>{
     expect(finalizeRoute).toContain('assertFieldServiceObjectPath');
     expect(downloadRoute).toContain('loadFieldServiceTask');
     expect(migration).toContain('alter table public.field_service_evidence enable row level security');
+    expect(migration).not.toContain('field_service_evidence_manager_insert');
+    expect(migration).toContain('grant select,insert on public.field_service_evidence');
+    expect(migration).toContain('to service_role');
+    expect(finalizeRoute).toContain("service.from('field_service_evidence')");
+    expect(migration).toContain('Field Service structural changes require a manager role');
   });
 
   it('ships a complete operator surface without a decorative-only page',()=>{

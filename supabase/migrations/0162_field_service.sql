@@ -242,11 +242,12 @@ create or replace function public.guard_field_service_work_order()
 returns trigger
 language plpgsql
 security invoker
-set search_path=public,pg_catalog
-as $$
+set search_path=public,auth,pg_catalog
+as $
 declare
   v_task public.crm_tasks%rowtype;
   v_booking public.bookings%rowtype;
+  v_actor_role text;
 begin
   select * into v_task
   from public.crm_tasks
@@ -260,6 +261,25 @@ begin
     if new.organization_id is distinct from old.organization_id
        or new.task_id is distinct from old.task_id
     then raise exception 'Field Service work order identity is immutable'; end if;
+
+    if new.booking_id is distinct from old.booking_id
+       or new.support_case_id is distinct from old.support_case_id
+       or new.branch_id is distinct from old.branch_id
+       or new.location_source is distinct from old.location_source
+       or new.location_reference is distinct from old.location_reference
+       or new.location_snapshot is distinct from old.location_snapshot
+       or new.requires_customer_signoff is distinct from old.requires_customer_signoff
+    then
+      select m.role into v_actor_role
+      from public.organization_members m
+      where m.organization_id=new.organization_id
+        and m.user_id=auth.uid();
+
+      if v_actor_role is null or v_actor_role not in ('OWNER','ADMIN','SALES_MANAGER') then
+        raise exception 'Field Service structural changes require a manager role';
+      end if;
+    end if;
+
     new.version:=old.version+1;
     new.updated_at:=now();
   else
@@ -565,13 +585,6 @@ with check (
 create policy field_service_evidence_member_read
 on public.field_service_evidence for select to authenticated
 using (public.is_org_member(organization_id));
-create policy field_service_evidence_manager_insert
-on public.field_service_evidence for insert to authenticated
-with check (
-  public.field_service_task_can_manage(organization_id,task_id)
-  and uploaded_by_user_id=(select auth.uid())
-);
-
 create policy field_service_signoff_member_read
 on public.field_service_signoffs for select to authenticated
 using (public.is_org_member(organization_id));
@@ -596,8 +609,10 @@ grant select,insert,update on public.field_service_checklist_items
   to authenticated;
 grant select,insert on public.field_service_material_usage
   to authenticated;
-grant select,insert on public.field_service_evidence
+grant select on public.field_service_evidence
   to authenticated;
+grant select,insert on public.field_service_evidence
+  to service_role;
 grant select,insert on public.field_service_signoffs
   to authenticated;
 

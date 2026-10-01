@@ -28,7 +28,8 @@ export async function POST(request:Request,{params}:{params:Promise<{taskId:stri
     if(!evidenceId||!filename||filename.length>255
       ||!FIELD_SERVICE_ALLOWED_MIME_TYPES.includes(contentType as typeof FIELD_SERVICE_ALLOWED_MIME_TYPES[number])
       ||!FIELD_SERVICE_EVIDENCE_TYPES.includes(evidenceType as typeof FIELD_SERVICE_EVIDENCE_TYPES[number])
-      ||!Number.isInteger(sizeBytes)||sizeBytes<1||sizeBytes>FIELD_SERVICE_MAX_FILE_BYTES){
+      ||!Number.isInteger(sizeBytes)||sizeBytes<1||sizeBytes>FIELD_SERVICE_MAX_FILE_BYTES
+      ||((evidenceType==='PHOTO'||evidenceType==='SIGNATURE')&&!contentType.startsWith('image/'))){
       return NextResponse.json({error:'Invalid Field Service evidence metadata'},{status:400});
     }
     assertFieldServiceObjectPath({path,organizationId,taskId,evidenceId});
@@ -39,11 +40,18 @@ export async function POST(request:Request,{params}:{params:Promise<{taskId:stri
     if(listError) throw new Error(`Field Service evidence verification failed: ${listError.message}`);
     const object=objects?.find(item=>item.name===safeEvidenceFilename(filename));
     if(!object) return NextResponse.json({error:'Uploaded Field Service evidence was not found'},{status:409});
-    const storedSize=Number((object.metadata as Record<string,unknown>|null)?.size??sizeBytes);
+    const metadata=(object.metadata??{}) as Record<string,unknown>;
+    const storedSize=Number(metadata.size??sizeBytes);
     if(Number.isFinite(storedSize)&&storedSize!==sizeBytes){
       return NextResponse.json({error:'Field Service evidence size mismatch'},{status:409});
     }
-    const {data,error}=await supabase.from('field_service_evidence').insert({
+    const storedMime=typeof metadata.mimetype==='string'
+      ?metadata.mimetype
+      :typeof metadata.contentType==='string'?metadata.contentType:'';
+    if(storedMime&&storedMime!==contentType){
+      return NextResponse.json({error:'Field Service evidence content type mismatch'},{status:409});
+    }
+    const {data,error}=await service.from('field_service_evidence').insert({
       id:evidenceId,organization_id:organizationId,task_id:taskId,evidence_type:evidenceType,
       storage_bucket:FIELD_SERVICE_BUCKET,object_path:path,filename,content_type:contentType,
       size_bytes:sizeBytes,caption,uploaded_by_user_id:userId,
