@@ -38,6 +38,9 @@ describe('FIELD-SERVICE contract',()=>{
     expect(migration).toContain('assignee_user_id');
     expect(migration).toContain('Field Service child state of canonical crm_tasks');
     expect(genericTaskRoute).not.toContain("'FOLLOW_UP','FIELD_SERVICE','OTHER'");
+    expect(createRoute).toContain(".eq('task_type','FIELD_SERVICE')");
+    expect(createRoute).toContain(".in('id',ids)");
+    expect(createRoute).not.toContain('listCrmTasks({supabase,organizationId,includeClosed:true,limit:100})');
   });
 
   it('enforces governed completion evidence and customer sign-off in PostgreSQL',()=>{
