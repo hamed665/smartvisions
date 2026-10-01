@@ -1,6 +1,6 @@
 # WhatsApp customer onboarding connection contract
 
-Status: **OWNER-APPROVED SCOPE LOCK — SLICES 1–3 PRODUCTION_VERIFIED; SLICES 4–8 PENDING**
+Status: **OWNER-APPROVED SCOPE LOCK — SLICES 1–4 PRODUCTION_VERIFIED; SLICES 5–8 PENDING**
 
 Date: 2026-10-01
 
@@ -44,7 +44,20 @@ Evidence:
 
 Slice 3 reuses the exact setup-attempt and setup-session authorities already created by Slices 1–2. It does not create a second invite/session/IAM or connection record. Remote completion is tied to the same bounded session, validates selected Meta assets before the existing trusted Vault mutation, records truthful remote completion provenance and supports completed-state replay after a lost network response. Actual provider subscription/provisioning, real-customer Meta E2E and same-number Coexistence/native activity are not claimed here.
 
-**Next owner-prioritized contract slice:** Slice 4 — Meta Provisioning / Subscription / Recovery.
+## Production checkpoint — Slice 4
+
+Slice 4 is **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** as of 2026-10-01 for the internally controlled Meta provisioning / subscription / recovery scope.
+
+Evidence:
+- implementation PR #382, final head `d39ca5db89f1661138dc4709cff8ab60a6bea579`, exact-head CI `36880398289`, merge `3e0eb5ec585b1be5d65ba48531c5026d38324178`;
+- exact-main CI `36880881774` and Cloudflare Production Deploy `36881305912` succeeded on the exact merge SHA;
+- no Slice-4 migration was required; Production remains through `0166_meta_whatsapp_mobile_wizard_completion@20261001135536`;
+- read-only Production verification after deploy found Setup Attempts 0, provisioning audit rows 0, provisioning-error bindings 0 and registration-required bindings 0;
+- post-deploy security/performance advisor baseline remains unchanged.
+
+Slice 4 reuses the existing Meta adapter, canonical binding/Vault credential authority, webhook receiver, tenant routing and OMNI channel health. It re-reads phone membership from the WABA, reconciles `subscribed_apps` before/after mutation, recovers ambiguous provider outcomes only from provider readback, and provides bounded Cloud API registration for `API_NEW_NUMBER` using an ephemeral six-digit PIN that is never persisted or audited. `EXISTING_API_RECONNECT` does not force re-registration. Same-number `BUSINESS_APP_COEXISTENCE` remains fail-closed and non-destructive.
+
+**Next owner-prioritized contract slice:** Slice 5 — Existing Chatwoot provisioning integration.
 
 This contract is an execution overlay for the existing Business OS 2027 roadmap. It does **not** create a new Work Package, integration source of truth, IAM system, secret store, message store, Chatwoot plane, queue, health system, or WhatsApp provider stack.
 
