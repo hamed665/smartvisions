@@ -429,6 +429,20 @@ This is an acceptance lock. A green Embedded Signup callback or stored token alo
 
 
 
+#### WhatsApp onboarding Slice 4 checkpoint — 2026-10-01
+
+**Disposition: IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled Meta provisioning / subscription / recovery scope.
+
+- PR #382 final head `d39ca5db89f1661138dc4709cff8ab60a6bea579` passed exact-head CI `36880398289`; canonical merge is `main@3e0eb5ec585b1be5d65ba48531c5026d38324178`.
+- Exact-main CI `36880881774` and Cloudflare Production Deploy `36881305912` succeeded on the exact merge SHA.
+- No Slice-4 schema migration was required. Production remains through `0166_meta_whatsapp_mobile_wizard_completion@20261001135536`.
+- Provisioning revalidates WABA/phone membership, reconciles the Meta app subscription by provider readback, safely handles ambiguous mutation outcomes, and supports bounded `API_NEW_NUMBER` registration with an ephemeral six-digit PIN that is neither persisted nor audited.
+- Owner and remote `WHATSAPP_SETUP` flows reuse the same canonical binding, Vault credential and Meta adapter. No second connection/provider/secret/health authority was added.
+- `BUSINESS_APP_COEXISTENCE` remains fail-closed and non-destructive; no Delete Account or destructive migration path exists.
+- Read-only Production verification remained side-effect clean: Setup Attempts 0, Slice-4 provisioning audit rows 0, provisioning-error bindings 0 and registration-required bindings 0. No synthetic provider/customer mutation was used.
+- Remaining acceptance for existing Chatwoot provisioning integration, message/status/media provenance, official Coexistence/native activity, Human/AI arbitration, reconnect/revoke/disconnect and first real tenant E2E stays open under Slices 5–8.
+
+
 ### CONN-01 — Guided onboarding
 
 Required flow:
