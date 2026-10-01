@@ -1970,3 +1970,160 @@ export async function mirrorCanonicalWhatsAppOutboundToChatwoot(input: {
     throw error;
   }
 }
+
+
+export async function downloadChatwootMessageAttachmentForProvider(input: {
+  service: SupabaseClient;
+  organizationId: string;
+  tenantBusinessId: string;
+  conversationDisplayId: number;
+  chatwootMessageId: number;
+  attachmentId: number;
+  fetchImpl?: typeof fetch;
+}) {
+  if (
+    !UUID_RE.test(input.organizationId)
+    || !UUID_RE.test(input.tenantBusinessId)
+    || !Number.isSafeInteger(input.conversationDisplayId)
+    || input.conversationDisplayId <= 0
+    || !Number.isSafeInteger(input.chatwootMessageId)
+    || input.chatwootMessageId <= 0
+    || !Number.isSafeInteger(input.attachmentId)
+    || input.attachmentId <= 0
+  ) {
+    fail('INVALID_INPUT', 'Chatwoot provider attachment scope is invalid');
+  }
+
+  activationReady();
+  const proxy = await issueAdminProxy({
+    service: input.service,
+    organizationId: input.organizationId,
+    tenantBusinessId: input.tenantBusinessId,
+    fetchImpl: input.fetchImpl,
+  });
+
+  const messages = await readBoundedConversationMessagePages({
+    proxy,
+    displayId: input.conversationDisplayId,
+    fetchImpl: input.fetchImpl,
+  });
+
+  const message = messages.find(
+    (row) => normalizeChatwootInt32Id(row.id) === input.chatwootMessageId,
+  );
+  if (!message) {
+    fail('NOT_READY', 'Chatwoot provider attachment message was not found in bounded history');
+  }
+
+  const attachments = Array.isArray(message.attachments)
+    ? message.attachments.filter(isObject)
+    : [];
+  const attachment = attachments.find(
+    (row) => normalizeChatwootInt32Id(row.id) === input.attachmentId,
+  );
+  if (!attachment) {
+    fail('NOT_READY', 'Chatwoot provider attachment was not found on the exact message');
+  }
+
+  if (
+    normalizeChatwootInt32Id(attachment.message_id) !== input.chatwootMessageId
+    || normalizeChatwootInt32Id(attachment.account_id) !== proxy.accountId
+  ) {
+    fail('FORBIDDEN', 'Chatwoot provider attachment escaped its governed message/account scope');
+  }
+
+  const url = safeAttachmentUrl(attachment.data_url);
+  if (!url) {
+    fail('FORBIDDEN', 'Chatwoot provider attachment source is not approved Active Storage');
+  }
+
+  const advertisedSize = Number(attachment.file_size);
+  if (
+    Number.isFinite(advertisedSize)
+    && advertisedSize > MAX_ATTACHMENT_BYTES
+  ) {
+    fail('INVALID_INPUT', 'Chatwoot provider attachment exceeds safe download limit');
+  }
+
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const response = await fetchImpl(url.toString(), {
+      method: 'GET',
+      cache: 'no-store',
+      redirect: 'follow',
+      signal: controller.signal,
+      headers: { Accept: '*/*' },
+    });
+    if (!response.ok) {
+      throw new ChatwootHttpError({
+        code: 'UPSTREAM_FAILED',
+        message: 'Chatwoot provider attachment download failed',
+        status: response.status,
+      });
+    }
+
+    const rawLength = response.headers.get('content-length');
+    const contentLength = rawLength ? Number(rawLength) : Number.NaN;
+    if (Number.isFinite(contentLength) && contentLength > MAX_ATTACHMENT_BYTES) {
+      await response.body?.cancel();
+      fail('INVALID_INPUT', 'Chatwoot provider attachment exceeds safe download limit');
+    }
+
+    const bytes = await response.arrayBuffer();
+    if (bytes.byteLength < 1 || bytes.byteLength > MAX_ATTACHMENT_BYTES) {
+      fail('INVALID_INPUT', 'Chatwoot provider attachment size is outside safe bounds');
+    }
+
+    const contentType = (
+      typeof attachment.content_type === 'string' && attachment.content_type.trim()
+        ? attachment.content_type.trim()
+        : response.headers.get('content-type')?.split(';', 1)[0]?.trim()
+    ) || 'application/octet-stream';
+    const extension = typeof attachment.extension === 'string'
+      ? attachment.extension.trim().toLowerCase()
+      : '';
+    const filename = `attachment-${input.attachmentId}${/^[a-z0-9]{1,12}$/.test(extension) ? `.${extension}` : ''}`;
+
+    const audit = await input.service.from('audit_logs').insert({
+      organization_id: input.organizationId,
+      actor_type: 'SYSTEM',
+      actor_id: 'whatsapp-chatwoot-media-bridge',
+      action: 'CHATWOOT_ATTACHMENT_PROVIDER_BRIDGE_AUTHORIZED',
+      entity_type: 'chatwoot_message',
+      entity_id: String(input.chatwootMessageId),
+      tenant_business_id: input.tenantBusinessId,
+      after_data: {
+        chatwoot_message_id: input.chatwootMessageId,
+        attachment_id: input.attachmentId,
+        content_type: contentType,
+        byte_length: bytes.byteLength,
+        direct_storage_url_exposed: false,
+      },
+    });
+    if (audit.error) {
+      fail('UPSTREAM_FAILED', 'Chatwoot provider attachment audit could not be persisted');
+    }
+
+    return {
+      bytes,
+      contentType,
+      filename,
+      fileType: typeof attachment.file_type === 'string'
+        ? attachment.file_type.trim().toLowerCase()
+        : 'file',
+    };
+  } catch (error) {
+    if (error instanceof UnifiedInboxActionError || error instanceof ChatwootHttpError) {
+      throw error;
+    }
+    throw new ChatwootHttpError({
+      code: 'NETWORK_FAILED',
+      message: 'Chatwoot provider attachment network request failed',
+      retryable: true,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
