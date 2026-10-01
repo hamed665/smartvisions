@@ -9,6 +9,7 @@ import { integrationFreshness } from '@/lib/reliability/operational-truth';
 import { getOmnichannelHealth } from '@/lib/omnichannel/health';
 import { getWebChatConnectionHealth } from '@/lib/web-chat/health';
 import { MetaWhatsAppEmbeddedSignup } from './meta-whatsapp-embedded-signup';
+import { MetaWhatsAppRemoteSetupInvite } from './meta-whatsapp-remote-setup-invite';
 
 export const dynamic = 'force-dynamic';
 
@@ -337,6 +338,30 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
             id: binding.id,
             version: binding.version,
             tenantBusinessId: binding.tenant_business_id,
+            businessName: business?.name ?? binding.tenant_business_id,
+            branchName: branch?.name ?? null,
+            destinationLabel: binding.provider_destination_label ?? null,
+          };
+        })}
+    />
+
+    <MetaWhatsAppRemoteSetupInvite
+      configured={Boolean(
+        process.env.NEXT_PUBLIC_META_APP_ID?.trim()
+        && process.env.NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID?.trim()
+      )}
+      bindings={(whatsappBindings ?? [])
+        .filter((binding) => {
+          const business = Array.isArray(binding.tenant_businesses) ? binding.tenant_businesses[0] : binding.tenant_businesses;
+          const branch = Array.isArray(binding.branches) ? binding.branches[0] : binding.branches;
+          return business?.status === 'ACTIVE' && (!branch || branch.status === 'ACTIVE');
+        })
+        .map((binding) => {
+          const business = Array.isArray(binding.tenant_businesses) ? binding.tenant_businesses[0] : binding.tenant_businesses;
+          const branch = Array.isArray(binding.branches) ? binding.branches[0] : binding.branches;
+          return {
+            id: binding.id,
+            version: binding.version,
             businessName: business?.name ?? binding.tenant_business_id,
             branchName: branch?.name ?? null,
             destinationLabel: binding.provider_destination_label ?? null,
