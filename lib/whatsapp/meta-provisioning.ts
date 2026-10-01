@@ -56,7 +56,7 @@ async function graphJson<T>(input: {
   method?: 'GET' | 'POST';
   fetchImpl?: typeof fetch;
   body?: Record<string, unknown>;
-}) {
+}): Promise<{ response: Response; body: MetaGraphResponse<T> | null }> {
   const fetchImpl = input.fetchImpl ?? fetch;
   const url = input.path.startsWith('https://')
     ? new URL(input.path)
