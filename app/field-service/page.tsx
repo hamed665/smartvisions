@@ -6,13 +6,19 @@ export const dynamic='force-dynamic';
 export default async function FieldServicePage(){
   const {supabase,organizationId,role,userId}=await getCurrentOrganization();
 
-  const [tasks,orders,businesses,people,bookings,members,cases]=await Promise.all([
-    supabase.from('crm_tasks')
+  const orders=await supabase.from('field_service_work_orders')
+    .select('*').eq('organization_id',organizationId).order('updated_at',{ascending:false}).limit(100);
+  if(orders.error) throw new Error(`Field Service page lookup failed: ${orders.error.message}`);
+
+  const orderTaskIds=(orders.data??[]).map(row=>String(row.task_id));
+  const tasks=orderTaskIds.length
+    ?await supabase.from('crm_tasks')
       .select('id,title,status,priority,assignee_user_id,due_at,person_id,business_id,version')
       .eq('organization_id',organizationId).eq('task_type','FIELD_SERVICE')
-      .order('updated_at',{ascending:false}).limit(100),
-    supabase.from('field_service_work_orders')
-      .select('*').eq('organization_id',organizationId).order('updated_at',{ascending:false}).limit(100),
+      .in('id',orderTaskIds).order('updated_at',{ascending:false})
+    :{data:[],error:null};
+
+  const [businesses,people,bookings,members,cases]=await Promise.all([
     supabase.from('businesses').select('id,name,formatted_address')
       .eq('organization_id',organizationId).order('name',{ascending:true}).limit(200),
     supabase.from('crm_people').select('id,display_name,status')
@@ -30,7 +36,7 @@ export default async function FieldServicePage(){
       .not('status','in','(CLOSED,RESOLVED)').order('updated_at',{ascending:false}).limit(100),
   ]);
 
-  const errors=[tasks,orders,businesses,people,bookings,members,cases].map(x=>x.error).filter(Boolean);
+  const errors=[tasks,businesses,people,bookings,members,cases].map(x=>x.error).filter(Boolean);
   if(errors.length) throw new Error(`Field Service page lookup failed: ${errors[0]?.message}`);
 
   const taskIds=(tasks.data??[]).map(row=>String(row.id));
