@@ -1,5 +1,31 @@
 # Smart Visions Growth OS — Current Production State
 
+## WhatsApp customer onboarding Slice 6 Production closeout — 2026-10-02
+
+- Contract slice: **Message/status/media bridge + provenance + dedupe**, implemented by extending the existing Meta WhatsApp journal/persistence, canonical `conversation_messages`, existing Smart Core send gate, Chatwoot signed-webhook journal, Unified Inbox projection and existing reconciliation runtime. No second message store, provider stack, webhook journal, queue, CRM, secret store, IAM or Chatwoot plane was introduced.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled Slice-6 code/schema/deploy scope.
+- Implementation PR #387 final head `4b6eba7ceb900e1d012d299e3b20816911f9fa51` passed exact-head CI `36939463033` across lint, typecheck, tests, the complete PostgreSQL 17 migration chain plus Slice-6 SQL smoke, Next build, Vinext and Cloudflare scheduled verification.
+- PR #387 squash-merged to canonical `main@5f7f81c5b279efd92feb6341bdc971fe6e6c012e`. Exact-main CI `36939774658` succeeded on that exact merge SHA.
+- Cloudflare Production Deploy `36940049403` succeeded on the same exact merge SHA through exact-green checkout, isolated release-candidate deployment/smoke, controlled SSR load, exact-bundle production promotion, Worker Route verification, immediate routed Production smoke and safe Production API/webhook rejection smoke. The smoke path invoked no outbound provider sends.
+- Production migration `0167_whatsapp_message_bridge_provenance` is live as version `20261001231837`; merged migration blob SHA `60c4df822b1429bf77d975089af96a218a1bf81b`.
+- Canonical message provenance is now bounded to `CUSTOMER`, `HUMAN_SMARTVISIONS`, `HUMAN_NATIVE_WHATSAPP`, `AI`, and `SYSTEM`. Cross-plane source identity is guarded by `organization_id + channel + source_plane + source_message_id`.
+- Meta inbound persists into the existing canonical message path and is projected to Chatwoot from the existing durable WhatsApp journal with `PENDING -> PROCESSING -> ACCEPTED` / `RECONCILIATION_REQUIRED` semantics. Ambiguous external mutations remain fail-closed and are never blindly retried.
+- Chatwoot human outgoing is accepted only from a canonically mapped Smart Visions human role and only during full human takeover. Owner/AI Smart Core sends mirror to Chatwoot using deterministic source identity so mirror echoes do not resend to Meta.
+- Delivery reconciliation is monotonic across canonical and outreach message evidence, including out-of-order status replay. The media bridge uses the existing Meta provider/Vault authority, bounded downloads/uploads, trusted origins and MIME checks. Chatwoot outbound media is intentionally limited to one attachment per provider message so provider correlation remains deterministic.
+- Business-wide Unified Inbox projection now supports `branch_id = null`; Branch-scoped Team mapping remains fail-closed.
+- Production backfill was conservative: all 36 existing `SHADOW_MODE` outbound messages are `AI`; the one ambiguous old outbound message is `SYSTEM`. No existing message received guessed human/customer provenance.
+- Production WhatsApp journal after migration has 37 inbound events eligible for Chatwoot sync in `PENDING`; 12 older inbound events remain without Chatwoot sync state because both `conversation_id` and `lead_id` are absent, so no scope was fabricated.
+- Production remained side-effect clean: Conversation Messages 37, WhatsApp Events 136 and Unified Inbox projections 0. The controlled SQL smoke ran transactionally and no smoke Organization/Business/Lead/Conversation/Message/Event IDs exist in Production.
+- Slice-6 RPCs for Chatwoot claim/finalize, Chatwoot-human outbound completion and delivery reconciliation are executable by `service_role` and denied to `anon` / `authenticated`. Source-identity and pending-sync indexes are live; Unified Inbox `branch_id` is nullable.
+- Production safety is verified unchanged: Shadow Mode ON; global Kill Switch OFF; WhatsApp AI pause OFF; Agents pause OFF. Fresh advisors retain the broader existing platform findings; no Slice-6-specific ACL regression was found.
+- **Not claimed here:** real-customer Meta ↔ Smart Core ↔ Chatwoot E2E, official same-number Business App Coexistence/native human activity, or reconnect/revoke/disconnect/final real-tenant acceptance. Those remain dependent on later contract slices and real external tenant/provider evidence.
+
+**Owner-prioritized WhatsApp continuation:** contract Slice 7 — **Official coexistence + native activity + Human/AI arbitration**. Fresh-read the connection contract before mutation; keep same-number Coexistence fail-closed and non-destructive until official provider/runtime evidence can verify it.
+
+**Stable program cursor preserved for return after the owner-prioritized WhatsApp work:** `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.
+
+---
+
 ## WhatsApp customer onboarding Slice 5 Production closeout — 2026-10-01
 
 - Contract slice: **Existing Chatwoot provisioning integration**, implemented by composing the existing Chatwoot Account/User/Membership/API Inbox provisioning and reconciliation authorities onto the already verified canonical Meta WhatsApp binding. No second Chatwoot plane, Inbox authority, provider store, Vault, IAM or message store was introduced.
