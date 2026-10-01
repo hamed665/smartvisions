@@ -1,25 +1,25 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
-## WhatsApp customer onboarding Slice 1 Production closeout — 2026-10-01
+## WhatsApp customer onboarding Slice 2 Production closeout — 2026-10-01
 
 - Owner-approved contract: [WHATSAPP_CUSTOMER_ONBOARDING_CONNECTION_CONTRACT.md](WHATSAPP_CUSTOMER_ONBOARDING_CONNECTION_CONTRACT.md).
-- Slice 1 disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled Connection Contract / Attempt+Mode / trusted completion / asset-validation scope.
-- PR #375 final head `1c6a47138635037189745615d1f25d387de00897` passed exact-head CI `36855801312` and merged at `474d7cd72d50a002add2e38a4cff30f7d588f09d`.
-- Advisor-hardening PR #376 head `d0ba891e4646652fea5ba88391de7dfc5471afef` passed exact-head CI `36856807256` and merged at final `main@85774ea16adf20403832771d316e68e56283028d`.
-- Exact-main CI `36857112993` and Cloudflare Production Deploy `36857447148` both succeeded on that exact final SHA.
-- Production migrations: `0163_meta_whatsapp_onboarding_slice1@20261001113758` and `0164_meta_whatsapp_onboarding_fk_index_hardening@20261001114314`.
-- `communication_channel_bindings` remains the connection authority; `communication_channel_setup_attempts` is child operational state only.
-- Allowed modes remain exactly `BUSINESS_APP_COEXISTENCE`, `API_NEW_NUMBER`, `EXISTING_API_RECONNECT`. Destructive Business App migration/Delete Account/uninstall is not a supported path.
-- The old authenticated direct Vault mutation path is revoked. Start/completion are trusted service-role commands and Meta completion is attempt/version-bound.
-- Meta asset verification now proves the selected phone is actually a member of the selected WABA before the trusted credential commit.
-- Same-number Business App Coexistence stays **fail-closed** until the later official Coexistence/native-activity slice has current provider evidence. No fallback to destructive migration exists.
-- Production stayed side-effect clean: Setup Attempts 0, Communication Bindings 0, Chatwoot Inbox Mappings 0; Outreach 43, Conversation Messages 37, Usage Events 108, Follow-up Jobs 6.
-- Safety stayed unchanged: Shadow ON; global Kill Switch OFF; Email pause OFF; WhatsApp AI pause OFF; Agents pause OFF.
-- Post-hotfix advisors returned to the prior baseline: RLS/no-policy INFO 15, leaked-password WARN 1, unindexed FKs 14, auth RLS initPlan 16.
+- Slice 1 remains **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** under PRs #375/#376 and Production migrations `0163`/`0164`; its non-destructive mode/trusted-completion guards remain authoritative.
+- Slice 2 disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled Secure Remote Setup Invitation/session scope.
+- PR #378 final head `fb7018647bf8f632bedff678f450564ee200252c` passed exact-head CI `36865430981`, then squash-merged to `main@ba837577f38c90b390474de1998a2ce84de3c622`.
+- Exact-main CI `36865851776` and Cloudflare Production Deploy `36866185938` both succeeded on that exact merge SHA.
+- Production migration `0165_meta_whatsapp_remote_setup_invitation@20261001130718` is live; merged migration blob SHA `46ca7d1d3821ed84135013546f64d891cecb8a7a`.
+- `communication_channel_bindings` remains the connection authority and `communication_channel_setup_attempts` remains child operational state. Slice 2 only adds invitation/session capability evidence to that existing attempt.
+- Remote Meta admins are not Smart Visions users/members. A remote participant receives only `WHATSAPP_SETUP`, scoped to the exact Organization + tenant Business + binding + attempt + binding version + mode + purpose and bounded by expiry/revocation.
+- Invitation/session secrets are 256-bit random bearer material persisted only as SHA-256 hashes. Invitation redemption is one-time; the setup session is short-lived and delivered in an HttpOnly SameSite=Strict cookie scoped to `/setup/whatsapp`.
+- Public redeem/context and OWNER issue/revoke routes execute through service-only RPC boundaries. New RPCs are SECURITY INVOKER and have no `anon`/`authenticated` EXECUTE. Existing setup-attempt authenticated deny-all/RLS remains intact.
+- Production stayed side-effect clean: Setup Attempts 0 and Slice-2 remote audit events 0. No synthetic tenant/binding/invite/session/credential/provider event or customer send was used.
+- Production safety remains unchanged: Shadow Mode ON; global Kill Switch OFF; WhatsApp AI pause OFF; Agents pause OFF.
+- Post-`0165` advisors remain at the prior baseline for security/FK/RLS-plan policy findings: RLS/no-policy 15, leaked-password warning 1, unindexed FKs 14, auth RLS initPlan 16 and multiple permissive policies 6. Two fresh zero-row capability hash indexes contribute expected unused-index INFO.
+- Same-number Business App Coexistence is still **fail-closed for actual activation**. Slice 2 did not implement Meta authorization/provider provisioning and did not introduce Delete Account/full migration.
 
-**Owner-prioritized continuation overlay:** WhatsApp onboarding contract **Slice 2 — Secure Remote Setup Invitation** under existing `UX-BUSINESS-WEB` + `ENT-IAM` + `DEV-INTEGRATIONS`.
+**Owner-prioritized continuation overlay:** WhatsApp onboarding contract **Slice 3 — Mobile-first Wizard + Preflight + Setup Later + Resume** under existing `UX-BUSINESS-WEB` + `UX-MOBILE` + `UX-PWA` scope.
 
-Before mutation, fresh-audit existing invitation/auth/session/capability/scope primitives and current public/customer setup surfaces. Reuse canonical Supabase Auth / Organization membership / scope authorities. A setup link may authorize only the intended Organization + tenant Business + binding + setup purpose/attempt for a bounded time. It must not grant OWNER, ADMIN, CRM, billing, unrelated integration or cross-business access. Do not create a second IAM/user directory or a generic magic-link authority if an existing primitive can safely carry the capability.
+Before mutation, fresh-audit the exact current `/setup/whatsapp` surface, Slice-2 session/context, Slice-1 attempt lifecycle, current Meta Embedded Signup SDK/configuration usage, existing return/resume/session/error patterns and browser/mobile security boundaries. Extend those exact authorities only. The remote wizard must reuse the current `WHATSAPP_SETUP` session and setup attempt; do not create a second invite/session/IAM or connection record. Customer-facing UI must hide WABA IDs, tokens, webhooks and developer-app details. Keep `BUSINESS_APP_COEXISTENCE` activation fail-closed until the official later Coexistence slice is provider-verified.
 
 **Stable program cursor preserved for return after the owner-prioritized WhatsApp onboarding work:** `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.
 
