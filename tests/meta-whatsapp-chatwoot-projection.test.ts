@@ -247,7 +247,7 @@ describe('WhatsApp to existing Chatwoot projection', () => {
       chatwootAccountMappingId: ACCOUNT_MAPPING,
     }));
 
-    const insert = auditQueries[1]?.insert as ReturnType<typeof vi.fn>;
+    const insert = auditQueries[2]?.insert as ReturnType<typeof vi.fn>;
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({
       organization_id: ORG,
       actor_type: 'USER',
