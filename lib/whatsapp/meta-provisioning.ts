@@ -49,6 +49,7 @@ async function graphJson<T>(input: {
   accessToken: string;
   method?: 'GET' | 'POST';
   fetchImpl?: typeof fetch;
+  body?: Record<string, unknown>;
 }) {
   const fetchImpl = input.fetchImpl ?? fetch;
   const response = await fetchImpl(
@@ -59,6 +60,7 @@ async function graphJson<T>(input: {
         Authorization: `Bearer ${input.accessToken}`,
         'Content-Type': 'application/json',
       },
+      ...(input.body ? { body: JSON.stringify(input.body) } : {}),
       cache: 'no-store',
     },
   );
@@ -204,11 +206,48 @@ export async function provisionMetaWhatsAppBinding(input: {
   };
 }
 
+
+export function normalizeMetaWhatsAppRegistrationPin(value: unknown) {
+  const pin = typeof value === 'string' ? value.trim() : '';
+  return /^\d{6}$/.test(pin) ? pin : null;
+}
+
+export async function registerMetaWhatsAppPhone(input: {
+  graphVersion: string;
+  accessToken: string;
+  phoneNumberId: string;
+  pin: string;
+  fetchImpl?: typeof fetch;
+}) {
+  const pin = normalizeMetaWhatsAppRegistrationPin(input.pin);
+  if (!pin) throw new Error('WhatsApp registration PIN must be exactly 6 digits');
+
+  const { response, body } = await graphJson<{ success?: boolean | string }>({
+    graphVersion: input.graphVersion.trim(),
+    accessToken: input.accessToken.trim(),
+    path: `${encodeURIComponent(input.phoneNumberId.trim())}/register`,
+    method: 'POST',
+    fetchImpl: input.fetchImpl,
+    body: {
+      messaging_product: 'whatsapp',
+      pin,
+    },
+  });
+
+  const succeeded = body?.success === true || body?.success === 'true';
+  if (!response.ok || !succeeded) {
+    throw new Error('Meta phone registration was not confirmed');
+  }
+  return { registered: true as const };
+}
+
 export function safeMetaWhatsAppProvisioningError(error: unknown) {
   const message = error instanceof Error ? error.message : '';
   if (
     message === 'Selected phone number is no longer assigned to the selected WhatsApp Business Account'
     || message === 'Meta webhook subscription could not be confirmed after reconciliation'
+    || message === 'WhatsApp registration PIN must be exactly 6 digits'
+    || message === 'Meta phone registration was not confirmed'
   ) return message;
   if (message === 'Meta phone eligibility readback failed') {
     return 'Meta could not confirm the selected WhatsApp phone number yet. Retry provisioning from the same setup session.';
