@@ -19,7 +19,7 @@ type InviteResult = {
   attemptId: string;
   attemptVersion: number;
   bindingId: string;
-  setupUrl: string;
+  setupPath: string;
   expiresAt: string;
   error?: string;
 };
@@ -60,10 +60,10 @@ export function MetaWhatsAppRemoteSetupInvite(props: {
         }),
       });
       const body = await response.json() as InviteResult;
-      if (!response.ok || !body.setupUrl || !body.attemptId || !body.attemptVersion) {
+      if (!response.ok || !body.setupPath || !body.attemptId || !body.attemptVersion) {
         throw new Error(body.error || 'Unable to create remote setup link');
       }
-      setInvite(body);
+      setInvite({ ...body, setupPath: `${window.location.origin}${body.setupPath}` });
       setMessage('Secure setup link created. Share it only with the person authorized to connect this WhatsApp business in Meta.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Unable to create remote setup link');
