@@ -22,6 +22,29 @@ export type WhatsAppCatalogProductSendInput = {
   replyToMessageId?: string;
 };
 
+
+export type WhatsAppMediaKind = 'audio' | 'image' | 'video' | 'document';
+
+export type WhatsAppMediaUploadInput = {
+  bytes: ArrayBuffer;
+  mimeType: string;
+  filename: string;
+  kind: WhatsAppMediaKind;
+};
+
+export type WhatsAppMediaSendInput = {
+  to: string;
+  mediaId: string;
+  kind: WhatsAppMediaKind;
+  caption?: string | null;
+  filename?: string | null;
+  replyToMessageId?: string;
+};
+
+export type WhatsAppMediaUploadResult = {
+  mediaId: string;
+};
+
 export type WhatsAppAudioUploadInput = {
   bytes: ArrayBuffer;
   mimeType: 'audio/mpeg' | 'audio/mp4' | 'audio/aac' | 'audio/amr' | 'audio/ogg';
@@ -48,6 +71,8 @@ export interface WhatsAppProvider {
   sendText(input: WhatsAppSendInput): Promise<WhatsAppSendResult>;
   sendTemplate(input: WhatsAppTemplateSendInput): Promise<WhatsAppSendResult>;
   sendCatalogProduct(input: WhatsAppCatalogProductSendInput): Promise<WhatsAppSendResult>;
+  uploadMedia(input: WhatsAppMediaUploadInput): Promise<WhatsAppMediaUploadResult>;
+  sendMedia(input: WhatsAppMediaSendInput): Promise<WhatsAppSendResult>;
   uploadAudio(input: WhatsAppAudioUploadInput): Promise<WhatsAppAudioUploadResult>;
   sendAudio(input: WhatsAppAudioSendInput): Promise<WhatsAppSendResult>;
   health(): Promise<{ healthy: boolean; detail?: string }>;
