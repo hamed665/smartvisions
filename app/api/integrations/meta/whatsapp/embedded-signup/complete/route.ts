@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server';
 
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
-import {\n  exchangeMetaAuthorizationCode,\n  metaGraphVersion,\n  safeMetaWhatsAppCompletionError,\n  verifyMetaWhatsAppSelectedAssets,\n} from '@/lib/whatsapp/meta-onboarding';
+import {
+  exchangeMetaAuthorizationCode,
+  metaGraphVersion,
+  safeMetaWhatsAppCompletionError,
+  verifyMetaWhatsAppSelectedAssets,
+} from '@/lib/whatsapp/meta-onboarding';
 
 export const runtime = 'nodejs';
 
