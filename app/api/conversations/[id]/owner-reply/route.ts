@@ -215,7 +215,13 @@ export async function POST(
       }
       throw new Error(`Owner reply journal insert failed: ${insertError?.message ?? 'no row returned'}`);
     }
-    messageId = inserted.id;
+    const canonicalMessageId = typeof inserted.id === 'string' && inserted.id.trim()
+      ? inserted.id
+      : null;
+    if (!canonicalMessageId) {
+      throw new Error('Owner reply journal insert returned no canonical message id');
+    }
+    messageId = canonicalMessageId;
 
     // Re-check every canonical safety condition immediately before crossing the provider boundary.
     const finalGate = await assertCanonicalSendAllowed({
@@ -366,7 +372,7 @@ export async function POST(
         service: supabase,
         organizationId,
         conversationId,
-        canonicalMessageId: messageId,
+        canonicalMessageId,
         providerMessageId: result.providerMessageId,
         content: text,
         provenance: 'HUMAN_SMARTVISIONS',
