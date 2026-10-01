@@ -391,6 +391,19 @@ For WhatsApp customer onboarding:
 This is an acceptance lock. A green Embedded Signup callback or stored token alone does not satisfy WhatsApp onboarding completion.
 
 
+#### WhatsApp onboarding Slice 1 checkpoint — 2026-10-01
+
+**Disposition: IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled Slice 1 contract only.
+
+- PR #375 + migration `0163_meta_whatsapp_onboarding_slice1` implemented bounded setup-attempt state, the three non-destructive connection modes, trusted service-only completion, revocation of the legacy authenticated Vault mutation path and exact WABA/phone membership validation.
+- PR #376 + migration `0164_meta_whatsapp_onboarding_fk_index_hardening` closed all four new FK advisor findings and restored the prior security-advisor RLS/no-policy baseline with an explicit authenticated deny-all policy.
+- Final canonical main is `85774ea16adf20403832771d316e68e56283028d`; exact-main CI `36857112993` and Cloudflare Production Deploy `36857447148` succeeded on that exact SHA.
+- Production setup-attempt rows remain zero. No synthetic tenant/binding/credential, provider send or customer message was used to prove the slice.
+- `BUSINESS_APP_COEXISTENCE` is represented and protected but intentionally not activated yet. Same-number setup remains fail-closed rather than falling back to Delete Account/full migration.
+- Remaining CONN/META acceptance for Remote Setup, mobile resume, provider subscription/recovery, actual Coexistence/native activity, Human/AI arbitration, reconnect/revoke/disconnect and first real tenant E2E remains open under later contract slices.
+
+
+
 ### CONN-01 — Guided onboarding
 
 Required flow:

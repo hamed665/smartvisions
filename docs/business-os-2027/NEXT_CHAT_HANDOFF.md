@@ -1,22 +1,27 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
-## WhatsApp customer onboarding scope lock registered — 2026-10-01
+## WhatsApp customer onboarding Slice 1 Production closeout — 2026-10-01
 
 - Owner-approved contract: [WHATSAPP_CUSTOMER_ONBOARDING_CONNECTION_CONTRACT.md](WHATSAPP_CUSTOMER_ONBOARDING_CONNECTION_CONTRACT.md).
-- This is a **scope/acceptance registration only**; no runtime, Production, Meta, Chatwoot, Vault, Supabase schema or provider-side mutation was performed by this documentation package.
-- No new Work Package or parallel architecture was introduced. The eight implementation slices map to existing Communication, Omnichannel, Developer, IAM/Security, UX and Final E2E Work Packages.
-- Canonical connection identity remains `communication_channel_bindings.id`; setup attempts are bounded child operational state and may not become a second connection truth.
-- Supported customer modes are `BUSINESS_APP_COEXISTENCE`, `API_NEW_NUMBER`, and `EXISTING_API_RECONNECT`.
-- **Hard product policy:** an active WhatsApp Business App account is never deleted/uninstalled/migrated destructively by the Smart Visions onboarding path. Same-number onboarding is coexistence-only. If coexistence is unavailable, the existing mobile WhatsApp stays untouched and a separate API number is the fallback.
-- Remote Setup is setup-only least privilege; it must not grant OWNER/ADMIN/CRM/billing access.
-- Credential completion must move behind a trusted server-side authorization boundary before Vault mutation and must validate Organization/Business/binding/attempt/version/purpose plus Meta asset evidence.
-- Existing Meta Embedded Signup, tenant-bound routing, Vault, Chatwoot API Inbox provisioning/reconciliation, Unified Inbox, CRM and channel-health authorities are reused; no Evolution API, WAHA or second WhatsApp/Chatwoot/secret/IAM/message/health plane is allowed.
-- Native WhatsApp human activity must participate in existing Human/AI arbitration and final send gating; historical sync must not impersonate a current human takeover.
-- External Meta review/Tech Provider/access approval/business verification/coexistence eligibility may remain `BLOCKED_EXTERNAL`; internal security, recovery, UI, state and reconciliation work remains in scope.
+- Slice 1 disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled Connection Contract / Attempt+Mode / trusted completion / asset-validation scope.
+- PR #375 final head `1c6a47138635037189745615d1f25d387de00897` passed exact-head CI `36855801312` and merged at `474d7cd72d50a002add2e38a4cff30f7d588f09d`.
+- Advisor-hardening PR #376 head `d0ba891e4646652fea5ba88391de7dfc5471afef` passed exact-head CI `36856807256` and merged at final `main@85774ea16adf20403832771d316e68e56283028d`.
+- Exact-main CI `36857112993` and Cloudflare Production Deploy `36857447148` both succeeded on that exact final SHA.
+- Production migrations: `0163_meta_whatsapp_onboarding_slice1@20261001113758` and `0164_meta_whatsapp_onboarding_fk_index_hardening@20261001114314`.
+- `communication_channel_bindings` remains the connection authority; `communication_channel_setup_attempts` is child operational state only.
+- Allowed modes remain exactly `BUSINESS_APP_COEXISTENCE`, `API_NEW_NUMBER`, `EXISTING_API_RECONNECT`. Destructive Business App migration/Delete Account/uninstall is not a supported path.
+- The old authenticated direct Vault mutation path is revoked. Start/completion are trusted service-role commands and Meta completion is attempt/version-bound.
+- Meta asset verification now proves the selected phone is actually a member of the selected WABA before the trusted credential commit.
+- Same-number Business App Coexistence stays **fail-closed** until the later official Coexistence/native-activity slice has current provider evidence. No fallback to destructive migration exists.
+- Production stayed side-effect clean: Setup Attempts 0, Communication Bindings 0, Chatwoot Inbox Mappings 0; Outreach 43, Conversation Messages 37, Usage Events 108, Follow-up Jobs 6.
+- Safety stayed unchanged: Shadow ON; global Kill Switch OFF; Email pause OFF; WhatsApp AI pause OFF; Agents pause OFF.
+- Post-hotfix advisors returned to the prior baseline: RLS/no-policy INFO 15, leaked-password WARN 1, unindexed FKs 14, auth RLS initPlan 16.
 
-**Current execution cursor is unchanged:** `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.
+**Owner-prioritized continuation overlay:** WhatsApp onboarding contract **Slice 2 — Secure Remote Setup Invitation** under existing `UX-BUSINESS-WEB` + `ENT-IAM` + `DEV-INTEGRATIONS`.
 
-Registering this WhatsApp scope does not reorder unrelated roadmap work by itself. When an owning Work Package is reached, or a fresh dependency audit proves earlier execution is required, implementation must follow the contract instead of inventing a new onboarding architecture.
+Before mutation, fresh-audit existing invitation/auth/session/capability/scope primitives and current public/customer setup surfaces. Reuse canonical Supabase Auth / Organization membership / scope authorities. A setup link may authorize only the intended Organization + tenant Business + binding + setup purpose/attempt for a bounded time. It must not grant OWNER, ADMIN, CRM, billing, unrelated integration or cross-business access. Do not create a second IAM/user directory or a generic magic-link authority if an existing primitive can safely carry the capability.
+
+**Stable program cursor preserved for return after the owner-prioritized WhatsApp onboarding work:** `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.
 
 ---
 
