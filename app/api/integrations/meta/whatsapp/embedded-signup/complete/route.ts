@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
-import { verifyMetaWhatsAppSelectedAssets } from '@/lib/whatsapp/meta-onboarding';
+import {\n  exchangeMetaAuthorizationCode,\n  metaGraphVersion,\n  safeMetaWhatsAppCompletionError,\n  verifyMetaWhatsAppSelectedAssets,\n} from '@/lib/whatsapp/meta-onboarding';
 
 export const runtime = 'nodejs';
 
@@ -158,9 +158,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Meta provider app is not configured' }, { status: 503 });
     }
 
-    const accessToken = await exchangeAuthorizationCode({ code, appId, appSecret });
+    const accessToken = await exchangeMetaAuthorizationCode({ code, appId, appSecret });
     const assets = await verifyMetaWhatsAppSelectedAssets({
-      graphVersion: graphVersion(),
+      graphVersion: metaGraphVersion(),
       accessToken,
       wabaId,
       phoneNumberId,
@@ -197,6 +197,6 @@ export async function POST(request: Request) {
       wabaName: assets.wabaName,
     });
   } catch (error) {
-    return NextResponse.json({ error: safeCompletionError(error) }, { status: 500 });
+    return NextResponse.json({ error: safeMetaWhatsAppCompletionError(error) }, { status: 500 });
   }
 }
