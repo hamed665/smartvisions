@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { getCurrentOrganization } from '@/lib/supabase/org';
+import { mirrorCanonicalWhatsAppOutboundToChatwoot } from '@/lib/chatwoot/conversation-actions';
 import {
   evaluateOwnerManualReplyAccess,
   normalizeOwnerReplyText,
@@ -359,12 +360,28 @@ export async function POST(
       statusReplayError = error instanceof Error ? error.message : 'WhatsApp status replay failed';
     }
 
+    let chatwootMirrorError: string | null = null;
+    try {
+      await mirrorCanonicalWhatsAppOutboundToChatwoot({
+        service: supabase,
+        organizationId,
+        conversationId,
+        canonicalMessageId: messageId,
+        providerMessageId,
+        content: text,
+        provenance: 'HUMAN_SMARTVISIONS',
+      });
+    } catch (error) {
+      chatwootMirrorError = error instanceof Error ? error.message : 'Chatwoot outbound mirror failed';
+    }
+
     const reconciliationWarnings = [
       eventWrite.error ? `whatsapp_events: ${eventWrite.error.message}` : null,
       conversationUpdate.error ? `conversation: ${conversationUpdate.error.message}` : null,
       auditWrite.error ? `audit: ${auditWrite.error.message}` : null,
       usageError ? `usage: ${usageError}` : null,
       statusReplayError ? `status_replay: ${statusReplayError}` : null,
+      chatwootMirrorError ? `chatwoot_mirror: ${chatwootMirrorError}` : null,
     ].filter(Boolean);
 
     return NextResponse.json({
