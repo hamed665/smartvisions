@@ -145,17 +145,35 @@ begin
     '00000000-0000-0000-0000-00000000c001'
   );
 
-  insert into public.field_service_evidence(
-    id,organization_id,task_id,evidence_type,object_path,filename,
-    content_type,size_bytes,caption,uploaded_by_user_id
-  ) values (
-    '00000000-0000-0000-0000-00000000f511',
-    '00000000-0000-0000-0000-000000000c01',v_task,'PHOTO',
-    '00000000-0000-0000-0000-000000000c01/00000000-0000-0000-0000-00000000f501/00000000-0000-0000-0000-00000000f511/proof.jpg',
-    'proof.jpg','image/jpeg',1024,'CI completion photo',
-    '00000000-0000-0000-0000-00000000c001'
-  );
+end;
+$field_service_fixture$;
 
+-- Evidence metadata is intentionally server-finalized. The authenticated
+-- technician never gets direct INSERT authority on the evidence table.
+reset role;
+set role service_role;
+
+insert into public.field_service_evidence(
+  id,organization_id,task_id,evidence_type,object_path,filename,
+  content_type,size_bytes,caption,uploaded_by_user_id
+) values (
+  '00000000-0000-0000-0000-00000000f511',
+  '00000000-0000-0000-0000-000000000c01',
+  '00000000-0000-0000-0000-00000000f501',
+  'PHOTO',
+  '00000000-0000-0000-0000-000000000c01/00000000-0000-0000-0000-00000000f501/00000000-0000-0000-0000-00000000f511/proof.jpg',
+  'proof.jpg','image/jpeg',1024,'CI completion photo',
+  '00000000-0000-0000-0000-00000000c001'
+);
+
+reset role;
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000c001',false);
+
+do $field_service_completion$
+declare
+  v_task uuid:='00000000-0000-0000-0000-00000000f501';
+begin
   insert into public.field_service_signoffs(
     organization_id,task_id,signer_name,signoff_method,
     acceptance_text,recorded_by_user_id
@@ -192,7 +210,7 @@ begin
       and entity_id=v_task::text
   ) then raise exception 'Field Service audit evidence is missing'; end if;
 end;
-$field_service_fixture$;
+$field_service_completion$;
 
 reset role;
 
@@ -246,6 +264,14 @@ begin
   if has_table_privilege('anon','public.field_service_work_orders','SELECT')
      or has_table_privilege('anon','public.field_service_evidence','SELECT')
   then raise exception 'Anonymous FIELD-SERVICE data access is available'; end if;
+
+  if has_table_privilege('authenticated','public.field_service_evidence','INSERT') then
+    raise exception 'Authenticated FIELD-SERVICE evidence metadata INSERT is available';
+  end if;
+
+  if not has_table_privilege('service_role','public.field_service_evidence','INSERT') then
+    raise exception 'Service FIELD-SERVICE evidence metadata INSERT is unavailable';
+  end if;
 end;
 $field_service_security$;
 
