@@ -457,6 +457,24 @@ This is an acceptance lock. A green Embedded Signup callback or stored token alo
 - Remaining acceptance for message/status/media provenance and dedupe, official Coexistence/native activity, Human/AI arbitration, reconnect/revoke/disconnect and first real-tenant E2E stays open under Slices 6–8.
 
 
+#### WhatsApp onboarding Slice 6 checkpoint — 2026-10-02
+
+**Disposition: IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled message/status/media bridge, provenance, cross-plane dedupe and reconciliation scope.
+
+- PR #387 final head `4b6eba7ceb900e1d012d299e3b20816911f9fa51` passed exact-head CI `36939463033`; canonical merge is `main@5f7f81c5b279efd92feb6341bdc971fe6e6c012e`.
+- Exact-main CI `36939774658` and Cloudflare Production Deploy `36940049403` succeeded on that exact merge SHA. Release-candidate smoke, controlled SSR load, routed Production smoke and safe API/webhook rejection smoke all passed without outbound provider sends.
+- Production migration `0167_whatsapp_message_bridge_provenance` is live as version `20261001231837`; merged blob SHA is `60c4df822b1429bf77d975089af96a218a1bf81b`.
+- Canonical `conversation_messages` now carries semantic provenance and cross-plane source identity; `whatsapp_events` remains the durable provider journal and carries Chatwoot sync state. No second message store, webhook journal, queue, provider authority or Chatwoot plane was introduced.
+- Meta inbound is canonically persisted before asynchronous Chatwoot projection. Chatwoot human outbound requires canonical Smart Visions user/membership authorization plus full human takeover and then passes the existing final send safety gate. Smart Core Owner/AI outbound mirrors to Chatwoot with deterministic echo suppression.
+- Delivery status reconciliation is monotonic and replays out-of-order status evidence. Media transfer is bounded, trusted-origin/MIME checked, and reuses the existing Meta provider/Vault and governed Chatwoot attachment boundaries. Ambiguous external mutation remains fail-closed / reconciliation-required rather than blind-retried.
+- Business-wide Unified Inbox `branch_id=null` is supported; Team mapping remains branch-scoped and fail-closed.
+- Production backfill is truthful: 36 existing `SHADOW_MODE` outbound messages are `AI`; the one ambiguous old outbound is `SYSTEM`. Of legacy inbound WhatsApp journal evidence, 37 scoped events are `PENDING` for Chatwoot reconciliation while 12 events lacking both Conversation and Lead scope remain unprojected.
+- Production remained side-effect clean at 37 Conversation Messages, 136 WhatsApp Events and 0 Unified Inbox projections. No synthetic tenant, binding, credential, Chatwoot resource, message or provider mutation was created for acceptance.
+- Slice-6 reconciliation RPCs are service-role-only; `anon` and `authenticated` execution is denied. Production safety remains Shadow Mode ON, global Kill Switch OFF, WhatsApp AI pause OFF and Agents pause OFF.
+- **Still open:** official same-number Coexistence/native activity and live `HUMAN_NATIVE_WHATSAPP` evidence, Human/AI arbitration against real native activity, reconnect/revoke/disconnect, and first real-tenant Meta ↔ Smart Core ↔ Chatwoot E2E. These remain Slices 7–8 / external-evidence acceptance.
+
+
+
 ### CONN-01 — Guided onboarding
 
 Required flow:
