@@ -370,6 +370,27 @@ Revalidate each gap before changing code. A later fix supersedes the finding thr
 
 Owners: UX-BUSINESS-WEB, DEV-INTEGRATIONS, COMM-TENANT-BRIDGE, OMNI-CHANNEL-HEALTH, ENT-SECURITY.
 
+### WhatsApp onboarding execution lock — 2026-10-01
+
+The detailed owner-approved execution contract is [WHATSAPP_CUSTOMER_ONBOARDING_CONNECTION_CONTRACT.md](WHATSAPP_CUSTOMER_ONBOARDING_CONNECTION_CONTRACT.md). It refines CONN-01..05 and META-01..02 without introducing a new roadmap Work Package or connection authority.
+
+For WhatsApp customer onboarding:
+
+- the canonical connection identity remains `communication_channel_bindings.id`;
+- setup/reconnect attempt identity is separate from binding identity and must be replay/version safe;
+- supported customer modes are `BUSINESS_APP_COEXISTENCE`, `API_NEW_NUMBER`, and `EXISTING_API_RECONNECT`;
+- `FULL_MIGRATION_FROM_BUSINESS_APP` is not a supported Smart Visions customer flow;
+- an active WhatsApp Business mobile account must never be deleted, disabled or uninstalled as a prerequisite created by Smart Visions;
+- if official coexistence is unavailable for that same number, the existing mobile WhatsApp remains untouched and a different API number is the fallback;
+- Remote Setup must use bounded setup-only authorization rather than OWNER/ADMIN panel access;
+- credential completion must validate setup scope, binding/attempt/version and Meta assets before trusted Vault mutation;
+- Chatwoot stays a Smart Core projection through the existing API Inbox path and does not become Meta credential/provider authority;
+- readiness must distinguish provider authorization, credential validity, webhook/subscription readiness, Chatwoot readiness, inbound verification, outbound verification, coexistence state and AI-send permission where applicable;
+- native WhatsApp human activity must beat AI at the final send gate; historical sync must not be mistaken for a live takeover.
+
+This is an acceptance lock. A green Embedded Signup callback or stored token alone does not satisfy WhatsApp onboarding completion.
+
+
 ### CONN-01 — Guided onboarding
 
 Required flow:
