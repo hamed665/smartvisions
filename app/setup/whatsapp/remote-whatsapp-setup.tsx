@@ -474,8 +474,9 @@ export function RemoteWhatsAppSetup() {
       </div> : null}
 
       {state === 'DONE' ? <div>
-        <strong>WhatsApp setup complete</strong>
+        <strong>Meta WhatsApp setup complete</strong>
         <p className="muted smallText">Authorization, phone ownership readback and Meta webhook subscription are confirmed on the existing Smart Core binding and secure Vault. No destructive WhatsApp migration was performed.</p>
+        <p className="muted smallText">This setup link intentionally has no Chatwoot or Smart Visions panel authority. The Smart Visions business owner can finalize the internal communication Inbox without repeating Meta login.</p>
       </div> : null}
 
       {state === 'ERROR' ? <div style={{ display: 'grid', gap: 10 }}>

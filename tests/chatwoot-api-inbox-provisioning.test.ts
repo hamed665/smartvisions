@@ -83,8 +83,10 @@ function setupSupabase(input?: { createMapping?: Record<string, unknown> }) {
       };
     }
     if (name === 'activate_chatwoot_inbox_mapping_verified') {
+      const created = input?.createMapping ?? mapping();
       return {
         data: mapping({
+          branch_id: created.branch_id ?? null,
           chatwoot_inbox_id: 701,
           chatwoot_channel_identifier: 'channel-identifier-701',
           status: 'ACTIVE',
@@ -395,6 +397,37 @@ describe('C4 API Inbox provisioning', () => {
     expect(adminRequest).not.toHaveBeenCalled();
     expect(vaultCreate).not.toHaveBeenCalled();
     expect(serviceFactory).not.toHaveBeenCalled();
+  });
+
+  it('supports business-wide Inbox projection when the binding has no branch', async () => {
+    vi.stubEnv('CHATWOOT_WEBHOOK_PUBLIC_ORIGIN', 'https://app.example.com');
+    const { supabase } = setupSupabase({
+      createMapping: mapping({ branch_id: null }),
+    });
+    setupService();
+
+    adminRequest
+      .mockResolvedValueOnce({ payload: [] })
+      .mockResolvedValueOnce(inboxResponse());
+
+    vaultCreate
+      .mockResolvedValueOnce(
+        'secretref://supabase-vault/00000000-0000-4000-8000-000000001208',
+      )
+      .mockResolvedValueOnce(
+        'secretref://supabase-vault/00000000-0000-4000-8000-000000001209',
+      );
+
+    const result = await provisionChatwootApiInbox({
+      ...input(supabase),
+      branchId: null,
+    });
+
+    expect(result.mapping).toMatchObject({
+      id: INBOX_MAPPING,
+      branch_id: null,
+      status: 'ACTIVE',
+    });
   });
 
   it('fails before mapping claim when public webhook origin is missing/unsafe', async () => {
