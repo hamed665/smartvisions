@@ -45,6 +45,42 @@ describe('Chatwoot public conversation projection', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
+  it('requires an existing Chatwoot conversation to carry the exact Smart Core marker when requested', async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ source_id: 'sv:binding:identity' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{
+        id: 41,
+        status: 'open',
+        custom_attributes: { smartvisions_conversation_id: 'conversation-1' },
+      }]), { status: 200 }));
+
+    const result = await ensureChatwootPublicConversationProjection({
+      service: service(), organizationId: 'org', tenantBusinessId: 'biz',
+      bindingId: 'binding', canonicalIdentityId: 'identity',
+      canonicalConversationId: 'conversation-1',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    expect(result.outcome).toBe('RECONCILED_EXISTING');
+  });
+
+  it('fails closed when the active Chatwoot conversation belongs to another Smart Core conversation', async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ source_id: 'sv:binding:identity' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{
+        id: 41,
+        status: 'open',
+        custom_attributes: { smartvisions_conversation_id: 'other-conversation' },
+      }]), { status: 200 }));
+
+    await expect(ensureChatwootPublicConversationProjection({
+      service: service(), organizationId: 'org', tenantBusinessId: 'biz',
+      bindingId: 'binding', canonicalIdentityId: 'identity',
+      canonicalConversationId: 'conversation-1',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })).rejects.toThrow('missing the canonical Smart Core conversation marker');
+  });
+
   it('reconciles an ambiguous conversation create instead of blind retrying', async () => {
     const fetchImpl = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ source_id: 'sv:binding:identity' }), { status: 200 }))
