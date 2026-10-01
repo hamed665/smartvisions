@@ -42,7 +42,11 @@ export function evaluateCanonicalSendSafety(input: CanonicalSendSafetySnapshot) 
   const fullHumanTakeover = input.leadAgentMode === 'HUMAN'
     && input.conversationAgentMode === 'HUMAN'
     && input.conversationRequiresHuman === true;
-  if (verifiedHumanSend && !fullHumanTakeover) blocks.push('HUMAN_SEND_REQUIRES_HUMAN_TAKEOVER');
+  if (input.ownerManualSendVerified && !fullHumanTakeover) {
+    blocks.push('OWNER_MANUAL_REQUIRES_HUMAN_TAKEOVER');
+  } else if (input.humanAgentSendVerified && !fullHumanTakeover) {
+    blocks.push('HUMAN_AGENT_REQUIRES_HUMAN_TAKEOVER');
+  }
   if (humanTakeover && !verifiedHumanSend) blocks.push('HUMAN_TAKEOVER');
   if (input.leadAgentMode === 'PAUSED' || input.conversationAgentMode === 'PAUSED' || input.conversationStage === 'PAUSED') blocks.push('AGENT_PAUSED');
   if (input.conversationStage === 'DO_NOT_CONTACT') blocks.push('CONVERSATION_DO_NOT_CONTACT');
