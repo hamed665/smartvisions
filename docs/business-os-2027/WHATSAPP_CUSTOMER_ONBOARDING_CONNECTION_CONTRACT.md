@@ -1,6 +1,6 @@
 # WhatsApp customer onboarding connection contract
 
-Status: **OWNER-APPROVED SCOPE LOCK — SLICES 1–4 PRODUCTION_VERIFIED; SLICES 5–8 PENDING**
+Status: **OWNER-APPROVED SCOPE LOCK — SLICES 1–5 PRODUCTION_VERIFIED; SLICES 6–8 PENDING**
 
 Date: 2026-10-01
 
@@ -57,7 +57,22 @@ Evidence:
 
 Slice 4 reuses the existing Meta adapter, canonical binding/Vault credential authority, webhook receiver, tenant routing and OMNI channel health. It re-reads phone membership from the WABA, reconciles `subscribed_apps` before/after mutation, recovers ambiguous provider outcomes only from provider readback, and provides bounded Cloud API registration for `API_NEW_NUMBER` using an ephemeral six-digit PIN that is never persisted or audited. `EXISTING_API_RECONNECT` does not force re-registration. Same-number `BUSINESS_APP_COEXISTENCE` remains fail-closed and non-destructive.
 
-**Next owner-prioritized contract slice:** Slice 5 — Existing Chatwoot provisioning integration.
+## Production checkpoint — Slice 5
+
+Slice 5 is **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** as of 2026-10-01 for the internally controlled existing-Chatwoot projection/orchestration path.
+
+Evidence:
+- implementation PR #385, final head `0e6ec7a73c8b6d715e6914cb99a2a9f3c501624b`, exact-head CI `36883590463`, merge `4463c29be4b3cf91fc80136587f6c253a6597f36`;
+- exact-main CI `36884006244` and Cloudflare Production Deploy `36884481705` succeeded on the exact merge SHA;
+- no Slice-5 database migration was required; Production remains through `0166_meta_whatsapp_mobile_wizard_completion@20261001135536`;
+- read-only Production verification after deploy found tenant Businesses 0, WhatsApp bindings 0, Chatwoot Account/User/Membership/Inbox mappings 0, Inbox receipts 0 and Slice-5 projection audit rows 0;
+- post-deploy security/performance advisor baseline and safety controls remain unchanged.
+
+Slice 5 composes the existing Chatwoot Account, OWNER access and `Channel::Api` Inbox provisioning/reconciliation paths onto the verified canonical WhatsApp binding. Projection is permitted only after matching Slice-4 provider evidence and only for the authenticated Smart Visions OWNER. Remote Meta setup capability remains bounded to `WHATSAPP_SETUP` and grants no Chatwoot/panel authority. Business-wide null-branch projection is supported, and retry after Chatwoot failure does not repeat or duplicate Meta authorization.
+
+Real-tenant external Chatwoot resource creation/E2E is not claimed because Production currently has no real tenant Business/binding to exercise it without synthetic data.
+
+**Next owner-prioritized contract slice:** Slice 6 — Message/status/media bridge + provenance + dedupe.
 
 This contract is an execution overlay for the existing Business OS 2027 roadmap. It does **not** create a new Work Package, integration source of truth, IAM system, secret store, message store, Chatwoot plane, queue, health system, or WhatsApp provider stack.
 

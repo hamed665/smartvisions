@@ -1,5 +1,29 @@
 # Smart Visions Growth OS — Current Production State
 
+## WhatsApp customer onboarding Slice 5 Production closeout — 2026-10-01
+
+- Contract slice: **Existing Chatwoot provisioning integration**, implemented by composing the existing Chatwoot Account/User/Membership/API Inbox provisioning and reconciliation authorities onto the already verified canonical Meta WhatsApp binding. No second Chatwoot plane, Inbox authority, provider store, Vault, IAM or message store was introduced.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled Slice-5 projection/orchestration path.
+- Implementation PR #385 final head `0e6ec7a73c8b6d715e6914cb99a2a9f3c501624b` passed exact-head CI `36883590463` and squash-merged to canonical `main@4463c29be4b3cf91fc80136587f6c253a6597f36`.
+- Exact-main CI `36884006244` succeeded on the merge SHA across lint, typecheck, tests, PostgreSQL 17 migration chain, Next build, Vinext and Cloudflare scheduled verification.
+- Cloudflare Production Deploy `36884481705` succeeded on the exact same SHA through exact-main checkout, credential preflight, release-candidate deployment/smoke, SSR load, exact-bundle promotion, Production Worker Route verification and safe Production API/webhook rejection smoke.
+- Slice 5 required **no new database migration**. Production remains through `0166_meta_whatsapp_mobile_wizard_completion@20261001135536`.
+- Projection requires verified Slice-4 `META_WHATSAPP_PROVIDER_PROVISIONED` evidence matching the same canonical binding/WABA/phone before any Chatwoot mutation.
+- Only an authenticated Smart Visions OWNER can finalize the Chatwoot projection. A remote Meta setup participant retains only bounded `WHATSAPP_SETUP` capability and receives no Chatwoot or normal panel authority.
+- The existing Chatwoot Account mapping, OWNER User/administrator membership, `Channel::Api` Inbox mapping, marker-based ambiguous-create recovery, Vault secret capture, reconciliation receipt and verified activation paths are reused.
+- Business-wide WhatsApp bindings with `branch_id = null` are now supported by the existing API Inbox provisioner; branch-scoped bindings remain unchanged.
+- If Meta was completed remotely, the OWNER can use **Finalize communication Inbox** without repeating Meta authorization. Chatwoot failure does not roll back or duplicate the Meta/WhatsApp connection; retry is scoped only to Chatwoot projection.
+- Read-only Production verification after deploy remained side-effect clean: tenant Businesses 0, WhatsApp bindings 0, Chatwoot Account/User/Membership/Inbox mappings 0, Inbox reconciliation receipts 0 and `META_WHATSAPP_CHATWOOT_PROJECTED` audit rows 0. No synthetic tenant, binding or external Chatwoot resource was created.
+- Production safety remains unchanged: Shadow Mode ON; global Kill Switch OFF; WhatsApp AI pause OFF; Agents pause OFF.
+- Post-Slice-5 advisors remain at the existing baseline: security RLS-enabled/no-policy INFO 15 plus leaked-password-protection WARN 1; performance unindexed FKs 14, auth RLS initPlan 16 and multiple permissive policies 6.
+- **Not claimed here:** first real-tenant Chatwoot projection E2E, message/status/media provenance bridge, official same-number Coexistence/native activity, Human/AI arbitration, disconnect lifecycle or first real-tenant end-to-end acceptance.
+
+**Owner-prioritized WhatsApp continuation:** contract Slice 6 — **Message/status/media bridge + provenance + dedupe**. Extend the existing webhook journals, canonical conversation/message lifecycle, Unified Inbox/CRM projection and reconciliation authorities only; do not create another message store or webhook queue.
+
+**Stable program cursor preserved for return after the owner-prioritized WhatsApp work:** `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.
+
+---
+
 ## WhatsApp customer onboarding Slice 4 Production closeout — 2026-10-01
 
 - Contract slice: **Meta Provisioning / Subscription / Recovery**, implemented by extending the existing canonical WhatsApp binding, Vault credential resolver, Meta adapter, webhook receiver and OMNI channel-health evidence only. No second provider stack, connection authority, secret store, webhook journal, IAM, CRM or health truth was introduced.

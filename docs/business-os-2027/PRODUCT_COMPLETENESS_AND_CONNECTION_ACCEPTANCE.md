@@ -443,6 +443,20 @@ This is an acceptance lock. A green Embedded Signup callback or stored token alo
 - Remaining acceptance for existing Chatwoot provisioning integration, message/status/media provenance, official Coexistence/native activity, Human/AI arbitration, reconnect/revoke/disconnect and first real tenant E2E stays open under Slices 5–8.
 
 
+#### WhatsApp onboarding Slice 5 checkpoint — 2026-10-01
+
+**Disposition: IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled existing-Chatwoot projection/orchestration path.
+
+- PR #385 final head `0e6ec7a73c8b6d715e6914cb99a2a9f3c501624b` passed exact-head CI `36883590463`; canonical merge is `main@4463c29be4b3cf91fc80136587f6c253a6597f36`.
+- Exact-main CI `36884006244` and Cloudflare Production Deploy `36884481705` succeeded on the exact merge SHA.
+- No Slice-5 migration was required; Production remains through `0166_meta_whatsapp_mobile_wizard_completion@20261001135536`.
+- The projection reuses existing Chatwoot Account/OWNER User+administrator membership/API Inbox mapping, marker reconciliation, Vault capture and verified receipt activation. It does not create a second Chatwoot authority or move Meta credential ownership into Chatwoot.
+- Chatwoot projection requires matching Slice-4 provider evidence and an authenticated Smart Visions OWNER. Remote `WHATSAPP_SETUP` participants receive no Chatwoot or panel authority.
+- Business-wide null-branch bindings are supported; owner retry/finalization after remote Meta setup does not repeat Meta login or duplicate the canonical connection.
+- Production remained side-effect clean: tenant Businesses 0, WhatsApp bindings 0, all Chatwoot mapping/receipt counts 0 and `META_WHATSAPP_CHATWOOT_PROJECTED` audit rows 0. Real-tenant external Chatwoot E2E remains open for Slice 8/final acceptance.
+- Remaining acceptance for message/status/media provenance and dedupe, official Coexistence/native activity, Human/AI arbitration, reconnect/revoke/disconnect and first real-tenant E2E stays open under Slices 6–8.
+
+
 ### CONN-01 — Guided onboarding
 
 Required flow:
