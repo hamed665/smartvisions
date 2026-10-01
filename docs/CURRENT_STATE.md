@@ -1,5 +1,29 @@
 # Smart Visions Growth OS — Current Production State
 
+## WhatsApp customer onboarding Slice 3 Production closeout — 2026-10-01
+
+- Contract slice: **Mobile-first Wizard + Preflight + Setup Later + Resume**, implemented by extending the existing Slice-1 setup attempt and Slice-2 `WHATSAPP_SETUP` session only. No second IAM, invitation/session authority, connection record, provider stack, Vault, CRM, queue, message store or Chatwoot authority was introduced.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled Slice-3 wizard/session/trusted-completion scope only.
+- Implementation PR #380 final head `ad4380caa27ad8928da8568e2b009114850d410e` passed exact-head CI `36871208717` across lint, typecheck, tests, the full PostgreSQL 17 migration/smoke chain, Next build, Vinext and Cloudflare scheduled verification. It squash-merged to canonical `main@19201aa26ad6176d978ccc6e70b17ac365f1f8aa`.
+- Exact-main CI `36871735143` succeeded on the merge SHA. Cloudflare Production Deploy `36872092126` succeeded on that exact SHA through credential preflight, isolated release-candidate deploy/smoke, controlled SSR load, exact-bundle Production promotion, Worker Route verification, routed Production smoke and safe API/webhook rejection smoke.
+- Production migration `0166_meta_whatsapp_mobile_wizard_completion` is live as version `20261001135536`; merged migration blob SHA `887c200e6d1a3f258ad70e95f3795a5dddb3ebce`.
+- The public `/setup/whatsapp` flow is now mobile-first and resumable over the existing setup session: preflight, Meta-hosted authorization, cancel/retry recovery, Setup Later and same-device resume before session expiry all reuse the same setup attempt/session rather than creating duplicate connection or identity state.
+- Customer UI does not expose WABA IDs, access tokens, webhook internals or developer-app details. Meta password entry remains on Meta; Smart Visions exchanges the authorization code server-side and validates exact phone/WABA membership before the existing trusted Vault mutation.
+- Remote completion is bound to the exact setup-session hash + attempt + binding + binding version. Lost-network/repeated-completion recovery can read the completed attempt without re-running a credential exchange when the canonical binding already matches.
+- Completion provenance now distinguishes `OWNER` from `REMOTE_SETUP`. For remote setup, the existing OWNER that initiated the attempt remains the sponsoring binding updater required by the canonical binding schema, while attempt/audit evidence records `REMOTE_SETUP / WHATSAPP_SETUP`; no fake user or Organization membership is created.
+- The owner completion path and the remote completion path are both SECURITY INVOKER and executable only by `service_role`. `anon` and `authenticated` have no direct EXECUTE, authenticated setup-attempt table privileges remain empty and RLS remains enabled.
+- Supported setup modes remain exactly `BUSINESS_APP_COEXISTENCE`, `API_NEW_NUMBER`, and `EXISTING_API_RECONNECT`. Same-number Coexistence completion remains explicitly fail-closed in both owner and remote backend paths; no Delete Account, uninstall or destructive migration fallback was introduced.
+- Production remained side-effect clean after migration: Setup Attempts 0 and `META_WHATSAPP_REMOTE_SETUP_COMPLETED` audit rows 0. No synthetic tenant, binding, setup session, Meta credential, provider asset, provider send or customer message was created for acceptance.
+- Production safety remains unchanged: Shadow Mode ON; global Kill Switch OFF; WhatsApp AI pause OFF; Agents pause OFF.
+- Post-`0166` advisors show no Slice-3 regression: security RLS-enabled/no-policy INFO 15 plus leaked-password-protection WARN 1; performance unindexed FKs 14, auth RLS initPlan 16 and multiple permissive policies 6. Unused-index INFO is 276 and Slice 3 introduced no new indexes.
+- **Not claimed here:** real-customer Meta authorization E2E, WABA/webhook subscription provisioning or recovery, phone registration/eligibility orchestration, Chatwoot provisioning, message/status/media provenance, actual Business App Coexistence/native activity, Human/AI arbitration, disconnect lifecycle or first real-tenant acceptance.
+
+**Owner-prioritized WhatsApp continuation:** contract Slice 4 — **Meta Provisioning / Subscription / Recovery**. Reuse the existing Meta adapter, canonical binding/Vault authority, webhook receiver, tenant routing and channel-health evidence; do not build a second provider stack or provisioning source of truth.
+
+**Stable program cursor preserved for return after the owner-prioritized WhatsApp work:** `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.
+
+---
+
 ## WhatsApp customer onboarding Slice 2 Production closeout — 2026-10-01
 
 - Contract slice: **Secure Remote Setup Invitation**, owned by existing `UX-BUSINESS-WEB` / `ENT-IAM` / `DEV-INTEGRATIONS` scope. No new Work Package, IAM/user directory, WhatsApp connection authority, provider stack, secret store, CRM, message store or Chatwoot authority was introduced.
