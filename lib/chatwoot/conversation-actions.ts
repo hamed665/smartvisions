@@ -1842,3 +1842,131 @@ export async function performUnifiedInboxConversationAction(input: {
       : {}),
   };
 }
+
+
+export async function mirrorCanonicalWhatsAppOutboundToChatwoot(input: {
+  service: SupabaseClient;
+  organizationId: string;
+  conversationId: string;
+  canonicalMessageId: string;
+  providerMessageId: string;
+  content: string;
+  provenance: 'AI' | 'HUMAN_SMARTVISIONS' | 'SYSTEM';
+  fetchImpl?: typeof fetch;
+}) {
+  const content = input.content.trim();
+  if (!UUID_RE.test(input.organizationId)
+      || !UUID_RE.test(input.conversationId)
+      || !UUID_RE.test(input.canonicalMessageId)
+      || !input.providerMessageId.trim()
+      || !content) {
+    fail('INVALID_INPUT', 'Canonical WhatsApp Chatwoot mirror input is invalid');
+  }
+
+  const projection = await input.service
+    .from('unified_inbox_conversation_projections')
+    .select('tenant_business_id,chatwoot_conversation_display_id,lifecycle_status')
+    .eq('organization_id', input.organizationId)
+    .eq('conversation_id', input.conversationId)
+    .in('lifecycle_status', ['ACTIVE', 'DEGRADED'])
+    .maybeSingle();
+  if (
+    projection.error
+    || !projection.data
+    || !Number.isSafeInteger(Number(projection.data.chatwoot_conversation_display_id))
+    || Number(projection.data.chatwoot_conversation_display_id) <= 0
+  ) {
+    fail('NOT_READY', 'ACTIVE Chatwoot conversation projection is required for WhatsApp mirror');
+  }
+
+  const conversation = await input.service
+    .from('sales_conversations')
+    .select('channel')
+    .eq('organization_id', input.organizationId)
+    .eq('id', input.conversationId)
+    .maybeSingle();
+  if (conversation.error || conversation.data?.channel !== 'WHATSAPP') {
+    fail('INVALID_INPUT', 'Canonical conversation is not WhatsApp');
+  }
+
+  const proxy = await issueAdminProxy({
+    service: input.service,
+    organizationId: input.organizationId,
+    tenantBusinessId: String(projection.data.tenant_business_id),
+    fetchImpl: input.fetchImpl,
+  });
+
+  const displayId = Number(projection.data.chatwoot_conversation_display_id);
+  const sourceId = `sv:mirror:${input.canonicalMessageId}`;
+
+  const findExisting = async () => {
+    const raw = await accountRequest<unknown>({
+      proxy,
+      resourcePath: `/conversations/${displayId}/messages`,
+      fetchImpl: input.fetchImpl,
+    });
+    const matches = chatwootRows(raw).filter((row) => row.source_id === sourceId);
+    if (matches.length > 1) {
+      fail('RECONCILIATION_REQUIRED', 'Duplicate Chatwoot Smart Core mirror source identity detected');
+    }
+    if (matches.length === 0) return null;
+    const row = matches[0];
+    const id = normalizeChatwootInt64Id(row.id);
+    const conversationId = normalizeChatwootInt32Id(row.conversation_id);
+    const messageType = typeof row.message_type === 'string'
+      ? row.message_type.toLowerCase()
+      : Number(row.message_type) === 1 ? 'outgoing' : '';
+    if (
+      id === null
+      || conversationId !== displayId
+      || messageType !== 'outgoing'
+      || String(row.content ?? '') !== content
+    ) {
+      fail('RECONCILIATION_REQUIRED', 'Chatwoot Smart Core mirror readback mismatched canonical message');
+    }
+    return { chatwootMessageId: id, outcome: 'RECONCILED_EXISTING' as const };
+  };
+
+  const existing = await findExisting();
+  if (existing) return existing;
+
+  try {
+    const created = await accountRequest<unknown>({
+      proxy,
+      resourcePath: `/conversations/${displayId}/messages`,
+      method: 'POST',
+      body: {
+        content,
+        message_type: 'outgoing',
+        private: false,
+        source_id: sourceId,
+        content_attributes: {
+          smartvisions_mirror: true,
+          smartvisions_mirror_version: '1',
+          smartvisions_canonical_message_id: input.canonicalMessageId,
+          smartvisions_provider_message_id: input.providerMessageId,
+          smartvisions_provenance: input.provenance,
+        },
+      },
+      fetchImpl: input.fetchImpl,
+    });
+    if (!isObject(created)) {
+      fail('UPSTREAM_FAILED', 'Chatwoot Smart Core mirror response is invalid');
+    }
+    const id = normalizeChatwootInt64Id(created.id);
+    const returnedConversation = normalizeChatwootInt32Id(created.conversation_id);
+    if (id === null || returnedConversation !== displayId || created.source_id !== sourceId) {
+      fail('RECONCILIATION_REQUIRED', 'Chatwoot Smart Core mirror response did not preserve source identity');
+    }
+    return { chatwootMessageId: id, outcome: 'CREATED' as const };
+  } catch (error) {
+    const reconciled = await findExisting();
+    if (reconciled) {
+      return {
+        chatwootMessageId: reconciled.chatwootMessageId,
+        outcome: 'RECONCILED_AFTER_AMBIGUOUS_CREATE' as const,
+      };
+    }
+    throw error;
+  }
+}
