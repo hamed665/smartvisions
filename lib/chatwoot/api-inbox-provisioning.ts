@@ -368,7 +368,7 @@ export async function provisionChatwootApiInbox(input: {
   supabase: SupabaseClient;
   organizationId: string;
   tenantBusinessId: string;
-  branchId: string;
+  branchId: string | null;
   communicationChannelBindingId: string;
   chatwootAccountMappingId: string;
   projectedName: string;
@@ -381,7 +381,7 @@ export async function provisionChatwootApiInbox(input: {
     input.tenantBusinessId,
     'tenantBusinessId',
   );
-  const branchId = requireUuid(input.branchId, 'branchId');
+  const branchId = input.branchId === null ? null : requireUuid(input.branchId, 'branchId');
   const bindingId = requireUuid(
     input.communicationChannelBindingId,
     'communicationChannelBindingId',
