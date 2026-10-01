@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server';
 
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
-import { verifyMetaWhatsAppSelectedAssets } from '@/lib/whatsapp/meta-onboarding';
+import {
+  exchangeMetaAuthorizationCode,
+  metaGraphVersion,
+  safeMetaWhatsAppCompletionError,
+  verifyMetaWhatsAppSelectedAssets,
+} from '@/lib/whatsapp/meta-onboarding';
 
 export const runtime = 'nodejs';
 
@@ -18,38 +23,6 @@ type CompleteBody = {
 function clean(value: unknown, max = 200) {
   const text = typeof value === 'string' ? value.trim() : '';
   return text && text.length <= max ? text : null;
-}
-
-function graphVersion() {
-  return process.env.META_GRAPH_VERSION?.trim() || 'v23.0';
-}
-
-async function exchangeAuthorizationCode(input: {
-  code: string;
-  appId: string;
-  appSecret: string;
-}) {
-  const tokenUrl = new URL(`https://graph.facebook.com/${graphVersion()}/oauth/access_token`);
-  tokenUrl.searchParams.set('client_id', input.appId);
-  tokenUrl.searchParams.set('client_secret', input.appSecret);
-  tokenUrl.searchParams.set('code', input.code);
-
-  const response = await fetch(tokenUrl.toString(), { cache: 'no-store' });
-  if (!response.ok) throw new Error(`Meta authorization exchange failed (${response.status})`);
-  const token = await response.json() as { access_token?: string };
-  if (!token.access_token || token.access_token.length < 20) {
-    throw new Error('Meta authorization exchange returned no usable credential');
-  }
-  return token.access_token;
-}
-
-function safeCompletionError(error: unknown) {
-  const message = error instanceof Error ? error.message : '';
-  if (
-    message === 'Selected phone number is not part of the selected WhatsApp Business Account'
-    || message === 'Meta returned assets that do not match the selected WhatsApp assets'
-  ) return message;
-  return 'Unable to complete WhatsApp setup safely. Start the connection flow again.';
 }
 
 export async function POST(request: Request) {
@@ -158,9 +131,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Meta provider app is not configured' }, { status: 503 });
     }
 
-    const accessToken = await exchangeAuthorizationCode({ code, appId, appSecret });
+    const accessToken = await exchangeMetaAuthorizationCode({ code, appId, appSecret });
     const assets = await verifyMetaWhatsAppSelectedAssets({
-      graphVersion: graphVersion(),
+      graphVersion: metaGraphVersion(),
       accessToken,
       wabaId,
       phoneNumberId,
@@ -197,6 +170,6 @@ export async function POST(request: Request) {
       wabaName: assets.wabaName,
     });
   } catch (error) {
-    return NextResponse.json({ error: safeCompletionError(error) }, { status: 500 });
+    return NextResponse.json({ error: safeMetaWhatsAppCompletionError(error) }, { status: 500 });
   }
 }
