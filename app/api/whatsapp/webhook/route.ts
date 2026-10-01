@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { persistWhatsAppWebhookEvents } from '@/lib/whatsapp/persistence';
 import { runInternalTestLiveReply, type InternalTestLiveReplyResult } from '@/lib/whatsapp/internal-test-live-reply';
-import { extractWhatsAppInbound, extractWhatsAppStatuses, verifyMetaSignature } from '@/lib/whatsapp/webhook';
+import { extractWhatsAppInbound, extractWhatsAppNativeEchoes, extractWhatsAppStatuses, verifyMetaSignature } from '@/lib/whatsapp/webhook';
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -31,10 +31,11 @@ export async function POST(request: Request) {
   }
 
   const inbound = extractWhatsAppInbound(payload);
+  const nativeEchoes = extractWhatsAppNativeEchoes(payload);
   const statuses = extractWhatsAppStatuses(payload);
 
   try {
-    const persistence = await persistWhatsAppWebhookEvents({ inbound, statuses });
+    const persistence = await persistWhatsAppWebhookEvents({ inbound, nativeEchoes, statuses });
     let liveTest: InternalTestLiveReplyResult = { attempted: false, sent: false, reason: 'NO_ELIGIBLE_TEXT_INBOUND' };
 
     // Normal customer traffic remains on the existing durable Cron/Agent path. Only a
@@ -67,6 +68,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       accepted: true,
       inboundCount: inbound.length,
+      nativeEchoCount: nativeEchoes.length,
       statusCount: statuses.length,
       persistence,
       liveTest,
