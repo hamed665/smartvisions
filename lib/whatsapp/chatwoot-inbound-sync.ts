@@ -25,7 +25,7 @@ type ClaimRow = {
   event_id: string;
   claimed: boolean;
   sync_status: 'PENDING' | 'PROCESSING' | 'ACCEPTED' | 'RECONCILIATION_REQUIRED';
-  chatwoot_message_id: number | null;
+  chatwoot_message_id: string | number | null;
   lead_id: string;
   conversation_id: string;
 };
@@ -113,7 +113,7 @@ async function finalizeNative(input: {
   service: SupabaseClient;
   eventId: string;
   status: 'ACCEPTED' | 'RECONCILIATION_REQUIRED';
-  chatwootMessageId?: number | null;
+  chatwootMessageId?: string | number | null;
 }) {
   const { data, error } = await input.service.rpc('finalize_whatsapp_native_chatwoot_sync', {
     p_event_id: input.eventId,
