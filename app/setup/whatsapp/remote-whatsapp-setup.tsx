@@ -47,6 +47,9 @@ type WizardState =
   | 'READY'
   | 'WAITING_META'
   | 'VERIFYING_META'
+  | 'PROVISIONING'
+  | 'REGISTRATION_REQUIRED'
+  | 'PROVISIONING_ERROR'
   | 'DONE'
   | 'BLOCKED'
   | 'PAUSED'
@@ -88,6 +91,7 @@ export function RemoteWhatsAppSetup() {
   const [state, setState] = useState<WizardState>('VERIFYING');
   const [message, setMessage] = useState('Checking your secure WhatsApp setup link…');
   const [errorMessage, setErrorMessage] = useState('');
+  const [registrationPin, setRegistrationPin] = useState('');
 
   const loadStatus = useCallback(async () => {
     const [contextResponse, preflightResponse] = await Promise.all([
@@ -111,8 +115,8 @@ export function RemoteWhatsAppSetup() {
     setPreflight(preflightBody);
 
     if (contextBody.attemptStatus === 'COMPLETED' || preflightBody.completed) {
-      setState('DONE');
-      setMessage('WhatsApp authorization was completed securely. You can close this page.');
+      setState('PROVISIONING');
+      setMessage('Authorization is complete. Verifying the Meta webhook subscription and phone readiness…');
       setErrorMessage('');
       return;
     }
@@ -149,6 +153,54 @@ export function RemoteWhatsAppSetup() {
     await loadStatus();
   }, [loadStatus]);
 
+  const provisionCompleted = useCallback(async (pin?: string) => {
+    setState('PROVISIONING');
+    setMessage('Verifying the Meta webhook subscription and phone readiness…');
+    setErrorMessage('');
+
+    try {
+      const response = await fetch('/setup/whatsapp/api/provision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pin ? { pin } : {}),
+        cache: 'no-store',
+      });
+      const body = await response.json() as {
+        error?: string;
+        provisioned?: boolean;
+        displayPhoneNumber?: string | null;
+        registrationRequired?: boolean;
+        message?: string;
+      };
+      if (body.registrationRequired) {
+        setState('REGISTRATION_REQUIRED');
+        setMessage('Meta authorization and webhook subscription are confirmed. One final registration step is required.');
+        setErrorMessage(body.message || 'Choose a 6-digit WhatsApp two-step verification PIN.');
+        return;
+      }
+      if (!response.ok || !body.provisioned) {
+        throw new Error(body.error || 'Unable to confirm WhatsApp provider provisioning.');
+      }
+
+      setRegistrationPin('');
+      setState('DONE');
+      setMessage(
+        `WhatsApp is authorized and provider provisioning is confirmed${body.displayPhoneNumber ? ` · ${body.displayPhoneNumber}` : ''}.`,
+      );
+      setErrorMessage('');
+    } catch (error) {
+      if (pin) {
+        setState('REGISTRATION_REQUIRED');
+        setMessage('Meta did not confirm phone registration. The authorization and webhook subscription remain saved.');
+        setErrorMessage(error instanceof Error ? error.message : 'Unable to confirm WhatsApp phone registration.');
+        return;
+      }
+      setState('PROVISIONING_ERROR');
+      setMessage('Authorization is saved, but provider provisioning is not confirmed yet.');
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to confirm WhatsApp provider provisioning.');
+    }
+  }, []);
+
   async function tryComplete() {
     if (savingRef.current || !codeRef.current || !selectionRef.current) return;
     const active = contextRef.current;
@@ -178,12 +230,11 @@ export function RemoteWhatsAppSetup() {
         throw new Error(body.error || 'Unable to finish WhatsApp authorization.');
       }
 
-      setState('DONE');
       setMessage(
-        `WhatsApp authorization completed securely${body.displayPhoneNumber ? ` · ${body.displayPhoneNumber}` : ''}. You can close this page.`,
+        `WhatsApp authorization completed securely${body.displayPhoneNumber ? ` · ${body.displayPhoneNumber}` : ''}. Finalizing provider setup…`,
       );
       setErrorMessage('');
-      void loadStatus().catch(() => undefined);
+      await loadStatus();
     } catch (error) {
       codeRef.current = null;
       selectionRef.current = null;
@@ -212,6 +263,14 @@ export function RemoteWhatsAppSetup() {
       setErrorMessage(error instanceof Error ? error.message : 'This WhatsApp setup link is invalid or expired.');
     });
   }, [redeemAndLoad]);
+
+  useEffect(() => {
+    if (state !== 'PROVISIONING' || context?.attemptStatus !== 'COMPLETED') return;
+    const timer = window.setTimeout(() => {
+      void provisionCompleted();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [state, context?.attemptStatus, provisionCompleted]);
 
   useEffect(() => {
     function receive(event: MessageEvent) {
@@ -300,7 +359,7 @@ export function RemoteWhatsAppSetup() {
   const expiresAt = context?.sessionExpiresAt
     ? new Date(context.sessionExpiresAt).toLocaleString()
     : null;
-  const step = state === 'DONE'
+  const step = state === 'DONE' || state === 'PROVISIONING' || state === 'REGISTRATION_REQUIRED' || state === 'PROVISIONING_ERROR'
     ? 3
     : state === 'WAITING_META' || state === 'VERIFYING_META'
       ? 2
@@ -379,9 +438,44 @@ export function RemoteWhatsAppSetup() {
         <button type="button" onClick={setupLater}>Set up later</button>
       </div> : null}
 
+      {state === 'PROVISIONING' ? <div>
+        <strong>Finalizing provider setup</strong>
+        <p className="muted smallText">Smart Visions is confirming the selected phone still belongs to this WABA and that the existing Meta app is subscribed to WhatsApp webhooks.</p>
+      </div> : null}
+
+      {state === 'REGISTRATION_REQUIRED' ? <div style={{ display: 'grid', gap: 10 }}>
+        <strong>Set WhatsApp two-step verification</strong>
+        <p className="muted smallText">Choose a new 6-digit PIN for this WhatsApp Cloud API number. Smart Visions sends it directly to Meta for registration and does not store it.</p>
+        <input
+          type="password"
+          inputMode="numeric"
+          autoComplete="new-password"
+          maxLength={6}
+          pattern="[0-9]{6}"
+          value={registrationPin}
+          onChange={(event) => setRegistrationPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
+          aria-label="6-digit WhatsApp two-step verification PIN"
+          placeholder="6-digit PIN"
+        />
+        <button
+          type="button"
+          disabled={!/^\d{6}$/.test(registrationPin)}
+          onClick={() => void provisionCompleted(registrationPin)}
+        >
+          Register WhatsApp number
+        </button>
+        {errorMessage ? <p className="muted smallText">{errorMessage}</p> : null}
+      </div> : null}
+
+      {state === 'PROVISIONING_ERROR' ? <div style={{ display: 'grid', gap: 10 }}>
+        <strong>Provider setup needs a retry</strong>
+        <p className="muted smallText">{errorMessage}</p>
+        <button type="button" onClick={() => void provisionCompleted()}>Retry provider verification</button>
+      </div> : null}
+
       {state === 'DONE' ? <div>
-        <strong>Authorization complete</strong>
-        <p className="muted smallText">The connection was saved through the existing Smart Core binding and secure Vault. No destructive WhatsApp migration was performed.</p>
+        <strong>WhatsApp setup complete</strong>
+        <p className="muted smallText">Authorization, phone ownership readback and Meta webhook subscription are confirmed on the existing Smart Core binding and secure Vault. No destructive WhatsApp migration was performed.</p>
       </div> : null}
 
       {state === 'ERROR' ? <div style={{ display: 'grid', gap: 10 }}>

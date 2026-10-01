@@ -47,14 +47,61 @@ export function MetaWhatsAppEmbeddedSignup(props: {
   const [bindingId, setBindingId] = useState(props.bindings[0]?.id ?? '');
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>(defaultMode(props.bindings[0]));
   const [sdkReady, setSdkReady] = useState(false);
-  const [state, setState] = useState<'IDLE' | 'PREPARING' | 'WAITING' | 'SAVING' | 'DONE' | 'ERROR'>('IDLE');
+  const [state, setState] = useState<'IDLE' | 'PREPARING' | 'WAITING' | 'SAVING' | 'PROVISIONING' | 'REGISTRATION_REQUIRED' | 'PROVISIONING_ERROR' | 'DONE' | 'ERROR'>('IDLE');
   const [message, setMessage] = useState('');
+  const [registrationPin, setRegistrationPin] = useState('');
   const codeRef = useRef<string | null>(null);
   const sessionRef = useRef<SessionInfo | null>(null);
   const attemptRef = useRef<SetupAttempt | null>(null);
   const savingRef = useRef(false);
 
   const selected = props.bindings.find((item) => item.id === bindingId);
+
+  async function provisionSelected(targetBindingId: string, pin?: string) {
+    setState('PROVISIONING');
+    setMessage('Authorization is saved. Confirming Meta webhook subscription and phone readiness…');
+
+    try {
+      const response = await fetch('/api/integrations/meta/whatsapp/embedded-signup/provision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bindingId: targetBindingId,
+          attemptId: attemptRef.current?.attemptId,
+          ...(pin ? { pin } : {}),
+        }),
+      });
+      const body = await response.json() as {
+        error?: string;
+        provisioned?: boolean;
+        displayPhoneNumber?: string | null;
+        registrationRequired?: boolean;
+        message?: string;
+      };
+      if (body.registrationRequired) {
+        setState('REGISTRATION_REQUIRED');
+        setMessage(body.message || 'Choose a 6-digit WhatsApp two-step verification PIN to finish registration.');
+        return;
+      }
+      if (!response.ok || !body.provisioned) {
+        throw new Error(body.error || 'Unable to confirm WhatsApp provider provisioning');
+      }
+
+      setRegistrationPin('');
+      setState('DONE');
+      setMessage(`WhatsApp provider setup confirmed${body.displayPhoneNumber ? ` · ${body.displayPhoneNumber}` : ''}. Refreshing…`);
+      window.setTimeout(() => window.location.reload(), 900);
+    } catch (error) {
+      savingRef.current = false;
+      if (pin) {
+        setState('REGISTRATION_REQUIRED');
+        setMessage(error instanceof Error ? error.message : 'Meta did not confirm WhatsApp phone registration');
+        return;
+      }
+      setState('PROVISIONING_ERROR');
+      setMessage(error instanceof Error ? error.message : 'Unable to confirm WhatsApp provider provisioning');
+    }
+  }
 
   async function finishIfReady() {
     if (
@@ -84,9 +131,8 @@ export function MetaWhatsAppEmbeddedSignup(props: {
       });
       const body = await response.json() as { error?: string; displayPhoneNumber?: string | null };
       if (!response.ok) throw new Error(body.error || 'Unable to complete Meta connection');
-      setState('DONE');
-      setMessage(`Connected securely${body.displayPhoneNumber ? ` · ${body.displayPhoneNumber}` : ''}. Refreshing…`);
-      window.setTimeout(() => window.location.reload(), 900);
+      setMessage(`Connected securely${body.displayPhoneNumber ? ` · ${body.displayPhoneNumber}` : ''}. Finalizing provider setup…`);
+      await provisionSelected(selected.id);
     } catch (error) {
       savingRef.current = false;
       codeRef.current = null;
@@ -130,6 +176,7 @@ export function MetaWhatsAppEmbeddedSignup(props: {
       || state === 'PREPARING'
       || state === 'WAITING'
       || state === 'SAVING'
+      || state === 'PROVISIONING'
     ) return;
 
     if (connectionMode === 'BUSINESS_APP_COEXISTENCE') {
@@ -240,10 +287,39 @@ export function MetaWhatsAppEmbeddedSignup(props: {
       <button
         type="button"
         onClick={() => void launch()}
-        disabled={!configured || !sdkReady || !selected || state === 'PREPARING' || state === 'WAITING' || state === 'SAVING'}
+        disabled={!configured || !sdkReady || !selected || state === 'PREPARING' || state === 'WAITING' || state === 'SAVING' || state === 'PROVISIONING'}
       >
-        {state === 'PREPARING' || state === 'WAITING' || state === 'SAVING' ? 'Connecting…' : 'Connect with Meta'}
+        {state === 'PROVISIONING'
+          ? 'Finalizing provider setup…'
+          : state === 'PREPARING' || state === 'WAITING' || state === 'SAVING'
+            ? 'Connecting…'
+            : 'Connect with Meta'}
       </button>
+      {state === 'REGISTRATION_REQUIRED' && selected ? <div style={{ display: 'grid', gap: 8 }}>
+        <label>WhatsApp two-step verification PIN
+          <input
+            type="password"
+            inputMode="numeric"
+            autoComplete="new-password"
+            maxLength={6}
+            pattern="[0-9]{6}"
+            value={registrationPin}
+            onChange={(event) => setRegistrationPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="6-digit PIN"
+          />
+        </label>
+        <p className="muted smallText">Choose a new 6-digit PIN. Smart Visions sends it to Meta for Cloud API registration and does not store it.</p>
+        <button
+          type="button"
+          disabled={!/^\d{6}$/.test(registrationPin)}
+          onClick={() => void provisionSelected(selected.id, registrationPin)}
+        >
+          Register WhatsApp number
+        </button>
+      </div> : null}
+      {state === 'PROVISIONING_ERROR' && selected
+        ? <button type="button" onClick={() => void provisionSelected(selected.id)}>Retry provider verification</button>
+        : null}
     </> : <p className="muted">Create an active tenant Business and its WhatsApp communication binding before connecting Meta assets.</p>}
     {!configured ? <p className="muted">Embedded Signup is code-ready but blocked until the Meta App ID and Embedded Signup Configuration ID are configured for this environment.</p> : null}
     {message ? <p role="status" className="muted smallText">{message}</p> : null}
