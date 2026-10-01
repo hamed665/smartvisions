@@ -1,6 +1,6 @@
 # WhatsApp customer onboarding connection contract
 
-Status: **OWNER-APPROVED SCOPE LOCK — SLICES 1–5 PRODUCTION_VERIFIED; SLICES 6–8 PENDING**
+Status: **OWNER-APPROVED SCOPE LOCK — SLICES 1–6 PRODUCTION_VERIFIED; SLICES 7–8 PENDING**
 
 Date: 2026-10-01
 
@@ -72,7 +72,26 @@ Slice 5 composes the existing Chatwoot Account, OWNER access and `Channel::Api` 
 
 Real-tenant external Chatwoot resource creation/E2E is not claimed because Production currently has no real tenant Business/binding to exercise it without synthetic data.
 
-**Next owner-prioritized contract slice:** Slice 6 — Message/status/media bridge + provenance + dedupe.
+## Production checkpoint — Slice 6
+
+Slice 6 is **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** as of 2026-10-02 for the internally controlled message/status/media bridge, provenance, cross-plane dedupe and reconciliation scope.
+
+Evidence:
+- implementation PR #387, final head `4b6eba7ceb900e1d012d299e3b20816911f9fa51`, exact-head CI `36939463033`, merge `5f7f81c5b279efd92feb6341bdc971fe6e6c012e`;
+- exact-main CI `36939774658` and Cloudflare Production Deploy `36940049403` succeeded on the exact merge SHA;
+- Production migration `0167_whatsapp_message_bridge_provenance@20261001231837`, merged blob SHA `60c4df822b1429bf77d975089af96a218a1bf81b`;
+- Production schema verifies canonical provenance/source identity, WhatsApp-to-Chatwoot durable sync state, service-role-only reconciliation RPCs, cross-plane unique identity and nullable business-wide Unified Inbox branch scope;
+- Production backfill preserved truth: 36 existing `SHADOW_MODE` messages became `AI`, one ambiguous old outbound became `SYSTEM`, 37 scoped inbound journal events became Chatwoot-sync `PENDING`, and 12 legacy inbound events with neither Conversation nor Lead scope were left unprojected rather than assigned fabricated scope;
+- Production remained side-effect clean at 37 Conversation Messages, 136 WhatsApp Events and 0 Unified Inbox projections, with no controlled-smoke IDs present after migration;
+- Production safety remained Shadow Mode ON, global Kill Switch OFF, WhatsApp AI pause OFF and Agents pause OFF.
+
+Slice 6 extends the existing canonical message/journal/reconciliation authorities only. Meta inbound is durably persisted before Chatwoot projection; Chatwoot human outbound must resolve a canonical Smart Visions membership and full human takeover before passing the existing send safety gate; Smart Core Owner/AI outbound is mirrored into Chatwoot with deterministic source identity and echo suppression; statuses are monotonic and recover from out-of-order evidence; media is bounded and validated using the existing provider/Vault authority. Ambiguous provider or Chatwoot mutation outcomes are never blindly retried.
+
+This checkpoint does **not** claim official Business App Coexistence/native activity, `HUMAN_NATIVE_WHATSAPP` live evidence, or a real-customer Meta ↔ Smart Core ↔ Chatwoot E2E. Those require later slices plus real provider/tenant evidence.
+
+**Next owner-prioritized contract slice:** Slice 7 — Official coexistence + native activity + Human/AI arbitration. Same-number Coexistence remains non-destructive and fail-closed until official provider/runtime evidence supports activation.
+
+
 
 This contract is an execution overlay for the existing Business OS 2027 roadmap. It does **not** create a new Work Package, integration source of truth, IAM system, secret store, message store, Chatwoot plane, queue, health system, or WhatsApp provider stack.
 
