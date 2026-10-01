@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createCrmTask, listCrmTasks } from '@/lib/crm/tasks';
+import { createCrmTask } from '@/lib/crm/tasks';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
 
@@ -27,8 +27,17 @@ export async function GET(){
       .select('*').eq('organization_id',organizationId).order('updated_at',{ascending:false}).limit(100);
     if(error) throw error;
     const ids=(orders??[]).map(row=>String(row.task_id));
-    const taskPage=await listCrmTasks({supabase,organizationId,includeClosed:true,limit:100});
-    const tasks=taskPage.items.filter(task=>ids.includes(task.id));
+    let tasks:Array<Record<string,unknown>>=[];
+    if(ids.length){
+      const {data,error:taskError}=await supabase.from('crm_tasks')
+        .select('*')
+        .eq('organization_id',organizationId)
+        .eq('task_type','FIELD_SERVICE')
+        .in('id',ids)
+        .order('updated_at',{ascending:false});
+      if(taskError) throw taskError;
+      tasks=(data??[]) as Array<Record<string,unknown>>;
+    }
     return NextResponse.json({orders:orders??[],tasks},{headers:{'Cache-Control':'private, no-store'}});
   }catch(error){
     return NextResponse.json({error:error instanceof Error?error.message:'Field Service query failed'},{status:500});
