@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { isDoNotContactReply, persistCustomerDoNotContact, persistCustomerReplyConversationState } from '@/lib/conversations/sales-lifecycle';
-import type { NormalizedWhatsAppInbound, NormalizedWhatsAppStatus } from './webhook';
+import type { NormalizedWhatsAppInbound, NormalizedWhatsAppNativeEcho, NormalizedWhatsAppStatus } from './webhook';
 import { mapWhatsAppProviderStatus } from '@/lib/omnichannel';
 import {
   recordCrmBusinessIdentityEvidence,
@@ -90,7 +90,7 @@ export function mapWhatsAppDeliveryStatus(status: NormalizedWhatsAppStatus['stat
   return mapWhatsAppProviderStatus(status);
 }
 
-async function resolveExactBusinessByPhone(organizationId: string, from: string) {
+export async function resolveExistingWhatsAppBusinessByPhone(organizationId: string, from: string) {
   const supabase = serviceClient();
   const target = normalizePhoneDigits(from);
   if (target.length < 8) return { business: null, ambiguous: false };
@@ -170,7 +170,7 @@ async function getOrCreateLeadForBusiness(organizationId: string, businessId: st
 
 async function resolveOrCreateVerifiedInboundLead(organizationId: string, event: NormalizedWhatsAppInbound) {
   const supabase = serviceClient();
-  const resolved = await resolveExactBusinessByPhone(organizationId, event.from);
+  const resolved = await resolveExistingWhatsAppBusinessByPhone(organizationId, event.from);
   if (resolved.ambiguous) return null;
   if (resolved.business) {
     const businessId = String(resolved.business.id);
@@ -483,6 +483,218 @@ export async function applyWhatsAppInboundLifecycle(organizationId: string, even
     messageId: canonicalMessageId,
     agentMode: lead.agent_mode,
     acquisitionSource: acquisition.acquisition_source,
+  };
+}
+
+
+function nativeEchoBody(event: NormalizedWhatsAppNativeEcho) {
+  return event.text?.trim()
+    || event.caption?.trim()
+    || (event.type === 'audio' ? '[WhatsApp Business app voice message]' : `[WhatsApp Business app ${event.type} message]`);
+}
+
+function nativeEchoMediaType(event: NormalizedWhatsAppNativeEcho) {
+  if (event.type === 'audio') return event.voice ? 'VOICE' : 'AUDIO';
+  if (event.type === 'image') return 'IMAGE';
+  if (event.type === 'video') return 'VIDEO';
+  if (event.type === 'document') return 'DOCUMENT';
+  if (event.type === 'text') return 'TEXT';
+  return 'OTHER';
+}
+
+async function existingLeadForBusiness(organizationId: string, businessId: string) {
+  const supabase = serviceClient();
+  const { data, error } = await supabase
+    .from('leads')
+    .select('id,status,agent_mode,business_id')
+    .eq('organization_id', organizationId)
+    .eq('business_id', businessId)
+    .maybeSingle();
+  if (error) throw new Error(`WhatsApp native lead lookup failed: ${error.message}`);
+  return data ?? null;
+}
+
+async function existingWhatsAppConversationForScope(
+  organizationId: string,
+  leadId: string,
+  scope: WhatsAppTenantScope,
+) {
+  const supabase = serviceClient();
+  const { data: conversation, error } = await supabase
+    .from('sales_conversations')
+    .select('id,lead_id,agent_mode,stage,requires_human')
+    .eq('organization_id', organizationId)
+    .eq('lead_id', leadId)
+    .eq('channel', 'WHATSAPP')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`WhatsApp native conversation lookup failed: ${error.message}`);
+  if (!conversation) return null;
+
+  const { data: projection, error: projectionError } = await supabase
+    .from('unified_inbox_conversation_projections')
+    .select('tenant_business_id,branch_id,communication_channel_binding_id,lifecycle_status')
+    .eq('organization_id', organizationId)
+    .eq('conversation_id', conversation.id)
+    .in('lifecycle_status', ['ACTIVE', 'DEGRADED'])
+    .maybeSingle();
+  if (projectionError) throw new Error(`WhatsApp native conversation scope lookup failed: ${projectionError.message}`);
+  if (
+    !projection
+    || projection.tenant_business_id !== scope.tenantBusinessId
+    || (projection.branch_id ?? null) !== scope.branchId
+    || projection.communication_channel_binding_id !== scope.bindingId
+  ) return null;
+
+  return conversation;
+}
+
+export async function applyWhatsAppNativeEchoLifecycle(
+  organizationId: string,
+  event: NormalizedWhatsAppNativeEcho,
+  scope: WhatsAppTenantScope,
+) {
+  const supabase = serviceClient();
+  if (event.type === 'edit' || event.type === 'revoke') {
+    return { linked: false as const, reason: 'NON_MESSAGE_NATIVE_ACTIVITY' as const };
+  }
+
+  if (
+    event.from
+    && event.destination.displayPhoneNumber
+    && !phonesRepresentSameNumber(event.from, event.destination.displayPhoneNumber)
+  ) {
+    return { linked: false as const, reason: 'BUSINESS_SENDER_MISMATCH' as const };
+  }
+
+  const recipient = event.recipientWaId ?? event.to;
+  if (!recipient || normalizePhoneDigits(recipient).length < 8) {
+    return { linked: false as const, reason: 'RECIPIENT_IDENTITY_UNRESOLVED' as const };
+  }
+
+  const resolved = await resolveExistingWhatsAppBusinessByPhone(organizationId, recipient);
+  if (resolved.ambiguous) return { linked: false as const, reason: 'RECIPIENT_IDENTITY_AMBIGUOUS' as const };
+  if (!resolved.business) return { linked: false as const, reason: 'RECIPIENT_IDENTITY_UNMATCHED' as const };
+
+  const businessId = String(resolved.business.id);
+  const lead = await existingLeadForBusiness(organizationId, businessId);
+  if (!lead) return { linked: false as const, reason: 'CANONICAL_LEAD_UNAVAILABLE' as const };
+
+  const conversation = await existingWhatsAppConversationForScope(organizationId, lead.id, scope);
+  if (!conversation) return { linked: false as const, reason: 'CANONICAL_CONVERSATION_UNAVAILABLE' as const };
+
+  const occurredAt = event.timestamp && /^\d+$/.test(event.timestamp)
+    ? new Date(Number(event.timestamp) * 1000).toISOString()
+    : new Date().toISOString();
+  const body = nativeEchoBody(event);
+  const mediaType = nativeEchoMediaType(event);
+
+  const canonical = await supabase.from('conversation_messages').insert({
+    organization_id: organizationId,
+    conversation_id: conversation.id,
+    lead_id: lead.id,
+    provider_message_id: event.providerMessageId,
+    channel: 'WHATSAPP',
+    direction: 'OUTBOUND',
+    media_type: mediaType,
+    original_text: body,
+    status: 'SENT',
+    provider_delivery_status: 'ACCEPTED',
+    provenance: 'HUMAN_NATIVE_WHATSAPP',
+    source_plane: 'META_WHATSAPP',
+    source_message_id: event.providerMessageId,
+    metadata: {
+      source: 'META_WHATSAPP_NATIVE_ECHO',
+      native_activity: true,
+      native_type: event.type,
+      recipient_phone: recipient,
+      recipient_user_id: event.recipientUserId ?? null,
+      recipient_parent_user_id: event.recipientParentUserId ?? null,
+      media_id: event.mediaId ?? null,
+      mime_type: event.mimeType ?? null,
+      filename: event.filename ?? null,
+      caption: event.caption ?? null,
+      voice: Boolean(event.voice),
+      tenant_business_id: scope.tenantBusinessId,
+      branch_id: scope.branchId,
+      communication_channel_binding_id: scope.bindingId,
+      canonical_business_id: businessId,
+    },
+    created_at: occurredAt,
+    processed_at: new Date().toISOString(),
+    sent_at: occurredAt,
+  }).select('id,conversation_id,lead_id,provenance,source_plane,source_message_id').single();
+
+  let canonicalMessageId: string;
+  if (canonical.error) {
+    if (!isWhatsAppInboundDuplicateError(canonical.error.code)) {
+      throw new Error(`WhatsApp native canonical message persistence failed: ${canonical.error.message}`);
+    }
+    const replay = await supabase.from('conversation_messages')
+      .select('id,conversation_id,lead_id,provenance,source_plane,source_message_id')
+      .eq('organization_id', organizationId)
+      .eq('channel', 'WHATSAPP')
+      .eq('source_plane', 'META_WHATSAPP')
+      .eq('source_message_id', event.providerMessageId)
+      .maybeSingle();
+    if (
+      replay.error
+      || !replay.data
+      || replay.data.conversation_id !== conversation.id
+      || replay.data.lead_id !== lead.id
+      || replay.data.provenance !== 'HUMAN_NATIVE_WHATSAPP'
+    ) {
+      throw new Error('WhatsApp native message replay does not match its original canonical scope');
+    }
+    canonicalMessageId = String(replay.data.id);
+  } else {
+    canonicalMessageId = String(canonical.data.id);
+  }
+
+  const { data: takeover, error: takeoverError } = await supabase.rpc('claim_whatsapp_native_human_takeover', {
+    p_organization_id: organizationId,
+    p_conversation_id: conversation.id,
+    p_lead_id: lead.id,
+    p_provider_message_id: event.providerMessageId,
+    p_occurred_at: occurredAt,
+  });
+  if (takeoverError) throw new Error(`WhatsApp native human takeover failed: ${takeoverError.message}`);
+
+  const eventType = `SMB_MESSAGE_ECHO_${event.type.toUpperCase()}`;
+  const { error: eventLinkError } = await supabase.from('whatsapp_events').update({
+    lead_id: lead.id,
+    conversation_id: conversation.id,
+    chatwoot_sync_status: 'PENDING',
+    payload: {
+      ...event,
+      routing: {
+        tenantBusinessId: scope.tenantBusinessId,
+        branchId: scope.branchId,
+        bindingId: scope.bindingId,
+        integrationConnectionId: scope.integrationConnectionId ?? null,
+        phoneNumberId: scope.phoneNumberId ?? event.destination.phoneNumberId ?? null,
+        wabaId: scope.wabaId ?? event.destination.wabaId ?? null,
+      },
+      canonical: {
+        businessId,
+        messageId: canonicalMessageId,
+      },
+      arbitration: takeover,
+    },
+  }).eq('organization_id', organizationId)
+    .eq('provider_message_id', event.providerMessageId)
+    .eq('direction', 'OUTBOUND')
+    .eq('event_type', eventType);
+  if (eventLinkError) throw new Error(`WhatsApp native event linkage failed: ${eventLinkError.message}`);
+
+  return {
+    linked: true as const,
+    leadId: lead.id,
+    businessId,
+    conversationId: conversation.id,
+    messageId: canonicalMessageId,
+    takeover,
   };
 }
 
