@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 
 import { getCurrentOrganization } from '@/lib/supabase/org';
+import { createSupabaseServiceClient } from '@/lib/supabase/service';
+import { verifyMetaWhatsAppSelectedAssets } from '@/lib/whatsapp/meta-onboarding';
 
 export const runtime = 'nodejs';
 
 type CompleteBody = {
+  attemptId?: string;
   bindingId?: string;
   expectedVersion?: number;
   code?: string;
@@ -21,33 +24,91 @@ function graphVersion() {
   return process.env.META_GRAPH_VERSION?.trim() || 'v23.0';
 }
 
-async function metaJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, { ...init, cache: 'no-store' });
-  const text = await response.text();
-  if (!response.ok) {
-    throw new Error(`Meta request failed (${response.status}): ${text.slice(0, 300)}`);
+async function exchangeAuthorizationCode(input: {
+  code: string;
+  appId: string;
+  appSecret: string;
+}) {
+  const tokenUrl = new URL(`https://graph.facebook.com/${graphVersion()}/oauth/access_token`);
+  tokenUrl.searchParams.set('client_id', input.appId);
+  tokenUrl.searchParams.set('client_secret', input.appSecret);
+  tokenUrl.searchParams.set('code', input.code);
+
+  const response = await fetch(tokenUrl.toString(), { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Meta authorization exchange failed (${response.status})`);
+  const token = await response.json() as { access_token?: string };
+  if (!token.access_token || token.access_token.length < 20) {
+    throw new Error('Meta authorization exchange returned no usable credential');
   }
-  return JSON.parse(text) as T;
+  return token.access_token;
+}
+
+function safeCompletionError(error: unknown) {
+  const message = error instanceof Error ? error.message : '';
+  if (
+    message === 'Selected phone number is not part of the selected WhatsApp Business Account'
+    || message === 'Meta returned assets that do not match the selected WhatsApp assets'
+  ) return message;
+  return 'Unable to complete WhatsApp setup safely. Start the connection flow again.';
 }
 
 export async function POST(request: Request) {
   try {
     const ctx = await getCurrentOrganization(true);
     const body = await request.json() as CompleteBody;
+    const attemptId = clean(body.attemptId);
     const bindingId = clean(body.bindingId);
     const code = clean(body.code, 4096);
     const wabaId = clean(body.wabaId);
     const phoneNumberId = clean(body.phoneNumberId);
     const expectedVersion = Number(body.expectedVersion);
 
-    if (!bindingId || !code || !wabaId || !phoneNumberId || !Number.isInteger(expectedVersion) || expectedVersion < 1) {
+    if (
+      !attemptId
+      || !bindingId
+      || !code
+      || !wabaId
+      || !phoneNumberId
+      || !Number.isInteger(expectedVersion)
+      || expectedVersion < 1
+    ) {
       return NextResponse.json({ error: 'Invalid Embedded Signup completion payload' }, { status: 400 });
     }
 
-    const appId = process.env.META_APP_ID?.trim() || process.env.NEXT_PUBLIC_META_APP_ID?.trim();
-    const appSecret = process.env.META_APP_SECRET?.trim();
-    if (!appId || !appSecret) {
-      return NextResponse.json({ error: 'Meta provider app is not configured' }, { status: 503 });
+    const service = createSupabaseServiceClient();
+    const { data: attempt, error: attemptError } = await service
+      .from('communication_channel_setup_attempts')
+      .select('id,organization_id,communication_channel_binding_id,binding_version,status,expires_at,provider_destination_label')
+      .eq('organization_id', ctx.organizationId)
+      .eq('id', attemptId)
+      .eq('communication_channel_binding_id', bindingId)
+      .maybeSingle();
+
+    if (attemptError || !attempt || attempt.binding_version !== expectedVersion) {
+      return NextResponse.json({ error: 'WhatsApp setup attempt is missing or stale' }, { status: 409 });
+    }
+
+    if (attempt.status === 'COMPLETED') {
+      const { data: completedBinding } = await service
+        .from('communication_channel_bindings')
+        .select('id,version,provider_destination_label')
+        .eq('organization_id', ctx.organizationId)
+        .eq('id', bindingId)
+        .maybeSingle();
+
+      if (completedBinding) {
+        return NextResponse.json({
+          ok: true,
+          bindingId,
+          version: completedBinding.version,
+          displayPhoneNumber: completedBinding.provider_destination_label ?? attempt.provider_destination_label ?? null,
+          replayed: true,
+        });
+      }
+    }
+
+    if (attempt.status !== 'STARTED' || new Date(attempt.expires_at).getTime() <= Date.now()) {
+      return NextResponse.json({ error: 'WhatsApp setup attempt has expired or was superseded' }, { status: 409 });
     }
 
     const { data: binding, error: bindingError } = await ctx.supabase
@@ -57,87 +118,85 @@ export async function POST(request: Request) {
       .eq('id', bindingId)
       .maybeSingle();
 
-    if (bindingError || !binding || binding.channel !== 'WHATSAPP' || binding.status !== 'ACTIVE' || binding.version !== expectedVersion) {
+    if (
+      bindingError
+      || !binding
+      || binding.channel !== 'WHATSAPP'
+      || binding.status !== 'ACTIVE'
+      || binding.version !== expectedVersion
+    ) {
       return NextResponse.json({ error: 'WhatsApp tenant binding is not eligible' }, { status: 409 });
     }
 
     const [{ data: business }, { data: integration }] = await Promise.all([
-      ctx.supabase.from('tenant_businesses').select('id,status').eq('organization_id', ctx.organizationId).eq('id', binding.tenant_business_id).maybeSingle(),
-      ctx.supabase.from('integration_connections').select('id,provider,channel,enabled').eq('organization_id', ctx.organizationId).eq('id', binding.integration_connection_id).maybeSingle(),
+      ctx.supabase
+        .from('tenant_businesses')
+        .select('id,status')
+        .eq('organization_id', ctx.organizationId)
+        .eq('id', binding.tenant_business_id)
+        .maybeSingle(),
+      ctx.supabase
+        .from('integration_connections')
+        .select('id,provider,channel,enabled')
+        .eq('organization_id', ctx.organizationId)
+        .eq('id', binding.integration_connection_id)
+        .maybeSingle(),
     ]);
 
-    if (business?.status !== 'ACTIVE' || integration?.provider !== 'META' || integration?.channel !== 'WHATSAPP' || integration.enabled !== true) {
+    if (
+      business?.status !== 'ACTIVE'
+      || integration?.provider !== 'META'
+      || integration?.channel !== 'WHATSAPP'
+      || integration.enabled !== true
+    ) {
       return NextResponse.json({ error: 'Canonical Meta WhatsApp scope is not active' }, { status: 409 });
     }
 
-    const tokenUrl = new URL(`https://graph.facebook.com/${graphVersion()}/oauth/access_token`);
-    tokenUrl.searchParams.set('client_id', appId);
-    tokenUrl.searchParams.set('client_secret', appSecret);
-    tokenUrl.searchParams.set('code', code);
-
-    const token = await metaJson<{ access_token?: string }>(tokenUrl.toString());
-    if (!token.access_token || token.access_token.length < 20) {
-      throw new Error('Meta code exchange returned no access token');
+    const appId = process.env.META_APP_ID?.trim() || process.env.NEXT_PUBLIC_META_APP_ID?.trim();
+    const appSecret = process.env.META_APP_SECRET?.trim();
+    if (!appId || !appSecret) {
+      return NextResponse.json({ error: 'Meta provider app is not configured' }, { status: 503 });
     }
 
-    const auth = { Authorization: `Bearer ${token.access_token}` };
-    const [phone, waba] = await Promise.all([
-      metaJson<{ id?: string; display_phone_number?: string; verified_name?: string }>(
-        `https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(phoneNumberId)}?fields=id,display_phone_number,verified_name`,
-        { headers: auth },
-      ),
-      metaJson<{ id?: string; name?: string }>(
-        `https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(wabaId)}?fields=id,name`,
-        { headers: auth },
-      ),
-    ]);
-
-    if (phone.id !== phoneNumberId || waba.id !== wabaId) {
-      throw new Error('Meta returned assets that do not match the customer-selected Embedded Signup assets');
-    }
-
-    const requestKey = `meta-embedded-signup:${bindingId}:${expectedVersion}`;
-    const { data: configured, error: configureError } = await ctx.supabase.rpc('configure_meta_whatsapp_binding', {
-      p_organization_id: ctx.organizationId,
-      p_binding_id: bindingId,
-      p_expected_version: expectedVersion,
-      p_waba_id: wabaId,
-      p_phone_number_id: phoneNumberId,
-      p_display_phone_number: phone.display_phone_number ?? null,
-      p_access_token: token.access_token,
-      p_request_key: requestKey,
+    const accessToken = await exchangeAuthorizationCode({ code, appId, appSecret });
+    const assets = await verifyMetaWhatsAppSelectedAssets({
+      graphVersion: graphVersion(),
+      accessToken,
+      wabaId,
+      phoneNumberId,
     });
-    if (configureError) throw new Error(`Meta binding persistence failed: ${configureError.message}`);
 
-    await ctx.supabase.from('audit_logs').insert({
-      organization_id: ctx.organizationId,
-      actor_type: 'USER',
-      actor_id: ctx.userId,
-      action: 'META_WHATSAPP_EMBEDDED_SIGNUP_COMPLETED',
-      entity_type: 'communication_channel_binding',
-      entity_id: bindingId,
-      after_data: {
-        tenant_business_id: binding.tenant_business_id,
-        branch_id: binding.branch_id,
-        waba_id: wabaId,
-        phone_number_id: phoneNumberId,
-        display_phone_number: phone.display_phone_number ?? null,
-        verified_name: phone.verified_name ?? null,
-        waba_name: waba.name ?? null,
-        credential_storage: 'SUPABASE_VAULT',
+    const requestKey = `meta-whatsapp-setup-complete:${attemptId}`;
+    const { data: configured, error: configureError } = await service.rpc(
+      'complete_meta_whatsapp_setup_attempt',
+      {
+        p_organization_id: ctx.organizationId,
+        p_attempt_id: attemptId,
+        p_binding_id: bindingId,
+        p_expected_binding_version: expectedVersion,
+        p_waba_id: wabaId,
+        p_phone_number_id: phoneNumberId,
+        p_display_phone_number: assets.displayPhoneNumber,
+        p_access_token: accessToken,
+        p_actor_user_id: ctx.userId,
+        p_request_key: requestKey,
       },
-    });
+    );
+
+    if (configureError) {
+      return NextResponse.json({ error: 'WhatsApp credential could not be committed safely' }, { status: 409 });
+    }
 
     const row = Array.isArray(configured) ? configured[0] : configured;
     return NextResponse.json({
       ok: true,
       bindingId,
       version: row?.version ?? expectedVersion + 1,
-      displayPhoneNumber: phone.display_phone_number ?? null,
-      verifiedName: phone.verified_name ?? null,
+      displayPhoneNumber: assets.displayPhoneNumber,
+      verifiedName: assets.verifiedName,
+      wabaName: assets.wabaName,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Embedded Signup completion failed';
-    return NextResponse.json({ error: message.slice(0, 500) }, { status: 500 });
+    return NextResponse.json({ error: safeCompletionError(error) }, { status: 500 });
   }
 }
