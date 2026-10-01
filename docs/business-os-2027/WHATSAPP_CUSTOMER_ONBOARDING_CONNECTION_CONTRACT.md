@@ -1,8 +1,24 @@
 # WhatsApp customer onboarding connection contract
 
-Status: **OWNER-APPROVED SCOPE LOCK — IMPLEMENTATION PENDING FRESH RUNTIME GAP AUDIT**
+Status: **OWNER-APPROVED SCOPE LOCK — SLICE 1 PRODUCTION_VERIFIED; SLICES 2–8 PENDING**
 
 Date: 2026-10-01
+
+## Production checkpoint — Slice 1
+
+Slice 1 is **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** as of 2026-10-01.
+
+Evidence:
+- implementation PR #375, final head `1c6a47138635037189745615d1f25d387de00897`, exact-head CI `36855801312`, merge `474d7cd72d50a002add2e38a4cff30f7d588f09d`;
+- advisor-hardening PR #376, head `d0ba891e4646652fea5ba88391de7dfc5471afef`, exact-head CI `36856807256`, final `main@85774ea16adf20403832771d316e68e56283028d`;
+- exact-main CI `36857112993` and Cloudflare Production Deploy `36857447148` succeeded on the final main SHA;
+- Production migrations `0163_meta_whatsapp_onboarding_slice1@20261001113758` and `0164_meta_whatsapp_onboarding_fk_index_hardening@20261001114314`;
+- Production setup-attempt rows remain 0; no synthetic connection/provider data or customer send was used;
+- post-hardening advisor counts returned to the prior baseline.
+
+This checkpoint proves only the internally controlled Slice 1 contract: bounded attempt state, non-destructive mode lock, trusted credential completion boundary, WABA/phone membership validation, stale/replay protection, ACL/RLS hardening and fail-closed unverified Coexistence. It does **not** claim Remote Setup Invitation, actual Coexistence/native activity, message provenance/Human-AI arbitration, or real-tenant Meta E2E.
+
+**Next owner-prioritized contract slice:** Slice 2 — Secure Remote Setup Invitation.
 
 This contract is an execution overlay for the existing Business OS 2027 roadmap. It does **not** create a new Work Package, integration source of truth, IAM system, secret store, message store, Chatwoot plane, queue, health system, or WhatsApp provider stack.
 
