@@ -511,3 +511,63 @@ export async function applyWhatsAppStatusLifecycle(organizationId: string, event
     status: row?.canonical_status ? String(row.canonical_status) : mapWhatsAppDeliveryStatus(event.status),
   };
 }
+
+
+export async function replayPersistedWhatsAppStatuses(input: {
+  organizationId: string;
+  providerMessageId: string;
+  tenantBusinessId: string;
+  branchId: string | null;
+  bindingId: string;
+}) {
+  const supabase = serviceClient();
+  const { data, error } = await supabase
+    .from('whatsapp_events')
+    .select('payload,created_at')
+    .eq('organization_id', input.organizationId)
+    .eq('provider_message_id', input.providerMessageId)
+    .eq('direction', 'STATUS')
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true });
+  if (error) throw new Error(`WhatsApp status replay discovery failed: ${error.message}`);
+
+  let matched = 0;
+  for (const row of data ?? []) {
+    const payload = row.payload && typeof row.payload === 'object' && !Array.isArray(row.payload)
+      ? row.payload as Record<string, unknown>
+      : null;
+    const status = typeof payload?.status === 'string' ? payload.status : '';
+    if (!['sent','delivered','read','failed','deleted','unknown'].includes(status)) continue;
+
+    const event: NormalizedWhatsAppStatus = {
+      providerMessageId: input.providerMessageId,
+      destination: {
+        phoneNumberId: typeof (payload?.destination as Record<string, unknown> | undefined)?.phoneNumberId === 'string'
+          ? String((payload!.destination as Record<string, unknown>).phoneNumberId)
+          : undefined,
+        displayPhoneNumber: typeof (payload?.destination as Record<string, unknown> | undefined)?.displayPhoneNumber === 'string'
+          ? String((payload!.destination as Record<string, unknown>).displayPhoneNumber)
+          : undefined,
+        wabaId: typeof (payload?.destination as Record<string, unknown> | undefined)?.wabaId === 'string'
+          ? String((payload!.destination as Record<string, unknown>).wabaId)
+          : undefined,
+      },
+      status: status as NormalizedWhatsAppStatus['status'],
+      timestamp: typeof payload?.timestamp === 'string' ? payload.timestamp : undefined,
+      recipientId: typeof payload?.recipientId === 'string' ? payload.recipientId : undefined,
+      conversationId: typeof payload?.conversationId === 'string' ? payload.conversationId : undefined,
+      pricingCategory: typeof payload?.pricingCategory === 'string' ? payload.pricingCategory : undefined,
+      errorCode: typeof payload?.errorCode === 'string' ? payload.errorCode : undefined,
+      errorTitle: typeof payload?.errorTitle === 'string' ? payload.errorTitle : undefined,
+    };
+
+    const result = await applyWhatsAppStatusLifecycle(input.organizationId, event, {
+      tenantBusinessId: input.tenantBusinessId,
+      branchId: input.branchId,
+      bindingId: input.bindingId,
+    });
+    matched += result.matched;
+  }
+
+  return { replayed: data?.length ?? 0, matched };
+}
