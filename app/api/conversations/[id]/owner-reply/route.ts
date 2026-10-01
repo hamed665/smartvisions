@@ -351,7 +351,7 @@ export async function POST(
     try {
       await replayPersistedWhatsAppStatuses({
         organizationId,
-        providerMessageId,
+        providerMessageId: result.providerMessageId,
         tenantBusinessId: projection.tenant_business_id,
         branchId: projection.branch_id,
         bindingId: tenantProvider.bindingId,
@@ -367,7 +367,7 @@ export async function POST(
         organizationId,
         conversationId,
         canonicalMessageId: messageId,
-        providerMessageId,
+        providerMessageId: result.providerMessageId,
         content: text,
         provenance: 'HUMAN_SMARTVISIONS',
       });
