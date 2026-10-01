@@ -48,6 +48,7 @@ type WizardState =
   | 'WAITING_META'
   | 'VERIFYING_META'
   | 'PROVISIONING'
+  | 'REGISTRATION_REQUIRED'
   | 'PROVISIONING_ERROR'
   | 'DONE'
   | 'BLOCKED'
@@ -90,6 +91,7 @@ export function RemoteWhatsAppSetup() {
   const [state, setState] = useState<WizardState>('VERIFYING');
   const [message, setMessage] = useState('Checking your secure WhatsApp setup link…');
   const [errorMessage, setErrorMessage] = useState('');
+  const [registrationPin, setRegistrationPin] = useState('');
 
   const loadStatus = useCallback(async () => {
     const [contextResponse, preflightResponse] = await Promise.all([
@@ -151,7 +153,7 @@ export function RemoteWhatsAppSetup() {
     await loadStatus();
   }, [loadStatus]);
 
-  const provisionCompleted = useCallback(async () => {
+  const provisionCompleted = useCallback(async (pin?: string) => {
     setState('PROVISIONING');
     setMessage('Verifying the Meta webhook subscription and phone readiness…');
     setErrorMessage('');
@@ -159,17 +161,28 @@ export function RemoteWhatsAppSetup() {
     try {
       const response = await fetch('/setup/whatsapp/api/provision', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pin ? { pin } : {}),
         cache: 'no-store',
       });
       const body = await response.json() as {
         error?: string;
         provisioned?: boolean;
         displayPhoneNumber?: string | null;
+        registrationRequired?: boolean;
+        message?: string;
       };
+      if (body.registrationRequired) {
+        setState('REGISTRATION_REQUIRED');
+        setMessage('Meta authorization and webhook subscription are confirmed. One final registration step is required.');
+        setErrorMessage(body.message || 'Choose a 6-digit WhatsApp two-step verification PIN.');
+        return;
+      }
       if (!response.ok || !body.provisioned) {
         throw new Error(body.error || 'Unable to confirm WhatsApp provider provisioning.');
       }
 
+      setRegistrationPin('');
       setState('DONE');
       setMessage(
         `WhatsApp is authorized and provider provisioning is confirmed${body.displayPhoneNumber ? ` · ${body.displayPhoneNumber}` : ''}.`,
@@ -337,7 +350,7 @@ export function RemoteWhatsAppSetup() {
   const expiresAt = context?.sessionExpiresAt
     ? new Date(context.sessionExpiresAt).toLocaleString()
     : null;
-  const step = state === 'DONE' || state === 'PROVISIONING' || state === 'PROVISIONING_ERROR'
+  const step = state === 'DONE' || state === 'PROVISIONING' || state === 'REGISTRATION_REQUIRED' || state === 'PROVISIONING_ERROR'
     ? 3
     : state === 'WAITING_META' || state === 'VERIFYING_META'
       ? 2
@@ -419,6 +432,30 @@ export function RemoteWhatsAppSetup() {
       {state === 'PROVISIONING' ? <div>
         <strong>Finalizing provider setup</strong>
         <p className="muted smallText">Smart Visions is confirming the selected phone still belongs to this WABA and that the existing Meta app is subscribed to WhatsApp webhooks.</p>
+      </div> : null}
+
+      {state === 'REGISTRATION_REQUIRED' ? <div style={{ display: 'grid', gap: 10 }}>
+        <strong>Set WhatsApp two-step verification</strong>
+        <p className="muted smallText">Choose a new 6-digit PIN for this WhatsApp Cloud API number. Smart Visions sends it directly to Meta for registration and does not store it.</p>
+        <input
+          type="password"
+          inputMode="numeric"
+          autoComplete="new-password"
+          maxLength={6}
+          pattern="[0-9]{6}"
+          value={registrationPin}
+          onChange={(event) => setRegistrationPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
+          aria-label="6-digit WhatsApp two-step verification PIN"
+          placeholder="6-digit PIN"
+        />
+        <button
+          type="button"
+          disabled={!/^\d{6}$/.test(registrationPin)}
+          onClick={() => void provisionCompleted(registrationPin)}
+        >
+          Register WhatsApp number
+        </button>
+        {errorMessage ? <p className="muted smallText">{errorMessage}</p> : null}
       </div> : null}
 
       {state === 'PROVISIONING_ERROR' ? <div style={{ display: 'grid', gap: 10 }}>
