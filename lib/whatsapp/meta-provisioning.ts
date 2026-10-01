@@ -105,7 +105,10 @@ async function readPhoneEvidence(input: {
   let phone: PhoneNumberRow | null = null;
 
   for (let page = 0; next && page < 10; page += 1) {
-    const result = await graphJson<PhoneNumberPage>({
+    const result: {
+      response: Response;
+      body: MetaGraphResponse<PhoneNumberPage> | null;
+    } = await graphJson<PhoneNumberPage>({
       graphVersion: input.graphVersion,
       accessToken: input.accessToken,
       path: next,
@@ -145,7 +148,10 @@ async function isAppSubscribed(input: {
     `https://graph.facebook.com/${input.graphVersion}/${encodeURIComponent(input.wabaId)}/subscribed_apps?limit=100`;
 
   for (let page = 0; next && page < 10; page += 1) {
-    const result = await graphJson<SubscribedAppsPage>({
+    const result: {
+      response: Response;
+      body: MetaGraphResponse<SubscribedAppsPage> | null;
+    } = await graphJson<SubscribedAppsPage>({
       graphVersion: input.graphVersion,
       accessToken: input.accessToken,
       path: next,
