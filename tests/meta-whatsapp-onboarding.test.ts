@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import {
+  exchangeMetaAuthorizationCode,
   normalizeMetaWhatsAppConnectionMode,
+  safeMetaWhatsAppCompletionError,
   verifyMetaWhatsAppSelectedAssets,
 } from '@/lib/whatsapp/meta-onboarding';
 
@@ -14,6 +16,30 @@ describe('Meta WhatsApp onboarding contract', () => {
     expect(normalizeMetaWhatsAppConnectionMode('EXISTING_API_RECONNECT')).toBe('EXISTING_API_RECONNECT');
     expect(normalizeMetaWhatsAppConnectionMode('FULL_MIGRATION_FROM_BUSINESS_APP')).toBeNull();
     expect(normalizeMetaWhatsAppConnectionMode('DELETE_ACCOUNT')).toBeNull();
+  });
+
+  it('exchanges Meta authorization codes only on the server helper', async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      expect(url).toContain('graph.facebook.com/');
+      expect(url).toContain('client_id=app-1');
+      expect(url).toContain('client_secret=secret-1');
+      expect(url).toContain('code=auth-code-1');
+      return new Response(JSON.stringify({ access_token: 'token-with-enough-length-123456789' }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    await expect(exchangeMetaAuthorizationCode({
+      code: 'auth-code-1',
+      appId: 'app-1',
+      appSecret: 'secret-1',
+      fetchImpl,
+    })).resolves.toBe('token-with-enough-length-123456789');
+  });
+
+  it('does not leak arbitrary provider errors to the setup participant', () => {
+    expect(safeMetaWhatsAppCompletionError(new Error('provider secret detail'))).not.toContain('provider secret detail');
+    expect(safeMetaWhatsAppCompletionError(
+      new Error('Selected phone number is not part of the selected WhatsApp Business Account'),
+    )).toContain('not part of the selected WhatsApp Business Account');
   });
 
   it('verifies the selected phone really belongs to the selected WABA', async () => {
