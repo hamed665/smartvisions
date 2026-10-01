@@ -53,8 +53,8 @@ create table public.field_service_work_orders (
     references public.branches(organization_id,id)
     on delete restrict,
   constraint field_service_work_orders_support_case_fk
-    foreign key (support_case_id)
-    references public.crm_support_cases(id)
+    foreign key (organization_id,support_case_id)
+    references public.crm_support_cases(organization_id,id)
     on delete restrict,
   constraint field_service_work_orders_location_reference_check
     check (location_reference is null or length(btrim(location_reference)) between 1 and 512)
@@ -153,7 +153,11 @@ create table public.field_service_evidence (
   created_at timestamptz not null default now(),
 
   constraint field_service_evidence_org_id_unique unique (organization_id,id),
+  constraint field_service_evidence_org_task_id_unique unique (organization_id,task_id,id),
   constraint field_service_evidence_object_unique unique (organization_id,object_path),
+  constraint field_service_evidence_object_scope_check check (
+    object_path like organization_id::text||'/'||task_id::text||'/'||id::text||'/%'
+  ),
   constraint field_service_evidence_task_fk
     foreign key (organization_id,task_id)
     references public.field_service_work_orders(organization_id,task_id)
@@ -187,8 +191,8 @@ create table public.field_service_signoffs (
     references public.field_service_work_orders(organization_id,task_id)
     on delete cascade,
   constraint field_service_signoffs_evidence_fk
-    foreign key (organization_id,evidence_id)
-    references public.field_service_evidence(organization_id,id)
+    foreign key (organization_id,task_id,evidence_id)
+    references public.field_service_evidence(organization_id,task_id,id)
     on delete restrict,
   constraint field_service_signoffs_recorded_by_fk
     foreign key (organization_id,recorded_by_user_id)
@@ -277,12 +281,26 @@ begin
     end if;
   end if;
 
-  if new.support_case_id is not null
-     and not exists(
-       select 1 from public.crm_support_cases c
-       where c.organization_id=new.organization_id and c.id=new.support_case_id
-     )
-  then raise exception 'Field Service Support Case was not found in Organization'; end if;
+  if new.support_case_id is not null then
+    if not exists(
+      select 1 from public.crm_support_cases c
+      where c.organization_id=new.organization_id and c.id=new.support_case_id
+    ) then
+      raise exception 'Field Service Support Case was not found in Organization';
+    end if;
+    if exists(
+      select 1 from public.crm_support_cases c
+      where c.organization_id=new.organization_id
+        and c.id=new.support_case_id
+        and (
+          (v_task.person_id is not null and c.person_id is distinct from v_task.person_id)
+          or
+          (v_task.business_id is not null and c.business_id is distinct from v_task.business_id)
+        )
+    ) then
+      raise exception 'Field Service Support Case must resolve to Task Person/Business';
+    end if;
+  end if;
 
   if new.branch_id is not null
      and not exists(
@@ -326,7 +344,9 @@ begin
     if new.organization_id is distinct from old.organization_id
        or new.task_id is distinct from old.task_id
        or new.position is distinct from old.position
-    then raise exception 'Field Service checklist identity is immutable'; end if;
+       or new.label is distinct from old.label
+       or new.required is distinct from old.required
+    then raise exception 'Field Service checklist definition is immutable'; end if;
     new.version:=old.version+1;
     new.updated_at:=now();
   else
@@ -410,6 +430,27 @@ begin
 end;
 $$;
 
+create or replace function public.guard_field_service_signoff()
+returns trigger
+language plpgsql
+security invoker
+set search_path=public,pg_catalog
+as $
+begin
+  if new.signoff_method='SIGNATURE_EVIDENCE' and not exists(
+    select 1
+    from public.field_service_evidence e
+    where e.organization_id=new.organization_id
+      and e.task_id=new.task_id
+      and e.id=new.evidence_id
+      and e.evidence_type='SIGNATURE'
+  ) then
+    raise exception 'SIGNATURE_EVIDENCE sign-off requires same-work-order SIGNATURE evidence';
+  end if;
+  return new;
+end;
+$;
+
 create or replace function public.audit_field_service_mutation()
 returns trigger
 language plpgsql
@@ -461,6 +502,11 @@ drop trigger if exists crm_tasks_field_service_completion_guard on public.crm_ta
 create trigger crm_tasks_field_service_completion_guard
 before update on public.crm_tasks
 for each row execute function public.guard_field_service_task_completion();
+
+drop trigger if exists field_service_signoff_guard on public.field_service_signoffs;
+create trigger field_service_signoff_guard
+before insert on public.field_service_signoffs
+for each row execute function public.guard_field_service_signoff();
 
 create trigger field_service_work_order_audit
 after insert or update on public.field_service_work_orders
@@ -565,6 +611,8 @@ revoke all on function public.guard_field_service_work_order()
 revoke all on function public.guard_field_service_checklist_item()
   from public,anon,authenticated,service_role;
 revoke all on function public.guard_field_service_task_completion()
+  from public,anon,authenticated,service_role;
+revoke all on function public.guard_field_service_signoff()
   from public,anon,authenticated,service_role;
 revoke all on function public.audit_field_service_mutation()
   from public,anon,authenticated,service_role;

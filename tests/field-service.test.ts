@@ -29,7 +29,12 @@ describe('FIELD-SERVICE contract',()=>{
   it('keeps Task status and technician canonical while specializing work details',()=>{
     expect(tasks).toContain("| 'FIELD_SERVICE'");
     expect(createRoute).toContain("taskType:'FIELD_SERVICE'");
+    expect(createRoute).toContain("personId:null");
+    expect(createRoute).toContain("link_crm_customer360_person_context");
+    expect(createRoute).toContain("p_entity_type:'TASK'");
     expect(page).toContain("Task owns technician/status");
+    expect(createRoute).toContain('scheduledAt');
+    expect(actions).toContain('Manual schedule');
     expect(migration).toContain('assignee_user_id');
     expect(migration).toContain('Field Service child state of canonical crm_tasks');
     expect(genericTaskRoute).not.toContain("'FOLLOW_UP','FIELD_SERVICE','OTHER'");
@@ -61,6 +66,8 @@ describe('FIELD-SERVICE contract',()=>{
     expect(finalizeRoute).toContain("storage.from(FIELD_SERVICE_BUCKET)");
     expect(downloadRoute).toContain('createSignedUrl');
     expect(downloadRoute).not.toContain('getPublicUrl');
+    expect(migration).toContain('field_service_evidence_object_scope_check');
+    expect(migration).toContain('SIGNATURE_EVIDENCE sign-off requires same-work-order SIGNATURE evidence');
     expect(actions).toContain('uploadToSignedUrl');
   });
 

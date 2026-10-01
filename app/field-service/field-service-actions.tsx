@@ -53,6 +53,7 @@ export function FieldServiceActions(props:{
           businessId:String(data.get('businessId')||'')||null,
           personId:String(data.get('personId')||'')||null,
           bookingId:String(data.get('bookingId')||'')||null,
+          scheduledAt:String(data.get('scheduledAt')||'')?new Date(String(data.get('scheduledAt'))).toISOString():null,
           supportCaseId:String(data.get('supportCaseId')||'')||null,
           assigneeUserId:String(data.get('assigneeUserId')||'')||null,
           locationSource:String(data.get('locationSource')||'CUSTOMER_CONFIRMED'),
@@ -69,6 +70,7 @@ export function FieldServiceActions(props:{
           <label>Customer<select name="personId"><option value="">None</option>{props.people.map(p=><option key={String(p.id)} value={String(p.id)}>{String(p.display_name||p.id)}</option>)}</select></label>
           <label>Business<select name="businessId"><option value="">None</option>{props.businesses.map(b=><option key={String(b.id)} value={String(b.id)}>{String(b.name)}</option>)}</select></label>
           <label>Booking<select name="bookingId"><option value="">Unscheduled</option>{props.bookings.map(b=><option key={String(b.id)} value={String(b.id)}>{String(b.booking_reference)} · {String(b.status)}</option>)}</select></label>
+          <label>Manual schedule<input name="scheduledAt" type="datetime-local"/></label>
           <label>Support case<select name="supportCaseId"><option value="">None</option>{props.supportCases.map(c=><option key={String(c.id)} value={String(c.id)}>{String(c.subject)} · {String(c.status)}</option>)}</select></label>
           <label>Technician<select name="assigneeUserId" defaultValue={props.currentUserId}><option value="">Unassigned</option>{assignable.map(m=><option key={String(m.user_id)} value={String(m.user_id)}>{String(m.role)} · {String(m.user_id).slice(0,8)}</option>)}</select></label>
           <label>Priority<select name="priority" defaultValue="NORMAL"><option>LOW</option><option>NORMAL</option><option>HIGH</option><option>URGENT</option></select></label>

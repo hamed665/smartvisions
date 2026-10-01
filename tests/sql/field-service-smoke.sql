@@ -8,7 +8,7 @@ reset role;
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000c001',false);
 
-do $field_service_fixture$
+do $field_service_seed_task$
 declare
   v_person uuid;
   v_booking uuid;
@@ -31,11 +31,11 @@ begin
   limit 1;
 
   insert into public.crm_tasks(
-    id,organization_id,person_id,task_type,title,status,priority,
+    id,organization_id,task_type,title,status,priority,
     assignee_user_id,due_at,source_type,source_id,request_key,
     creator_type,created_by_user_id,metadata
   ) values (
-    v_task,'00000000-0000-0000-0000-000000000c01',v_person,
+    v_task,'00000000-0000-0000-0000-000000000c01',
     'FIELD_SERVICE','CI field service work order','OPEN','HIGH',
     '00000000-0000-0000-0000-00000000c003',
     coalesce((select starts_at from public.bookings where id=v_booking),now()+interval '1 hour'),
@@ -44,6 +44,64 @@ begin
     '{"source":"CI"}'::jsonb
   )
   on conflict (id) do nothing;
+end;
+$field_service_seed_task$;
+
+reset role;
+set role service_role;
+select *
+from public.link_crm_customer360_person_context(
+  '00000000-0000-0000-0000-000000000c01',
+  '00000000-0000-0000-0000-00000000c001',
+  'TASK',
+  '00000000-0000-0000-0000-00000000f501',
+  (
+    select id
+    from public.crm_people
+    where organization_id='00000000-0000-0000-0000-000000000c01'
+      and status='ACTIVE'
+    order by created_at
+    limit 1
+  ),
+  'IMPORT_VERIFIED',
+  'field-service-smoke:disposable-ci-fixture',
+  '{"source":"FIELD_SERVICE_SMOKE","disposable":true}'::jsonb
+);
+
+reset role;
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000c001',false);
+
+do $field_service_fixture$
+declare
+  v_person uuid;
+  v_booking uuid;
+  v_task uuid:='00000000-0000-0000-0000-00000000f501';
+begin
+  select id into v_person
+  from public.crm_people
+  where organization_id='00000000-0000-0000-0000-000000000c01'
+    and status='ACTIVE'
+  order by created_at
+  limit 1;
+
+  select id into v_booking
+  from public.bookings
+  where organization_id='00000000-0000-0000-0000-000000000c01'
+    and person_id=v_person
+    and status='COMPLETED'
+  order by updated_at desc
+  limit 1;
+
+  if not exists(
+    select 1 from public.crm_tasks
+    where organization_id='00000000-0000-0000-0000-000000000c01'
+      and id=v_task
+      and person_id=v_person
+      and person_link_method='IMPORT_VERIFIED'
+  ) then
+    raise exception 'FIELD-SERVICE Task Person context was not linked through Customer 360';
+  end if;
 
   insert into public.field_service_work_orders(
     task_id,organization_id,booking_id,location_source,location_reference,
@@ -148,7 +206,7 @@ begin
       and p.proname in (
         'field_service_task_can_manage','guard_field_service_work_order',
         'guard_field_service_checklist_item','guard_field_service_task_completion',
-        'audit_field_service_mutation'
+        'guard_field_service_signoff','audit_field_service_mutation'
       )
       and p.prosecdef
   ) then raise exception 'FIELD-SERVICE unexpectedly uses SECURITY DEFINER'; end if;

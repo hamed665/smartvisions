@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createCrmTask, listCrmTasks } from '@/lib/crm/tasks';
 import { getCurrentOrganization } from '@/lib/supabase/org';
+import { createSupabaseServiceClient } from '@/lib/supabase/service';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +13,12 @@ function uuid(value:unknown): value is string { return typeof value==='string'&&
 function optionalUuid(value:unknown): value is string|null|undefined { return value==null||uuid(value); }
 function object(value:unknown): value is Record<string,unknown> { return !!value&&typeof value==='object'&&!Array.isArray(value); }
 function text(value:unknown,max:number){ return typeof value==='string'&&value.trim().length<=max?value.trim():''; }
+function iso(value:unknown){
+  if(value===null||value===undefined||value==='') return null;
+  if(typeof value!=='string') return undefined;
+  const time=Date.parse(value);
+  return Number.isFinite(time)?new Date(time).toISOString():undefined;
+}
 
 export async function GET(){
   try{
@@ -45,7 +52,8 @@ export async function POST(request:Request){
     const supportCaseId=parsed.supportCaseId??null;
     let branchId=parsed.branchId??null;
     let personId=parsed.personId??null;
-    let dueAt: string|null=null;
+    const scheduledAt=iso(parsed.scheduledAt);
+    let dueAt: string|null=scheduledAt??null;
     const locationSource=typeof parsed.locationSource==='string'?parsed.locationSource:'CUSTOMER_CONFIRMED';
     let locationSnapshot=object(parsed.locationSnapshot)?parsed.locationSnapshot:{};
     const locationReference=text(parsed.locationReference,512)||null;
@@ -54,7 +62,8 @@ export async function POST(request:Request){
 
     if(!title||requestKey.length<1||!PRIORITIES.has(priority)||!LOCATIONS.has(locationSource)
       ||!optionalUuid(businessId)||!optionalUuid(bookingId)||!optionalUuid(supportCaseId)
-      ||!optionalUuid(branchId)||!optionalUuid(personId)||!optionalUuid(assigneeUserId)){
+      ||!optionalUuid(branchId)||!optionalUuid(personId)||!optionalUuid(assigneeUserId)
+      ||scheduledAt===undefined){
       return NextResponse.json({error:'Invalid Field Service work-order payload'},{status:400});
     }
 
@@ -106,7 +115,7 @@ export async function POST(request:Request){
       organizationId,
       actorUserId:userId,
       businessId:businessId as string|null,
-      personId:personId as string|null,
+      personId:null,
       taskType:'FIELD_SERVICE',
       title,
       priority:priority as 'LOW'|'NORMAL'|'HIGH'|'URGENT',
@@ -115,6 +124,27 @@ export async function POST(request:Request){
       requestKey,
       metadata:{fieldService:true,bookingId:bookingId??null},
     });
+
+    if(personId){
+      const service=createSupabaseServiceClient();
+      const {error:personLinkError}=await service.rpc('link_crm_customer360_person_context',{
+        p_organization_id:organizationId,
+        p_actor_user_id:userId,
+        p_entity_type:'TASK',
+        p_entity_id:task.id,
+        p_person_id:personId as string,
+        p_verification_method:'IMPORT_VERIFIED',
+        p_source_ref:`field-service:${task.id}:${bookingId?'booking':'operator'}`,
+        p_evidence:{
+          source:bookingId?'FIELD_SERVICE_BOOKING':'FIELD_SERVICE_OPERATOR_SELECTION',
+          bookingId:bookingId??null,
+          businessId:businessId??null,
+        },
+      });
+      if(personLinkError){
+        throw new Error(`Field Service Customer 360 linkage failed: ${personLinkError.message}`);
+      }
+    }
 
     const {data:workOrder,error:workError}=await supabase.from('field_service_work_orders').upsert({
       task_id:task.id,organization_id:organizationId,booking_id:bookingId,
