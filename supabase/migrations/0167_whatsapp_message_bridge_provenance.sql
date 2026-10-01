@@ -212,6 +212,73 @@ grant execute on function public.finalize_whatsapp_chatwoot_sync(uuid,text,bigin
   to service_role;
 
 
+
+create or replace function public.complete_whatsapp_chatwoot_outbound_event(
+  p_event_id uuid,
+  p_message_id uuid
+)
+returns public.chatwoot_webhook_events
+language plpgsql
+security definer
+set search_path=public,pg_catalog
+as $
+declare
+  e public.chatwoot_webhook_events%rowtype;
+  m public.conversation_messages%rowtype;
+begin
+  if p_event_id is null or p_message_id is null then
+    raise exception 'invalid WhatsApp Chatwoot outbound completion identity';
+  end if;
+
+  select * into e
+    from public.chatwoot_webhook_events
+   where id=p_event_id
+   for update;
+  if not found or e.event_type<>'message_created' then
+    raise exception 'signed Chatwoot message event required';
+  end if;
+
+  select * into m
+    from public.conversation_messages
+   where organization_id=e.organization_id
+     and id=p_message_id
+     and channel='WHATSAPP'
+     and direction='OUTBOUND'
+     and provenance='HUMAN_SMARTVISIONS'
+     and source_plane='CHATWOOT'
+     and status='SENT'
+     and provider_message_id is not null;
+  if not found then
+    raise exception 'provider-accepted canonical WhatsApp human message required';
+  end if;
+
+  if coalesce(m.metadata->>'chatwoot_event_id','')<>e.id::text then
+    raise exception 'canonical WhatsApp human message does not match Chatwoot event';
+  end if;
+
+  if e.status='PROCESSED' then
+    return e;
+  end if;
+  if e.status not in ('RECEIVED','FAILED') then
+    raise exception 'Chatwoot event cannot be completed from its current state';
+  end if;
+
+  update public.chatwoot_webhook_events
+     set status='PROCESSED',
+         error_code=null,
+         processed_at=coalesce(processed_at,statement_timestamp())
+   where id=e.id
+  returning * into e;
+
+  return e;
+end
+$;
+
+revoke all on function public.complete_whatsapp_chatwoot_outbound_event(uuid,uuid)
+  from public,anon,authenticated,service_role;
+grant execute on function public.complete_whatsapp_chatwoot_outbound_event(uuid,uuid)
+  to service_role;
+
 create or replace function public.reconcile_whatsapp_delivery_status(
   p_organization_id uuid,
   p_provider_message_id text,
