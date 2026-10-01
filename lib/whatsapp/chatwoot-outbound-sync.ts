@@ -2,6 +2,8 @@ import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { downloadChatwootMessageAttachmentForProvider } from '@/lib/chatwoot/conversation-actions';
+
 import {
   assertCanonicalSendAllowed,
   normalizeCanonicalPhone,
@@ -117,6 +119,9 @@ async function claimCanonicalMessage(input: {
   smartUserId: string;
   smartRole: string;
   content: string;
+  mediaType: 'TEXT' | 'AUDIO' | 'IMAGE' | 'VIDEO' | 'DOCUMENT';
+  attachmentId?: number | null;
+  attachmentContentType?: string | null;
 }) {
   const sourceMessageId = String(input.chatwootMessageId);
   const existing = await input.service
@@ -151,7 +156,7 @@ async function claimCanonicalMessage(input: {
       lead_id: input.leadId,
       channel: 'WHATSAPP',
       direction: 'OUTBOUND',
-      media_type: 'TEXT',
+      media_type: input.mediaType,
       original_text: input.content,
       requires_approval: false,
       status: 'PROCESSING',
@@ -166,6 +171,8 @@ async function claimCanonicalMessage(input: {
         chatwoot_sender_id: input.chatwootSenderId,
         smart_user_id: input.smartUserId,
         smart_role: input.smartRole,
+        attachment_id: input.attachmentId ?? null,
+        attachment_content_type: input.attachmentContentType ?? null,
       },
     })
     .select('id,conversation_id,status,provider_message_id,original_text,provenance,source_plane,source_message_id')
@@ -270,17 +277,53 @@ export async function reconcileWhatsAppChatwootHumanOutboundEvent(
   const displayId = positiveId(conversation?.id);
   const sender = record(root.sender);
   const senderId = positiveId(sender?.id);
-  const content = typeof root.content === 'string' ? root.content.trim() : '';
-  const attachments = Array.isArray(root.attachments) ? root.attachments : [];
+  const rawContent = typeof root.content === 'string' ? root.content.trim() : '';
+  const attachments = Array.isArray(root.attachments)
+    ? root.attachments.map(record).filter((row): row is RecordValue => Boolean(row))
+    : [];
 
-  if (!chatwootMessageId || !displayId || !senderId || !content) {
+  if (!chatwootMessageId || !displayId || !senderId || (!rawContent && attachments.length === 0)) {
     await finalizeFailed(service, event.id, 'WHATSAPP_INVALID_HUMAN_MESSAGE');
     return { handled: true as const, outcome: 'FAILED_INVALID_MESSAGE' as const };
   }
-  if (attachments.length > 0) {
-    await finalizeFailed(service, event.id, 'WHATSAPP_OUTBOUND_MEDIA_REQUIRES_RECONCILIATION');
-    return { handled: true as const, outcome: 'FAILED_MEDIA_NOT_READY' as const };
+  if (attachments.length > 1) {
+    await finalizeFailed(service, event.id, 'WHATSAPP_MULTIPLE_ATTACHMENTS_REQUIRE_RECONCILIATION');
+    return { handled: true as const, outcome: 'FAILED_MULTIPLE_ATTACHMENTS' as const };
   }
+
+  const attachment = attachments[0] ?? null;
+  const attachmentId = attachment ? positiveId(attachment.id) : null;
+  const attachmentContentType = attachment && typeof attachment.content_type === 'string'
+    ? attachment.content_type.trim().toLowerCase()
+    : null;
+  if (attachment && !attachmentId) {
+    await finalizeFailed(service, event.id, 'WHATSAPP_INVALID_ATTACHMENT_IDENTITY');
+    return { handled: true as const, outcome: 'FAILED_INVALID_ATTACHMENT' as const };
+  }
+
+  const mediaKind = attachmentContentType?.startsWith('image/')
+    ? 'image' as const
+    : attachmentContentType?.startsWith('video/')
+      ? 'video' as const
+      : attachmentContentType?.startsWith('audio/')
+        ? 'audio' as const
+        : attachment
+          ? 'document' as const
+          : null;
+  if (mediaKind === 'audio' && rawContent) {
+    await finalizeFailed(service, event.id, 'WHATSAPP_AUDIO_WITH_TEXT_REQUIRES_RECONCILIATION');
+    return { handled: true as const, outcome: 'FAILED_AUDIO_WITH_TEXT' as const };
+  }
+  const canonicalMediaType = mediaKind === 'image'
+    ? 'IMAGE' as const
+    : mediaKind === 'video'
+      ? 'VIDEO' as const
+      : mediaKind === 'audio'
+        ? 'AUDIO' as const
+        : mediaKind === 'document'
+          ? 'DOCUMENT' as const
+          : 'TEXT' as const;
+  const content = rawContent || (mediaKind ? `[Chatwoot ${mediaKind} attachment]` : '');
 
   const projectionResult = await service
     .from('unified_inbox_conversation_projections')
@@ -376,6 +419,9 @@ export async function reconcileWhatsAppChatwootHumanOutboundEvent(
     smartUserId: human.smartUserId,
     smartRole: human.role,
     content,
+    mediaType: canonicalMediaType,
+    attachmentId,
+    attachmentContentType,
   });
 
   if (!claimed.claimed) {
@@ -427,7 +473,32 @@ export async function reconcileWhatsAppChatwootHumanOutboundEvent(
       throw new Error('WhatsApp human reply credential does not match canonical binding');
     }
 
-    const result = await provider.provider.sendText({ to: recipient, text: content });
+    let result;
+    if (attachmentId && mediaKind) {
+      const downloaded = await downloadChatwootMessageAttachmentForProvider({
+        service,
+        organizationId,
+        tenantBusinessId,
+        conversationDisplayId: displayId,
+        chatwootMessageId,
+        attachmentId,
+      });
+      const uploaded = await provider.provider.uploadMedia({
+        bytes: downloaded.bytes,
+        mimeType: downloaded.contentType,
+        filename: downloaded.filename,
+        kind: mediaKind,
+      });
+      result = await provider.provider.sendMedia({
+        to: recipient,
+        mediaId: uploaded.mediaId,
+        kind: mediaKind,
+        caption: mediaKind === 'audio' ? null : rawContent || null,
+        filename: mediaKind === 'document' ? downloaded.filename : null,
+      });
+    } else {
+      result = await provider.provider.sendText({ to: recipient, text: content });
+    }
     providerAccepted = true;
     providerMessageId = result.providerMessageId;
     const now = new Date().toISOString();
@@ -455,12 +526,15 @@ export async function reconcileWhatsAppChatwootHumanOutboundEvent(
       conversation_id: projection.conversation_id,
       provider_message_id: providerMessageId,
       direction: 'OUTBOUND',
-      event_type: 'TEXT_SENT',
+      event_type: mediaKind ? `${mediaKind.toUpperCase()}_SENT` : 'TEXT_SENT',
       payload: {
         source: 'CHATWOOT_SIGNED_WEBHOOK',
         chatwoot_event_id: event.id,
         chatwoot_message_id: chatwootMessageId,
         smart_user_id: human.smartUserId,
+        media_kind: mediaKind,
+        attachment_id: attachmentId,
+        attachment_content_type: attachmentContentType,
         tenant_business_id: tenantBusinessId,
         branch_id: projection.branch_id,
         communication_channel_binding_id: binding.data.id,
@@ -493,13 +567,15 @@ export async function reconcileWhatsAppChatwootHumanOutboundEvent(
       await recordUsage({
         organizationId,
         provider: 'WHATSAPP',
-        operation: 'SEND_TEXT',
+        operation: mediaKind ? 'SEND_MEDIA' : 'SEND_TEXT',
         costUsd: 0,
         units: 1,
         leadId: conversationRow.data.lead_id,
         metadata: {
           source: 'CHATWOOT_SIGNED_WEBHOOK',
           smart_user_id: human.smartUserId,
+          media_kind: mediaKind,
+          attachment_id: attachmentId,
           tenant_business_id: tenantBusinessId,
           branch_id: projection.branch_id,
           communication_channel_binding_id: binding.data.id,
