@@ -6,8 +6,6 @@ export type MetaWhatsAppProvisioningEvidence = {
   displayPhoneNumber: string | null;
   verifiedName: string | null;
   qualityRating: string | null;
-  platformType: string | null;
-  codeVerificationStatus: string | null;
   subscriptionConfirmed: boolean;
   subscriptionCreated: boolean;
 };
@@ -26,8 +24,6 @@ type PhoneNumberRow = {
   display_phone_number?: string;
   verified_name?: string;
   quality_rating?: string;
-  platform_type?: string;
-  code_verification_status?: string;
 };
 
 type SubscribedApp = {
@@ -91,7 +87,7 @@ async function readPhoneEvidence(input: {
   fetchImpl?: typeof fetch;
 }) {
   const query = new URLSearchParams({
-    fields: 'id,display_phone_number,verified_name,quality_rating,platform_type,code_verification_status',
+    fields: 'id,display_phone_number,verified_name,quality_rating',
     limit: '100',
   });
   let next: string | null =
@@ -126,8 +122,6 @@ async function readPhoneEvidence(input: {
     displayPhoneNumber: clean(phone.display_phone_number),
     verifiedName: clean(phone.verified_name),
     qualityRating: clean(phone.quality_rating),
-    platformType: clean(phone.platform_type),
-    codeVerificationStatus: clean(phone.code_verification_status),
   };
 }
 
@@ -232,8 +226,6 @@ export async function provisionMetaWhatsAppBinding(input: {
     displayPhoneNumber: phone.displayPhoneNumber,
     verifiedName: phone.verifiedName,
     qualityRating: phone.qualityRating,
-    platformType: phone.platformType,
-    codeVerificationStatus: phone.codeVerificationStatus,
     subscriptionConfirmed: true,
     subscriptionCreated,
   };
