@@ -234,6 +234,9 @@ export function MetaWhatsAppEmbeddedSignup(props: {
       {connectionMode === 'BUSINESS_APP_COEXISTENCE'
         ? <p className="muted smallText">Same-number setup is fail-closed until the official Coexistence activation path is verified. Smart Visions will not fall back to Delete Account or destructive migration.</p>
         : null}
+      {connectionMode === 'API_NEW_NUMBER'
+        ? <p className="muted smallText">Use only a number that is not active in WhatsApp Business on a phone. If Meta asks you to delete an existing WhatsApp account, cancel the flow; Smart Visions does not require that migration.</p>
+        : null}
       <button
         type="button"
         onClick={() => void launch()}
