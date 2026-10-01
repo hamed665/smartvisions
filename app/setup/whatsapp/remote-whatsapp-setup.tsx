@@ -1,13 +1,21 @@
 'use client';
 
+import Script from 'next/script';
 import { useEffect, useRef, useState } from 'react';
+
+type ConnectionMode =
+  | 'BUSINESS_APP_COEXISTENCE'
+  | 'API_NEW_NUMBER'
+  | 'EXISTING_API_RECONNECT';
 
 type SetupContext = {
   attemptId: string;
   attemptVersion: number;
+  attemptStatus: 'AUTHORIZED' | 'COMPLETED';
   bindingId: string;
   bindingVersion: number;
-  connectionMode: 'BUSINESS_APP_COEXISTENCE' | 'API_NEW_NUMBER' | 'EXISTING_API_RECONNECT';
+  currentBindingVersion: number;
+  connectionMode: ConnectionMode;
   purpose: 'CONNECT' | 'RECONNECT';
   businessName: string;
   branchName: string | null;
@@ -16,84 +24,384 @@ type SetupContext = {
   capability: 'WHATSAPP_SETUP';
 };
 
+type Preflight = {
+  attemptStatus: 'AUTHORIZED' | 'COMPLETED';
+  connectionMode: ConnectionMode;
+  purpose: 'CONNECT' | 'RECONNECT';
+  providerConfigured: boolean;
+  canLaunchMeta: boolean;
+  canResume: boolean;
+  completed: boolean;
+  setupLaterAvailable: boolean;
+  sessionExpiresAt: string;
+  appId: string | null;
+  configurationId: string | null;
+  graphVersion: string;
+  blockers: Array<{ code: string; message: string }>;
+};
+
+type MetaSelection = { wabaId: string; phoneNumberId: string };
+
+type WizardState =
+  | 'VERIFYING'
+  | 'READY'
+  | 'WAITING_META'
+  | 'VERIFYING_META'
+  | 'DONE'
+  | 'BLOCKED'
+  | 'PAUSED'
+  | 'ERROR';
+
+declare global {
+  interface Window {
+    FB?: {
+      init(input: { appId: string; cookie: boolean; xfbml: boolean; version: string }): void;
+      login(
+        callback: (response: { authResponse?: { code?: string } }) => void,
+        options: Record<string, unknown>,
+      ): void;
+    };
+  }
+}
+
+function modeMessage(mode: ConnectionMode) {
+  if (mode === 'BUSINESS_APP_COEXISTENCE') {
+    return 'Your current WhatsApp Business app stays on the phone. Same-number activation will only use official Coexistence after that provider path is verified.';
+  }
+  if (mode === 'API_NEW_NUMBER') {
+    return 'This setup is for a separate API number. If Meta asks you to delete an existing WhatsApp account, cancel the Meta flow instead.';
+  }
+  return 'This setup reconnects the existing Meta API destination already assigned to this business.';
+}
+
 export function RemoteWhatsAppSetup() {
   const initialized = useRef(false);
+  const contextRef = useRef<SetupContext | null>(null);
+  const preflightRef = useRef<Preflight | null>(null);
+  const codeRef = useRef<string | null>(null);
+  const selectionRef = useRef<MetaSelection | null>(null);
+  const savingRef = useRef(false);
+
   const [context, setContext] = useState<SetupContext | null>(null);
-  const [state, setState] = useState<'VERIFYING' | 'READY' | 'ERROR'>('VERIFYING');
+  const [preflight, setPreflight] = useState<Preflight | null>(null);
+  const [sdkReady, setSdkReady] = useState(false);
+  const [state, setState] = useState<WizardState>('VERIFYING');
   const [message, setMessage] = useState('Checking your secure WhatsApp setup link…');
+  const [errorMessage, setErrorMessage] = useState('');
+
+  async function loadStatus() {
+    const [contextResponse, preflightResponse] = await Promise.all([
+      fetch('/setup/whatsapp/api/context', { cache: 'no-store' }),
+      fetch('/setup/whatsapp/api/preflight', { cache: 'no-store' }),
+    ]);
+
+    const contextBody = await contextResponse.json() as SetupContext & { error?: string };
+    const preflightBody = await preflightResponse.json() as Preflight & { error?: string };
+
+    if (!contextResponse.ok || !contextBody.attemptId) {
+      throw new Error(contextBody.error || 'This setup session is no longer available.');
+    }
+    if (!preflightResponse.ok) {
+      throw new Error(preflightBody.error || 'WhatsApp setup preflight failed.');
+    }
+
+    contextRef.current = contextBody;
+    preflightRef.current = preflightBody;
+    setContext(contextBody);
+    setPreflight(preflightBody);
+
+    if (contextBody.attemptStatus === 'COMPLETED' || preflightBody.completed) {
+      setState('DONE');
+      setMessage('WhatsApp authorization was completed securely. You can close this page.');
+      setErrorMessage('');
+      return;
+    }
+
+    if (preflightBody.blockers.length > 0 || !preflightBody.canLaunchMeta) {
+      setState('BLOCKED');
+      setMessage('This setup session is valid, but Meta authorization cannot continue yet.');
+      setErrorMessage(preflightBody.blockers.map((item) => item.message).join(' '));
+      return;
+    }
+
+    setState('READY');
+    setMessage('Preflight passed. Continue with Meta when you are ready.');
+    setErrorMessage('');
+  }
+
+  async function redeemAndLoad() {
+    const fragment = window.location.hash.startsWith('#')
+      ? window.location.hash.slice(1).trim()
+      : '';
+
+    if (fragment) {
+      window.history.replaceState(null, '', window.location.pathname);
+      const redeem = await fetch('/setup/whatsapp/api/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: fragment }),
+        cache: 'no-store',
+      });
+      const redeemed = await redeem.json() as { error?: string };
+      if (!redeem.ok) throw new Error(redeemed.error || 'This setup link is unavailable.');
+    }
+
+    await loadStatus();
+  }
+
+  async function tryComplete() {
+    if (savingRef.current || !codeRef.current || !selectionRef.current) return;
+    const active = contextRef.current;
+    if (!active || active.attemptStatus !== 'AUTHORIZED') return;
+
+    savingRef.current = true;
+    setState('VERIFYING_META');
+    setMessage('Verifying the selected WhatsApp number with Meta and saving access securely…');
+    setErrorMessage('');
+
+    try {
+      const response = await fetch('/setup/whatsapp/api/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: codeRef.current,
+          wabaId: selectionRef.current.wabaId,
+          phoneNumberId: selectionRef.current.phoneNumberId,
+        }),
+      });
+      const body = await response.json() as {
+        error?: string;
+        completed?: boolean;
+        displayPhoneNumber?: string | null;
+      };
+      if (!response.ok || !body.completed) {
+        throw new Error(body.error || 'Unable to finish WhatsApp authorization.');
+      }
+
+      setState('DONE');
+      setMessage(
+        `WhatsApp authorization completed securely${body.displayPhoneNumber ? ` · ${body.displayPhoneNumber}` : ''}. You can close this page.`,
+      );
+      setErrorMessage('');
+      void loadStatus().catch(() => undefined);
+    } catch (error) {
+      codeRef.current = null;
+      selectionRef.current = null;
+      savingRef.current = false;
+
+      try {
+        await loadStatus();
+        if (contextRef.current?.attemptStatus === 'COMPLETED') return;
+      } catch {
+        // Keep the actionable completion error below when status refresh also fails.
+      }
+
+      setState('READY');
+      setMessage('The secure setup session is still available. You can retry Meta authorization.');
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to finish WhatsApp authorization.');
+    }
+  }
 
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
 
-    void (async () => {
-      try {
-        const fragment = window.location.hash.startsWith('#')
-          ? window.location.hash.slice(1).trim()
-          : '';
-
-        if (fragment) {
-          window.history.replaceState(null, '', window.location.pathname);
-          const redeem = await fetch('/setup/whatsapp/api/redeem', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: fragment }),
-            cache: 'no-store',
-          });
-          const redeemed = await redeem.json() as { error?: string };
-          if (!redeem.ok) throw new Error(redeemed.error || 'This setup link is unavailable');
-        }
-
-        const response = await fetch('/setup/whatsapp/api/context', { cache: 'no-store' });
-        const body = await response.json() as SetupContext & { error?: string };
-        if (!response.ok || !body.attemptId) {
-          throw new Error(body.error || 'No active WhatsApp setup session');
-        }
-
-        setContext(body);
-        setState('READY');
-        setMessage('Secure setup access confirmed. This session can only be used for the WhatsApp connection shown here.');
-      } catch (error) {
-        setState('ERROR');
-        setMessage(error instanceof Error ? error.message : 'This WhatsApp setup link is invalid or expired.');
-      }
-    })();
+    void redeemAndLoad().catch((error) => {
+      setState('ERROR');
+      setMessage('This setup session cannot continue.');
+      setErrorMessage(error instanceof Error ? error.message : 'This WhatsApp setup link is invalid or expired.');
+    });
   }, []);
 
-  return <main style={{ maxWidth: 760, margin: '0 auto', padding: '32px 16px' }}>
-    <section className="panel settingsCreate">
-      <h1>WhatsApp Business setup</h1>
-      <p className="muted">This link grants setup access only. It does not provide Smart Visions account, CRM, billing, organization settings, or access to any other business.</p>
-      <p className="muted"><strong>Your existing WhatsApp Business app is never deleted or destructively migrated by this setup.</strong></p>
+  useEffect(() => {
+    function receive(event: MessageEvent) {
+      if (!/^https:\/\/(www\.)?facebook\.com$/.test(event.origin)) return;
+
+      let payload: unknown = event.data;
+      if (typeof payload === 'string') {
+        try { payload = JSON.parse(payload); } catch { return; }
+      }
+      if (!payload || typeof payload !== 'object') return;
+
+      const root = payload as Record<string, unknown>;
+      if (root.type !== 'WA_EMBEDDED_SIGNUP') return;
+      const data = root.data && typeof root.data === 'object'
+        ? root.data as Record<string, unknown>
+        : {};
+      const wabaId = typeof data.waba_id === 'string' ? data.waba_id.trim() : '';
+      const phoneNumberId = typeof data.phone_number_id === 'string' ? data.phone_number_id.trim() : '';
+
+      if (wabaId && phoneNumberId) {
+        selectionRef.current = { wabaId, phoneNumberId };
+        void tryComplete();
+      }
+    }
+
+    window.addEventListener('message', receive);
+    return () => window.removeEventListener('message', receive);
+  });
+
+  function initializeSdk() {
+    const active = preflightRef.current;
+    if (!active?.appId || !window.FB) return;
+    window.FB.init({
+      appId: active.appId,
+      cookie: true,
+      xfbml: false,
+      version: active.graphVersion,
+    });
+    setSdkReady(true);
+  }
+
+  function launchMeta() {
+    const active = preflightRef.current;
+    if (
+      !active
+      || !active.canLaunchMeta
+      || !active.configurationId
+      || !sdkReady
+      || !window.FB
+      || state === 'WAITING_META'
+      || state === 'VERIFYING_META'
+    ) return;
+
+    codeRef.current = null;
+    selectionRef.current = null;
+    savingRef.current = false;
+    setState('WAITING_META');
+    setMessage('Continue in the Meta window. Smart Visions never asks for your Meta password or a copied access token.');
+    setErrorMessage('');
+
+    window.FB.login((response) => {
+      const code = response.authResponse?.code?.trim();
+      if (!code) {
+        setState('READY');
+        setMessage('Meta authorization was cancelled or the window did not complete. Nothing was changed.');
+        setErrorMessage('You can retry from this same secure setup session.');
+        return;
+      }
+      codeRef.current = code;
+      void tryComplete();
+    }, {
+      config_id: active.configurationId,
+      response_type: 'code',
+      override_default_response_type: true,
+      extras: { setup: {}, featureType: '', sessionInfoVersion: '3' },
+    });
+  }
+
+  function setupLater() {
+    setState('PAUSED');
+    setMessage('Setup is paused safely. You can close this page and return on this same device before the secure session expires.');
+    setErrorMessage('');
+  }
+
+  const activeMode = context?.connectionMode;
+  const expiresAt = context?.sessionExpiresAt
+    ? new Date(context.sessionExpiresAt).toLocaleString()
+    : null;
+  const step = state === 'DONE'
+    ? 3
+    : state === 'WAITING_META' || state === 'VERIFYING_META'
+      ? 2
+      : 1;
+
+  return <main style={{ maxWidth: 720, margin: '0 auto', padding: '20px 14px 40px' }}>
+    {preflight?.appId ? <Script
+      src="https://connect.facebook.net/en_US/sdk.js"
+      strategy="afterInteractive"
+      onLoad={initializeSdk}
+      onReady={initializeSdk}
+    /> : null}
+
+    <section className="panel settingsCreate" style={{ display: 'grid', gap: 16 }}>
+      <div>
+        <p className="muted smallText" style={{ marginBottom: 6 }}>Secure WhatsApp setup · Step {step} of 3</p>
+        <h1 style={{ marginTop: 0 }}>Connect WhatsApp Business</h1>
+        <p className="muted">Meta handles the login. Smart Visions never receives your Facebook password.</p>
+        <p className="muted"><strong>Your existing WhatsApp Business app is never deleted or destructively migrated by this setup.</strong></p>
+      </div>
 
       {context ? <div className="settingsList">
         <div className="settingsRow">
           <div>
             <strong>{context.businessName}</strong>
             <span className="muted smallText">{context.branchName ?? 'Business-wide'} · {context.purpose}</span>
-            {context.destinationLabel ? <span className="muted smallText">Current destination: {context.destinationLabel}</span> : null}
+            {context.destinationLabel ? <span className="muted smallText">Current WhatsApp: {context.destinationLabel}</span> : null}
           </div>
           <div>
-            <span className="muted smallText">Capability: {context.capability}</span>
-            <span className="muted smallText">Session expires: {new Date(context.sessionExpiresAt).toLocaleString()}</span>
+            <span className="muted smallText">Setup access only</span>
+            {expiresAt ? <span className="muted smallText">Expires: {expiresAt}</span> : null}
           </div>
         </div>
       </div> : null}
 
-      {context?.connectionMode === 'BUSINESS_APP_COEXISTENCE'
-        ? <p className="muted smallText">Same-number setup will use official WhatsApp Business App Coexistence only. Delete Account, uninstall, and destructive migration are not allowed.</p>
-        : null}
-      {context?.connectionMode === 'API_NEW_NUMBER'
-        ? <p className="muted smallText">This path is for a separate API number. If a later Meta screen asks to delete an existing WhatsApp account, the flow must be cancelled instead.</p>
-        : null}
-      {context?.connectionMode === 'EXISTING_API_RECONNECT'
-        ? <p className="muted smallText">This session is scoped to reconnect the existing Meta API destination on this binding.</p>
-        : null}
+      {activeMode ? <div>
+        <strong>Connection path</strong>
+        <p className="muted smallText">{modeMessage(activeMode)}</p>
+      </div> : null}
 
-      {state === 'READY'
-        ? <p className="muted smallText">Secure access is ready. The guided Meta authorization wizard is the next onboarding step and will reuse this exact session rather than creating another identity or connection.</p>
+      {state === 'READY' ? <>
+        <div>
+          <strong>Preflight complete</strong>
+          <p className="muted smallText">Your setup link, business scope and Meta provider configuration are ready. Continue with Meta to choose the authorized WhatsApp asset.</p>
+        </div>
+        <div style={{ display: 'grid', gap: 10 }}>
+          <button type="button" onClick={launchMeta} disabled={!sdkReady || !preflight?.canLaunchMeta}>
+            {sdkReady ? 'Continue with Meta' : 'Loading Meta…'}
+          </button>
+          <button type="button" onClick={setupLater}>Set up later</button>
+        </div>
+      </> : null}
+
+      {state === 'PAUSED' ? <div style={{ display: 'grid', gap: 10 }}>
+        <strong>Setup paused</strong>
+        <p className="muted smallText">Nothing has been changed. Return before the session expires to continue from the same setup attempt. If it expires, the business owner can issue a fresh setup link without affecting WhatsApp on the phone.</p>
+        <button type="button" onClick={() => {
+          setState('READY');
+          setMessage('Secure setup resumed. Continue with Meta when ready.');
+        }}>Resume setup</button>
+      </div> : null}
+
+      {state === 'WAITING_META' ? <div>
+        <strong>Waiting for Meta</strong>
+        <p className="muted smallText">Finish the Meta-hosted authorization. If you cancel or the popup is blocked, you can retry without creating another WhatsApp connection.</p>
+      </div> : null}
+
+      {state === 'VERIFYING_META' ? <div>
+        <strong>Verifying selection</strong>
+        <p className="muted smallText">Smart Visions is checking that the selected phone belongs to the selected WhatsApp Business Account before storing the credential in the existing secure Vault.</p>
+      </div> : null}
+
+      {state === 'BLOCKED' ? <div style={{ display: 'grid', gap: 10 }}>
+        <strong>Setup cannot continue yet</strong>
+        <p className="muted smallText">{errorMessage || 'A provider prerequisite is not ready.'}</p>
+        <button type="button" onClick={setupLater}>Set up later</button>
+      </div> : null}
+
+      {state === 'DONE' ? <div>
+        <strong>Authorization complete</strong>
+        <p className="muted smallText">The connection was saved through the existing Smart Core binding and secure Vault. No destructive WhatsApp migration was performed.</p>
+      </div> : null}
+
+      {state === 'ERROR' ? <div style={{ display: 'grid', gap: 10 }}>
+        <strong>Setup link unavailable</strong>
+        <p className="muted smallText">{errorMessage}</p>
+        <button type="button" onClick={() => {
+          setState('VERIFYING');
+          setMessage('Checking the secure setup session again…');
+          setErrorMessage('');
+          void loadStatus().catch((error) => {
+            setState('ERROR');
+            setErrorMessage(error instanceof Error ? error.message : 'Unable to resume setup.');
+          });
+        }}>Check again</button>
+      </div> : null}
+
+      {message ? <p role="status" className="muted smallText">{message}</p> : null}
+      {state !== 'ERROR' && state !== 'BLOCKED' && errorMessage
+        ? <p role="alert" className="muted smallText">{errorMessage}</p>
         : null}
-      <p role="status" className="muted smallText">{message}</p>
     </section>
   </main>;
 }
