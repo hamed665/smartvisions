@@ -47,6 +47,8 @@ type WizardState =
   | 'READY'
   | 'WAITING_META'
   | 'VERIFYING_META'
+  | 'PROVISIONING'
+  | 'PROVISIONING_ERROR'
   | 'DONE'
   | 'BLOCKED'
   | 'PAUSED'
@@ -111,8 +113,8 @@ export function RemoteWhatsAppSetup() {
     setPreflight(preflightBody);
 
     if (contextBody.attemptStatus === 'COMPLETED' || preflightBody.completed) {
-      setState('DONE');
-      setMessage('WhatsApp authorization was completed securely. You can close this page.');
+      setState('PROVISIONING');
+      setMessage('Authorization is complete. Verifying the Meta webhook subscription and phone readiness…');
       setErrorMessage('');
       return;
     }
@@ -149,6 +151,37 @@ export function RemoteWhatsAppSetup() {
     await loadStatus();
   }, [loadStatus]);
 
+  const provisionCompleted = useCallback(async () => {
+    setState('PROVISIONING');
+    setMessage('Verifying the Meta webhook subscription and phone readiness…');
+    setErrorMessage('');
+
+    try {
+      const response = await fetch('/setup/whatsapp/api/provision', {
+        method: 'POST',
+        cache: 'no-store',
+      });
+      const body = await response.json() as {
+        error?: string;
+        provisioned?: boolean;
+        displayPhoneNumber?: string | null;
+      };
+      if (!response.ok || !body.provisioned) {
+        throw new Error(body.error || 'Unable to confirm WhatsApp provider provisioning.');
+      }
+
+      setState('DONE');
+      setMessage(
+        `WhatsApp is authorized and provider provisioning is confirmed${body.displayPhoneNumber ? ` · ${body.displayPhoneNumber}` : ''}.`,
+      );
+      setErrorMessage('');
+    } catch (error) {
+      setState('PROVISIONING_ERROR');
+      setMessage('Authorization is saved, but provider provisioning is not confirmed yet.');
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to confirm WhatsApp provider provisioning.');
+    }
+  }, []);
+
   async function tryComplete() {
     if (savingRef.current || !codeRef.current || !selectionRef.current) return;
     const active = contextRef.current;
@@ -178,12 +211,11 @@ export function RemoteWhatsAppSetup() {
         throw new Error(body.error || 'Unable to finish WhatsApp authorization.');
       }
 
-      setState('DONE');
       setMessage(
-        `WhatsApp authorization completed securely${body.displayPhoneNumber ? ` · ${body.displayPhoneNumber}` : ''}. You can close this page.`,
+        `WhatsApp authorization completed securely${body.displayPhoneNumber ? ` · ${body.displayPhoneNumber}` : ''}. Finalizing provider setup…`,
       );
       setErrorMessage('');
-      void loadStatus().catch(() => undefined);
+      await loadStatus();
     } catch (error) {
       codeRef.current = null;
       selectionRef.current = null;
@@ -212,6 +244,11 @@ export function RemoteWhatsAppSetup() {
       setErrorMessage(error instanceof Error ? error.message : 'This WhatsApp setup link is invalid or expired.');
     });
   }, [redeemAndLoad]);
+
+  useEffect(() => {
+    if (state !== 'PROVISIONING' || context?.attemptStatus !== 'COMPLETED') return;
+    void provisionCompleted();
+  }, [state, context?.attemptStatus, provisionCompleted]);
 
   useEffect(() => {
     function receive(event: MessageEvent) {
@@ -300,7 +337,7 @@ export function RemoteWhatsAppSetup() {
   const expiresAt = context?.sessionExpiresAt
     ? new Date(context.sessionExpiresAt).toLocaleString()
     : null;
-  const step = state === 'DONE'
+  const step = state === 'DONE' || state === 'PROVISIONING' || state === 'PROVISIONING_ERROR'
     ? 3
     : state === 'WAITING_META' || state === 'VERIFYING_META'
       ? 2
@@ -379,9 +416,20 @@ export function RemoteWhatsAppSetup() {
         <button type="button" onClick={setupLater}>Set up later</button>
       </div> : null}
 
+      {state === 'PROVISIONING' ? <div>
+        <strong>Finalizing provider setup</strong>
+        <p className="muted smallText">Smart Visions is confirming the selected phone still belongs to this WABA and that the existing Meta app is subscribed to WhatsApp webhooks.</p>
+      </div> : null}
+
+      {state === 'PROVISIONING_ERROR' ? <div style={{ display: 'grid', gap: 10 }}>
+        <strong>Provider setup needs a retry</strong>
+        <p className="muted smallText">{errorMessage}</p>
+        <button type="button" onClick={() => void provisionCompleted()}>Retry provider verification</button>
+      </div> : null}
+
       {state === 'DONE' ? <div>
-        <strong>Authorization complete</strong>
-        <p className="muted smallText">The connection was saved through the existing Smart Core binding and secure Vault. No destructive WhatsApp migration was performed.</p>
+        <strong>WhatsApp setup complete</strong>
+        <p className="muted smallText">Authorization, phone ownership readback and Meta webhook subscription are confirmed on the existing Smart Core binding and secure Vault. No destructive WhatsApp migration was performed.</p>
       </div> : null}
 
       {state === 'ERROR' ? <div style={{ display: 'grid', gap: 10 }}>
