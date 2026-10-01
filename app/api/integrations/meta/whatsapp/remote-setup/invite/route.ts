@@ -67,8 +67,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unable to issue the WhatsApp setup invitation safely' }, { status: 409 });
     }
 
-    const setupUrl = new URL('/setup/whatsapp', request.url);
-    setupUrl.hash = inviteSecret;
+    const setupPath = `/setup/whatsapp#${inviteSecret}`;
 
     return NextResponse.json({
       ok: true,
@@ -79,7 +78,7 @@ export async function POST(request: Request) {
       connectionMode: row.connection_mode,
       purpose: row.purpose,
       expiresAt: row.remote_setup_invitation_expires_at,
-      setupUrl: setupUrl.toString(),
+      setupPath,
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch {
     return NextResponse.json({ error: 'Unable to create WhatsApp remote setup link' }, { status: 500 });
