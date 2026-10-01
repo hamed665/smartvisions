@@ -270,9 +270,12 @@ begin
   where n.nspname='public'
     and p.proname='complete_whatsapp_chatwoot_outbound_event';
   if v_complete is null
-     or v_complete not like '%provenance = ''HUMAN_SMARTVISIONS''%'
-     or v_complete not like '%source_plane = ''CHATWOOT''%'
-     or v_complete not like '%provider_message_id IS NOT NULL%'
+     or regexp_replace(lower(v_complete), '[[:space:]]+', '', 'g')
+          not like '%provenance=''human_smartvisions''%'
+     or regexp_replace(lower(v_complete), '[[:space:]]+', '', 'g')
+          not like '%source_plane=''chatwoot''%'
+     or regexp_replace(lower(v_complete), '[[:space:]]+', '', 'g')
+          not like '%provider_message_idisnotnull%'
   then raise exception 'WhatsApp human outbound completion boundary drifted'; end if;
 
   select pg_get_functiondef(p.oid) into v_reconciler
@@ -280,8 +283,10 @@ begin
   where n.nspname='public'
     and p.proname='reconcile_unified_inbox_projection_event';
   if v_reconciler is null
-     or v_reconciler not like '%branch_id IS NOT DISTINCT FROM v_mapping.branch_id%'
-     or v_reconciler like '%v_mapping.branch_id IS NULL%live Branch-scoped%'
+     or regexp_replace(lower(v_reconciler), '[[:space:]]+', '', 'g')
+          not like '%branch_idisnotdistinctfromv_mapping.branch_id%'
+     or regexp_replace(lower(v_reconciler), '[[:space:]]+', '', 'g')
+          like '%v_mapping.branch_idisnull%livebranch-scoped%'
   then raise exception 'Business-wide Unified Inbox reconciliation drifted'; end if;
 end;
 $slice6_contract$;
