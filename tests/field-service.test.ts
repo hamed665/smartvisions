@@ -87,6 +87,13 @@ describe('FIELD-SERVICE contract',()=>{
     expect(migration).toContain('to service_role');
     expect(finalizeRoute).toContain("service.from('field_service_evidence')");
     expect(migration).toContain('Field Service structural changes require a manager role');
+    expect(migration).toContain('BOOKING_BRANCH must use the linked Booking Branch');
+    expect(migration).toContain('BUSINESS_ADDRESS requires canonical formattedAddress evidence');
+    expect(createRoute).toContain('Business address location requires formattedAddress');
+    expect(migration).toContain('on public.field_service_work_orders(organization_id,support_case_id)');
+    expect(migration).toContain('on public.field_service_material_usage(organization_id,task_id)');
+    expect(migration).toContain('on public.field_service_signoffs(organization_id,task_id,evidence_id)');
+    expect(migration).toContain("(signoff_method='TYPED_NAME' and evidence_id is null)");
   });
 
   it('ships a complete operator surface without a decorative-only page',()=>{
