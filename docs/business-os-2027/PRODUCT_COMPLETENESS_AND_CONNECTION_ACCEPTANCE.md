@@ -414,6 +414,19 @@ This is an acceptance lock. A green Embedded Signup callback or stored token alo
 - Production setup-attempt and Slice-2 remote audit rows remain zero. No synthetic customer/invite/session/credential or provider send was used for acceptance.
 - Actual Meta authorization wizard, provider provisioning and Business App Coexistence activation remain outside Slice 2. The non-destructive/fail-closed Coexistence guard remains required.
 
+#### WhatsApp onboarding Slice 3 checkpoint — 2026-10-01
+
+**Disposition: IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled mobile wizard / preflight / setup-later / resume / trusted-remote-completion scope only.
+
+- PR #380 + migration `0166_meta_whatsapp_mobile_wizard_completion` reuse the existing setup attempt and bounded `WHATSAPP_SETUP` session to provide the public mobile wizard, preflight, Meta-hosted authorization entry, recoverable cancel/retry, Setup Later and reload/mobile-return resume.
+- Final head `ad4380caa27ad8928da8568e2b009114850d410e` passed exact-head CI `36871208717`; canonical merge is `main@19201aa26ad6176d978ccc6e70b17ac365f1f8aa`.
+- Exact-main CI `36871735143` and Cloudflare Production Deploy `36872092126` succeeded on the exact merge SHA. Production migration is live as `20261001135536`.
+- Remote completion is bound to the exact session hash + attempt + binding version, validates WABA/phone membership before trusted Vault mutation, records `REMOTE_SETUP / WHATSAPP_SETUP` provenance and supports completed-state replay without creating a second credential/connection path.
+- Customer UI hides access tokens, WABA IDs, webhook and developer-app details; Meta password entry remains on Meta.
+- Both owner and remote completion remain service-only and retain explicit fail-closed Coexistence guards. No destructive Business App migration path was introduced.
+- Production setup-attempt and Slice-3 remote completion audit rows remain zero. No synthetic or real-customer Meta authorization/provider send was used for acceptance.
+- Remaining acceptance for provider subscription/provisioning/recovery, Chatwoot provisioning, message/status/media bridge, actual Coexistence/native activity, Human/AI arbitration, reconnect/disconnect and first real-tenant E2E stays open under later slices.
+
 
 
 ### CONN-01 — Guided onboarding
