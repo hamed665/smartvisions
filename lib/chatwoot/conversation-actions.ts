@@ -126,7 +126,7 @@ type ProjectionRow = {
   conversation_id: string;
   brand_id: string;
   tenant_business_id: string;
-  branch_id: string;
+  branch_id: string | null;
   department_id: string | null;
   team_id: string | null;
   chatwoot_conversation_display_id: number;
@@ -141,7 +141,7 @@ type ActionClaim = {
   current_projection_version: number;
   brand_id: string;
   tenant_business_id: string;
-  branch_id: string;
+  branch_id: string | null;
   department_id: string | null;
   team_id: string | null;
   chatwoot_conversation_display_id: number;
