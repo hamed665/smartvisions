@@ -11,6 +11,7 @@ import {
   normalizeCanonicalPhone,
 } from '@/lib/outreach/canonical-send-gate';
 import { resolveMetaWhatsAppProvider } from '@/lib/whatsapp/tenant-routing';
+import { replayPersistedWhatsAppStatuses } from '@/lib/whatsapp/lifecycle';
 import {
   assertPaidOperationAllowed,
   getCostGuardState,
@@ -173,6 +174,9 @@ export async function POST(
         reply_dialect: conversation.detected_dialect ?? null,
         requires_approval: false,
         status: 'PROCESSING',
+        provenance: 'HUMAN_SMARTVISIONS',
+        source_plane: 'SMART_CORE',
+        source_message_id: idempotencyKey,
         processed_at: new Date().toISOString(),
         metadata: {
           source: 'OWNER_MANUAL_REPLY',
@@ -258,6 +262,7 @@ export async function POST(
       .update({
         status: 'SENT',
         provider_message_id: providerMessageId,
+        provider_delivery_status: 'ACCEPTED',
         sent_at: new Date().toISOString(),
         processed_at: new Date().toISOString(),
         approval_reason: null,
@@ -341,11 +346,25 @@ export async function POST(
       usageError = error instanceof Error ? error.message : 'Usage reconciliation failed';
     }
 
+    let statusReplayError: string | null = null;
+    try {
+      await replayPersistedWhatsAppStatuses({
+        organizationId,
+        providerMessageId,
+        tenantBusinessId: projection.tenant_business_id,
+        branchId: projection.branch_id,
+        bindingId: tenantProvider.bindingId,
+      });
+    } catch (error) {
+      statusReplayError = error instanceof Error ? error.message : 'WhatsApp status replay failed';
+    }
+
     const reconciliationWarnings = [
       eventWrite.error ? `whatsapp_events: ${eventWrite.error.message}` : null,
       conversationUpdate.error ? `conversation: ${conversationUpdate.error.message}` : null,
       auditWrite.error ? `audit: ${auditWrite.error.message}` : null,
       usageError ? `usage: ${usageError}` : null,
+      statusReplayError ? `status_replay: ${statusReplayError}` : null,
     ].filter(Boolean);
 
     return NextResponse.json({
