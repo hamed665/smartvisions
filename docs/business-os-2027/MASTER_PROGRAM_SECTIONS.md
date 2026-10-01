@@ -239,6 +239,27 @@ Before mutation, fresh-audit current main/open PRs and the existing queue/outbox
 
 This supersedes historical cursor text below. Fresh runtime/current-main verification is still required before mutation.
 
+## WhatsApp customer onboarding scope lock — 2026-10-01
+
+The owner-approved non-destructive WhatsApp onboarding contract is frozen in [WHATSAPP_CUSTOMER_ONBOARDING_CONNECTION_CONTRACT.md](WHATSAPP_CUSTOMER_ONBOARDING_CONNECTION_CONTRACT.md).
+
+This scope **does not create new Work Packages**. Its eight implementation slices are mapped onto existing `COMM-TENANT-BRIDGE`, `COMM-HUMAN-AI`, `COMM-ACTION-BRIDGE`, `COMM-RECONCILIATION`, `OMNI-META-SOCIAL`, `OMNI-CHANNEL-HEALTH`, `DEV-INTEGRATIONS`, `ENT-IAM`, `ENT-SECURITY`, `UX-BUSINESS-WEB`, `UX-MOBILE`, `UX-PWA` and `FINAL-E2E` ownership.
+
+Scope locks:
+
+- `communication_channel_bindings` remains the logical connection authority;
+- setup/reconnect attempts are child operational state, never a second connection truth;
+- active WhatsApp Business App numbers may use only official coexistence for the same number;
+- destructive Business App migration / Delete Account / uninstall guidance is not a supported customer path;
+- if coexistence is unavailable, the existing mobile WhatsApp stays untouched and a separate API number is the fallback;
+- Remote Setup receives only bounded `WHATSAPP_SETUP` authority, not general panel/CRM/billing/admin access;
+- credential completion crosses a trusted server-side authorization boundary before Vault mutation;
+- Chatwoot remains `Channel::Api` communication plane, while Meta provider authority stays in Smart Core/Vault;
+- readiness is evidence-dimensional, not one overloaded `CONNECTED` enum;
+- native WhatsApp human activity must participate in the existing Human/AI send gate without creating a second message store.
+
+The current continuation cursor is not reordered merely by registering this scope. Execute these requirements when their owning Work Packages are reached or when a fresh dependency audit proves they are required earlier.
+
 ## Product completeness and customer connection requirements
 
 Read [PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE.md](PRODUCT_COMPLETENESS_AND_CONNECTION_ACCEPTANCE.md) before selecting or closing a Business OS delivery package. It preserves the owner-requested full-product scope, simple official customer connection journey, verified multi-business WhatsApp gaps, detailed acceptance gates and the complete Work Package coverage index. It extends acceptance under this roadmap; it does not replace architecture, renumber Work Packages or authorize provider activation. Keep its requirement dispositions and the canonical handoff traceable to implementation and Production evidence.
