@@ -221,7 +221,7 @@ returns public.chatwoot_webhook_events
 language plpgsql
 security definer
 set search_path=public,pg_catalog
-as $
+as $outbound$
 declare
   e public.chatwoot_webhook_events%rowtype;
   m public.conversation_messages%rowtype;
@@ -272,7 +272,7 @@ begin
 
   return e;
 end
-$;
+$outbound$;
 
 revoke all on function public.complete_whatsapp_chatwoot_outbound_event(uuid,uuid)
   from public,anon,authenticated,service_role;
@@ -300,7 +300,7 @@ returns table(
 language plpgsql
 security definer
 set search_path=public,pg_catalog
-as $
+as $status$
 declare
   v_provider text:=trim(coalesce(p_provider_message_id,''));
   v_raw text:=lower(trim(coalesce(p_status,'')));
@@ -392,7 +392,7 @@ begin
 
   return query select v_outreach_count,v_conversation_count,v_status;
 end
-$;
+$status$;
 
 revoke all on function public.reconcile_whatsapp_delivery_status(
   uuid,text,text,timestamptz,uuid,uuid,uuid,text,text,text,text
