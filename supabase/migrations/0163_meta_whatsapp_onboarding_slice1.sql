@@ -518,6 +518,10 @@ begin
     raise exception 'Meta WhatsApp setup attempt is stale or not completable';
   end if;
 
+  if v_attempt.connection_mode = 'BUSINESS_APP_COEXISTENCE' then
+    raise exception 'official WhatsApp Business App coexistence completion is not enabled yet';
+  end if;
+
   select b.*
     into v_binding
     from public.communication_channel_bindings b
