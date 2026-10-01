@@ -152,8 +152,6 @@ export async function POST(request: NextRequest) {
         subscription_created: evidence.subscriptionCreated,
         registration_confirmed: registrationConfirmed,
         quality_rating: evidence.qualityRating,
-        platform_type: evidence.platformType,
-        code_verification_status: evidence.codeVerificationStatus,
         verified_at: now,
       },
     });
@@ -168,8 +166,6 @@ export async function POST(request: NextRequest) {
       displayPhoneNumber: evidence.displayPhoneNumber,
       verifiedName: evidence.verifiedName,
       qualityRating: evidence.qualityRating,
-      platformType: evidence.platformType,
-      codeVerificationStatus: evidence.codeVerificationStatus,
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     if (context?.organization_id && context?.binding_id) {
