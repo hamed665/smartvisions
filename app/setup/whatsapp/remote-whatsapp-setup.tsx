@@ -1,7 +1,7 @@
 'use client';
 
 import Script from 'next/script';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 type ConnectionMode =
   | 'BUSINESS_APP_COEXISTENCE'
@@ -89,7 +89,7 @@ export function RemoteWhatsAppSetup() {
   const [message, setMessage] = useState('Checking your secure WhatsApp setup link…');
   const [errorMessage, setErrorMessage] = useState('');
 
-  async function loadStatus() {
+  const loadStatus = useCallback(async () => {
     const [contextResponse, preflightResponse] = await Promise.all([
       fetch('/setup/whatsapp/api/context', { cache: 'no-store' }),
       fetch('/setup/whatsapp/api/preflight', { cache: 'no-store' }),
@@ -127,9 +127,9 @@ export function RemoteWhatsAppSetup() {
     setState('READY');
     setMessage('Preflight passed. Continue with Meta when you are ready.');
     setErrorMessage('');
-  }
+  }, []);
 
-  async function redeemAndLoad() {
+  const redeemAndLoad = useCallback(async () => {
     const fragment = window.location.hash.startsWith('#')
       ? window.location.hash.slice(1).trim()
       : '';
@@ -147,7 +147,7 @@ export function RemoteWhatsAppSetup() {
     }
 
     await loadStatus();
-  }
+  }, [loadStatus]);
 
   async function tryComplete() {
     if (savingRef.current || !codeRef.current || !selectionRef.current) return;
@@ -211,7 +211,7 @@ export function RemoteWhatsAppSetup() {
       setMessage('This setup session cannot continue.');
       setErrorMessage(error instanceof Error ? error.message : 'This WhatsApp setup link is invalid or expired.');
     });
-  }, []);
+  }, [redeemAndLoad]);
 
   useEffect(() => {
     function receive(event: MessageEvent) {
