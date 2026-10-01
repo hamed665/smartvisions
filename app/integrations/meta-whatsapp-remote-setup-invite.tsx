@@ -97,9 +97,9 @@ export function MetaWhatsAppRemoteSetupInvite(props: {
   }
 
   async function copy() {
-    if (!invite?.setupUrl) return;
+    if (!invite?.setupPath) return;
     try {
-      await navigator.clipboard.writeText(invite.setupUrl);
+      await navigator.clipboard.writeText(invite.setupPath);
       setMessage('Setup link copied. It is one-time, short-lived, and grants WHATSAPP_SETUP only.');
     } catch {
       setMessage('Copy failed. Select the link manually and copy it.');
@@ -153,7 +153,7 @@ export function MetaWhatsAppRemoteSetupInvite(props: {
 
       {invite ? <div className="settingsRow">
         <label>One-time setup link
-          <input value={invite.setupUrl} readOnly />
+          <input value={invite.setupPath} readOnly />
           <span className="muted smallText">Expires {new Date(invite.expiresAt).toLocaleString()}.</span>
         </label>
         <div>
