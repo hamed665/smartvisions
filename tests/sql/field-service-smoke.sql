@@ -230,6 +230,7 @@ begin
     'field_service_work_orders_branch_idx',
     'field_service_work_orders_support_case_idx',
     'field_service_checklist_completed_by_idx',
+    'field_service_material_task_idx',
     'field_service_material_created_by_idx',
     'field_service_evidence_task_idx',
     'field_service_evidence_uploaded_by_idx',
