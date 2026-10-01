@@ -65,7 +65,7 @@ describe('WhatsApp native Chatwoot reconciliation', () => {
       },
     ]);
     vi.mocked(mirrorCanonicalWhatsAppOutboundToChatwoot).mockResolvedValue({
-      chatwootMessageId: 701,
+      chatwootMessageId: '701',
       outcome: 'CREATED',
     });
 
@@ -78,7 +78,7 @@ describe('WhatsApp native Chatwoot reconciliation', () => {
       canonicalMessageId: canonical.id,
     });
 
-    expect(result).toEqual({ outcome: 'SYNCED', chatwootMessageId: 701 });
+    expect(result).toEqual({ outcome: 'SYNCED', chatwootMessageId: '701' });
     expect(mirrorCanonicalWhatsAppOutboundToChatwoot).toHaveBeenCalledWith(
       expect.objectContaining({
         canonicalMessageId: canonical.id,
@@ -89,7 +89,7 @@ describe('WhatsApp native Chatwoot reconciliation', () => {
     expect(rpc).toHaveBeenNthCalledWith(1, 'claim_whatsapp_native_chatwoot_sync', expect.any(Object));
     expect(rpc).toHaveBeenNthCalledWith(2, 'finalize_whatsapp_native_chatwoot_sync', expect.objectContaining({
       p_status: 'ACCEPTED',
-      p_chatwoot_message_id: 701,
+      p_chatwoot_message_id: '701',
     }));
   });
 
