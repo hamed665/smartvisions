@@ -13,6 +13,17 @@ type BindingOption = {
 };
 
 type SessionInfo = { wabaId: string; phoneNumberId: string };
+type ConnectionMode =
+  | 'BUSINESS_APP_COEXISTENCE'
+  | 'API_NEW_NUMBER'
+  | 'EXISTING_API_RECONNECT';
+
+type SetupAttempt = {
+  attemptId: string;
+  bindingId: string;
+  bindingVersion: number;
+  connectionMode: ConnectionMode;
+};
 
 declare global {
   interface Window {
@@ -23,6 +34,10 @@ declare global {
   }
 }
 
+function defaultMode(binding: BindingOption | undefined): ConnectionMode {
+  return binding?.destinationLabel ? 'EXISTING_API_RECONNECT' : 'BUSINESS_APP_COEXISTENCE';
+}
+
 export function MetaWhatsAppEmbeddedSignup(props: {
   appId: string | null;
   configurationId: string | null;
@@ -30,27 +45,38 @@ export function MetaWhatsAppEmbeddedSignup(props: {
   bindings: BindingOption[];
 }) {
   const [bindingId, setBindingId] = useState(props.bindings[0]?.id ?? '');
+  const [connectionMode, setConnectionMode] = useState<ConnectionMode>(defaultMode(props.bindings[0]));
   const [sdkReady, setSdkReady] = useState(false);
-  const [state, setState] = useState<'IDLE' | 'WAITING' | 'SAVING' | 'DONE' | 'ERROR'>('IDLE');
+  const [state, setState] = useState<'IDLE' | 'PREPARING' | 'WAITING' | 'SAVING' | 'DONE' | 'ERROR'>('IDLE');
   const [message, setMessage] = useState('');
   const codeRef = useRef<string | null>(null);
   const sessionRef = useRef<SessionInfo | null>(null);
+  const attemptRef = useRef<SetupAttempt | null>(null);
   const savingRef = useRef(false);
 
   const selected = props.bindings.find((item) => item.id === bindingId);
 
   async function finishIfReady() {
-    if (savingRef.current || !codeRef.current || !sessionRef.current || !selected) return;
+    if (
+      savingRef.current
+      || !codeRef.current
+      || !sessionRef.current
+      || !selected
+      || !attemptRef.current
+    ) return;
+
     savingRef.current = true;
     setState('SAVING');
-    setMessage('Verifying selected Meta assets and storing the credential securely…');
+    setMessage('Verifying that the selected number belongs to the selected Meta business and storing the credential securely…');
+
     try {
       const response = await fetch('/api/integrations/meta/whatsapp/embedded-signup/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          attemptId: attemptRef.current.attemptId,
           bindingId: selected.id,
-          expectedVersion: selected.version,
+          expectedVersion: attemptRef.current.bindingVersion,
           code: codeRef.current,
           wabaId: sessionRef.current.wabaId,
           phoneNumberId: sessionRef.current.phoneNumberId,
@@ -65,6 +91,7 @@ export function MetaWhatsAppEmbeddedSignup(props: {
       savingRef.current = false;
       codeRef.current = null;
       sessionRef.current = null;
+      attemptRef.current = null;
       setState('ERROR');
       setMessage(error instanceof Error ? error.message : 'Unable to complete Meta connection');
     }
@@ -94,29 +121,69 @@ export function MetaWhatsAppEmbeddedSignup(props: {
 
   const configured = Boolean(props.appId && props.configurationId);
 
-  function launch() {
-    if (!configured || !sdkReady || !window.FB || !selected || state === 'WAITING' || state === 'SAVING') return;
+  async function launch() {
+    if (
+      !configured
+      || !sdkReady
+      || !window.FB
+      || !selected
+      || state === 'PREPARING'
+      || state === 'WAITING'
+      || state === 'SAVING'
+    ) return;
+
+    if (connectionMode === 'BUSINESS_APP_COEXISTENCE') {
+      setState('ERROR');
+      setMessage('Your WhatsApp Business app will not be deleted or migrated. Same-number connection stays blocked until the official Coexistence flow is verified for this product. Use a separate API number for now.');
+      return;
+    }
+
     codeRef.current = null;
     sessionRef.current = null;
+    attemptRef.current = null;
     savingRef.current = false;
-    setState('WAITING');
-    setMessage('Complete the Meta-hosted signup window. Smart Visions never asks for your Meta password or a copied token.');
+    setState('PREPARING');
+    setMessage('Creating a secure, version-bound setup attempt…');
 
-    window.FB.login((response) => {
-      const code = response.authResponse?.code?.trim();
-      if (!code) {
-        setState('ERROR');
-        setMessage('Meta signup was cancelled or returned no authorization code.');
-        return;
+    try {
+      const startResponse = await fetch('/api/integrations/meta/whatsapp/embedded-signup/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bindingId: selected.id,
+          expectedVersion: selected.version,
+          connectionMode,
+        }),
+      });
+      const start = await startResponse.json() as SetupAttempt & { error?: string };
+      if (!startResponse.ok || !start.attemptId) {
+        throw new Error(start.error || 'Unable to start WhatsApp setup');
       }
-      codeRef.current = code;
-      void finishIfReady();
-    }, {
-      config_id: props.configurationId,
-      response_type: 'code',
-      override_default_response_type: true,
-      extras: { setup: {}, featureType: '', sessionInfoVersion: '3' },
-    });
+
+      attemptRef.current = start;
+      setState('WAITING');
+      setMessage('Complete the Meta-hosted signup window. Smart Visions never asks for your Meta password or a copied token.');
+
+      window.FB.login((response) => {
+        const code = response.authResponse?.code?.trim();
+        if (!code) {
+          setState('ERROR');
+          setMessage('Meta signup was cancelled or returned no authorization code. Your existing WhatsApp was not changed.');
+          return;
+        }
+        codeRef.current = code;
+        void finishIfReady();
+      }, {
+        config_id: props.configurationId,
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: { setup: {}, featureType: '', sessionInfoVersion: '3' },
+      });
+    } catch (error) {
+      attemptRef.current = null;
+      setState('ERROR');
+      setMessage(error instanceof Error ? error.message : 'Unable to start WhatsApp setup');
+    }
   }
 
   return <section className="panel settingsCreate">
@@ -130,17 +197,49 @@ export function MetaWhatsAppEmbeddedSignup(props: {
       }}
     />
     <h2>Connect WhatsApp Business</h2>
-    <p className="muted">Use Meta Embedded Signup. Authorization happens on Meta; the returned access token is exchanged server-side and stored in Supabase Vault, never in this page.</p>
+    <p className="muted">Authorization happens on Meta. Smart Visions never asks for your Facebook password or a copied access token.</p>
+    <p className="muted"><strong>Your existing WhatsApp Business app is never deleted or destructively migrated by this setup.</strong></p>
     {props.bindings.length ? <>
       <label>Business destination
-        <select value={bindingId} onChange={(event) => { setBindingId(event.target.value); setState('IDLE'); setMessage(''); }}>
+        <select
+          value={bindingId}
+          onChange={(event) => {
+            const nextId = event.target.value;
+            const next = props.bindings.find((item) => item.id === nextId);
+            setBindingId(nextId);
+            setConnectionMode(defaultMode(next));
+            setState('IDLE');
+            setMessage('');
+          }}
+        >
           {props.bindings.map((binding) => <option key={binding.id} value={binding.id}>
             {binding.businessName}{binding.branchName ? ` · ${binding.branchName}` : ''}{binding.destinationLabel ? ` · ${binding.destinationLabel}` : ''}
           </option>)}
         </select>
       </label>
-      <button type="button" onClick={launch} disabled={!configured || !sdkReady || !selected || state === 'WAITING' || state === 'SAVING'}>
-        {state === 'WAITING' || state === 'SAVING' ? 'Connecting…' : 'Connect with Meta'}
+      <label>Connection path
+        <select
+          value={connectionMode}
+          onChange={(event) => {
+            setConnectionMode(event.target.value as ConnectionMode);
+            setState('IDLE');
+            setMessage('');
+          }}
+        >
+          <option value="BUSINESS_APP_COEXISTENCE">Keep the current WhatsApp Business app + connect API (Coexistence)</option>
+          <option value="API_NEW_NUMBER">Use a separate number for the API</option>
+          {selected?.destinationLabel ? <option value="EXISTING_API_RECONNECT">Reconnect the existing API number</option> : null}
+        </select>
+      </label>
+      {connectionMode === 'BUSINESS_APP_COEXISTENCE'
+        ? <p className="muted smallText">Same-number setup is fail-closed until the official Coexistence activation path is verified. Smart Visions will not fall back to Delete Account or destructive migration.</p>
+        : null}
+      <button
+        type="button"
+        onClick={() => void launch()}
+        disabled={!configured || !sdkReady || !selected || state === 'PREPARING' || state === 'WAITING' || state === 'SAVING'}
+      >
+        {state === 'PREPARING' || state === 'WAITING' || state === 'SAVING' ? 'Connecting…' : 'Connect with Meta'}
       </button>
     </> : <p className="muted">Create an active tenant Business and its WhatsApp communication binding before connecting Meta assets.</p>}
     {!configured ? <p className="muted">Embedded Signup is code-ready but blocked until the Meta App ID and Embedded Signup Configuration ID are configured for this environment.</p> : null}
