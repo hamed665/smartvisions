@@ -13,6 +13,7 @@ import {
   isUuid,
 } from '@/lib/chatwoot/tenant-bridge';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
+import { processPendingWhatsAppChatwootSync } from '@/lib/whatsapp/chatwoot-inbound-sync';
 
 type WhatsAppBinding = {
   id: string;
@@ -302,6 +303,20 @@ export async function provisionWhatsAppChatwootProjection(input: {
     if (auditError) return fail('Chatwoot projection audit evidence could not be committed');
   }
 
+  let pendingInboundSync: Awaited<ReturnType<typeof processPendingWhatsAppChatwootSync>> | null = null;
+  try {
+    pendingInboundSync = await processPendingWhatsAppChatwootSync({
+      service,
+      organizationId: input.organizationId,
+      bindingId: binding.id,
+      limit: 25,
+      fetchImpl: input.fetchImpl,
+    });
+  } catch {
+    // Inbox activation remains valid; durable PENDING journal rows are retried
+    // by the existing operations reconciler without repeating Meta onboarding.
+  }
+
   return {
     ok: true as const,
     bindingId: binding.id,
@@ -311,5 +326,6 @@ export async function provisionWhatsAppChatwootProjection(input: {
     inboxMappingId: mapping.id,
     chatwootInboxId: mapping.chatwoot_inbox_id,
     outcome: inbox.outcome,
+    pendingInboundSync,
   };
 }
