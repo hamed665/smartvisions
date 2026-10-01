@@ -44,8 +44,10 @@ async function graphJson<T>(input: {
   path: string;
   accessToken: string;
   method?: 'GET' | 'POST';
+  fetchImpl?: typeof fetch;
 }) {
-  const response = await fetch(
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const response = await fetchImpl(
     `https://graph.facebook.com/${input.graphVersion}/${input.path}`,
     {
       method: input.method ?? 'GET',
@@ -72,6 +74,7 @@ async function readPhoneEvidence(input: {
   accessToken: string;
   wabaId: string;
   phoneNumberId: string;
+  fetchImpl?: typeof fetch;
 }) {
   const query = new URLSearchParams({
     fields: 'id,display_phone_number,verified_name,quality_rating,platform_type,code_verification_status',
@@ -80,6 +83,7 @@ async function readPhoneEvidence(input: {
     graphVersion: input.graphVersion,
     accessToken: input.accessToken,
     path: `${encodeURIComponent(input.wabaId)}/phone_numbers?${query.toString()}`,
+    fetchImpl: input.fetchImpl,
   });
 
   if (!response.ok) {
@@ -105,11 +109,13 @@ async function isAppSubscribed(input: {
   accessToken: string;
   wabaId: string;
   appId: string;
+  fetchImpl?: typeof fetch;
 }) {
   const { response, body } = await graphJson<{ data?: SubscribedApp[] }>({
     graphVersion: input.graphVersion,
     accessToken: input.accessToken,
     path: `${encodeURIComponent(input.wabaId)}/subscribed_apps`,
+    fetchImpl: input.fetchImpl,
   });
 
   if (!response.ok) {
@@ -125,6 +131,7 @@ export async function provisionMetaWhatsAppBinding(input: {
   appId: string;
   wabaId: string;
   phoneNumberId: string;
+  fetchImpl?: typeof fetch;
 }): Promise<MetaWhatsAppProvisioningEvidence> {
   const graphVersion = input.graphVersion.trim();
   const accessToken = input.accessToken.trim();
@@ -141,6 +148,7 @@ export async function provisionMetaWhatsAppBinding(input: {
     accessToken,
     wabaId,
     phoneNumberId,
+    fetchImpl: input.fetchImpl,
   });
 
   let subscribed = await isAppSubscribed({
@@ -148,6 +156,7 @@ export async function provisionMetaWhatsAppBinding(input: {
     accessToken,
     wabaId,
     appId,
+    fetchImpl: input.fetchImpl,
   });
   let subscriptionCreated = false;
 
@@ -157,6 +166,7 @@ export async function provisionMetaWhatsAppBinding(input: {
       accessToken,
       path: `${encodeURIComponent(wabaId)}/subscribed_apps`,
       method: 'POST',
+      fetchImpl: input.fetchImpl,
     });
 
     // Provider responses can be ambiguous after transport errors or retries.
@@ -166,6 +176,7 @@ export async function provisionMetaWhatsAppBinding(input: {
       accessToken,
       wabaId,
       appId,
+      fetchImpl: input.fetchImpl,
     });
     subscriptionCreated = subscribed && attempt.response.ok;
   }
