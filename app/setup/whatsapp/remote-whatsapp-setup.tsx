@@ -266,7 +266,10 @@ export function RemoteWhatsAppSetup() {
 
   useEffect(() => {
     if (state !== 'PROVISIONING' || context?.attemptStatus !== 'COMPLETED') return;
-    void provisionCompleted();
+    const timer = window.setTimeout(() => {
+      void provisionCompleted();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [state, context?.attemptStatus, provisionCompleted]);
 
   useEffect(() => {
