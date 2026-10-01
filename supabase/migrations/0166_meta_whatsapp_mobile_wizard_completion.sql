@@ -14,12 +14,12 @@ update public.communication_channel_setup_attempts
    and completion_actor_type is null;
 
 alter table public.communication_channel_setup_attempts
-  add constraint communication_channel_setup_attempts_completion_actor_type_check
+  add constraint comm_setup_attempts_completion_actor_type_check
     check (
       completion_actor_type is null
       or completion_actor_type in ('OWNER','REMOTE_SETUP')
     ),
-  add constraint communication_channel_setup_attempts_completion_actor_ref_check
+  add constraint comm_setup_attempts_completion_actor_ref_check
     check (
       completion_actor_ref is null
       or length(btrim(completion_actor_ref)) between 1 and 200
