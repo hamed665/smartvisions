@@ -67,7 +67,7 @@ create index field_service_work_orders_branch_idx
   on public.field_service_work_orders(organization_id,branch_id)
   where branch_id is not null;
 create index field_service_work_orders_support_case_idx
-  on public.field_service_work_orders(support_case_id)
+  on public.field_service_work_orders(organization_id,support_case_id)
   where support_case_id is not null;
 
 create table public.field_service_checklist_items (
@@ -133,6 +133,8 @@ create table public.field_service_material_usage (
     on delete restrict
 );
 
+create index field_service_material_task_idx
+  on public.field_service_material_usage(organization_id,task_id);
 create index field_service_material_created_by_idx
   on public.field_service_material_usage(organization_id,created_by_user_id);
 
@@ -199,14 +201,14 @@ create table public.field_service_signoffs (
     references public.organization_members(organization_id,user_id)
     on delete restrict,
   constraint field_service_signoffs_method_evidence_check check (
-    (signoff_method='TYPED_NAME')
+    (signoff_method='TYPED_NAME' and evidence_id is null)
     or
     (signoff_method='SIGNATURE_EVIDENCE' and evidence_id is not null)
   )
 );
 
 create index field_service_signoffs_evidence_idx
-  on public.field_service_signoffs(organization_id,evidence_id)
+  on public.field_service_signoffs(organization_id,task_id,evidence_id)
   where evidence_id is not null;
 create index field_service_signoffs_recorded_by_idx
   on public.field_service_signoffs(organization_id,recorded_by_user_id);
@@ -335,9 +337,18 @@ begin
     if new.booking_id is null or new.branch_id is null then
       raise exception 'BOOKING_BRANCH location requires Booking and Branch';
     end if;
+    if not (
+      new.branch_id is not distinct from v_booking.branch_id
+      or new.branch_id is not distinct from v_booking.requested_branch_id
+    ) then
+      raise exception 'BOOKING_BRANCH must use the linked Booking Branch';
+    end if;
   elsif new.location_source='BUSINESS_ADDRESS' then
     if v_task.business_id is null then
       raise exception 'BUSINESS_ADDRESS requires canonical Task Business';
+    end if;
+    if nullif(btrim(coalesce(new.location_snapshot->>'formattedAddress','')),'') is null then
+      raise exception 'BUSINESS_ADDRESS requires canonical formattedAddress evidence';
     end if;
   elsif new.location_source in ('CUSTOMER_CONFIRMED','MANUAL_CONFIRMED') then
     if nullif(btrim(coalesce(new.location_snapshot->>'formattedAddress','')),'') is null then
