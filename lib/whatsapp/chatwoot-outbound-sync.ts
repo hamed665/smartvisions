@@ -249,6 +249,16 @@ export async function reconcileWhatsAppChatwootHumanOutboundEvent(
     return { handled: true as const, outcome: 'FAILED_INVALID_PAYLOAD' as const };
   }
 
+  const mirrorAttributes = record(root.content_attributes);
+  const mirrorSourceId = typeof root.source_id === 'string' ? root.source_id.trim() : '';
+  if (
+    mirrorSourceId.startsWith('sv:mirror:')
+    && mirrorAttributes?.smartvisions_mirror === true
+    && mirrorAttributes.smartvisions_mirror_version === '1'
+  ) {
+    return { handled: false as const, outcome: 'SMART_CORE_MIRROR' as const };
+  }
+
   const messageType = String(root.message_type ?? '').trim().toLowerCase();
   const isPrivate = root.private === true || String(root.private ?? '').toLowerCase() === 'true';
   if (messageType !== 'outgoing' || isPrivate) {
