@@ -400,7 +400,19 @@ This is an acceptance lock. A green Embedded Signup callback or stored token alo
 - Final canonical main is `85774ea16adf20403832771d316e68e56283028d`; exact-main CI `36857112993` and Cloudflare Production Deploy `36857447148` succeeded on that exact SHA.
 - Production setup-attempt rows remain zero. No synthetic tenant/binding/credential, provider send or customer message was used to prove the slice.
 - `BUSINESS_APP_COEXISTENCE` is represented and protected but intentionally not activated yet. Same-number setup remains fail-closed rather than falling back to Delete Account/full migration.
-- Remaining CONN/META acceptance for Remote Setup, mobile resume, provider subscription/recovery, actual Coexistence/native activity, Human/AI arbitration, reconnect/revoke/disconnect and first real tenant E2E remains open under later contract slices.
+- Remaining CONN/META acceptance for mobile wizard/resume, provider subscription/recovery, actual Coexistence/native activity, Human/AI arbitration, reconnect/revoke/disconnect and first real tenant E2E remains open under later contract slices.
+
+#### WhatsApp onboarding Slice 2 checkpoint — 2026-10-01
+
+**Disposition: IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled Secure Remote Setup Invitation/session scope only.
+
+- PR #378 + migration `0165_meta_whatsapp_remote_setup_invitation` extend the canonical setup-attempt child state with a one-time setup-only invitation, short-lived session, owner revoke path and exact scope/context revalidation. No second IAM/user directory or connection authority was introduced.
+- Final implementation head `fb7018647bf8f632bedff678f450564ee200252c` passed exact-head CI `36865430981`; canonical merge is `main@ba837577f38c90b390474de1998a2ce84de3c622`.
+- Exact-main CI `36865851776` and Cloudflare Production Deploy `36866185938` succeeded on the exact merge SHA. Production migration is live as `20261001130718`.
+- A remote setup participant receives `WHATSAPP_SETUP` only, with no CRM/Billing/Organization Settings/unrelated-integration/cross-business/OWNER/ADMIN authority and without becoming an Organization member.
+- Invitation/session bearer values are not persisted in plaintext. Invitation redemption is one-time and both invitation/session lifetime are bounded by the existing setup attempt.
+- Production setup-attempt and Slice-2 remote audit rows remain zero. No synthetic customer/invite/session/credential or provider send was used for acceptance.
+- Actual Meta authorization wizard, provider provisioning and Business App Coexistence activation remain outside Slice 2. The non-destructive/fail-closed Coexistence guard remains required.
 
 
 
