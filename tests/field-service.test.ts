@@ -41,6 +41,8 @@ describe('FIELD-SERVICE contract',()=>{
     expect(createRoute).toContain(".eq('task_type','FIELD_SERVICE')");
     expect(createRoute).toContain(".in('id',ids)");
     expect(createRoute).not.toContain('listCrmTasks({supabase,organizationId,includeClosed:true,limit:100})');
+    expect(page).toContain("const orderTaskIds=(orders.data??[]).map(row=>String(row.task_id))");
+    expect(page).toContain(".in('id',orderTaskIds)");
   });
 
   it('enforces governed completion evidence and customer sign-off in PostgreSQL',()=>{
