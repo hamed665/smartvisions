@@ -15,9 +15,21 @@ import { resolveMetaWhatsAppProvider } from '@/lib/whatsapp/tenant-routing';
 
 export const runtime = 'nodejs';
 
+type RemoteProvisioningContext = {
+  attempt_id: string;
+  attempt_status: string;
+  connection_mode: string;
+  organization_id: string;
+  tenant_business_id: string;
+  branch_id: string | null;
+  binding_id: string;
+  provider_account_id: string | null;
+  provider_destination_id: string | null;
+};
+
 export async function POST(request: NextRequest) {
   const service = createSupabaseServiceClient();
-  let context: Record<string, any> | null = null;
+  let context: RemoteProvisioningContext | null = null;
 
   try {
     const secret = normalizeWhatsAppRemoteSetupSecret(
@@ -31,7 +43,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await service.rpc('get_meta_whatsapp_remote_setup_context', {
       p_session_token_hash: sessionHash,
     });
-    context = (Array.isArray(data) ? data[0] : data) as Record<string, any> | null;
+    context = (Array.isArray(data) ? data[0] : data) as RemoteProvisioningContext | null;
 
     if (error || !context?.attempt_id) {
       return NextResponse.json({ error: 'This WhatsApp setup session is expired or revoked' }, { status: 410 });
