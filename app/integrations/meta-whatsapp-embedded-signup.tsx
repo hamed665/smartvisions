@@ -330,6 +330,11 @@ export function MetaWhatsAppEmbeddedSignup(props: {
               ? 'Connecting…'
               : 'Connect with Meta'}
       </button>
+      {selected?.destinationLabel && state !== 'PREPARING' && state !== 'WAITING' && state !== 'SAVING' && state !== 'PROVISIONING' && state !== 'CHATWOOT_PROVISIONING'
+        ? <button type="button" onClick={() => void provisionChatwootSelected(selected.id)}>
+            Finalize communication Inbox
+          </button>
+        : null}
       {state === 'REGISTRATION_REQUIRED' && selected ? <div style={{ display: 'grid', gap: 8 }}>
         <label>WhatsApp two-step verification PIN
           <input
