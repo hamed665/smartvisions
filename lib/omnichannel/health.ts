@@ -323,7 +323,12 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
   const emailState = integrationState(emailIntegration, emailCredential);
 
   const whatsappIntegration = integration('META', 'WHATSAPP');
-  const whatsappCredential = envCredentialHealth('WHATSAPP');
+  const whatsappBindings = channelBindings('WHATSAPP');
+  const whatsappCredential = whatsappBindings.some((row) =>
+    Boolean(row.provider_secret_ref && row.provider_destination_id),
+  )
+    ? 'BOUND'
+    : envCredentialHealth('WHATSAPP');
   const whatsappState = integrationState(whatsappIntegration, whatsappCredential);
 
   const instagramBindings = channelBindings('INSTAGRAM');
@@ -408,16 +413,16 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
         whatsappIntegration?.last_checked_at,
         whatsappRateLimit.observedAt,
         whatsappEvent?.createdAt,
-        ...channelBindings('WHATSAPP').map((row) => row.last_verified_at),
+        ...whatsappBindings.map((row) => row.last_verified_at),
       ),
       supportedCapabilities: descriptorCapabilities(WHATSAPP_CHANNEL_DESCRIPTOR),
       incidentState: pauseState(controls, 'WHATSAPP') !== 'RUNNING' ? pauseState(controls, 'WHATSAPP') : whatsappState.incidentState,
       blockers: [
         ...(whatsappCredential === 'MISSING' ? ['CREDENTIAL_MISSING'] : []),
         ...(whatsappIntegration?.last_error ? ['INTEGRATION_LAST_ERROR'] : []),
-        ...channelBindings('WHATSAPP').flatMap((row) => row.last_error_code ? [row.last_error_code] : []),
+        ...whatsappBindings.flatMap((row) => row.last_error_code ? [row.last_error_code] : []),
       ],
-      bindingCount: channelBindings('WHATSAPP').length,
+      bindingCount: whatsappBindings.length,
       lastEventAt: whatsappEvent?.createdAt ?? null,
       lastAcceptanceAt: null,
       controlState: pauseState(controls, 'WHATSAPP'),
@@ -709,7 +714,7 @@ export async function getOmnichannelHealth(organizationId: string): Promise<Chan
         'VOICE_REPLY_CONTROLLED_ACCEPTANCE_PENDING',
         'TELEPHONY_ACCEPTANCE_PENDING',
       ],
-      bindingCount: channelBindings('WHATSAPP').length,
+      bindingCount: whatsappBindings.length,
       lastEventAt: whatsappEvent?.createdAt ?? null,
       lastAcceptanceAt: null,
       controlState: pauseState(controls, 'WHATSAPP'),
