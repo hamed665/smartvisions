@@ -40,6 +40,7 @@ export async function persistWhatsAppWebhookEvents(input: {
       provider_message_id: event.providerMessageId,
       direction: 'INBOUND',
       event_type: event.type.toUpperCase(),
+      chatwoot_sync_status: 'PENDING',
       payload: {
         ...event,
         routing: {
@@ -86,6 +87,9 @@ export async function persistWhatsAppWebhookEvents(input: {
       tenantBusinessId: route.tenantBusinessId,
       branchId: route.branchId,
       bindingId: route.bindingId,
+      integrationConnectionId: route.integrationConnectionId,
+      phoneNumberId: route.phoneNumberId,
+      wabaId: route.wabaId,
     });
     if (lifecycle.linked) linkedInbound += 1;
   }
@@ -96,6 +100,9 @@ export async function persistWhatsAppWebhookEvents(input: {
       tenantBusinessId: route.tenantBusinessId,
       branchId: route.branchId,
       bindingId: route.bindingId,
+      integrationConnectionId: route.integrationConnectionId,
+      phoneNumberId: route.phoneNumberId,
+      wabaId: route.wabaId,
     });
     statusUpdates += lifecycle.matched;
   }
