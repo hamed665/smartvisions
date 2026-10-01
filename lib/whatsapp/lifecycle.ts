@@ -253,6 +253,9 @@ type WhatsAppTenantScope = {
   tenantBusinessId: string;
   branchId: string | null;
   bindingId: string;
+  integrationConnectionId?: string | null;
+  phoneNumberId?: string | null;
+  wabaId?: string | null;
 };
 
 async function getOrCreateConversation(organizationId: string, leadId: string, receivedAt: string, scope: WhatsAppTenantScope) {
@@ -309,25 +312,6 @@ export async function applyWhatsAppInboundLifecycle(organizationId: string, even
   const body = event.text?.trim() || event.caption?.trim() || (event.type === 'audio' ? '[WhatsApp voice message]' : `[WhatsApp ${event.type} message]`);
   const idempotencyKey = `whatsapp:inbound:${event.providerMessageId}`;
   const acquisition = inboundAcquisitionMetadata(event);
-
-  const { error: eventLinkError } = await supabase.from('whatsapp_events').update({
-    lead_id: lead.id,
-    conversation_id: conversation.id,
-    payload: {
-      ...event,
-      routing: {
-        tenantBusinessId: scope.tenantBusinessId,
-        branchId: scope.branchId,
-        bindingId: scope.bindingId,
-        phoneNumberId: event.destination.phoneNumberId,
-        wabaId: event.destination.wabaId ?? null,
-      },
-    },
-  }).eq('organization_id', organizationId)
-    .eq('provider_message_id', event.providerMessageId)
-    .eq('direction', 'INBOUND')
-    .eq('event_type', event.type.toUpperCase());
-  if (eventLinkError) throw new Error(`WhatsApp event linkage failed: ${eventLinkError.message}`);
 
   const { error: messageError } = await supabase.from('outreach_messages').insert({
     organization_id: organizationId,
@@ -426,6 +410,31 @@ export async function applyWhatsAppInboundLifecycle(organizationId: string, even
   } else {
     canonicalMessageId = String(canonicalMessage.data.id);
   }
+
+  const { error: eventLinkError } = await supabase.from('whatsapp_events').update({
+    lead_id: lead.id,
+    conversation_id: conversation.id,
+    payload: {
+      ...event,
+      routing: {
+        tenantBusinessId: scope.tenantBusinessId,
+        branchId: scope.branchId,
+        bindingId: scope.bindingId,
+        integrationConnectionId: scope.integrationConnectionId ?? null,
+        phoneNumberId: scope.phoneNumberId ?? event.destination.phoneNumberId ?? null,
+        wabaId: scope.wabaId ?? event.destination.wabaId ?? null,
+      },
+      canonical: {
+        businessId,
+        identityId,
+        messageId: canonicalMessageId,
+      },
+    },
+  }).eq('organization_id', organizationId)
+    .eq('provider_message_id', event.providerMessageId)
+    .eq('direction', 'INBOUND')
+    .eq('event_type', event.type.toUpperCase());
+  if (eventLinkError) throw new Error(`WhatsApp event linkage failed: ${eventLinkError.message}`);
 
   if (isDoNotContactReply(body)) {
     await persistCustomerDoNotContact({
