@@ -69,13 +69,13 @@ export async function verifyMetaWhatsAppSelectedAssets(input: {
   let membership: MetaPhone | null = null;
 
   for (let page = 0; next && page < 10; page += 1) {
-    const parsed = new URL(next);
+    const parsed: URL = new URL(next);
     if (parsed.protocol !== 'https:' || parsed.hostname !== 'graph.facebook.com') {
       throw new Error('Meta returned an untrusted pagination URL');
     }
 
-    const result = await metaJson<MetaPage>(parsed.toString(), input.accessToken, fetchImpl);
-    membership = (result.data ?? []).find((row) => row.id === phoneNumberId) ?? null;
+    const result: MetaPage = await metaJson<MetaPage>(parsed.toString(), input.accessToken, fetchImpl);
+    membership = (result.data ?? []).find((row: MetaPhone) => row.id === phoneNumberId) ?? null;
     if (membership) break;
     next = typeof result.paging?.next === 'string' ? result.paging.next : null;
   }
