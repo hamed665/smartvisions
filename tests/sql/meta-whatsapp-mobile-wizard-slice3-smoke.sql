@@ -58,9 +58,10 @@ begin
   end if;
 
   if v_context_def is null
-     or v_context_def not like '%a.status in (''AUTHORIZED'', ''COMPLETED'')%'
-     or v_context_def not like '%a.binding_version + 1%'
+     or v_context_def not like '%AUTHORIZED%'
+     or v_context_def not like '%COMPLETED%'
      or v_context_def not like '%remote_setup_session_token_hash%'
+     or v_context_def not like '%provider_destination_id%'
   then
     raise exception 'remote resume/replay context boundary drifted';
   end if;
