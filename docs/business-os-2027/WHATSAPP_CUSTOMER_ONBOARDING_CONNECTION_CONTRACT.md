@@ -1,6 +1,6 @@
 # WhatsApp customer onboarding connection contract
 
-Status: **OWNER-APPROVED SCOPE LOCK — SLICES 1–2 PRODUCTION_VERIFIED; SLICES 3–8 PENDING**
+Status: **OWNER-APPROVED SCOPE LOCK — SLICES 1–3 PRODUCTION_VERIFIED; SLICES 4–8 PENDING**
 
 Date: 2026-10-01
 
@@ -31,7 +31,20 @@ Evidence:
 
 Slice 2 extends only the existing setup-attempt child state with hashed one-time invitation and short-lived session evidence. It does not create a user/member for the remote Meta admin, does not grant panel authority, and does not create a second IAM or connection authority. Actual Meta authorization/provider provisioning is deliberately left to later slices; same-number Business App Coexistence activation remains fail-closed and non-destructive.
 
-**Next owner-prioritized contract slice:** Slice 3 — Mobile-first Wizard + Preflight + Setup Later + Resume.
+## Production checkpoint — Slice 3
+
+Slice 3 is **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** as of 2026-10-01 for the internally controlled mobile wizard / preflight / setup-later / resume / trusted-remote-completion scope.
+
+Evidence:
+- implementation PR #380, final head `ad4380caa27ad8928da8568e2b009114850d410e`, exact-head CI `36871208717`, merge `19201aa26ad6176d978ccc6e70b17ac365f1f8aa`;
+- exact-main CI `36871735143` and Cloudflare Production Deploy `36872092126` succeeded on that exact merge SHA;
+- Production migration `0166_meta_whatsapp_mobile_wizard_completion@20261001135536`, merged blob SHA `887c200e6d1a3f258ad70e95f3795a5dddb3ebce`;
+- Production setup-attempt rows and Slice-3 remote completion audit rows remain 0; no synthetic setup/provider/customer data or send was used;
+- post-migration advisor counts remain at the prior security/FK/RLS-plan/policy baseline.
+
+Slice 3 reuses the exact setup-attempt and setup-session authorities already created by Slices 1–2. It does not create a second invite/session/IAM or connection record. Remote completion is tied to the same bounded session, validates selected Meta assets before the existing trusted Vault mutation, records truthful remote completion provenance and supports completed-state replay after a lost network response. Actual provider subscription/provisioning, real-customer Meta E2E and same-number Coexistence/native activity are not claimed here.
+
+**Next owner-prioritized contract slice:** Slice 4 — Meta Provisioning / Subscription / Recovery.
 
 This contract is an execution overlay for the existing Business OS 2027 roadmap. It does **not** create a new Work Package, integration source of truth, IAM system, secret store, message store, Chatwoot plane, queue, health system, or WhatsApp provider stack.
 
