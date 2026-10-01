@@ -58,6 +58,7 @@ begin
   if v_complete_def is null
      or v_complete_def not like '%apply_meta_whatsapp_binding_credential_internal%'
      or v_complete_def not like '%setup attempt is stale or not completable%'
+     or v_complete_def not like '%coexistence completion is not enabled yet%'
   then raise exception 'trusted setup completion boundary is incomplete'; end if;
 
   if v_internal_def is null
