@@ -1,5 +1,25 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## WhatsApp customer onboarding scope lock registered — 2026-10-01
+
+- Owner-approved contract: [WHATSAPP_CUSTOMER_ONBOARDING_CONNECTION_CONTRACT.md](WHATSAPP_CUSTOMER_ONBOARDING_CONNECTION_CONTRACT.md).
+- This is a **scope/acceptance registration only**; no runtime, Production, Meta, Chatwoot, Vault, Supabase schema or provider-side mutation was performed by this documentation package.
+- No new Work Package or parallel architecture was introduced. The eight implementation slices map to existing Communication, Omnichannel, Developer, IAM/Security, UX and Final E2E Work Packages.
+- Canonical connection identity remains `communication_channel_bindings.id`; setup attempts are bounded child operational state and may not become a second connection truth.
+- Supported customer modes are `BUSINESS_APP_COEXISTENCE`, `API_NEW_NUMBER`, and `EXISTING_API_RECONNECT`.
+- **Hard product policy:** an active WhatsApp Business App account is never deleted/uninstalled/migrated destructively by the Smart Visions onboarding path. Same-number onboarding is coexistence-only. If coexistence is unavailable, the existing mobile WhatsApp stays untouched and a separate API number is the fallback.
+- Remote Setup is setup-only least privilege; it must not grant OWNER/ADMIN/CRM/billing access.
+- Credential completion must move behind a trusted server-side authorization boundary before Vault mutation and must validate Organization/Business/binding/attempt/version/purpose plus Meta asset evidence.
+- Existing Meta Embedded Signup, tenant-bound routing, Vault, Chatwoot API Inbox provisioning/reconciliation, Unified Inbox, CRM and channel-health authorities are reused; no Evolution API, WAHA or second WhatsApp/Chatwoot/secret/IAM/message/health plane is allowed.
+- Native WhatsApp human activity must participate in existing Human/AI arbitration and final send gating; historical sync must not impersonate a current human takeover.
+- External Meta review/Tech Provider/access approval/business verification/coexistence eligibility may remain `BLOCKED_EXTERNAL`; internal security, recovery, UI, state and reconciliation work remains in scope.
+
+**Current execution cursor is unchanged:** `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.
+
+Registering this WhatsApp scope does not reorder unrelated roadmap work by itself. When an owning Work Package is reached, or a fresh dependency audit proves earlier execution is required, implementation must follow the contract instead of inventing a new onboarding architecture.
+
+---
+
 ## FIELD-SERVICE Production closeout — 2026-10-01
 
 - Work Package: `SECTION BOOKING_OPERATIONS -> FIELD-SERVICE`.
