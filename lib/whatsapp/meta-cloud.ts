@@ -4,6 +4,9 @@ import type {
   WhatsAppAudioUploadInput,
   WhatsAppAudioUploadResult,
   WhatsAppCatalogProductSendInput,
+  WhatsAppMediaSendInput,
+  WhatsAppMediaUploadInput,
+  WhatsAppMediaUploadResult,
   WhatsAppProvider,
   WhatsAppSendInput,
   WhatsAppSendResult,
@@ -107,6 +110,87 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
           }],
         } : {}),
       },
+    });
+  }
+
+  async uploadMedia(input: WhatsAppMediaUploadInput): Promise<WhatsAppMediaUploadResult> {
+    this.assertConfigured();
+    if (!input.bytes.byteLength) throw new Error('WhatsApp media upload cannot be empty');
+
+    const allowed = new Map<string, { kinds: string[]; maxBytes: number }>([
+      ['image/jpeg', { kinds: ['image'], maxBytes: 5 * 1024 * 1024 }],
+      ['image/png', { kinds: ['image'], maxBytes: 5 * 1024 * 1024 }],
+      ['video/mp4', { kinds: ['video'], maxBytes: 16 * 1024 * 1024 }],
+      ['video/3gpp', { kinds: ['video'], maxBytes: 16 * 1024 * 1024 }],
+      ['audio/mpeg', { kinds: ['audio'], maxBytes: 16 * 1024 * 1024 }],
+      ['audio/mp4', { kinds: ['audio'], maxBytes: 16 * 1024 * 1024 }],
+      ['audio/aac', { kinds: ['audio'], maxBytes: 16 * 1024 * 1024 }],
+      ['audio/amr', { kinds: ['audio'], maxBytes: 16 * 1024 * 1024 }],
+      ['audio/ogg', { kinds: ['audio'], maxBytes: 16 * 1024 * 1024 }],
+      ['application/pdf', { kinds: ['document'], maxBytes: 50 * 1024 * 1024 }],
+      ['text/plain', { kinds: ['document'], maxBytes: 50 * 1024 * 1024 }],
+      ['application/msword', { kinds: ['document'], maxBytes: 50 * 1024 * 1024 }],
+      ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', { kinds: ['document'], maxBytes: 50 * 1024 * 1024 }],
+      ['application/vnd.ms-excel', { kinds: ['document'], maxBytes: 50 * 1024 * 1024 }],
+      ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', { kinds: ['document'], maxBytes: 50 * 1024 * 1024 }],
+      ['application/vnd.ms-powerpoint', { kinds: ['document'], maxBytes: 50 * 1024 * 1024 }],
+      ['application/vnd.openxmlformats-officedocument.presentationml.presentation', { kinds: ['document'], maxBytes: 50 * 1024 * 1024 }],
+    ]);
+    const policy = allowed.get(input.mimeType);
+    if (!policy || !policy.kinds.includes(input.kind)) {
+      throw new Error('WhatsApp media upload MIME type is unsupported for this media kind');
+    }
+    if (input.bytes.byteLength > policy.maxBytes) {
+      throw new Error('WhatsApp media upload exceeds the conservative Cloud API limit');
+    }
+
+    const filename = input.filename.trim().slice(0, 180);
+    if (!filename) throw new Error('WhatsApp media upload filename is required');
+
+    const form = new FormData();
+    form.set('messaging_product', 'whatsapp');
+    form.set('file', new Blob([input.bytes], { type: input.mimeType }), filename);
+
+    const response = await fetch(
+      `https://graph.facebook.com/${this.graphVersion}/${this.phoneNumberId}/media`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${this.token}` },
+        body: form,
+      },
+    );
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new ProviderHttpError(
+        `Meta WhatsApp media upload failed (${response.status}): ${detail.slice(0, 500)}`,
+        response.status,
+        extractProviderRateLimitEvidence(response.headers),
+      );
+    }
+
+    const body = await response.json() as { id?: string };
+    const mediaId = body.id?.trim();
+    if (!mediaId) throw new Error('Meta WhatsApp media upload returned no media id');
+    return { mediaId };
+  }
+
+  async sendMedia(input: WhatsAppMediaSendInput): Promise<WhatsAppSendResult> {
+    const mediaId = input.mediaId.trim();
+    if (!mediaId) throw new Error('WhatsApp media id is required');
+    const caption = input.caption?.trim().slice(0, 1024) || undefined;
+    const filename = input.filename?.trim().slice(0, 180) || undefined;
+
+    const media: Record<string, unknown> = { id: mediaId };
+    if (caption && input.kind !== 'audio') media.caption = caption;
+    if (filename && input.kind === 'document') media.filename = filename;
+
+    return this.sendPayload({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: input.to,
+      type: input.kind,
+      [input.kind]: media,
+      ...(input.replyToMessageId ? { context: { message_id: input.replyToMessageId } } : {}),
     });
   }
 
