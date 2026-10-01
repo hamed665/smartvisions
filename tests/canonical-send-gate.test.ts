@@ -55,6 +55,19 @@ describe('canonical send safety', () => {
     ]));
   });
 
+  it('blocks previously approved AI after a newer native WhatsApp human reply takes over', () => {
+    const result = evaluateCanonicalSendSafety({
+      ...base,
+      channel: 'WHATSAPP',
+      leadAgentMode: 'HUMAN',
+      conversationAgentMode: 'HUMAN',
+      conversationRequiresHuman: true,
+      whatsappPolicyAllowed: true,
+    });
+    expect(result.allowed).toBe(false);
+    expect(result.blocks).toContain('HUMAN_TAKEOVER');
+  });
+
   it('keeps shadow mode fail-closed except for a separately verified exception', () => {
     expect(evaluateCanonicalSendSafety({ ...base, shadowMode: true }).blocks).toContain('SHADOW_MODE_ENABLED');
     expect(evaluateCanonicalSendSafety({ ...base, shadowMode: true, shadowModeExceptionVerified: true }).allowed).toBe(true);
