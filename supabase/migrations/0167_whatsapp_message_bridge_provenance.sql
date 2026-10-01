@@ -211,6 +211,129 @@ revoke all on function public.finalize_whatsapp_chatwoot_sync(uuid,text,bigint)
 grant execute on function public.finalize_whatsapp_chatwoot_sync(uuid,text,bigint)
   to service_role;
 
+
+create or replace function public.reconcile_whatsapp_delivery_status(
+  p_organization_id uuid,
+  p_provider_message_id text,
+  p_status text,
+  p_occurred_at timestamptz,
+  p_tenant_business_id uuid,
+  p_branch_id uuid,
+  p_binding_id uuid,
+  p_conversation_id text default null,
+  p_pricing_category text default null,
+  p_error_code text default null,
+  p_error_title text default null
+)
+returns table(
+  outreach_matched integer,
+  conversation_matched integer,
+  canonical_status text
+)
+language plpgsql
+security definer
+set search_path=public,pg_catalog
+as $
+declare
+  v_provider text:=trim(coalesce(p_provider_message_id,''));
+  v_raw text:=lower(trim(coalesce(p_status,'')));
+  v_status text;
+  v_outreach_status text;
+  v_outreach_count integer:=0;
+  v_conversation_count integer:=0;
+  v_at timestamptz:=coalesce(p_occurred_at,statement_timestamp());
+begin
+  if p_organization_id is null
+     or p_tenant_business_id is null
+     or p_binding_id is null
+     or length(v_provider) not between 1 and 512
+  then
+    raise exception 'invalid WhatsApp delivery reconciliation scope';
+  end if;
+
+  v_status:=case v_raw
+    when 'sent' then 'ACCEPTED'
+    when 'delivered' then 'DELIVERED'
+    when 'read' then 'READ'
+    when 'failed' then 'FAILED'
+    else null
+  end;
+
+  if v_status is null then
+    return query select 0,0,null::text;
+    return;
+  end if;
+
+  v_outreach_status:=case v_status
+    when 'ACCEPTED' then 'SENT'
+    when 'DELIVERED' then 'DELIVERED'
+    when 'READ' then 'READ'
+    when 'FAILED' then 'FAILED'
+  end;
+
+  update public.outreach_messages m
+     set status=case
+       when v_status='READ' then 'READ'
+       when v_status='DELIVERED' and upper(coalesce(m.status,'')) not in ('READ','FAILED') then 'DELIVERED'
+       when v_status='ACCEPTED' and upper(coalesce(m.status,'')) not in ('DELIVERED','READ','FAILED') then 'SENT'
+       when v_status='FAILED' and upper(coalesce(m.status,'')) not in ('DELIVERED','READ') then 'FAILED'
+       else m.status
+     end,
+     metadata=coalesce(m.metadata,'{}'::jsonb)||jsonb_build_object(
+       'whatsapp_status',v_raw,
+       'conversation_id',p_conversation_id,
+       'pricing_category',p_pricing_category,
+       'error_code',p_error_code,
+       'error_title',p_error_title,
+       'tenant_business_id',p_tenant_business_id,
+       'branch_id',p_branch_id,
+       'communication_channel_binding_id',p_binding_id,
+       'provider_status_occurred_at',v_at
+     )
+   where m.organization_id=p_organization_id
+     and m.provider_message_id=v_provider
+     and m.channel='WHATSAPP';
+  get diagnostics v_outreach_count=row_count;
+
+  update public.conversation_messages m
+     set provider_delivery_status=case
+       when v_status='READ' then 'READ'
+       when v_status='DELIVERED' and coalesce(m.provider_delivery_status,'') not in ('READ','FAILED') then 'DELIVERED'
+       when v_status='ACCEPTED' and coalesce(m.provider_delivery_status,'') not in ('DELIVERED','READ','FAILED') then 'ACCEPTED'
+       when v_status='FAILED' and coalesce(m.provider_delivery_status,'') not in ('DELIVERED','READ') then 'FAILED'
+       else m.provider_delivery_status
+     end,
+     delivered_at=case
+       when v_status in ('DELIVERED','READ') and m.delivered_at is null then v_at
+       else m.delivered_at
+     end,
+     read_at=case
+       when v_status='READ' and m.read_at is null then v_at
+       else m.read_at
+     end,
+     metadata=coalesce(m.metadata,'{}'::jsonb)||jsonb_build_object(
+       'last_whatsapp_status',v_raw,
+       'provider_status_occurred_at',v_at,
+       'pricing_category',p_pricing_category,
+       'error_code',p_error_code,
+       'error_title',p_error_title
+     )
+   where m.organization_id=p_organization_id
+     and m.provider_message_id=v_provider
+     and m.channel='WHATSAPP';
+  get diagnostics v_conversation_count=row_count;
+
+  return query select v_outreach_count,v_conversation_count,v_status;
+end
+$;
+
+revoke all on function public.reconcile_whatsapp_delivery_status(
+  uuid,text,text,timestamptz,uuid,uuid,uuid,text,text,text,text
+) from public,anon,authenticated,service_role;
+grant execute on function public.reconcile_whatsapp_delivery_status(
+  uuid,text,text,timestamptz,uuid,uuid,uuid,text,text,text,text
+) to service_role;
+
 -- Slice 5 permits a Business-wide Channel::Api mapping. Conversation projection
 -- must preserve that exact nullable Branch scope rather than inventing a Branch.
 alter table public.unified_inbox_conversation_projections
