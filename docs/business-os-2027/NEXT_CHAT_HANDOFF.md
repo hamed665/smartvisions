@@ -1,5 +1,27 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## WhatsApp customer onboarding Slice 4 Production closeout — 2026-10-01
+
+- Slices 1–3 remain **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** and their canonical binding/setup-attempt/`WHATSAPP_SETUP` authorities remain unchanged.
+- Slice 4 disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled Meta provisioning/subscription/recovery scope.
+- PR #382 final head `d39ca5db89f1661138dc4709cff8ab60a6bea579` passed exact-head CI `36880398289`, then squash-merged to `main@3e0eb5ec585b1be5d65ba48531c5026d38324178`.
+- Exact-main CI `36880881774` and Cloudflare Production Deploy `36881305912` both succeeded on that exact merge SHA.
+- Slice 4 required no schema migration. Production remains through `0166_meta_whatsapp_mobile_wizard_completion@20261001135536`.
+- WABA phone readback, `subscribed_apps` reconciliation, ambiguous-success recovery and bounded new-number Cloud API registration now reuse the existing Meta adapter/binding/Vault authority.
+- Six-digit registration PIN material is ephemeral and never persisted/audited. `EXISTING_API_RECONNECT` does not force registration, and `BUSINESS_APP_COEXISTENCE` remains fail-closed/non-destructive.
+- Production stayed side-effect clean: Setup Attempts 0, Slice-4 provisioning audit rows 0, provisioning-error bindings 0 and registration-required bindings 0. No synthetic tenant/binding/credential/provider mutation or customer send was used.
+- Existing advisor baseline remains unchanged for security/FK/RLS-plan/policy findings.
+
+**Owner-prioritized continuation overlay:** WhatsApp onboarding contract **Slice 5 — Existing Chatwoot provisioning integration**.
+
+Fresh audit already confirms the required Chatwoot foundation exists: canonical `chatwoot_account_mappings` / `chatwoot_inbox_mappings`, Account/API Inbox provisioning, marker-based ambiguous-create reconciliation, Vault capture, reconciliation receipts and activation gating. The current gaps to solve are onboarding orchestration onto those exact authorities, support for business-wide bindings where `branch_id` is null, and a bounded trusted path for remote setup that does not grant the external Meta admin OWNER/ADMIN or normal panel authority.
+
+Do not create a second Chatwoot Account/Inbox authority, second webhook receiver, second secret store or second communication plane. Preserve `Meta ↔ Smart Core ↔ Chatwoot Channel::Api`.
+
+**Stable program cursor preserved for return after the owner-prioritized WhatsApp onboarding work:** `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.
+
+---
+
 ## WhatsApp customer onboarding Slice 3 Production closeout — 2026-10-01
 
 - Slices 1–2 remain **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** and their non-destructive connection, setup-attempt and bounded `WHATSAPP_SETUP` invitation/session authorities remain canonical.
