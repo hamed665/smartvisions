@@ -35,6 +35,16 @@ type SubscribedApp = {
   };
 };
 
+type PhoneNumberPage = {
+  data?: PhoneNumberRow[];
+  paging?: { next?: string };
+};
+
+type SubscribedAppsPage = {
+  data?: SubscribedApp[];
+  paging?: { next?: string };
+};
+
 function clean(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
@@ -95,15 +105,14 @@ async function readPhoneEvidence(input: {
   let phone: PhoneNumberRow | null = null;
 
   for (let page = 0; next && page < 10; page += 1) {
-    const { response, body } = await graphJson<{
-      data?: PhoneNumberRow[];
-      paging?: { next?: string };
-    }>({
+    const result = await graphJson<PhoneNumberPage>({
       graphVersion: input.graphVersion,
       accessToken: input.accessToken,
       path: next,
       fetchImpl: input.fetchImpl,
     });
+    const response: Response = result.response;
+    const body: MetaGraphResponse<PhoneNumberPage> | null = result.body;
 
     if (!response.ok) {
       throw new Error('Meta phone eligibility readback failed');
@@ -136,15 +145,14 @@ async function isAppSubscribed(input: {
     `https://graph.facebook.com/${input.graphVersion}/${encodeURIComponent(input.wabaId)}/subscribed_apps?limit=100`;
 
   for (let page = 0; next && page < 10; page += 1) {
-    const { response, body } = await graphJson<{
-      data?: SubscribedApp[];
-      paging?: { next?: string };
-    }>({
+    const result = await graphJson<SubscribedAppsPage>({
       graphVersion: input.graphVersion,
       accessToken: input.accessToken,
       path: next,
       fetchImpl: input.fetchImpl,
     });
+    const response: Response = result.response;
+    const body: MetaGraphResponse<SubscribedAppsPage> | null = result.body;
 
     if (!response.ok) {
       throw new Error('Meta webhook subscription readback failed');
