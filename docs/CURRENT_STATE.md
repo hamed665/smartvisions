@@ -1,5 +1,29 @@
 # Smart Visions Growth OS — Current Production State
 
+## WhatsApp customer onboarding Slice 2 Production closeout — 2026-10-01
+
+- Contract slice: **Secure Remote Setup Invitation**, owned by existing `UX-BUSINESS-WEB` / `ENT-IAM` / `DEV-INTEGRATIONS` scope. No new Work Package, IAM/user directory, WhatsApp connection authority, provider stack, secret store, CRM, message store or Chatwoot authority was introduced.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled Slice 2 invitation/session scope only.
+- Implementation PR #378 final head `fb7018647bf8f632bedff678f450564ee200252c` passed exact-head CI `36865430981` across lint, typecheck, tests, the PostgreSQL 17 migration/smoke chain, Next build, Vinext and Cloudflare scheduled verification. It squash-merged to canonical `main@ba837577f38c90b390474de1998a2ce84de3c622`.
+- Exact-main CI `36865851776` succeeded on that merge SHA. Cloudflare Production Deploy `36866185938` also succeeded on the exact same SHA through credential preflight, isolated release-candidate deployment/smoke, controlled SSR load, exact-bundle Production promotion, Worker Route verification, routed Production smoke and safe API/webhook rejection smoke.
+- Production migration `0165_meta_whatsapp_remote_setup_invitation` is live as version `20261001130718`; merged migration blob SHA `46ca7d1d3821ed84135013546f64d891cecb8a7a`.
+- Remote setup extends the existing `communication_channel_setup_attempts` child operational state only. The invitation/session capability is still anchored to the canonical Organization + tenant Business + binding + attempt + binding version + connection mode + purpose. `communication_channel_bindings` remains the logical connection authority.
+- The external Meta administrator is **not** turned into a Supabase Auth user, Organization member or `member_scope_assignment`. The public setup surface receives only a bounded `WHATSAPP_SETUP` capability; it has no CRM, Billing, Organization Settings, unrelated integration, cross-business, ADMIN or OWNER authority.
+- Invitation/session bearer material is generated server-side from 256-bit randomness and persisted only as SHA-256 hashes. The invitation is carried in a URL fragment, removed from the address bar before redemption, redeemable once, and capped by the existing setup-attempt expiry (maximum 30 minutes). Redemption yields a separate session capped at 20 minutes.
+- The setup session cookie is HttpOnly, SameSite=Strict, Production-secure and path-scoped to `/setup/whatsapp`. The server context command revalidates session/attempt expiry, revocation, canonical binding version/state, tenant Business state and enabled Meta/WhatsApp integration on every read.
+- OWNER issue/revoke operations and public redeem/context operations execute only through service-role server routes. All four new database RPCs are SECURITY INVOKER, executable by `service_role` only; `anon` and `authenticated` have no direct EXECUTE. Direct authenticated access to `communication_channel_setup_attempts` remains absent and RLS remains enabled.
+- Same-number `BUSINESS_APP_COEXISTENCE` remains non-destructive and fail-closed for actual activation. Slice 2 establishes secure setup authorization only; it does not add Meta OAuth completion, credential mutation, provider provisioning, a customer/provider send, or any fallback to Delete Account/full migration.
+- Production remained side-effect clean after migration: Setup Attempts 0 and Slice-2 remote-setup audit events 0. No synthetic tenant, binding, invite, session, credential, Meta asset, message or provider call was created for acceptance.
+- Production safety remains unchanged: Shadow Mode ON; global Kill Switch OFF; WhatsApp AI pause OFF; Agents pause OFF.
+- Post-`0165` advisors show no Slice-2 regression: security remains RLS-enabled/no-policy INFO 15 plus leaked-password-protection WARN 1; performance remains unindexed FKs 14, auth RLS initPlan 16 and multiple permissive policies 6. Unused-index INFO is 277 and includes the two new zero-row invitation/session hash indexes, which have no real traffic yet.
+- **Not claimed here:** Slice 3 mobile-first Meta authorization/resume wizard, Meta subscription/recovery orchestration, Chatwoot onboarding orchestration, message provenance/native activity, actual Coexistence/Human-AI arbitration, reconnect/disconnect lifecycle completion, or first real-tenant E2E.
+
+**Owner-prioritized WhatsApp continuation:** contract Slice 3 — **Mobile-first Wizard + Preflight + Setup Later + Resume**. It must reuse the exact Slice-2 `WHATSAPP_SETUP` session and Slice-1 setup attempt rather than creating another identity, invitation authority or connection record.
+
+**Stable program cursor preserved for return after the owner-prioritized WhatsApp work:** `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.
+
+---
+
 ## WhatsApp customer onboarding Slice 1 Production closeout — 2026-10-01
 
 - Contract slice: **Connection Contract + Attempt/Mode + trusted completion + Meta asset validation**, owned by existing `COMM-TENANT-BRIDGE` / `ENT-SECURITY` / `DEV-INTEGRATIONS` scope. No new Work Package or parallel WhatsApp authority was introduced.
