@@ -47,7 +47,7 @@ export function MetaWhatsAppEmbeddedSignup(props: {
   const [bindingId, setBindingId] = useState(props.bindings[0]?.id ?? '');
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>(defaultMode(props.bindings[0]));
   const [sdkReady, setSdkReady] = useState(false);
-  const [state, setState] = useState<'IDLE' | 'PREPARING' | 'WAITING' | 'SAVING' | 'PROVISIONING' | 'REGISTRATION_REQUIRED' | 'PROVISIONING_ERROR' | 'DONE' | 'ERROR'>('IDLE');
+  const [state, setState] = useState<'IDLE' | 'PREPARING' | 'WAITING' | 'SAVING' | 'PROVISIONING' | 'REGISTRATION_REQUIRED' | 'PROVISIONING_ERROR' | 'CHATWOOT_PROVISIONING' | 'CHATWOOT_ACTION_REQUIRED' | 'DONE' | 'ERROR'>('IDLE');
   const [message, setMessage] = useState('');
   const [registrationPin, setRegistrationPin] = useState('');
   const codeRef = useRef<string | null>(null);
@@ -56,6 +56,39 @@ export function MetaWhatsAppEmbeddedSignup(props: {
   const savingRef = useRef(false);
 
   const selected = props.bindings.find((item) => item.id === bindingId);
+
+  async function provisionChatwootSelected(targetBindingId: string) {
+    setState('CHATWOOT_PROVISIONING');
+    setMessage('Meta setup is confirmed. Preparing the existing Smart Visions communication Inbox…');
+
+    try {
+      const response = await fetch('/api/integrations/meta/whatsapp/embedded-signup/chatwoot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bindingId: targetBindingId }),
+      });
+      const body = await response.json() as {
+        error?: string;
+        ready?: boolean;
+        correlationId?: string;
+      };
+      if (!response.ok || !body.ready) {
+        const suffix = body.correlationId ? ` Support ID: ${body.correlationId}` : '';
+        throw new Error((body.error || 'Communication Inbox provisioning is not ready.') + suffix);
+      }
+
+      savingRef.current = false;
+      setState('DONE');
+      setMessage('WhatsApp and the Smart Visions communication Inbox are ready. Refreshing…');
+      window.setTimeout(() => window.location.reload(), 900);
+    } catch (error) {
+      savingRef.current = false;
+      setState('CHATWOOT_ACTION_REQUIRED');
+      setMessage(error instanceof Error
+        ? error.message
+        : 'WhatsApp is connected, but the communication Inbox still needs owner reconciliation.');
+    }
+  }
 
   async function provisionSelected(targetBindingId: string, pin?: string) {
     setState('PROVISIONING');
@@ -88,9 +121,8 @@ export function MetaWhatsAppEmbeddedSignup(props: {
       }
 
       setRegistrationPin('');
-      setState('DONE');
-      setMessage(`WhatsApp provider setup confirmed${body.displayPhoneNumber ? ` · ${body.displayPhoneNumber}` : ''}. Refreshing…`);
-      window.setTimeout(() => window.location.reload(), 900);
+      setMessage(`WhatsApp provider setup confirmed${body.displayPhoneNumber ? ` · ${body.displayPhoneNumber}` : ''}. Preparing the communication Inbox…`);
+      await provisionChatwootSelected(targetBindingId);
     } catch (error) {
       savingRef.current = false;
       if (pin) {
@@ -177,6 +209,7 @@ export function MetaWhatsAppEmbeddedSignup(props: {
       || state === 'WAITING'
       || state === 'SAVING'
       || state === 'PROVISIONING'
+      || state === 'CHATWOOT_PROVISIONING'
     ) return;
 
     if (connectionMode === 'BUSINESS_APP_COEXISTENCE') {
@@ -287,13 +320,15 @@ export function MetaWhatsAppEmbeddedSignup(props: {
       <button
         type="button"
         onClick={() => void launch()}
-        disabled={!configured || !sdkReady || !selected || state === 'PREPARING' || state === 'WAITING' || state === 'SAVING' || state === 'PROVISIONING'}
+        disabled={!configured || !sdkReady || !selected || state === 'PREPARING' || state === 'WAITING' || state === 'SAVING' || state === 'PROVISIONING' || state === 'CHATWOOT_PROVISIONING'}
       >
-        {state === 'PROVISIONING'
-          ? 'Finalizing provider setup…'
-          : state === 'PREPARING' || state === 'WAITING' || state === 'SAVING'
-            ? 'Connecting…'
-            : 'Connect with Meta'}
+        {state === 'CHATWOOT_PROVISIONING'
+          ? 'Preparing communication Inbox…'
+          : state === 'PROVISIONING'
+            ? 'Finalizing provider setup…'
+            : state === 'PREPARING' || state === 'WAITING' || state === 'SAVING'
+              ? 'Connecting…'
+              : 'Connect with Meta'}
       </button>
       {state === 'REGISTRATION_REQUIRED' && selected ? <div style={{ display: 'grid', gap: 8 }}>
         <label>WhatsApp two-step verification PIN
@@ -319,6 +354,12 @@ export function MetaWhatsAppEmbeddedSignup(props: {
       </div> : null}
       {state === 'PROVISIONING_ERROR' && selected
         ? <button type="button" onClick={() => void provisionSelected(selected.id)}>Retry provider verification</button>
+        : null}
+      {state === 'CHATWOOT_ACTION_REQUIRED' && selected
+        ? <div style={{ display: 'grid', gap: 8 }}>
+            <p className="muted smallText">Meta authorization is already saved. Retrying this step does not repeat Meta login or create another WhatsApp connection.</p>
+            <button type="button" onClick={() => void provisionChatwootSelected(selected.id)}>Retry communication Inbox</button>
+          </div>
         : null}
     </> : <p className="muted">Create an active tenant Business and its WhatsApp communication binding before connecting Meta assets.</p>}
     {!configured ? <p className="muted">Embedded Signup is code-ready but blocked until the Meta App ID and Embedded Signup Configuration ID are configured for this environment.</p> : null}
