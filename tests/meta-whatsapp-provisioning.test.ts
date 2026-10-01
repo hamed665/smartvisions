@@ -20,8 +20,6 @@ describe('Meta WhatsApp provisioning reconciler', () => {
             display_phone_number: '+96890000000',
             verified_name: 'Clinic',
             quality_rating: 'GREEN',
-            platform_type: 'CLOUD_API',
-            code_verification_status: 'VERIFIED',
           }],
         }), { status: 200 });
       }
@@ -46,8 +44,6 @@ describe('Meta WhatsApp provisioning reconciler', () => {
       subscriptionCreated: false,
       displayPhoneNumber: '+96890000000',
       verifiedName: 'Clinic',
-      platformType: 'CLOUD_API',
-      codeVerificationStatus: 'VERIFIED',
     });
 
     expect(fetchImpl).toHaveBeenCalledTimes(2);
