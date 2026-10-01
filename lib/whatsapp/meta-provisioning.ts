@@ -33,6 +33,10 @@ type PhoneNumberRow = {
 type SubscribedApp = {
   id?: string;
   name?: string;
+  whatsapp_business_api_data?: {
+    id?: string;
+    name?: string;
+  };
 };
 
 function clean(value: unknown) {
@@ -122,7 +126,9 @@ async function isAppSubscribed(input: {
     throw new Error('Meta webhook subscription readback failed');
   }
 
-  return Boolean(body?.data?.some((row) => clean(row.id) === input.appId));
+  return Boolean(body?.data?.some((row) =>
+    clean(row.whatsapp_business_api_data?.id ?? row.id) === input.appId,
+  ));
 }
 
 export async function provisionMetaWhatsAppBinding(input: {
