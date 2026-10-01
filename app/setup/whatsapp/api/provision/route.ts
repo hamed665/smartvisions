@@ -4,6 +4,7 @@ import { createSupabaseServiceClient } from '@/lib/supabase/service';
 import { metaGraphVersion } from '@/lib/whatsapp/meta-onboarding';
 import {
   provisionMetaWhatsAppBinding,
+  registerMetaWhatsAppPhone,
   safeMetaWhatsAppProvisioningError,
 } from '@/lib/whatsapp/meta-provisioning';
 import {
@@ -27,11 +28,14 @@ type RemoteProvisioningContext = {
   provider_destination_id: string | null;
 };
 
+type ProvisionBody = { pin?: string };
+
 export async function POST(request: NextRequest) {
   const service = createSupabaseServiceClient();
   let context: RemoteProvisioningContext | null = null;
 
   try {
+    const body = await request.json().catch(() => ({})) as ProvisionBody;
     const secret = normalizeWhatsAppRemoteSetupSecret(
       request.cookies.get(WHATSAPP_REMOTE_SETUP_COOKIE)?.value,
     );
@@ -85,6 +89,37 @@ export async function POST(request: NextRequest) {
       phoneNumberId: resolved.phoneNumberId,
     });
 
+    let registrationConfirmed = context.connection_mode !== 'API_NEW_NUMBER';
+    if (context.connection_mode === 'API_NEW_NUMBER') {
+      const pin = typeof body.pin === 'string' ? body.pin.trim() : '';
+      if (!pin) {
+        await service
+          .from('communication_channel_bindings')
+          .update({
+            last_error_code: 'META_PHONE_REGISTRATION_REQUIRED',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('organization_id', context.organization_id)
+          .eq('id', context.binding_id);
+        return NextResponse.json({
+          ok: false,
+          provisioned: false,
+          subscriptionConfirmed: true,
+          registrationRequired: true,
+          displayPhoneNumber: evidence.displayPhoneNumber,
+          message: 'Choose a 6-digit WhatsApp two-step verification PIN to finish Cloud API registration.',
+        }, { status: 409, headers: { 'Cache-Control': 'no-store' } });
+      }
+
+      await registerMetaWhatsAppPhone({
+        graphVersion: metaGraphVersion(),
+        accessToken: resolved.accessToken,
+        phoneNumberId: resolved.phoneNumberId,
+        pin,
+      });
+      registrationConfirmed = true;
+    }
+
     const now = new Date().toISOString();
     const { error: bindingError } = await service
       .from('communication_channel_bindings')
@@ -115,6 +150,7 @@ export async function POST(request: NextRequest) {
         phone_number_id: evidence.phoneNumberId,
         subscription_confirmed: evidence.subscriptionConfirmed,
         subscription_created: evidence.subscriptionCreated,
+        registration_confirmed: registrationConfirmed,
         quality_rating: evidence.qualityRating,
         platform_type: evidence.platformType,
         code_verification_status: evidence.codeVerificationStatus,
@@ -127,6 +163,8 @@ export async function POST(request: NextRequest) {
       ok: true,
       provisioned: true,
       subscriptionConfirmed: true,
+      registrationRequired: false,
+      registrationConfirmed,
       displayPhoneNumber: evidence.displayPhoneNumber,
       verifiedName: evidence.verifiedName,
       qualityRating: evidence.qualityRating,
