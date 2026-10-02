@@ -124,6 +124,10 @@ jobs:
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f /work/tests/sql/booking-catalog-legacy-authority-bootstrap.sql
 
+          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
+            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f /work/tests/sql/catalog-v2-legacy-authority-bootstrap.sql
+
           # Keep every numbered migration after the explicit foundational chain under PostgreSQL 17.
           # This closes the gap where 0102+ files existed but were never executed by CI.
           late_count=0
@@ -157,6 +161,10 @@ jobs:
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f /work/tests/sql/meta-whatsapp-reconnect-disconnect-slice8-smoke.sql
+
+          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
+            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f /work/tests/sql/catalog-v2-smoke.sql
 
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
