@@ -28,6 +28,7 @@ type Props = {
   defaultValidUntil?:string;
   defaultTerms?:string;
   defaultNotes?:string;
+  initialLines?:Line[];
 };
 
 function blankLine(catalog:CatalogOption[]):Line {
@@ -49,7 +50,7 @@ function subjectPayload(line:Line) {
 
 export function QuoteComposer(props:Props) {
   const [seller,setSeller]=useState(props.tenantBusinesses[0]?.id ?? '');
-  const [lines,setLines]=useState<Line[]>([blankLine(props.catalog)]);
+  const [lines,setLines]=useState<Line[]>(props.initialLines?.length ? props.initialLines : [blankLine(props.catalog)]);
   const catalog=useMemo(
     ()=>props.catalog.filter(item=>!item.tenantBusinessId || !seller || item.tenantBusinessId===seller),
     [props.catalog,seller]
