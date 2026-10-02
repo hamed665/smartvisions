@@ -46,6 +46,8 @@ describe('BRAIN-BUSINESS-TWIN contract',()=>{
     expect(migration).toContain('BUSINESS_TWIN_CONFIGURATION_SET');
     expect(migration).toContain('BUSINESS_TWIN_CONFIGURATION_DELETED');
     expect(migration).toContain('BUSINESS_TWIN_PUBLISHED');
+    expect(migration).toContain("m.role in ('OWNER','ADMIN')");
+    expect(migration).toContain('business_twin_versions_manager_read');
     expect(actions).toContain("const MANAGER_ROLES=new Set(['OWNER','ADMIN'])");
     expect(actions).toContain("rpc('publish_business_twin_v1'");
     expect(actions).toContain("rpc('set_business_twin_configuration_v1'");
@@ -54,6 +56,7 @@ describe('BRAIN-BUSINESS-TWIN contract',()=>{
   it('exposes a clear operator read model without claiming a second source of truth',()=>{
     expect(page).toContain('Versioned composition of canonical business truth');
     expect(page).toContain('not another source-of-truth database');
+    expect(page).toContain("if(!canManage)notFound()");
     expect(page).toContain('Publish current truth');
     expect(page).toContain('Stored secrets and Knowledge payload bodies are deliberately excluded');
     expect(shell).toContain("['Business Twin', '/business-twin']");
