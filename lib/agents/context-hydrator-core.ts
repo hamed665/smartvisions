@@ -218,7 +218,20 @@ export async function hydrateAgentContext(input: {
     : [];
 
   const knowledgeContext: KnowledgeSnapshot[] = ((knowledgeResult.data ?? []) as Array<Record<string, unknown>>)
-    .map((row) => ({ key: clip(row.knowledge_key, 120), version: numberOrZero(row.version), payload: row.payload }))
+    .map((row) => ({
+      key: clip(row.knowledge_key, 120),
+      version: numberOrZero(row.version),
+      payload: row.payload,
+      sourceType: clip(row.source_type, 40) || undefined,
+      sourceLocator: clip(row.source_locator, 1000) || undefined,
+      provenance: safeRecord(row.provenance),
+      sensitivity: clip(row.sensitivity, 40) || undefined,
+      scopeType: clip(row.scope_type, 40) || undefined,
+      stale: row.stale === true,
+      conflictState: clip(row.conflict_state, 40) || undefined,
+      confidence: row.confidence == null ? undefined : numberOrZero(row.confidence),
+      reviewState: clip(row.review_state, 40) || undefined,
+    }))
     .filter((item) => item.key && item.version > 0);
 
   const activePrompts: Partial<Record<AgentName, ActivePromptSnapshot>> = {};

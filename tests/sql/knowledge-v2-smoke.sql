@@ -242,4 +242,159 @@ begin
 end;
 $authority_contract$;
 
+
+reset role;
+set role service_role;
+
+insert into public.brands(id,organization_id,name,slug)
+values ('00000000-0000-0000-0000-00000000f721','00000000-0000-0000-0000-00000000f701','Knowledge Brand','knowledge-brand');
+
+insert into public.tenant_businesses(id,organization_id,brand_id,name,slug)
+values ('00000000-0000-0000-0000-00000000f722','00000000-0000-0000-0000-00000000f701','00000000-0000-0000-0000-00000000f721','Knowledge Business','knowledge-business');
+
+insert into public.branches(id,organization_id,tenant_business_id,name,code)
+values ('00000000-0000-0000-0000-00000000f723','00000000-0000-0000-0000-00000000f701','00000000-0000-0000-0000-00000000f722','Knowledge Branch','KNOW');
+
+insert into public.departments(id,organization_id,branch_id,name,code)
+values ('00000000-0000-0000-0000-00000000f724','00000000-0000-0000-0000-00000000f701','00000000-0000-0000-0000-00000000f723','Knowledge Department','KNOW');
+
+insert into public.teams(id,organization_id,department_id,name,code)
+values ('00000000-0000-0000-0000-00000000f725','00000000-0000-0000-0000-00000000f701','00000000-0000-0000-0000-00000000f724','Knowledge Team','KNOW');
+
+do $scope_hardening_contract$
+declare
+  org_version record;
+  team_source public.knowledge_sources%rowtype;
+  failure_source public.knowledge_sources%rowtype;
+  failed_source public.knowledge_sources%rowtype;
+  team_staged record;
+  team_approved public.knowledge_versions%rowtype;
+  active_count integer;
+  team_context_count integer;
+begin
+  perform private.knowledge_v2_validate_scope(
+    '00000000-0000-0000-0000-00000000f701','BRAND',
+    '00000000-0000-0000-0000-00000000f721',null,null,null,null
+  );
+  perform private.knowledge_v2_validate_scope(
+    '00000000-0000-0000-0000-00000000f701','DEPARTMENT',
+    null,null,null,'00000000-0000-0000-0000-00000000f724',null
+  );
+  perform private.knowledge_v2_validate_scope(
+    '00000000-0000-0000-0000-00000000f701','TEAM',
+    null,null,null,null,'00000000-0000-0000-0000-00000000f725'
+  );
+
+  select * into org_version from public.publish_manual_knowledge_v2(
+    '00000000-0000-0000-0000-00000000f701',
+    '00000000-0000-0000-0000-00000000f711',
+    'scope_shared','{"text":"Organization truth."}'::jsonb,'knowledge-scope-org-ci'
+  );
+
+  select * into failure_source from public.configure_knowledge_source_scope_v2(
+    '00000000-0000-0000-0000-00000000f701',
+    '00000000-0000-0000-0000-00000000f711',
+    'failure_source','WEBSITE','Failure Source','https://example.invalid','ORGANIZATION',
+    null,'INTERNAL','ACTIVE','MANUAL',null,'{"fixture":"failure"}'::jsonb,
+    null,'knowledge-failure-source-ci'
+  );
+
+  select * into failed_source from public.record_knowledge_source_failure_v2(
+    '00000000-0000-0000-0000-00000000f701',
+    '00000000-0000-0000-0000-00000000f711',
+    failure_source.id,1,'WEBSITE_FETCH_FAILED','knowledge-source-failure-ci'
+  );
+
+  if failed_source.version<>2 or failed_source.last_error_code<>'WEBSITE_FETCH_FAILED'
+     or failed_source.last_refresh_attempt_at is null then
+    raise exception 'Knowledge Source failed-refresh evidence was not persisted';
+  end if;
+  if exists(
+    select 1 from public.knowledge_versions
+    where organization_id='00000000-0000-0000-0000-00000000f701'
+      and source_id=failure_source.id
+  ) then raise exception 'Failed Knowledge refresh manufactured a Knowledge version'; end if;
+  if not exists(
+    select 1 from public.audit_logs
+    where organization_id='00000000-0000-0000-0000-00000000f701'
+      and action='KNOWLEDGE_SOURCE_REFRESH_FAILED'
+      and entity_id=failure_source.id::text
+  ) then raise exception 'Failed Knowledge refresh did not enter canonical audit history'; end if;
+
+  select * into team_source from public.configure_knowledge_source_scope_v2(
+    '00000000-0000-0000-0000-00000000f701',
+    '00000000-0000-0000-0000-00000000f711',
+    'team_source','API','Team API',null,'TEAM',
+    '00000000-0000-0000-0000-00000000f725',
+    'INTERNAL','ACTIVE','MANUAL',null,'{"fixture":"scope"}'::jsonb,
+    null,'knowledge-scope-source-ci'
+  );
+
+  if team_source.scope_type<>'TEAM' or team_source.team_id<>'00000000-0000-0000-0000-00000000f725' then
+    raise exception 'Team Knowledge Source scope was not persisted canonically';
+  end if;
+
+  select * into team_staged from public.stage_knowledge_version_v2(
+    '00000000-0000-0000-0000-00000000f701',
+    '00000000-0000-0000-0000-00000000f711',
+    team_source.id,'scope_shared','{"text":"Team truth."}'::jsonb,
+    '{"ingestion":"CI_FIXTURE","confidence":0.8}'::jsonb,
+    1,null,null,'knowledge-scope-stage-ci'
+  );
+
+  select * into team_approved from public.approve_knowledge_version_v2(
+    '00000000-0000-0000-0000-00000000f701',
+    '00000000-0000-0000-0000-00000000f711',
+    team_staged.version_id,'knowledge-scope-approve-ci'
+  );
+
+  if team_approved.scope_type<>'TEAM' or team_approved.confidence<>0.8000 then
+    raise exception 'Scoped Knowledge approval/evidence contract failed';
+  end if;
+
+  select count(*) into active_count
+  from public.knowledge_versions
+  where organization_id='00000000-0000-0000-0000-00000000f701'
+    and knowledge_key='scope_shared' and active;
+  if active_count<>2 then
+    raise exception 'Organization and Team Knowledge cannot coexist; active count %',active_count;
+  end if;
+
+  select count(*) into team_context_count
+  from public.get_knowledge_context_v2(
+    '00000000-0000-0000-0000-00000000f701',
+    null,null,null,null,'00000000-0000-0000-0000-00000000f725',
+    false,50
+  )
+  where knowledge_key='scope_shared' and review_state='APPROVED';
+  if team_context_count<>2 then
+    raise exception 'Full scoped resolver should return Organization + Team truth, got %',team_context_count;
+  end if;
+
+  if not has_function_privilege(
+    'service_role',
+    'public.configure_knowledge_source_scope_v2(uuid,uuid,text,text,text,text,text,uuid,text,text,text,integer,jsonb,integer,text)'::regprocedure,
+    'EXECUTE'
+  ) then raise exception 'Full hierarchy source command is not service executable'; end if;
+
+  if has_function_privilege(
+    'authenticated',
+    'public.configure_knowledge_source_scope_v2(uuid,uuid,text,text,text,text,text,uuid,text,text,text,integer,jsonb,integer,text)'::regprocedure,
+    'EXECUTE'
+  ) then raise exception 'Full hierarchy source command leaked to authenticated'; end if;
+
+  if not has_function_privilege(
+    'service_role',
+    'public.record_knowledge_source_failure_v2(uuid,uuid,uuid,integer,text,text)'::regprocedure,
+    'EXECUTE'
+  ) then raise exception 'Knowledge Source failure evidence command is not service executable'; end if;
+
+  if has_function_privilege(
+    'authenticated',
+    'public.record_knowledge_source_failure_v2(uuid,uuid,uuid,integer,text,text)'::regprocedure,
+    'EXECUTE'
+  ) then raise exception 'Knowledge Source failure evidence command leaked to authenticated'; end if;
+end;
+$scope_hardening_contract$;
+
 rollback;

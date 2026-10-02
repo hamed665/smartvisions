@@ -29,6 +29,24 @@ async function sourceRow(service:ReturnType<typeof createSupabaseServiceClient>,
   return data;
 }
 
+async function recordSourceFailureV2(sourceId:string,errorCode:string){
+  try{
+    const current=await managerContext();
+    const service=createSupabaseServiceClient();
+    const source=await sourceRow(service,current.organizationId,sourceId);
+    await service.rpc('record_knowledge_source_failure_v2',{
+      p_organization_id:current.organizationId,
+      p_actor_user_id:current.userId,
+      p_source_id:source.id,
+      p_expected_version:Number(source.version),
+      p_error_code:errorCode,
+      p_request_key:requestKey('knowledge-source-failure'),
+    });
+  }catch{
+    // Preserve the original ingestion error. Failure-evidence recording is best-effort.
+  }
+}
+
 export async function configureKnowledgeSourceV2(fd:FormData){
   const current=await managerContext();
   const service=createSupabaseServiceClient();
@@ -36,7 +54,12 @@ export async function configureKnowledgeSourceV2(fd:FormData){
   const refreshPolicy=field(fd,'refresh_policy').toUpperCase()||'MANUAL';
   const intervalRaw=field(fd,'refresh_interval_minutes');
   const scopeType=field(fd,'scope_type').toUpperCase()||'ORGANIZATION';
-  const {error}=await service.rpc('configure_knowledge_source_v2',{
+  const scopeField:Record<string,string>={
+    BRAND:'brand_id',BUSINESS:'tenant_business_id',BRANCH:'branch_id',
+    DEPARTMENT:'department_id',TEAM:'team_id',
+  };
+  const scopeId=scopeType==='ORGANIZATION'?null:maybeUuid(field(fd,scopeField[scopeType]??''));
+  const {error}=await service.rpc('configure_knowledge_source_scope_v2',{
     p_organization_id:current.organizationId,
     p_actor_user_id:current.userId,
     p_source_key:field(fd,'source_key').toLowerCase(),
@@ -44,8 +67,7 @@ export async function configureKnowledgeSourceV2(fd:FormData){
     p_title:field(fd,'title'),
     p_source_locator:field(fd,'source_locator')||null,
     p_scope_type:scopeType,
-    p_tenant_business_id:scopeType==='BUSINESS'?maybeUuid(field(fd,'tenant_business_id')):null,
-    p_branch_id:scopeType==='BRANCH'?maybeUuid(field(fd,'branch_id')):null,
+    p_scope_id:scopeId,
     p_sensitivity:field(fd,'sensitivity').toUpperCase()||'INTERNAL',
     p_status:field(fd,'status').toUpperCase()||'ACTIVE',
     p_refresh_policy:refreshPolicy,
@@ -102,7 +124,13 @@ export async function stageKnowledgeWebsiteV2(fd:FormData){
   const source=await sourceRow(service,current.organizationId,field(fd,'source_id'));
   if(source.source_type!=='WEBSITE')throw new Error('Selected Knowledge Source is not a website');
   if(!source.source_locator)throw new Error('Website Knowledge Source has no URL');
-  const extracted=await fetchWebsiteKnowledge(source.source_locator);
+  let extracted:Awaited<ReturnType<typeof fetchWebsiteKnowledge>>;
+  try{
+    extracted=await fetchWebsiteKnowledge(source.source_locator);
+  }catch(error){
+    await recordSourceFailureV2(source.id,'WEBSITE_FETCH_FAILED');
+    throw error;
+  }
   const {error}=await service.rpc('stage_knowledge_version_v2',{
     p_organization_id:current.organizationId,
     p_actor_user_id:current.userId,
@@ -131,7 +159,13 @@ export async function stageKnowledgeWebsiteV2(fd:FormData){
 export async function stageKnowledgeFileV2(fd:FormData){
   const file=fd.get('file');
   if(!(file instanceof File))throw new Error('Knowledge file is required');
-  const extracted=await extractKnowledgeFile(file);
+  let extracted:Awaited<ReturnType<typeof extractKnowledgeFile>>;
+  try{
+    extracted=await extractKnowledgeFile(file);
+  }catch(error){
+    await recordSourceFailureV2(field(fd,'source_id'),'FILE_EXTRACTION_FAILED');
+    throw error;
+  }
   await stageSourcePayload({
     sourceId:field(fd,'source_id'),
     knowledgeKey:field(fd,'knowledge_key'),
@@ -160,7 +194,10 @@ export async function stageCanonicalCatalogKnowledgeV2(fd:FormData){
     service.from('catalog_product_variants').select('id,product_id,sku,name,attributes,status,version').eq('organization_id',current.organizationId).eq('status','ACTIVE'),
   ]);
   const firstError=[servicesResult,profilesResult,productsResult,variantsResult].map(r=>r.error).find(Boolean);
-  if(firstError)throw new Error('Canonical Catalog read failed: '+firstError.message);
+  if(firstError){
+    await recordSourceFailureV2(source.id,'CATALOG_READ_FAILED');
+    throw new Error('Canonical Catalog read failed: '+firstError.message);
+  }
 
   const serviceProfiles=new Map((profilesResult.data??[]).map(r=>[String(r.service_id),r]));
   const services=(servicesResult.data??[]).map(row=>({

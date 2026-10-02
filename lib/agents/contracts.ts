@@ -132,6 +132,15 @@ export type KnowledgeSnapshot = {
   key: string;
   version: number;
   payload: unknown;
+  sourceType?: string;
+  sourceLocator?: string;
+  provenance?: Record<string, unknown>;
+  sensitivity?: string;
+  scopeType?: string;
+  stale?: boolean;
+  conflictState?: string;
+  confidence?: number;
+  reviewState?: string;
 };
 
 export type ServiceKnowledgeSnapshot = {
