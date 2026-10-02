@@ -517,6 +517,14 @@ export async function runAutomationRuntimeTick(input: {
     throw new Error(`Invoice automation event reconciliation failed: ${invoiceEvents.error.message}`);
   }
 
+  const paymentEvents = await input.supabase.rpc(
+    'reconcile_payment_automation_events',
+    { p_limit: 100 },
+  );
+  if (paymentEvents.error && paymentEvents.error.code !== 'PGRST202') {
+    throw new Error(`Payment automation event reconciliation failed: ${paymentEvents.error.message}`);
+  }
+
   const approvalDeadlines = await input.supabase.rpc(
     'reconcile_automation_runtime_approval_deadlines',
     { p_limit: 100 },
@@ -584,6 +592,7 @@ export async function runAutomationRuntimeTick(input: {
     orderEvents: orderEvents.error ? {} : record(orderEvents.data),
     invoiceDue: invoiceDue.error ? {} : record(invoiceDue.data),
     invoiceEvents: invoiceEvents.error ? {} : record(invoiceEvents.data),
+    paymentEvents: paymentEvents.error ? {} : record(paymentEvents.data),
     approvalDeadlines: record(approvalDeadlines.data),
     reconciliation: record(waiting.data),
     timeoutRecovery: record(timeouts.data),
