@@ -458,3 +458,26 @@ begin
   ) then raise exception 'QUOTE-ENGINE exposed table is missing RLS'; end if;
 end;
 $rls_presence$;
+
+
+do $quote_postdeploy_index_hardening$
+begin
+  if to_regclass('public.businesses_org_id_uidx') is not null then
+    raise exception 'QUOTE-ENGINE redundant businesses_org_id_uidx still exists';
+  end if;
+  if to_regclass('public.catalog_product_prices_org_id_uidx') is not null then
+    raise exception 'QUOTE-ENGINE redundant catalog_product_prices_org_id_uidx still exists';
+  end if;
+  if to_regclass('public.quote_automation_projection_request_uidx') is not null then
+    raise exception 'QUOTE-ENGINE redundant automation projection index still exists';
+  end if;
+
+  if to_regclass('public.businesses_organization_id_id_unique') is null
+     or to_regclass('public.catalog_product_prices_organization_id_id_key') is null
+     or to_regclass('public.quote_automation_projection_uidx') is null
+     or to_regclass('public.service_prices_org_id_uidx') is null
+  then
+    raise exception 'QUOTE-ENGINE required canonical supporting index is missing';
+  end if;
+end;
+$quote_postdeploy_index_hardening$;
