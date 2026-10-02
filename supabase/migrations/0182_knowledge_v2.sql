@@ -961,7 +961,7 @@ as $knowledge_context$
     k.knowledge_key,k.version,k.payload,
     coalesce(s.source_type,k.provenance->>'sourceType','MANUAL') as source_type,
     s.source_locator,k.provenance,k.sensitivity,k.scope_type,
-    coalesce(k.stale_after_at,s.stale_after_at)<statement_timestamp() as stale,
+    coalesce(coalesce(k.stale_after_at,s.stale_after_at)<statement_timestamp(),false) as stale,
     k.conflict_state
   from public.knowledge_versions k
   left join public.knowledge_sources s
