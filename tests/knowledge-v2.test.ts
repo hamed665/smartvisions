@@ -97,6 +97,8 @@ describe('KNOWLEDGE-V2 hierarchy/evidence hardening',()=>{
       expect(hardening).toContain(`'${type}'`);
     }
     expect(actions).toContain("rpc('configure_knowledge_source_scope_v2'");
+    expect(actions).toContain("rpc('record_knowledge_source_failure_v2'");
+    expect(hardening).toContain('KNOWLEDGE_SOURCE_REFRESH_FAILED');
   });
 
   it('surfaces lifecycle history from the existing audit log instead of inventing ingestion runs',()=>{
@@ -114,5 +116,7 @@ describe('KNOWLEDGE-V2 hierarchy/evidence hardening',()=>{
     expect(hydrator).toContain('stale: row.stale === true');
     expect(hydrator).toContain('confidence: row.confidence == null');
     expect(hydrator).toContain('reviewState: clip(row.review_state');
+    expect(hardening).toContain("coalesce(k.provenance->>'sourceType',s.source_type,'MANUAL')");
+    expect(hardening).toContain("coalesce(k.provenance->>'sourceLocator',s.source_locator)");
   });
 });
