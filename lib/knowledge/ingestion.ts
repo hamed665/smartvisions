@@ -129,7 +129,8 @@ function latin1(bytes:Uint8Array){
 }
 
 async function inflate(bytes:Uint8Array,format:'deflate'|'deflate-raw'){
-  const decompressed=new Blob([bytes]).stream().pipeThrough(new DecompressionStream(format));
+  const copy=Uint8Array.from(bytes);
+  const decompressed=new Blob([copy.buffer]).stream().pipeThrough(new DecompressionStream(format));
   return new Uint8Array(await new Response(decompressed).arrayBuffer());
 }
 
