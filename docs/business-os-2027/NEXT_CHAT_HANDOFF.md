@@ -1,5 +1,24 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## WhatsApp customer onboarding Slice 8 controlled-scope Production closeout — 2026-10-02
+
+- Slices 1–7 remain **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for their internally controlled scopes.
+- Slice 8 disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for internally controlled same-binding reconnect, credential/subscription health, safe disconnect/revoke fail-closed behavior, provider reconciliation, UI controls, schema and deploy scope.
+- PR #391 final head `09697e4127fbd3bb8a8216bc945bd16fbcfa637b` passed exact-head CI `36979621813`, then squash-merged to `main@5051d6984e1d6413a0077da8da3142f89ef740cd`.
+- Exact-main CI `36979959886` and Cloudflare Production Deploy `36980189935` succeeded on that exact merge SHA.
+- Production migration `0169_whatsapp_reconnect_disconnect_lifecycle@20261002074458` is live; merged migration blob SHA `10dd1fd8fdefed603dd8688f92130e70b7348774`.
+- Reconnect rotates the existing binding credential/Vault secret and rejects WABA/phone identity drift. It does not create a new logical WhatsApp connection.
+- Manual disconnect, invalid/revoked credentials, unconfirmed health and missing WABA subscription all fail closed in the canonical inbound/outbound resolvers.
+- Safe disconnect first blocks Smart Core provider actions, supersedes active setup attempts and degrades active Unified Inbox projection state. WABA webhook unsubscribe is reconciled by provider readback; ambiguous mutation is recorded for explicit reconciliation and is never blindly retried.
+- Customer mobile WhatsApp Business is never deleted/uninstalled and no destructive migration path was introduced. Same-number Coexistence activation remains fail-closed until real official Meta/provider/runtime eligibility exists.
+- Production remains clean: WhatsApp bindings 0, setup attempts 0, Conversation Messages 37, WhatsApp Events 136, Unified Inbox projections 0 and Slice-8 lifecycle incident rows 0. No synthetic Production tenant/credential/customer/message/provider mutation was used.
+- Safety remains Shadow Mode ON; global Kill Switch OFF; WhatsApp AI pause OFF; Agents pause OFF. Slice-8 lifecycle RPC ACLs are service-role-only and fresh advisors show no Slice-8-specific new finding.
+- **Not claimed:** first real consented tenant Meta ↔ Smart Core ↔ Chatwoot E2E or real same-number Coexistence. Those remain `BLOCKED_EXTERNAL` / pending real external evidence.
+
+**Owner-prioritized WhatsApp overlay is internally complete through Slice 8. Resume the stable roadmap at:** `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.
+
+---
+
 ## WhatsApp customer onboarding Slice 7 controlled-scope Production closeout — 2026-10-02
 
 - Slices 1–6 remain **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for their internally controlled canonical setup/provider/Chatwoot/message bridge scopes.
