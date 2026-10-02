@@ -121,14 +121,14 @@ returns trigger
 language plpgsql
 security invoker
 set search_path=public,pg_catalog
-as $
+as $industry_pack_catalog_guard$
 begin
   if coalesce(current_setting('app.industry_pack_catalog_migration',true),'')='allowed' then
     return case when tg_op='DELETE' then old else new end;
   end if;
   raise exception 'Industry Pack catalog/versions are migration-versioned and immutable at runtime';
 end;
-$;
+$industry_pack_catalog_guard$;
 
 create trigger industry_packs_immutable
 before update or delete on public.industry_packs
@@ -207,7 +207,7 @@ language plpgsql
 stable
 security invoker
 set search_path=public,pg_catalog
-as $
+as $industry_pack_readiness$
 declare
   v_manifest jsonb;
   v_missing_triggers jsonb;
@@ -304,7 +304,7 @@ begin
     'pendingCustomObjects',v_pending_custom_objects
   );
 end;
-$;
+$industry_pack_readiness$;
 
 create or replace function public.activate_industry_pack_v1(
   p_organization_id uuid,
