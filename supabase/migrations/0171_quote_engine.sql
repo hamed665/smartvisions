@@ -1331,6 +1331,45 @@ exception when others then perform set_config('app.quote_engine_mutation','0',tr
 end;
 $$;
 
+create or replace function public.reconcile_due_quotes_v1(p_limit integer default 100)
+returns jsonb
+language plpgsql
+security invoker
+set search_path=public,pg_catalog
+as $
+declare
+  q record;
+  v_processed integer:=0;
+begin
+  if current_user<>'service_role' or p_limit not between 1 and 1000 then
+    raise exception 'QUOTE-ENGINE expiry reconciliation is not permitted';
+  end if;
+
+  for q in
+    select x.organization_id,x.id,x.current_version
+    from public.quotes x
+    join public.quote_versions v
+      on v.organization_id=x.organization_id
+     and v.quote_id=x.id
+     and v.version_no=x.current_version
+    where x.status in ('DRAFT','REVIEW','SENT','VIEWED')
+      and v.valid_until<=statement_timestamp()
+    order by v.valid_until,x.id
+    for update of x skip locked
+    limit p_limit
+  loop
+    perform public.expire_quote_v1(
+      q.organization_id,
+      q.id,
+      'quote-expire:'||q.id::text||':v'||q.current_version::text
+    );
+    v_processed:=v_processed+1;
+  end loop;
+
+  return jsonb_build_object('processed',v_processed);
+end;
+$;
+
 create or replace function public.record_quote_conversion_v1(
   p_organization_id uuid,
   p_quote_id uuid,
@@ -1534,6 +1573,10 @@ grant execute on function public.record_quote_customer_decision_v1(uuid,uuid,uui
 revoke all on function public.expire_quote_v1(uuid,uuid,text)
   from public,anon,authenticated,service_role;
 grant execute on function public.expire_quote_v1(uuid,uuid,text) to service_role;
+
+revoke all on function public.reconcile_due_quotes_v1(integer)
+  from public,anon,authenticated,service_role;
+grant execute on function public.reconcile_due_quotes_v1(integer) to service_role;
 
 revoke all on function public.record_quote_conversion_v1(uuid,uuid,text,text,jsonb,text)
   from public,anon,authenticated,service_role;
