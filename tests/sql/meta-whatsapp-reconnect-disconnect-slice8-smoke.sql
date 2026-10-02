@@ -79,6 +79,8 @@ begin
      or v_health_def not like '%UNCONFIRMED%'
      or v_health_def not like '%SUBSCRIPTION_MISSING%'
      or v_health_def not like '%META_PROVIDER_SUBSCRIPTION_MISSING%'
+     or v_health_def not like '%version = version + 1%'
+     or v_health_def not like '%p_expected_version%'
   then raise exception 'Meta WhatsApp credential/subscription health contract drifted'; end if;
 
   if has_function_privilege('anon',
@@ -93,13 +95,13 @@ begin
   then raise exception 'Meta WhatsApp disconnect ACL drifted'; end if;
 
   if has_function_privilege('anon',
-       'public.mark_meta_whatsapp_binding_health(uuid,uuid,text,uuid,text)',
+       'public.mark_meta_whatsapp_binding_health(uuid,uuid,integer,text,uuid,text)',
        'EXECUTE')
      or has_function_privilege('authenticated',
-       'public.mark_meta_whatsapp_binding_health(uuid,uuid,text,uuid,text)',
+       'public.mark_meta_whatsapp_binding_health(uuid,uuid,integer,text,uuid,text)',
        'EXECUTE')
      or not has_function_privilege('service_role',
-       'public.mark_meta_whatsapp_binding_health(uuid,uuid,text,uuid,text)',
+       'public.mark_meta_whatsapp_binding_health(uuid,uuid,integer,text,uuid,text)',
        'EXECUTE')
   then raise exception 'Meta WhatsApp health ACL drifted'; end if;
 

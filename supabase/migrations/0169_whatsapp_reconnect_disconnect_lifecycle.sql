@@ -333,6 +333,8 @@ declare
 begin
   if p_organization_id is null
      or p_binding_id is null
+     or p_expected_version is null
+     or p_expected_version < 1
      or p_actor_user_id is null
      or p_expected_version is null
      or p_expected_version < 1
@@ -442,6 +444,7 @@ $$;
 create or replace function public.mark_meta_whatsapp_binding_health(
   p_organization_id uuid,
   p_binding_id uuid,
+  p_expected_version integer,
   p_health_state text,
   p_actor_user_id uuid,
   p_request_key text
@@ -485,6 +488,7 @@ begin
      and b.status = 'ACTIVE'
      and b.channel = 'WHATSAPP'
      and b.provider = 'META'
+     and b.version = p_expected_version
    for update;
 
   if not found then
@@ -506,11 +510,17 @@ begin
      set last_verified_at = case when v_state = 'VERIFIED' then v_now else null end,
          last_error_code = v_error,
          last_request_key = v_request_key,
+         version = version + 1,
          updated_by_user_id = p_actor_user_id,
          updated_at = v_now
    where organization_id = p_organization_id
      and id = p_binding_id
+     and version = p_expected_version
   returning * into v_binding;
+
+  if not found then
+    raise exception 'Meta WhatsApp health update lost optimistic state';
+  end if;
 
   if v_state <> 'VERIFIED' then
     update public.unified_inbox_conversation_projections
@@ -576,8 +586,8 @@ grant execute on function public.disconnect_meta_whatsapp_binding(
 ) to service_role;
 
 revoke all on function public.mark_meta_whatsapp_binding_health(
-  uuid,uuid,text,uuid,text
+  uuid,uuid,integer,text,uuid,text
 ) from public, anon, authenticated, service_role;
 grant execute on function public.mark_meta_whatsapp_binding_health(
-  uuid,uuid,text,uuid,text
+  uuid,uuid,integer,text,uuid,text
 ) to service_role;

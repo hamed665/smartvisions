@@ -52,12 +52,14 @@ async function markHealth(input: {
   service: ReturnType<typeof createSupabaseServiceClient>;
   organizationId: string;
   bindingId: string;
+  expectedVersion: number;
   actorUserId: string;
   state: 'VERIFIED' | 'CREDENTIAL_INVALID' | 'UNCONFIRMED' | 'SUBSCRIPTION_MISSING';
 }) {
   const { data, error } = await input.service.rpc('mark_meta_whatsapp_binding_health', {
     p_organization_id: input.organizationId,
     p_binding_id: input.bindingId,
+    p_expected_version: input.expectedVersion,
     p_health_state: input.state,
     p_actor_user_id: input.actorUserId,
     p_request_key: `meta-whatsapp-health:${input.bindingId}:${crypto.randomUUID()}`,
@@ -71,11 +73,14 @@ async function auditProviderDisconnect(input: {
   binding: BindingRow;
   organizationId: string;
   actorUserId: string;
-  action: 'META_WHATSAPP_PROVIDER_UNSUBSCRIBED' | 'META_WHATSAPP_PROVIDER_UNSUBSCRIBE_RECONCILIATION_REQUIRED';
+  action:
+    | 'META_WHATSAPP_PROVIDER_UNSUBSCRIBE_STARTED'
+    | 'META_WHATSAPP_PROVIDER_UNSUBSCRIBED'
+    | 'META_WHATSAPP_PROVIDER_UNSUBSCRIBE_RECONCILIATION_REQUIRED';
   providerUnsubscribeConfirmed: boolean;
   reason: string | null;
 }) {
-  await input.service.from('audit_logs').insert({
+  const { error } = await input.service.from('audit_logs').insert({
     organization_id: input.organizationId,
     actor_type: 'USER',
     actor_id: input.actorUserId,
@@ -93,6 +98,7 @@ async function auditProviderDisconnect(input: {
       reconciliation_reason: input.reason,
     },
   });
+  return !error;
 }
 
 export async function POST(request: Request) {
@@ -190,6 +196,7 @@ export async function POST(request: Request) {
             service,
             organizationId: ctx.organizationId,
             bindingId: binding.id,
+            expectedVersion,
             actorUserId: ctx.userId,
             state: 'SUBSCRIPTION_MISSING',
           });
@@ -204,6 +211,7 @@ export async function POST(request: Request) {
           service,
           organizationId: ctx.organizationId,
           bindingId: binding.id,
+          expectedVersion,
           actorUserId: ctx.userId,
           state: 'VERIFIED',
         });
@@ -224,6 +232,7 @@ export async function POST(request: Request) {
           service,
           organizationId: ctx.organizationId,
           bindingId: binding.id,
+          expectedVersion,
           actorUserId: ctx.userId,
           state: kind === 'INVALID_OR_REVOKED' ? 'CREDENTIAL_INVALID' : 'UNCONFIRMED',
         });
@@ -278,6 +287,28 @@ export async function POST(request: Request) {
     }
 
     const disconnectedRow = Array.isArray(disconnected) ? disconnected[0] : disconnected;
+
+    const providerAuditStarted = await auditProviderDisconnect({
+      service,
+      binding,
+      organizationId: ctx.organizationId,
+      actorUserId: ctx.userId,
+      action: 'META_WHATSAPP_PROVIDER_UNSUBSCRIBE_STARTED',
+      providerUnsubscribeConfirmed: false,
+      reason: 'PENDING_PROVIDER_RECONCILIATION',
+    });
+
+    if (!providerAuditStarted) {
+      return NextResponse.json({
+        ok: true,
+        localDisconnected: true,
+        providerUnsubscribeConfirmed: false,
+        reconciliationRequired: true,
+        version: disconnectedRow?.version ?? expectedVersion + 1,
+        message: 'Smart Visions provider actions are blocked. Provider unsubscribe was not attempted because durable reconciliation evidence could not be started.',
+      }, { headers: { 'Cache-Control': 'no-store' } });
+    }
+
     let providerUnsubscribeConfirmed = false;
     let reconciliationRequired = false;
     let reconciliationReason: string | null = null;
@@ -302,7 +333,7 @@ export async function POST(request: Request) {
       reconciliationReason = 'CREDENTIAL_UNAVAILABLE';
     }
 
-    await auditProviderDisconnect({
+    const providerAuditFinalized = await auditProviderDisconnect({
       service,
       binding,
       organizationId: ctx.organizationId,
@@ -313,6 +344,11 @@ export async function POST(request: Request) {
       providerUnsubscribeConfirmed,
       reason: reconciliationReason,
     });
+
+    if (!providerAuditFinalized) {
+      reconciliationRequired = true;
+      reconciliationReason = reconciliationReason ?? 'AUDIT_FINALIZATION_REQUIRED';
+    }
 
     return NextResponse.json({
       ok: true,
