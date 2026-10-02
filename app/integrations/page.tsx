@@ -10,6 +10,7 @@ import { getOmnichannelHealth } from '@/lib/omnichannel/health';
 import { getWebChatConnectionHealth } from '@/lib/web-chat/health';
 import { MetaWhatsAppEmbeddedSignup } from './meta-whatsapp-embedded-signup';
 import { MetaWhatsAppRemoteSetupInvite } from './meta-whatsapp-remote-setup-invite';
+import { MetaWhatsAppLifecycle } from './meta-whatsapp-lifecycle';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,7 +80,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
     supabase.from('voice_transcriptions').select('provider_message_id,status,detected_language,error_message,updated_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(20),
     supabase.from('businesses').select('leads(id)').eq('organization_id', organizationId).eq('category', 'INTERNAL_TEST').not('whatsapp', 'is', null).limit(2),
     supabase.from('communication_channel_bindings')
-      .select('id,version,tenant_business_id,branch_id,provider_destination_label,tenant_businesses!inner(name,status),branches(name,status)')
+      .select('id,version,tenant_business_id,branch_id,provider,provider_destination_id,provider_destination_label,last_error_code,last_verified_at,tenant_businesses!inner(name,status),branches(name,status)')
       .eq('organization_id', organizationId)
       .eq('channel', 'WHATSAPP')
       .eq('status', 'ACTIVE'),
@@ -141,6 +142,29 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
     && openAiRuntime?.status === 'CONNECTED'
     && openAiRuntime?.enabled === true,
   );
+
+  const whatsappBindingOptions = (whatsappBindings ?? [])
+    .filter((binding) => {
+      const business = Array.isArray(binding.tenant_businesses) ? binding.tenant_businesses[0] : binding.tenant_businesses;
+      const branch = Array.isArray(binding.branches) ? binding.branches[0] : binding.branches;
+      return business?.status === 'ACTIVE' && (!branch || branch.status === 'ACTIVE');
+    })
+    .map((binding) => {
+      const business = Array.isArray(binding.tenant_businesses) ? binding.tenant_businesses[0] : binding.tenant_businesses;
+      const branch = Array.isArray(binding.branches) ? binding.branches[0] : binding.branches;
+      return {
+        id: binding.id,
+        version: binding.version,
+        tenantBusinessId: binding.tenant_business_id,
+        businessName: business?.name ?? binding.tenant_business_id,
+        branchName: branch?.name ?? null,
+        provider: binding.provider ?? null,
+        configured: Boolean(binding.provider_destination_id),
+        destinationLabel: binding.provider_destination_label ?? null,
+        lastErrorCode: binding.last_error_code ?? null,
+        lastVerifiedAt: binding.last_verified_at ?? null,
+      };
+    });
 
   return <div>
     <div className="headerRow">
@@ -321,28 +345,13 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
       })}
     </div>
 
+    <MetaWhatsAppLifecycle bindings={whatsappBindingOptions} />
+
     <MetaWhatsAppEmbeddedSignup
       appId={process.env.NEXT_PUBLIC_META_APP_ID?.trim() || null}
       configurationId={process.env.NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID?.trim() || null}
       graphVersion={process.env.META_GRAPH_VERSION?.trim() || 'v23.0'}
-      bindings={(whatsappBindings ?? [])
-        .filter((binding) => {
-          const business = Array.isArray(binding.tenant_businesses) ? binding.tenant_businesses[0] : binding.tenant_businesses;
-          const branch = Array.isArray(binding.branches) ? binding.branches[0] : binding.branches;
-          return business?.status === 'ACTIVE' && (!branch || branch.status === 'ACTIVE');
-        })
-        .map((binding) => {
-          const business = Array.isArray(binding.tenant_businesses) ? binding.tenant_businesses[0] : binding.tenant_businesses;
-          const branch = Array.isArray(binding.branches) ? binding.branches[0] : binding.branches;
-          return {
-            id: binding.id,
-            version: binding.version,
-            tenantBusinessId: binding.tenant_business_id,
-            businessName: business?.name ?? binding.tenant_business_id,
-            branchName: branch?.name ?? null,
-            destinationLabel: binding.provider_destination_label ?? null,
-          };
-        })}
+      bindings={whatsappBindingOptions}
     />
 
     <MetaWhatsAppRemoteSetupInvite
@@ -350,23 +359,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
         process.env.NEXT_PUBLIC_META_APP_ID?.trim()
         && process.env.NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID?.trim()
       )}
-      bindings={(whatsappBindings ?? [])
-        .filter((binding) => {
-          const business = Array.isArray(binding.tenant_businesses) ? binding.tenant_businesses[0] : binding.tenant_businesses;
-          const branch = Array.isArray(binding.branches) ? binding.branches[0] : binding.branches;
-          return business?.status === 'ACTIVE' && (!branch || branch.status === 'ACTIVE');
-        })
-        .map((binding) => {
-          const business = Array.isArray(binding.tenant_businesses) ? binding.tenant_businesses[0] : binding.tenant_businesses;
-          const branch = Array.isArray(binding.branches) ? binding.branches[0] : binding.branches;
-          return {
-            id: binding.id,
-            version: binding.version,
-            businessName: business?.name ?? binding.tenant_business_id,
-            branchName: branch?.name ?? null,
-            destinationLabel: binding.provider_destination_label ?? null,
-          };
-        })}
+      bindings={whatsappBindingOptions}
     />
 
     <section className="panel settingsCreate">

@@ -196,7 +196,8 @@ begin
      and coalesce(b.last_error_code, '') not in (
        'MANUAL_DISCONNECTED',
        'META_CREDENTIAL_INVALID_OR_REVOKED',
-       'META_CREDENTIAL_HEALTH_UNCONFIRMED'
+       'META_CREDENTIAL_HEALTH_UNCONFIRMED',
+       'META_PROVIDER_SUBSCRIPTION_MISSING'
      )
      and ic.enabled = true
      and ic.status = 'CONNECTED'
@@ -246,7 +247,8 @@ begin
      and coalesce(b.last_error_code, '') not in (
        'MANUAL_DISCONNECTED',
        'META_CREDENTIAL_INVALID_OR_REVOKED',
-       'META_CREDENTIAL_HEALTH_UNCONFIRMED'
+       'META_CREDENTIAL_HEALTH_UNCONFIRMED',
+       'META_PROVIDER_SUBSCRIPTION_MISSING'
      )
      and ic.enabled = true
      and ic.status = 'CONNECTED'
@@ -459,7 +461,7 @@ begin
   if p_organization_id is null
      or p_binding_id is null
      or p_actor_user_id is null
-     or v_state not in ('VERIFIED','CREDENTIAL_INVALID','UNCONFIRMED')
+     or v_state not in ('VERIFIED','CREDENTIAL_INVALID','UNCONFIRMED','SUBSCRIPTION_MISSING')
      or length(v_request_key) not between 1 and 200
   then
     raise exception 'invalid Meta WhatsApp health request';
@@ -496,6 +498,7 @@ begin
   v_error := case v_state
     when 'CREDENTIAL_INVALID' then 'META_CREDENTIAL_INVALID_OR_REVOKED'
     when 'UNCONFIRMED' then 'META_CREDENTIAL_HEALTH_UNCONFIRMED'
+    when 'SUBSCRIPTION_MISSING' then 'META_PROVIDER_SUBSCRIPTION_MISSING'
     else null
   end;
 
@@ -530,7 +533,8 @@ begin
     case v_state
       when 'VERIFIED' then 'META_WHATSAPP_CREDENTIAL_HEALTH_VERIFIED'
       when 'CREDENTIAL_INVALID' then 'META_WHATSAPP_CREDENTIAL_INVALID_OR_REVOKED'
-      else 'META_WHATSAPP_CREDENTIAL_HEALTH_UNCONFIRMED'
+      when 'UNCONFIRMED' then 'META_WHATSAPP_CREDENTIAL_HEALTH_UNCONFIRMED'
+      else 'META_WHATSAPP_PROVIDER_SUBSCRIPTION_MISSING'
     end,
     'communication_channel_binding',
     p_binding_id::text,
