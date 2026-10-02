@@ -1415,6 +1415,30 @@ exception when others then perform set_config('app.quote_engine_mutation','0',tr
 end;
 $$;
 
+-- Extend the existing canonical trigger subject resolver; do not create a second condition engine.
+create or replace function public.automation_trigger_expected_condition_subject(p_trigger_key text)
+returns text
+language sql
+stable
+security invoker
+set search_path=public,pg_catalog
+as $
+  select case family
+    when 'MESSAGE' then 'CONVERSATION'
+    when 'CUSTOMER' then 'ACCOUNT'
+    when 'LEAD' then 'LEAD'
+    when 'DEAL' then 'DEAL'
+    when 'TASK' then 'TASK'
+    when 'SEGMENT' then 'SEGMENT_SNAPSHOT'
+    when 'CASE' then 'CASE'
+    when 'BOOKING' then 'BOOKING'
+    when 'QUOTE' then 'QUOTE'
+    else null
+  end
+  from public.automation_trigger_catalog
+  where trigger_key=upper(trim(p_trigger_key));
+$;
+
 -- Quote acceptance now has a durable canonical producer. The catalog remains metadata only.
 update public.automation_trigger_catalog
 set availability='AVAILABLE',
@@ -1458,7 +1482,7 @@ begin
     v_source_key:='quote-lifecycle:'||e.id::text;
     v_result:=public.enqueue_automation_runtime_event(
       e.organization_id,'QUOTE_ACCEPTED',v_source_key,
-      null,null,
+      'QUOTE',e.quote_id,
       jsonb_build_object(
         'quoteId',e.quote_id,'versionNo',e.quote_version_no,
         'lifecycleEventId',e.id,'evidence',e.evidence
