@@ -2,6 +2,7 @@ import Link from 'next/link';
 import {notFound} from 'next/navigation';
 
 import {cancelPaymentIntentV1,requestPaymentRefundV1} from '../actions';
+import {createOmanPaymentLinkV1,executeOmanRefundV1} from '../provider-actions';
 import {getCurrentOrganization} from '@/lib/supabase/org';
 
 export const dynamic='force-dynamic';
@@ -19,7 +20,7 @@ export default async function PaymentDetailPage({params}:Props){
     .eq('organization_id',organizationId).eq('id',id).maybeSingle();
   if(!payment)notFound();
 
-  const [{data:links},{data:transactions},{data:refunds},{data:providerEvents},{data:invoice}]=await Promise.all([
+  const [{data:links},{data:transactions},{data:refunds},{data:providerEvents},{data:invoice},{data:providerRows}]=await Promise.all([
     supabase.from('payment_links').select('*').eq('organization_id',organizationId).eq('payment_intent_id',id).order('created_at',{ascending:false}),
     supabase.from('payment_transactions').select('*').eq('organization_id',organizationId).eq('payment_intent_id',id).order('occurred_at',{ascending:false}),
     supabase.from('payment_refunds').select('*').eq('organization_id',organizationId).eq('payment_intent_id',id).order('created_at',{ascending:false}),
@@ -27,18 +28,28 @@ export default async function PaymentDetailPage({params}:Props){
       .eq('organization_id',organizationId).eq('payment_intent_id',id).order('received_at',{ascending:false}),
     supabase.from('invoices').select('id,invoice_number,status,paid_total,credited_total,balance_due,total,currency')
       .eq('organization_id',organizationId).eq('id',payment.invoice_id).maybeSingle(),
+    supabase.from('integration_connections').select('provider,status,enabled')
+      .eq('organization_id',organizationId).eq('channel','PAYMENT').in('provider',['TAP','THAWANI']),
   ]);
 
-  const isManager=['OWNER','ADMIN','SALES_MANAGER'].includes(String(role));
+  const roleText=String(role);
+  const isManager=['OWNER','ADMIN','SALES_MANAGER'].includes(roleText);
+  const canOperate=['OWNER','ADMIN','SALES_MANAGER','SALES_AGENT'].includes(roleText);
   const openRefunds=(refunds??[]).filter(r=>['REQUESTED','RECONCILIATION_REQUIRED'].includes(String(r.status)))
     .reduce((sum,r)=>sum+Number(r.amount??0),0);
   const refundable=Math.max(0,Number(payment.captured_total)-Number(payment.refunded_total)-openRefunds);
-  const canCancel=['CREATED','AUTHORIZED','RECONCILIATION_REQUIRED'].includes(String(payment.status))&&Number(payment.captured_total)===0;
+  const unresolved=['CREATED','AUTHORIZED','RECONCILIATION_REQUIRED'].includes(String(payment.status))&&Number(payment.captured_total)===0;
+  const canCancel=unresolved;
+  const activeLink=(links??[]).some(link=>String(link.status)==='ACTIVE');
+  const configuredProviders=(providerRows??[])
+    .filter(row=>row.enabled&&['READY','CONNECTED','DEGRADED'].includes(String(row.status)))
+    .map(row=>String(row.provider))
+    .filter(provider=>!payment.provider||String(payment.provider)===provider);
 
   return <div>
     <div className="headerRow">
       <div><h1>{payment.payment_number}</h1><p className="muted">Canonical Payment Intent · {payment.status} · v{payment.version}</p></div>
-      <div><Link className="textLink" href="/payments">← Payments</Link>{invoice?<> · <Link className="textLink" href={'/invoices/'+invoice.id}>Invoice {invoice.invoice_number} →</Link></>:null}</div>
+      <div><Link className="textLink" href="/payments">← Payments</Link> · <Link className="textLink" href="/payments/providers">Providers</Link>{invoice?<> · <Link className="textLink" href={'/invoices/'+invoice.id}>Invoice {invoice.invoice_number} →</Link></>:null}</div>
     </div>
 
     <section className="statsGrid fourStats">
@@ -49,17 +60,26 @@ export default async function PaymentDetailPage({params}:Props){
     </section>
 
     <section className="panel"><h2>Settlement boundary</h2>
-      <p className="muted">Provider: {payment.provider??'not bound'}. Provider acceptance and links are not settlement. Only verified webhook or explicit reconciliation evidence can append immutable money transactions and project Invoice paid_total.</p>
+      <p className="muted">Provider: {payment.provider??'not bound'}. Provider acceptance and links are not settlement. Tap settles only through verified hashstring webhook or authenticated readback; Thawani success is confirmed by server-to-server session readback before Payment Core moves money.</p>
       {invoice?<p className="muted smallText">Invoice: total {money(invoice.total,invoice.currency)} · paid projection {money(invoice.paid_total,invoice.currency)} · credited {money(invoice.credited_total,invoice.currency)} · balance {money(invoice.balance_due,invoice.currency)}</p>:null}
       {payment.reconciliation_reason?<p><strong>Reconciliation required:</strong> {payment.reconciliation_reason}</p>:null}
     </section>
+
+    {canOperate&&unresolved&&!activeLink&&String(payment.currency)==='OMR'?<section className="panel"><h2>Create Oman Payment Link</h2>
+      {configuredProviders.length?<div className="settingsList">{configuredProviders.map(provider=><form action={createOmanPaymentLinkV1} className="settingsRow" key={provider}>
+        <input type="hidden" name="payment_intent_id" value={id}/>
+        <input type="hidden" name="provider" value={provider}/>
+        <div><strong>{provider==='TAP'?'Tap Payments':'Thawani Pay'}</strong><span className="muted smallText">Hosted checkout · settlement remains evidence-gated</span></div>
+        <button>Create link</button>
+      </form>)}</div>:<p className="muted">No Oman gateway is configured. <Link className="textLink" href="/payments/providers">Configure Tap or Thawani →</Link></p>}
+    </section>:null}
 
     <section className="panel"><h2>Payment links</h2><div className="settingsList">
       {(links??[]).map(link=><div className="settingsRow" key={link.id}><div>
         <strong>{link.provider} · {link.status}</strong>
         <span className="muted smallText">{link.provider_link_id} · expires {link.expires_at?new Date(String(link.expires_at)).toLocaleString():'not supplied'}</span>
       </div><a className="textLink" href={link.url} target="_blank" rel="noreferrer">Open link →</a></div>)}
-      {!(links?.length)?<p className="muted">No provider Payment Link recorded. Provider creation belongs to a configured gateway adapter.</p>:null}
+      {!(links?.length)?<p className="muted">No provider Payment Link recorded.</p>:null}
     </div></section>
 
     <section className="panel"><h2>Immutable transaction ledger</h2><div className="settingsList">
@@ -82,7 +102,14 @@ export default async function PaymentDetailPage({params}:Props){
       {(refunds??[]).map(refund=><div className="settingsRow" key={refund.id}><div>
         <strong>{refund.refund_number} · {refund.status}</strong>
         <span className="muted smallText">{money(refund.amount,refund.currency)} · {refund.reason}</span>
-      </div><span className="muted smallText">{refund.provider_reference??'provider outcome pending'}</span></div>)}
+      </div><div>
+        <span className="muted smallText">{refund.provider_reference??'provider outcome pending'}</span>
+        {isManager&&String(refund.status)==='REQUESTED'&&['TAP','THAWANI'].includes(String(payment.provider))?<form action={executeOmanRefundV1}>
+          <input type="hidden" name="payment_intent_id" value={id}/>
+          <input type="hidden" name="refund_id" value={refund.id}/>
+          <button>Execute with {payment.provider}</button>
+        </form>:null}
+      </div></div>)}
       {!(refunds?.length)?<p className="muted">No Refund requests. Refund is money movement and does not create or replace a Credit Note.</p>:null}
     </div></section>
 
