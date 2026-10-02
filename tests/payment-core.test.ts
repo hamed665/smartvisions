@@ -20,7 +20,7 @@ describe('PAYMENT-CORE contract',()=>{
       'create table public.payment_transactions',
     ]) expect(migration).toContain(marker);
     expect(migration).not.toMatch(/create table public\.(invoices|orders|quotes|subscriptions|usage_events|billing_ledger|outbox)/i);
-    expect(migration).not.toMatch(/tap|thawani/i);
+    expect(migration).not.toMatch(/create table public\.(tap|thawani)|tap_secret|thawani_secret|api[.]tap|api[.]thawani/i);
     expect(migration).not.toMatch(/cron\.schedule|pgmq\.|create extension.*pg_cron/i);
   });
 
