@@ -457,6 +457,21 @@ This is an acceptance lock. A green Embedded Signup callback or stored token alo
 - Remaining acceptance for message/status/media provenance and dedupe, official Coexistence/native activity, Human/AI arbitration, reconnect/revoke/disconnect and first real-tenant E2E stays open under Slices 6–8.
 
 
+#### WhatsApp onboarding Slice 7 checkpoint — 2026-10-02
+
+**Disposition: IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled native Business App activity, Human/AI arbitration, canonical provenance/dedupe, durable Chatwoot reconciliation and deployment scope. **Official same-number Coexistence activation and first real-tenant native E2E remain BLOCKED_EXTERNAL / pending real external evidence.**
+
+- PR #389 final head `75ad62a8bc88fa3b69226208e7b19ce5231fb6ef` passed exact-head CI `36943804916`; canonical merge is `main@917913736fe6ac2cf5c87626d8ac92f422541df5`.
+- Exact-main CI `36944138334` and Cloudflare Production Deploy `36944402017` succeeded on that exact merge SHA.
+- Production migration `0168_whatsapp_coexistence_native_arbitration@20261002000822` is live; merged blob SHA `0f3411fc50599e6241510362125a8f37c83c6e77`.
+- Signed/current `smb_message_echoes` are normalized into the existing journal and canonical message path as `HUMAN_NATIVE_WHATSAPP` only when an existing canonical customer/Lead/WhatsApp Conversation can be resolved. The WhatsApp Business sender number is never fabricated as a customer.
+- Current native-human activity atomically claims existing HUMAN takeover semantics and therefore blocks stale queued/approved AI at the existing final send gate. Duplicate/replayed native evidence is idempotent.
+- The existing Chatwoot reconciliation worker mirrors canonical native outbound evidence with `PENDING -> PROCESSING -> ACCEPTED / RECONCILIATION_REQUIRED`; ambiguous mutation is fail-closed rather than blindly retried.
+- Historical sync is not classified as live native-human takeover evidence.
+- Production remains data-clean at 37 canonical Conversation Messages, 136 WhatsApp Events, 0 Unified Inbox projections, 0 WhatsApp bindings and 0 Slice-7 smoke residue. New Slice-7 RPCs are service-role-only.
+- Production safety remains Shadow Mode ON, global Kill Switch OFF, WhatsApp AI pause OFF and Agents pause OFF. Fresh advisors contain no Slice-7-specific security/performance finding.
+- Acceptance still open by design: actual Meta Coexistence eligibility/activation, real `HUMAN_NATIVE_WHATSAPP` provider evidence, reconnect/revoke/disconnect and first real-tenant Meta ↔ Smart Core ↔ Chatwoot end-to-end proof.
+
 #### WhatsApp onboarding Slice 6 checkpoint — 2026-10-02
 
 **Disposition: IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled message/status/media bridge, provenance, cross-plane dedupe and reconciliation scope.
