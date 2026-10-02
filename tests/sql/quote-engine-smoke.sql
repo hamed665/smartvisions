@@ -318,6 +318,18 @@ begin
     'EXECUTE'
   ) then raise exception 'service_role cannot execute QUOTE-ENGINE mutation RPC'; end if;
 
+  if has_function_privilege(
+    'authenticated',
+    'public.reconcile_due_quotes_v1(integer)'::regprocedure,
+    'EXECUTE'
+  ) then raise exception 'Authenticated role can execute QUOTE-ENGINE expiry reconciler'; end if;
+
+  if not has_function_privilege(
+    'service_role',
+    'public.reconcile_due_quotes_v1(integer)'::regprocedure,
+    'EXECUTE'
+  ) then raise exception 'service_role cannot execute QUOTE-ENGINE expiry reconciler'; end if;
+
   if (select availability from public.automation_trigger_catalog where trigger_key='QUOTE_ACCEPTED')<>'AVAILABLE' then
     raise exception 'QUOTE_ACCEPTED trigger was not activated after canonical producer implementation';
   end if;
