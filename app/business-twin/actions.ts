@@ -38,7 +38,7 @@ async function managerContext(){
 export async function publishBusinessTwinV1(){
   const current=await managerContext();
   const service=createSupabaseServiceClient();
-  const {error}=await service.rpc('publish_business_twin_v1',{
+  const {error}=await service.rpc('publish_business_twin_v2',{
     p_organization_id:current.organizationId,
     p_actor_user_id:current.userId,
     p_request_key:('business-twin-publish:'+crypto.randomUUID()).slice(0,200),
