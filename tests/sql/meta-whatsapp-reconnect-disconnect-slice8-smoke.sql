@@ -56,6 +56,8 @@ begin
      or v_apply_def not like '%vault.update_secret%'
      or v_apply_def not like '%version = version + 1%'
      or v_apply_def not like '%last_error_code = null%'
+     or v_apply_def not like '%set_config(''smartvisions.chatwoot_bridge_command'', ''1'', true)%'
+     or v_apply_def not like '%set_config(''smartvisions.chatwoot_bridge_command'', ''0'', true)%'
   then raise exception 'same-binding Meta WhatsApp reconnect identity/credential rotation drifted'; end if;
 
   if v_start_def is null
@@ -71,6 +73,8 @@ begin
      or v_disconnect_def not like '%lifecycle_status = ''DEGRADED''%'
      or v_disconnect_def not like '%mobile_whatsapp_account_changed%'
      or v_disconnect_def not like '%false%'
+     or v_disconnect_def not like '%set_config(''smartvisions.chatwoot_bridge_command'', ''1'', true)%'
+     or v_disconnect_def not like '%set_config(''smartvisions.chatwoot_bridge_command'', ''0'', true)%'
   then raise exception 'safe Meta WhatsApp disconnect contract drifted'; end if;
 
   if v_health_def is null
@@ -81,6 +85,8 @@ begin
      or v_health_def not like '%META_PROVIDER_SUBSCRIPTION_MISSING%'
      or v_health_def not like '%version = version + 1%'
      or v_health_def not like '%p_expected_version%'
+     or v_health_def not like '%set_config(''smartvisions.chatwoot_bridge_command'', ''1'', true)%'
+     or v_health_def not like '%set_config(''smartvisions.chatwoot_bridge_command'', ''0'', true)%'
   then raise exception 'Meta WhatsApp credential/subscription health contract drifted'; end if;
 
   if has_function_privilege('anon',
@@ -190,6 +196,10 @@ insert into public.communication_channel_bindings(
   '00000000-0000-4000-8000-000000016901',
   'META','waba-slice8','phone-slice8','+96890000008'
 );
+
+-- The fixture insert needs the existing bridge command guard, but the lifecycle
+-- RPCs below must open and close that governed window themselves.
+set local smartvisions.chatwoot_bridge_command = '0';
 
 do $slice8_behavior$
 declare

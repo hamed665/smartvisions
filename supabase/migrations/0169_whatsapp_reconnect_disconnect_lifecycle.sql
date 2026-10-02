@@ -120,6 +120,8 @@ begin
     end if;
   end if;
 
+  perform set_config('smartvisions.chatwoot_bridge_command', '1', true);
+
   update public.communication_channel_bindings
      set provider = 'META',
          provider_account_id = v_waba,
@@ -137,13 +139,19 @@ begin
      and version = p_expected_version
   returning * into v_updated;
 
+  perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
+
   if not found then
     raise exception 'Meta WhatsApp binding trusted completion lost optimistic lock';
   end if;
 
   return v_updated;
+exception
+  when others then
+    perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
+    raise;
 end;
-$$;
+$;
 
 -- Operationally disconnected/revoked bindings remain the same logical ACTIVE
 -- binding so reconnect can rotate credentials without manufacturing a new identity.
@@ -281,7 +289,8 @@ begin
        and coalesce(sibling.last_error_code, '') not in (
          'MANUAL_DISCONNECTED',
          'META_CREDENTIAL_INVALID_OR_REVOKED',
-         'META_CREDENTIAL_HEALTH_UNCONFIRMED'
+         'META_CREDENTIAL_HEALTH_UNCONFIRMED',
+         'META_PROVIDER_SUBSCRIPTION_MISSING'
        )
        and sic.enabled = true
        and sic.status = 'CONNECTED'
@@ -377,6 +386,8 @@ begin
     raise exception 'Meta WhatsApp binding changed before disconnect';
   end if;
 
+  perform set_config('smartvisions.chatwoot_bridge_command', '1', true);
+
   update public.communication_channel_bindings
      set last_verified_at = null,
          last_error_code = 'MANUAL_DISCONNECTED',
@@ -388,6 +399,8 @@ begin
      and id = p_binding_id
      and version = p_expected_version
   returning * into v_binding;
+
+  perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
 
   if not found then
     raise exception 'Meta WhatsApp disconnect lost optimistic state';
@@ -436,8 +449,12 @@ begin
   );
 
   return v_binding;
+exception
+  when others then
+    perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
+    raise;
 end;
-$$;
+$;
 
 create or replace function public.mark_meta_whatsapp_binding_health(
   p_organization_id uuid,
@@ -506,6 +523,8 @@ begin
     else null
   end;
 
+  perform set_config('smartvisions.chatwoot_bridge_command', '1', true);
+
   update public.communication_channel_bindings
      set last_verified_at = case when v_state = 'VERIFIED' then v_now else null end,
          last_error_code = v_error,
@@ -517,6 +536,8 @@ begin
      and id = p_binding_id
      and version = p_expected_version
   returning * into v_binding;
+
+  perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
 
   if not found then
     raise exception 'Meta WhatsApp health update lost optimistic state';
@@ -558,8 +579,12 @@ begin
   );
 
   return v_binding;
+exception
+  when others then
+    perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
+    raise;
 end;
-$$;
+$;
 
 revoke all on function public.resolve_meta_whatsapp_destination(text,text)
   from public, anon, authenticated, service_role;
