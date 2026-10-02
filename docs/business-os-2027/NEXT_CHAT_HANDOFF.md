@@ -1,5 +1,26 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## ORDER-ENGINE Production closeout — 2026-10-02
+
+- Work Package: `SECTION COMMERCE_PAYMENTS -> ORDER-ENGINE`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled canonical Order scope.
+- Implementation PR #398 final head `4e2f3007c944cc3fb40b791359cc9558cffe30d5` passed exact-head CI `37009383921`; canonical squash merge is `main@4c5d5b26d33b460e4d19c6e13551a65eda4d98dc`.
+- Exact-main CI `37009775188` and Cloudflare Production Deploy `37010061631` succeeded on that exact implementation merge SHA.
+- Production migration `0173_order_engine@20261002130127` is live from merged blob `9123adb5a748a0b5440039ccb81ebe69cfff3236`.
+- Canonical Order truth is `orders` + immutable line snapshots + bounded fulfillment/return/lifecycle child state. Accepted Quote conversion and permitted direct canonical-price Orders reuse existing Quote/Catalog/CRM/Booking authorities. Invoice, Payment/refund, live stock, reservations, warehouse and stock-movement truth remain outside ORDER-ENGINE.
+- Order mutations are service-role governed; authenticated users have scoped reads only. `ORDER_CREATED` and `ORDER_STATUS_CHANGED` are AVAILABLE canonical Automation triggers and Customer 360 V4 composes Order truth.
+- Production remained side-effect clean with all six Order tables at 0 rows and upstream Quotes/Products/Variants/Product Prices at 0. No synthetic Production Order/return/customer/Product/payment/provider evidence was created.
+- Post-0173 advisors found exactly three new composite-FK index gaps. Hardening PR #399 final head `4935cbcfad527f2084123faa722ab1ada9ba9cb0` passed exact-head CI `37010634724`, merged as `main@ac65d781251f8be112a351aa3ca73cd110314b68`, and exact-main CI `37011043404` plus Cloudflare Production Deploy `37011371669` succeeded.
+- Production hardening migration `0174_order_engine_fk_index_hardening@20261002131210` is live from merged blob `b799d423d2db191f10c22a63ec116d09774ae683`. The three FK findings are gone and `unindexed_foreign_keys` is back at baseline 14; security baseline is unchanged.
+- Existing WhatsApp real-tenant E2E and same-number Coexistence blockers remain unchanged.
+- Managerial estimate after ORDER-ENGINE: Phase 8 approximately **58% complete / 42% remaining**; overall program approximately **66% complete / 34% remaining**. These are planning estimates only.
+
+**Fresh continuation cursor:** `SECTION COMMERCE_PAYMENTS -> INVENTORY-FULFILLMENT`.
+
+Next chat must fresh-audit current main/open PRs, Production migrations/advisors, Product/Variant/Branch availability, Order fulfillment evidence, Field Service material usage, Booking resources and any existing inventory/warehouse/stock references before mutation. Build one canonical inventory/stock/reservation/warehouse/movement/fulfillment truth only; do not duplicate Catalog, Order, Booking, Field Service, Invoice or Payment authorities.
+
+---
+
 ## QUOTE-ENGINE Production closeout — 2026-10-02
 
 - Work Package: `SECTION COMMERCE_PAYMENTS -> QUOTE-ENGINE`.
