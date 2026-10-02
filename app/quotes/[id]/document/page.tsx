@@ -30,13 +30,20 @@ export default async function QuoteDocumentPage({params}:Props){
   const seller=v.seller_snapshot as Record<string,unknown>;
   const buyer=v.buyer_snapshot as Record<string,unknown>;
 
-  return <main style={{maxWidth:960,margin:'0 auto',padding:'32px'}}>
+  return <main className="quoteDocument" style={{maxWidth:960,margin:'0 auto',padding:'32px'}}>
+    <style>{`@media print {
+      .sidebar,.mobileAppBar,.mobileBottomNav,.mobileNavOverlay,.quotePrintControls{display:none!important}
+      .shell{display:block!important}
+      .content{padding:0!important;max-width:none!important}
+      .quoteDocument{max-width:none!important;margin:0!important;padding:0!important}
+      .quoteDocument .panel{box-shadow:none!important;break-inside:avoid}
+    }`}</style>
     <div className="headerRow">
       <div>
         <h1>Quote {q.quote_number}</h1>
         <p className="muted">Version {v.version_no} · {q.status}</p>
       </div>
-      <div>
+      <div className="quotePrintControls">
         <PrintQuoteButton />{' '}
         <Link className="textLink" href={'/quotes/'+id}>Back to Quote</Link>
       </div>
