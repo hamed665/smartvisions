@@ -45,7 +45,7 @@ returns trigger
 language plpgsql
 security invoker
 set search_path=public,pg_catalog
-as $
+as $$
 begin
   if tg_op='INSERT' then
     if coalesce(current_setting('app.business_twin_publish',true),'')<>'allowed' then
@@ -55,7 +55,7 @@ begin
   end if;
   raise exception 'Business Twin versions are immutable';
 end;
-$;
+$$;
 
 create trigger business_twin_versions_immutable
 before insert or update or delete on public.business_twin_versions
