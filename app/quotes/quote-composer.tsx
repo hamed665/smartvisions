@@ -52,6 +52,7 @@ export function QuoteComposer(props:Props) {
   const requestKey='quote-ui:' + props.quoteId + ':' + useId().replace(/[^A-Za-z0-9_-]/g,'');
   const [seller,setSeller]=useState(props.tenantBusinesses[0]?.id ?? '');
   const [lines,setLines]=useState<Line[]>(props.initialLines?.length ? props.initialLines : [blankLine(props.catalog)]);
+  const [requestKey] = useState(()=>'quote-ui:' + props.quoteId + ':' + crypto.randomUUID());
   const catalog=useMemo(
     ()=>props.catalog.filter(item=>!item.tenantBusinessId || !seller || item.tenantBusinessId===seller),
     [props.catalog,seller]
@@ -73,7 +74,12 @@ export function QuoteComposer(props:Props) {
 
     {props.mode==='create' ? <>
       <label>Seller Business
-        <select name="tenant_business_id" value={seller} onChange={e=>setSeller(e.target.value)} required>
+        <select name="tenant_business_id" value={seller} onChange={e=>{
+            const next=e.target.value;
+            setSeller(next);
+            const nextCatalog=props.catalog.filter(item=>!item.tenantBusinessId || item.tenantBusinessId===next);
+            setLines([blankLine(nextCatalog)]);
+          }} required>
           {props.tenantBusinesses.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}
         </select>
       </label>
