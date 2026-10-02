@@ -263,7 +263,7 @@ export async function extractKnowledgeFile(file:File):Promise<ExtractedKnowledge
   const lower=name.toLowerCase();
   let text='';
   let extraction='';
-  let contentType=file.type||'application/octet-stream';
+  const contentType=file.type||'application/octet-stream';
 
   if(lower.endsWith('.pdf')||file.type==='application/pdf'){
     text=await extractPdf(bytes); extraction='PDF_TEXT';
