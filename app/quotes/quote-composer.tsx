@@ -49,10 +49,9 @@ function subjectPayload(line:Line) {
 }
 
 export function QuoteComposer(props:Props) {
-  const requestKey='quote-ui:' + props.quoteId + ':' + useId().replace(/[^A-Za-z0-9_-]/g,'');
+  const requestKey='quote-ui:' + props.quoteId + ':' + props.mode + ':' + (props.expectedQuoteVersion ?? 'create') + ':' + useId().replace(/[^A-Za-z0-9_-]/g,'');
   const [seller,setSeller]=useState(props.tenantBusinesses[0]?.id ?? '');
   const [lines,setLines]=useState<Line[]>(props.initialLines?.length ? props.initialLines : [blankLine(props.catalog)]);
-  const [requestKey] = useState(()=>'quote-ui:' + props.quoteId + ':' + crypto.randomUUID());
   const catalog=useMemo(
     ()=>props.catalog.filter(item=>!item.tenantBusinessId || !seller || item.tenantBusinessId===seller),
     [props.catalog,seller]
