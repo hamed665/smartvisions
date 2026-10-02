@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { getCurrentOrganization } from '@/lib/supabase/org';
+import { createSupabaseServiceClient } from '@/lib/supabase/service';
 
 const required = (form: FormData, key: string) => {
   const value = String(form.get(key) ?? '').trim();
@@ -22,16 +23,21 @@ function firstPublishedVersion(data: unknown): PublishedVersion {
 
 export async function createKnowledge(form: FormData) {
   const ctx = await getCurrentOrganization(true);
+  if (!ctx.userId || !['OWNER','ADMIN'].includes(String(ctx.role))) throw new Error('Owner/Admin permission required');
   const knowledgeKey = required(form, 'knowledge_key');
   const content = required(form, 'content');
+  const service = createSupabaseServiceClient();
 
-  const { data, error } = await ctx.supabase.rpc('publish_knowledge_version', {
+  const { data, error } = await service.rpc('publish_manual_knowledge_v2', {
     p_organization_id: ctx.organizationId,
+    p_actor_user_id: ctx.userId,
     p_knowledge_key: knowledgeKey,
     p_payload: { text: content },
+    p_request_key: ('knowledge-manual:'+crypto.randomUUID()).slice(0,200),
   });
   if (error) throw new Error(`Knowledge publish failed: ${error.message}`);
-  firstPublishedVersion(data);
+  const row=Array.isArray(data)?data[0]:data;
+  if(!row||!String((row as Record<string,unknown>).version_id??''))throw new Error('Knowledge publish returned no result');
   revalidatePath('/knowledge');
 }
 
