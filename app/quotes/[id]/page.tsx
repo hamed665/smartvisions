@@ -7,6 +7,7 @@ import {
   recordManualQuoteDecisionV1,
   submitQuoteReviewV1,
 } from '../actions';
+import { createOrderFromQuoteV1 } from '../../orders/actions';
 import { QuoteComposer } from '../quote-composer';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 
@@ -166,6 +167,17 @@ export default async function QuoteDetailPage({params}:Props) {
       </div> : null}
       <p className="muted smallText">Review: {currentReview?.status??'—'} · policies {(currentReview?.approval_action_keys??[]).join(', ')||'none'} · flags {(currentReview?.review_flags??[]).join(', ')||'none'}</p>
     </section>
+
+    {canManage && quote.status==='ACCEPTED' ? <section className="panel">
+      <h2>Create canonical Order</h2>
+      <p className="muted">Creates exactly one Order from this accepted Quote and records the Quote conversion atomically. It does not create an Invoice, Payment or stock movement.</p>
+      <form action={createOrderFromQuoteV1}>
+        <input type="hidden" name="order_id" value={crypto.randomUUID()}/>
+        <input type="hidden" name="quote_id" value={id}/>
+        <input type="hidden" name="request_key" value={'order-from-quote:'+id+':v'+quote.version}/>
+        <button>Create Order from accepted Quote</button>
+      </form>
+    </section> : null}
 
     <section className="panel">
       <h2>Current line items</h2>
