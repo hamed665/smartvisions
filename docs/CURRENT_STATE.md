@@ -1,5 +1,31 @@
 # Smart Visions Growth OS — Current Production State
 
+## PAYMENT-OMAN Production closeout — 2026-10-02
+
+- Work Package: `SECTION COMMERCE_PAYMENTS -> PAYMENT-OMAN`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled Oman gateway-adapter scope. Real merchant activation, merchant approval, credentials and real-money E2E remain **BLOCKED_EXTERNAL** until legitimate provider evidence exists.
+- Implementation PR #408 final head `dd39c43a6f3d9a97f3190941a570bef286e85f1c` passed exact-head CI `37049624399` across lint, typecheck, tests, the complete PostgreSQL 17 migration chain plus PAYMENT-OMAN controlled smoke, Next build, Vinext and Cloudflare scheduled verification.
+- PR #408 squash-merged to canonical `main@87a036cac3bf983a787523162fddc4ca4f07677b`. Exact-main CI `37050014540` and Cloudflare Production Deploy `37050299511` succeeded on that exact merge SHA.
+- Production migration source `supabase/migrations/0179_payment_oman.sql` is applied in Supabase Production as migration `payment_oman@20261002185224`; merged migration blob SHA is `006b9e68fa83392feea5b2d4a596fd16e844290d`.
+- PAYMENT-OMAN extends the existing canonical PAYMENT-CORE only. Tap and Thawani remain provider adapters; they do not own a second payment ledger, Invoice, Refund engine, webhook journal, queue, IAM, scheduler or billing authority.
+- Provider credentials use the existing Supabase Vault boundary. `integration_connections` stores only Vault references and non-secret provider configuration. Trusted credential create/update/read and provider-configuration functions are service-role-only, SECURITY INVOKER, and denied to `authenticated`.
+- Tap support includes hosted OMR charge creation, merchant binding, verified hashstring webhook ingestion, authenticated charge readback, governed Payment Link evidence, and provider refund execution/reconciliation. A Tap API response or link never marks an Invoice paid without canonical verified provider evidence.
+- Thawani support includes TEST/LIVE hosted checkout sessions, OMR-to-baisa normalization, publishable/secret key separation, authenticated server-to-server session readback, governed settlement reconciliation, and provider refund execution where supported.
+- Ambiguous provider outcomes fail closed into the existing `RECONCILIATION_REQUIRED` path. Captures/refunds still enter the immutable PAYMENT-CORE provider-event/transaction authority with replay-safe provider event IDs.
+- Business Web exposes authenticated Oman-provider configuration and Payment Link/refund controls under the existing Payments surfaces. Stored provider secrets are never displayed back to operators.
+- Production routed smoke found a real callback-routing defect after the first deploy: new provider callbacks were receiving the operator-auth `307` redirect. Hotfix PR #409 final head `bfd10b3881642f3ecc966ebab0249513e29df71f` passed exact-head CI `37050896062` and merged to canonical `main@bc2fc8664c1fa22def73e50e1ac98ed03bfd6ecb`.
+- Exact-main CI `37051363965` and Cloudflare Production Deploy `37051736988` succeeded on the hotfix merge SHA. Fresh routed Production smoke verifies `/payments/providers` remains auth-protected (`307` unauthenticated), while Tap return, Thawani reconciliation and invalid provider webhook POSTs reach the public callback handlers and fail safely with `400` instead of redirecting to Login.
+- Production verification remains side-effect clean: `payment_intents=0`, `payment_links=0`, `payment_refunds=0`, `payment_provider_events=0`, `payment_transactions=0`, Oman provider connections `0`, and Payment-named Vault secrets `0`. No synthetic merchant, credential, customer, Payment Link, transaction, refund, provider callback or provider-success evidence was created.
+- Fresh advisor baseline remains unchanged from the pre-PAYMENT-OMAN baseline: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`.
+- Tap/Thawani merchant onboarding, real provider credentials, provider approval and a real paid/refunded transaction remain external-evidence gated. Their absence does not justify fake Production success.
+
+**Fresh continuation cursor:** `SECTION COMMERCE_PAYMENTS -> PAYMENT-EXTENSION`.
+
+Before mutation, audit the new canonical provider adapter boundary plus current `PAYMENT-CORE`, `integration_connections`, Vault wrappers, provider callback/reconciliation contracts, UI/provider selection and currency assumptions. PAYMENT-EXTENSION should make future country/gateway adapters plug into the same canonical payment truth without provider-specific ledgers, credential stores, webhooks, refund engines or settlement state.
+
+---
+
+
 ## PAYMENT-CORE Production closeout — 2026-10-02
 
 - Work Package: `SECTION COMMERCE_PAYMENTS -> PAYMENT-CORE`.
