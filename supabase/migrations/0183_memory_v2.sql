@@ -39,6 +39,7 @@ create table public.memory_items (
   supersedes_memory_id uuid references public.memory_items(id) on delete restrict,
   corrected_by_memory_id uuid references public.memory_items(id) on delete restrict,
   correction_reason text,
+  invalidation_reason text,
   retrieval_enabled boolean not null default false,
   content_hash text not null check (content_hash ~ '^[0-9a-f]{32}$'),
   created_by_user_id uuid,
@@ -62,6 +63,7 @@ create table public.memory_items (
   check (valid_until is null or valid_until>=valid_from),
   check (expires_at is null or expires_at>=valid_from),
   check (correction_reason is null or length(btrim(correction_reason)) between 2 and 500),
+  check (invalidation_reason is null or length(btrim(invalidation_reason)) between 2 and 500),
   check (
     (supersedes_memory_id is null and correction_reason is null)
     or (supersedes_memory_id is not null and correction_reason is not null)
@@ -731,7 +733,7 @@ begin
       valid_until=case
         when valid_until is null or valid_until>statement_timestamp() then statement_timestamp()
         else valid_until end,
-      correction_reason=v_reason,last_request_key=p_request_key
+      invalidation_reason=v_reason,last_request_key=p_request_key
   where id=p_memory_id
   returning * into v_result;
 
