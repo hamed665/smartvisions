@@ -295,6 +295,41 @@ begin
 end;
 $variant_quote_snapshot$;
 
+
+-- Operational validity: due Quotes must transition to EXPIRED through the existing runtime reconciler.
+select public.create_quote_v1(
+  '00000000-0000-0000-0000-00000000c701',
+  '00000000-0000-0000-0000-00000000c711',
+  '00000000-0000-0000-0000-00000000d814',
+  '00000000-0000-0000-0000-00000000c731',
+  null,null,
+  '00000000-0000-0000-0000-00000000d801',
+  null,
+  '00000000-0000-0000-0000-00000000c711',
+  'OM','OMR',clock_timestamp()+interval '1 second',null,null,
+  jsonb_build_array(jsonb_build_object(
+    'subjectKind','VARIANT',
+    'variantId','00000000-0000-0000-0000-00000000c781',
+    'quantity',1,'discountBps',0,'taxBps',0
+  )),
+  'quote-engine-expiry-create-1'
+);
+select pg_sleep(1.2);
+select public.reconcile_due_quotes_v1(100);
+
+do $quote_expiry_reconciler$
+begin
+  if (select status from public.quotes where id='00000000-0000-0000-0000-00000000d814')<>'EXPIRED' then
+    raise exception 'QUOTE-ENGINE due Quote was not expired';
+  end if;
+  if not exists(
+    select 1 from public.quote_lifecycle_events
+    where quote_id='00000000-0000-0000-0000-00000000d814'
+      and transition='EXPIRED'
+  ) then raise exception 'QUOTE-ENGINE expiry lifecycle evidence is missing'; end if;
+end;
+$quote_expiry_reconciler$;
+
 do $immutability_and_acl$
 begin
   begin
