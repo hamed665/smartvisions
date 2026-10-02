@@ -333,8 +333,6 @@ declare
 begin
   if p_organization_id is null
      or p_binding_id is null
-     or p_expected_version is null
-     or p_expected_version < 1
      or p_actor_user_id is null
      or p_expected_version is null
      or p_expected_version < 1
@@ -463,6 +461,8 @@ declare
 begin
   if p_organization_id is null
      or p_binding_id is null
+     or p_expected_version is null
+     or p_expected_version < 1
      or p_actor_user_id is null
      or v_state not in ('VERIFIED','CREDENTIAL_INVALID','UNCONFIRMED','SUBSCRIPTION_MISSING')
      or length(v_request_key) not between 1 and 200
