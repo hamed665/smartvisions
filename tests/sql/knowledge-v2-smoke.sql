@@ -221,11 +221,13 @@ select set_config('request.jwt.claim.sub','',false);
 
 do $authority_contract$
 begin
-  if has_function_privilege(
-    'authenticated',
-    'public.publish_knowledge_version(uuid,text,jsonb)'::regprocedure,
-    'EXECUTE'
-  ) then raise exception 'Legacy Knowledge publisher remains browser executable'; end if;
+  if to_regprocedure('public.publish_knowledge_version(uuid,text,jsonb)') is not null
+     and has_function_privilege(
+       'authenticated',
+       to_regprocedure('public.publish_knowledge_version(uuid,text,jsonb)'),
+       'EXECUTE'
+     )
+  then raise exception 'Legacy Knowledge publisher remains browser executable'; end if;
 
   if not has_function_privilege(
     'service_role',
