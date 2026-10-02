@@ -45,14 +45,20 @@ returns trigger
 language plpgsql
 security invoker
 set search_path=public,pg_catalog
-as $$
+as $
 begin
+  if tg_op='INSERT' then
+    if coalesce(current_setting('app.business_twin_publish',true),'')<>'allowed' then
+      raise exception 'Business Twin version insert requires governed publish';
+    end if;
+    return new;
+  end if;
   raise exception 'Business Twin versions are immutable';
 end;
-$$;
+$;
 
 create trigger business_twin_versions_immutable
-before update or delete on public.business_twin_versions
+before insert or update or delete on public.business_twin_versions
 for each row execute function public.guard_business_twin_version_immutable();
 
 create or replace function public.guard_business_twin_scope_configuration()
@@ -668,6 +674,7 @@ begin
     v_result:=v_latest;
   else
     v_next_version:=coalesce(v_latest.version,0)+1;
+    perform set_config('app.business_twin_publish','allowed',true);
     insert into public.business_twin_versions(
       organization_id,version,source_hash,payload,published_by_user_id
     ) values (
