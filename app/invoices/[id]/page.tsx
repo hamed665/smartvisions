@@ -3,6 +3,7 @@ import {notFound} from 'next/navigation';
 
 import {CreditNoteForm} from '../credit-note-form';
 import {issueInvoiceV1,voidInvoiceV1} from '../actions';
+import {PaymentIntentForm} from '../../payments/payment-intent-form';
 import {getCurrentOrganization} from '@/lib/supabase/org';
 
 export const dynamic='force-dynamic';
@@ -26,6 +27,11 @@ export default async function InvoiceDetailPage({params}:Props){
     supabase.from('invoice_lifecycle_events').select('id,event_type,from_status,to_status,actor_type,occurred_at,evidence,credit_note_id').eq('organization_id',organizationId).eq('invoice_id',id).order('occurred_at',{ascending:false}).limit(100),
     supabase.from('orders').select('id,order_number,status').eq('organization_id',organizationId).eq('id',invoice.order_id).maybeSingle(),
   ]);
+
+  const {data:paymentIntents,error:paymentSchemaError}=await supabase.from('payment_intents')
+    .select('id,payment_number,status,amount,captured_total,refunded_total,net_paid_total,currency,updated_at')
+    .eq('organization_id',organizationId).eq('invoice_id',id)
+    .order('updated_at',{ascending:false}).limit(20);
 
   const roleText=String(role);
   const canManage=['OWNER','ADMIN','SALES_MANAGER'].includes(roleText)||(roleText==='SALES_AGENT'&&String(invoice.owner_user_id)===String(userId));
@@ -71,6 +77,21 @@ export default async function InvoiceDetailPage({params}:Props){
         <button>Issue Invoice</button>
       </form>
     </section>:null}
+
+    <section className="panel"><h2>Payment Core</h2>
+      {paymentSchemaError?<p className="muted">Payment Core schema is not available in this runtime yet. Collection remains fail-closed during the deployment cutover.</p>:<>
+        <p className="muted">Payment Intent, provider evidence, money settlement and Refund truth are owned by Payment Core. A Payment Link does not mean this Invoice is paid.</p>
+        {(paymentIntents??[]).map(payment=><div className="settingsRow" key={payment.id}><div>
+          <strong>{payment.payment_number} · {payment.status}</strong>
+          <span className="muted smallText">intent {money(payment.amount,payment.currency)} · captured {money(payment.captured_total,payment.currency)} · refunded {money(payment.refunded_total,payment.currency)} · net {money(payment.net_paid_total,payment.currency)}</span>
+        </div><Link className="textLink" href={'/payments/'+payment.id}>Payment evidence →</Link></div>)}
+        {canManage&&['ISSUED','OVERDUE'].includes(String(invoice.status))&&Number(invoice.balance_due)>0
+          &&!(paymentIntents??[]).some(payment=>['CREATED','AUTHORIZED','RECONCILIATION_REQUIRED'].includes(String(payment.status)))
+          ?<PaymentIntentForm invoiceId={id} invoiceVersion={Number(invoice.version)} balanceDue={Number(invoice.balance_due)} currency={String(invoice.currency)}/>:null}
+        {!(paymentIntents?.length)&&!(canManage&&['ISSUED','OVERDUE'].includes(String(invoice.status))&&Number(invoice.balance_due)>0)
+          ?<p className="muted">No Payment evidence for this Invoice.</p>:null}
+      </>}
+    </section>
 
     <section className="panel"><h2>Immutable lines</h2><div className="settingsList">
       {(lines??[]).map(line=><div className="settingsRow" key={line.id}><div>
