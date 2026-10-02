@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { DateTime } from 'luxon';
 
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
@@ -19,10 +20,42 @@ function integer(formData: FormData, key: string) {
   if (!Number.isInteger(value)) throw new Error(key + ' must be an integer');
   return value;
 }
-function parseDate(raw: string) {
-  const value = raw.trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error('valid_until must be a date');
-  return new Date(value + 'T23:59:59.999Z').toISOString();
+async function normalizeValidUntil(input: {
+  service: ReturnType<typeof createSupabaseServiceClient>;
+  organizationId: string;
+  raw: string;
+  tenantBusinessId?: string | null;
+  quoteId?: string | null;
+}) {
+  const raw=input.raw.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) throw new Error('valid_until must be a date');
+
+  let sellerId=input.tenantBusinessId??null;
+  if (!sellerId && input.quoteId) {
+    const {data:quote,error}=await input.service.from('quotes')
+      .select('tenant_business_id')
+      .eq('organization_id',input.organizationId)
+      .eq('id',input.quoteId)
+      .maybeSingle();
+    if (error) throw new Error('Quote seller lookup failed: '+error.message);
+    sellerId=quote?.tenant_business_id?String(quote.tenant_business_id):null;
+  }
+  if (!sellerId) throw new Error('Seller Business is required for Quote validity');
+
+  const {data:seller,error}=await input.service.from('tenant_businesses')
+    .select('timezone')
+    .eq('organization_id',input.organizationId)
+    .eq('id',sellerId)
+    .maybeSingle();
+  if (error) throw new Error('Seller timezone lookup failed: '+error.message);
+  if (!seller) throw new Error('Seller Business was not found');
+
+  const zone=String(seller.timezone||'UTC');
+  const parsed=DateTime.fromISO(raw,{zone});
+  if (!parsed.isValid) throw new Error('valid_until is invalid');
+  const iso=parsed.endOf('day').toUTC().toISO();
+  if (!iso) throw new Error('valid_until could not be normalized');
+  return iso;
 }
 function parseLines(raw: string) {
   const value = JSON.parse(raw || '[]');
@@ -52,11 +85,15 @@ function rpcError(label: string, error: {message?: string}|null) {
 export async function createQuoteV1(formData: FormData) {
   const {organizationId,userId,service}=await context();
   const quoteId=field(formData,'quote_id');
+  const tenantBusinessId=field(formData,'tenant_business_id');
+  const validUntil=await normalizeValidUntil({
+    service,organizationId,raw:field(formData,'valid_until'),tenantBusinessId,
+  });
   const {error}=await service.rpc('create_quote_v1',{
     p_organization_id:organizationId,
     p_actor_user_id:userId,
     p_quote_id:quoteId,
-    p_tenant_business_id:field(formData,'tenant_business_id'),
+    p_tenant_business_id:tenantBusinessId,
     p_branch_id:optional(formData,'branch_id'),
     p_person_id:optional(formData,'person_id'),
     p_buyer_business_id:optional(formData,'buyer_business_id'),
@@ -64,7 +101,7 @@ export async function createQuoteV1(formData: FormData) {
     p_owner_user_id:userId,
     p_country_code:field(formData,'country_code'),
     p_currency:field(formData,'currency'),
-    p_valid_until:parseDate(field(formData,'valid_until')),
+    p_valid_until:validUntil,
     p_terms:optional(formData,'terms'),
     p_notes:optional(formData,'notes'),
     p_lines:parseLines(field(formData,'lines_json')),
@@ -77,6 +114,9 @@ export async function createQuoteV1(formData: FormData) {
 export async function createQuoteVersionV1(formData: FormData) {
   const {organizationId,userId,service}=await context();
   const quoteId=field(formData,'quote_id');
+  const validUntil=await normalizeValidUntil({
+    service,organizationId,raw:field(formData,'valid_until'),quoteId,
+  });
   const {error}=await service.rpc('create_quote_version_v1',{
     p_organization_id:organizationId,
     p_actor_user_id:userId,
@@ -84,7 +124,7 @@ export async function createQuoteVersionV1(formData: FormData) {
     p_expected_quote_version:integer(formData,'expected_quote_version'),
     p_country_code:field(formData,'country_code'),
     p_currency:field(formData,'currency'),
-    p_valid_until:parseDate(field(formData,'valid_until')),
+    p_valid_until:validUntil,
     p_terms:optional(formData,'terms'),
     p_notes:optional(formData,'notes'),
     p_lines:parseLines(field(formData,'lines_json')),
