@@ -19,6 +19,30 @@ type MetaGraphResponse<T> = T & {
   };
 };
 
+export class MetaWhatsAppCredentialHealthError extends Error {
+  constructor(
+    public readonly kind: 'INVALID_OR_REVOKED' | 'UNCONFIRMED',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'MetaWhatsAppCredentialHealthError';
+  }
+}
+
+function credentialFailure<T>(
+  response: Response,
+  body: MetaGraphResponse<T> | null,
+  fallback: string,
+) {
+  if (response.status === 401 || response.status === 403 || body?.error?.code === 190) {
+    return new MetaWhatsAppCredentialHealthError(
+      'INVALID_OR_REVOKED',
+      'Meta WhatsApp credential is invalid or revoked',
+    );
+  }
+  return new MetaWhatsAppCredentialHealthError('UNCONFIRMED', fallback);
+}
+
 type PhoneNumberRow = {
   id?: string;
   display_phone_number?: string;
@@ -53,7 +77,7 @@ async function graphJson<T>(input: {
   graphVersion: string;
   path: string;
   accessToken: string;
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'POST' | 'DELETE';
   fetchImpl?: typeof fetch;
   body?: Record<string, unknown>;
 }): Promise<{ response: Response; body: MetaGraphResponse<T> | null }> {
@@ -118,7 +142,7 @@ async function readPhoneEvidence(input: {
     const body: MetaGraphResponse<PhoneNumberPage> | null = result.body;
 
     if (!response.ok) {
-      throw new Error('Meta phone eligibility readback failed');
+      throw credentialFailure(response, body, 'Meta phone eligibility readback failed');
     }
 
     phone = body?.data?.find((row) => clean(row.id) === input.phoneNumberId) ?? null;
@@ -161,7 +185,7 @@ async function isAppSubscribed(input: {
     const body: MetaGraphResponse<SubscribedAppsPage> | null = result.body;
 
     if (!response.ok) {
-      throw new Error('Meta webhook subscription readback failed');
+      throw credentialFailure(response, body, 'Meta webhook subscription readback failed');
     }
 
     if (body?.data?.some((row) =>
@@ -172,6 +196,109 @@ async function isAppSubscribed(input: {
   }
 
   return false;
+}
+
+
+export async function readMetaWhatsAppBindingHealth(input: {
+  graphVersion: string;
+  accessToken: string;
+  appId: string;
+  wabaId: string;
+  phoneNumberId: string;
+  fetchImpl?: typeof fetch;
+}) {
+  const graphVersion = input.graphVersion.trim();
+  const accessToken = input.accessToken.trim();
+  const appId = input.appId.trim();
+  const wabaId = input.wabaId.trim();
+  const phoneNumberId = input.phoneNumberId.trim();
+  if (!graphVersion || !accessToken || !appId || !wabaId || !phoneNumberId) {
+    throw new MetaWhatsAppCredentialHealthError(
+      'UNCONFIRMED',
+      'Meta WhatsApp credential health input is incomplete',
+    );
+  }
+
+  const phone = await readPhoneEvidence({
+    graphVersion,
+    accessToken,
+    wabaId,
+    phoneNumberId,
+    fetchImpl: input.fetchImpl,
+  });
+  const subscriptionConfirmed = await isAppSubscribed({
+    graphVersion,
+    accessToken,
+    wabaId,
+    appId,
+    fetchImpl: input.fetchImpl,
+  });
+
+  return {
+    ...phone,
+    subscriptionConfirmed,
+  };
+}
+
+export async function unsubscribeMetaWhatsAppBinding(input: {
+  graphVersion: string;
+  accessToken: string;
+  appId: string;
+  wabaId: string;
+  fetchImpl?: typeof fetch;
+}) {
+  const graphVersion = input.graphVersion.trim();
+  const accessToken = input.accessToken.trim();
+  const appId = input.appId.trim();
+  const wabaId = input.wabaId.trim();
+  if (!graphVersion || !accessToken || !appId || !wabaId) {
+    throw new MetaWhatsAppCredentialHealthError(
+      'UNCONFIRMED',
+      'Meta WhatsApp unsubscribe input is incomplete',
+    );
+  }
+
+  const before = await isAppSubscribed({
+    graphVersion,
+    accessToken,
+    wabaId,
+    appId,
+    fetchImpl: input.fetchImpl,
+  });
+  if (!before) {
+    return { unsubscribed: true as const, mutationPerformed: false as const };
+  }
+
+  const attempt = await graphJson<{ success?: boolean | string }>({
+    graphVersion,
+    accessToken,
+    path: `${encodeURIComponent(wabaId)}/subscribed_apps`,
+    method: 'DELETE',
+    fetchImpl: input.fetchImpl,
+  });
+
+  // DELETE can have an ambiguous transport/provider outcome. Never trust only
+  // the mutation response; reconcile with provider readback before claiming success.
+  const after = await isAppSubscribed({
+    graphVersion,
+    accessToken,
+    wabaId,
+    appId,
+    fetchImpl: input.fetchImpl,
+  });
+
+  if (after) {
+    throw credentialFailure(
+      attempt.response,
+      attempt.body,
+      'Meta webhook unsubscription could not be confirmed after reconciliation',
+    );
+  }
+
+  return {
+    unsubscribed: true as const,
+    mutationPerformed: true as const,
+  };
 }
 
 export async function provisionMetaWhatsAppBinding(input: {
