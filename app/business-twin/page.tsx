@@ -46,6 +46,14 @@ function count(summary:JsonObject,key:string){
   return Number.isFinite(n)?n:0;
 }
 function pretty(value:unknown){return JSON.stringify(value,null,2);}
+function targetValue(row:ConfigRow){
+  if(row.scope_type==='ORGANIZATION')return 'ORGANIZATION';
+  if(row.scope_type==='BRAND')return 'BRAND:'+row.brand_id;
+  if(row.scope_type==='BUSINESS')return 'BUSINESS:'+row.tenant_business_id;
+  if(row.scope_type==='BRANCH')return 'BRANCH:'+row.branch_id;
+  return 'ORGANIZATION';
+}
+
 function targetLabel(row:ConfigRow,brands:Map<string,string>,businesses:Map<string,string>,branches:Map<string,string>){
   if(row.scope_type==='ORGANIZATION')return 'Organization';
   if(row.scope_type==='BRAND')return 'Brand · '+(brands.get(row.brand_id??'')??row.brand_id);
@@ -130,6 +138,13 @@ export default async function BusinessTwinPage(){
           <strong>{row.config_key}</strong>
           <span className="muted smallText">{targetLabel(row,brandNames,businessNames,branchNames)} · v{row.version} · {new Date(row.updated_at).toLocaleString()}</span>
           <pre className="smallText">{pretty(row.config_value)}</pre>
+          {canManage?<form action={setBusinessTwinConfigurationV1} className="settingsGrid">
+            <input type="hidden" name="target" value={targetValue(row)}/>
+            <input type="hidden" name="config_key" value={row.config_key}/>
+            <input type="hidden" name="expected_version" value={row.version}/>
+            <label>Update JSON<textarea name="config_value" rows={6} defaultValue={pretty(row.config_value)} required/></label>
+            <button>Update</button>
+          </form>:null}
         </div>{canManage?<form action={deleteBusinessTwinConfigurationV1}>
           <input type="hidden" name="configuration_id" value={row.id}/>
           <input type="hidden" name="expected_version" value={row.version}/>
