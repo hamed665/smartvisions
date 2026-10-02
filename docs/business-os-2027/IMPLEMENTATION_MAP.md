@@ -1,5 +1,30 @@
 # Business OS 2027 — Dependency-Ordered Implementation Map
 
+## BRAIN-BUSINESS-TWIN Production closeout — 2026-10-03
+
+- Work Package: `SECTION BUSINESS_INTELLIGENCE_AI -> BRAIN-BUSINESS-TWIN`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled Business Twin scope.
+- Implementation PR #413 final head `05c5a1c3c9ea2f93aa48f73cf2e2588478d04099` passed exact-head CI `37063571893` across lint, typecheck, unit tests, the complete PostgreSQL 17 migration chain plus Business Twin controlled smoke, Next build, Vinext and Cloudflare scheduled verification.
+- PR #413 squash-merged to canonical `main@147b782b1925b5e6780c8f360d2bc2e6abc35d6a`. Exact-main CI `37063966903` succeeded on that exact SHA. Cloudflare Production Deploy `37064288073` also succeeded on the same SHA.
+- Production migration source `supabase/migrations/0180_business_twin.sql` is applied in Supabase Production as `0180_business_twin@20261002210152`; merged migration blob SHA is `7da9289bb5454d52373a6c6540ac3ebca33db6ca`.
+- Business Twin is a compiled/versioned read model over existing canonical authorities only. It does **not** create a second Catalog, pricing store, Booking engine, Payment ledger, Knowledge Base, tenant hierarchy, CRM or secret store.
+- The compiler composes Organization/Brand/Business/Branch hierarchy, staff/scope assignments, locale/market settings, Services/prices, Catalog products/variants/prices, Service booking profiles, Payment-provider readiness and active Knowledge version references.
+- Business-hours, customer/refund/warranty policies, booking/payment/delivery rules, brand tone, language preferences, escalation rules and operational constraints reuse the existing `scope_configuration_overrides` authority under the guarded `business_twin` namespace. Direct namespace mutation is blocked; OWNER/ADMIN provenance and optimistic version checks are enforced through governed service-role RPCs.
+- Published Twin versions are immutable and source-hash deduplicated. The Organization row lock serializes publication per Organization; unchanged canonical truth reuses the latest version rather than manufacturing a new snapshot.
+- Stored provider secrets and Knowledge payload bodies are intentionally excluded from Twin snapshots. Payment/provider truth and Knowledge content remain owned by their canonical modules.
+- Production verification is side-effect clean: `business_twin_versions=0`, Business-Twin scoped configuration rows `0`, Brands `0`, Businesses `0`, Branches `0`, Catalog Products `0`. No synthetic Business, Branch, Catalog item, policy, Twin snapshot, Payment or Knowledge record was created.
+- Read-only Production compilation succeeds against real Smart Visions canonical state: 1 Organization/OWNER, 8 Services, 6 locale profiles, 2 active Knowledge references, and currently 0 canonical Businesses/Branches/Products. This confirms composition without seeding missing business hierarchy.
+- Runtime ACL verification confirms `service_role` has SELECT/INSERT but no UPDATE/DELETE on immutable Twin versions; authenticated callers cannot execute publish/configuration mutation RPCs. Both immutability and Business-Twin configuration guard triggers are enabled.
+- Fresh routed Production smoke after deploy verifies `/business-twin` is present and remains session-protected: unauthenticated request returns `307 -> /login`.
+- Fresh advisor safety baseline remains unchanged for tracked categories: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`. The generic `unused_index` INFO advisory currently includes the new empty Twin-table indexes, expected before real Twin-version workload and not a security/authority regression.
+
+**Fresh continuation cursor:** `SECTION BUSINESS_INTELLIGENCE_AI -> BRAIN-INDUSTRY-PACKS`.
+
+Before mutation, fresh-audit existing tenant hierarchy, Business Twin scoped configuration, Catalog/Booking/CRM/Automation/Knowledge/AI evaluation/template authorities and any current vertical-specific code. Industry Packs must configure the canonical core, not fork it. A pack may supply onboarding defaults, allowed custom fields/objects, workflow/templates/metrics/evaluation scenarios and scoped configuration, but must not create parallel CRM, Catalog, Booking, Payment, Knowledge, IAM, queue or agent runtimes.
+
+---
+
+
 ## PAYMENT-EXTENSION Production closeout — 2026-10-02
 
 - Work Package: `SECTION COMMERCE_PAYMENTS -> PAYMENT-EXTENSION`.
