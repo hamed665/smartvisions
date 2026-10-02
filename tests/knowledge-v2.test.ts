@@ -86,7 +86,7 @@ describe('KNOWLEDGE-V2 hierarchy/evidence hardening',()=>{
   });
 
   it('allows one active version per key and scope rather than one per organization',()=>{
-    expect(hardening).toContain('drop index public.knowledge_versions_one_active_uidx');
+    expect(hardening).toContain('drop index if exists public.knowledge_versions_one_active_uidx');
     expect(hardening).toContain('knowledge_versions_one_active_scope_uidx');
     expect(hardening).toContain('nulls not distinct');
     expect(hardening).toContain('and scope_type=v_target.scope_type');
