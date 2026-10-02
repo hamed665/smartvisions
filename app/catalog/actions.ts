@@ -26,7 +26,10 @@ function optionalInteger(formData: FormData, key: string) {
 
 function numberValue(formData: FormData, key: string, fallback?: number | null) {
   const raw = String(formData.get(key) ?? '').trim();
-  if (!raw && fallback !== undefined) return fallback;
+  if (!raw) {
+    if (fallback !== undefined) return fallback;
+    throw new Error(`${key} is required`);
+  }
   const value = Number(raw);
   if (!Number.isFinite(value)) throw new Error(`${key} must be numeric`);
   return value;
