@@ -357,13 +357,33 @@ begin
 end;
 $catalog_media_and_relations$;
 
--- Product B proves cross-Business product relations fail closed.
+do $direct_relation_cycle_block$
+begin
+  begin
+    perform public.upsert_catalog_item_relation_v2(
+      '00000000-0000-0000-0000-00000000c701',
+      '00000000-0000-0000-0000-00000000c711',
+      '00000000-0000-0000-0000-00000000cb03',
+      'catalog_ci_service',null,null,
+      null,'00000000-0000-0000-0000-00000000c771',null,
+      'ADD_ON',1,false,0,null,'catalog-v2-direct-cycle'
+    );
+    raise exception 'Direct CATALOG-V2 relation cycle unexpectedly succeeded';
+  exception when others then
+    if sqlerrm not like 'CATALOG-V2 relation cannot create a direct cycle%' then raise; end if;
+  end;
+end;
+$direct_relation_cycle_block$;
+
+-- Product B deliberately reuses Product A's SKU to prove SKU identity is scoped
+-- to tenant Business rather than incorrectly global across the Organization.
+-- It also proves cross-Business product relations fail closed.
 select public.upsert_catalog_product_v2(
   '00000000-0000-0000-0000-00000000c701',
   '00000000-0000-0000-0000-00000000c711',
   '00000000-0000-0000-0000-00000000c773',
   '00000000-0000-0000-0000-00000000c732',
-  'CATALOG-PRODUCT-B','Business B Product',null,'ACTIVE',null,
+  'CATALOG-PRODUCT','Business B Product',null,'ACTIVE',null,
   'ALL_ACTIVE_BRANCHES','NONE',null,null,'{}'::uuid[],
   'catalog-v2-product-b-ci-1'
 );
