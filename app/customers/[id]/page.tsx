@@ -31,6 +31,7 @@ type Customer360 = {
   tasks: Item[];
   deals: Item[];
   quotes: Item[];
+  orders: Item[];
   supportCases: Item[];
   activityTimeline: Item[];
   linkCandidates: {
@@ -144,6 +145,12 @@ export default async function CustomerDetailPage({ params }: Props) {
     </section>
 
     <section className="panel">
+      <h2>Orders</h2>
+      <p className="muted">Only canonical ORDER-ENGINE records explicitly linked to this Person are shown.</p>
+      {sectionRows(customer.orders ?? [], [['Status', 'status'], ['Fulfillment', 'fulfillmentStatus'], ['Total', 'total'], ['Currency', 'currency']])}
+    </section>
+
+    <section className="panel">
       <h2>Support Cases</h2>
       <p className="muted">Only Cases created with this explicit canonical Person context are shown. Customer 360 does not rewrite immutable Support Case identity/context.</p>
       {sectionRows(customer.supportCases ?? [], [['Status', 'status'], ['Priority', 'priority'], ['Escalation', 'escalationLevel'], ['CSAT', 'csatScore'], ['Updated', 'updatedAt']])}
@@ -172,7 +179,7 @@ export default async function CustomerDetailPage({ params }: Props) {
       <div className="healthList">
         {Object.entries(customer.moduleStatus ?? {}).map(([module, status]) => <span key={module}>{module} <strong>{status}</strong></span>)}
       </div>
-      <p className="muted">Missing modules remain explicit. Customer 360 now reads canonical Quote truth but does not create placeholder Booking, Order, Invoice, Payment, Document or Consent truth. Scoped internal Notes stay outside this Organization-wide read model until their authorization can be preserved.</p>
+      <p className="muted">Missing modules remain explicit. Customer 360 now reads canonical Quote and Order truth but does not create placeholder Invoice, Payment, inventory, Document or Consent truth. Scoped internal Notes stay outside this Organization-wide read model until their authorization can be preserved.</p>
     </section>
   </div>;
 }
