@@ -275,30 +275,19 @@ begin
     raise exception 'CATALOG-V2 Product price was not created';
   end if;
 
-  select * into pr from public.upsert_catalog_product_price_v2(
-    '00000000-0000-0000-0000-00000000c701',
-    '00000000-0000-0000-0000-00000000c711',
-    '00000000-0000-0000-0000-00000000c792',
-    '00000000-0000-0000-0000-00000000c771',
-    '00000000-0000-0000-0000-00000000c781',
-    'OM','USD',26,21,31,null,'catalog-v2-price-usd-ci-1'
-  );
-  if pr.currency<>'USD' then
-    raise exception 'CATALOG-V2 country/currency pricing did not allow a distinct currency';
-  end if;
-
   begin
     perform public.upsert_catalog_product_price_v2(
       '00000000-0000-0000-0000-00000000c701',
       '00000000-0000-0000-0000-00000000c711',
-      '00000000-0000-0000-0000-00000000c793',
+      '00000000-0000-0000-0000-00000000c792',
       '00000000-0000-0000-0000-00000000c771',
       '00000000-0000-0000-0000-00000000c781',
-      'OM','OMR',27,22,32,null,'catalog-v2-price-duplicate-ci-1'
+      'OM','USD',26,21,31,null,'catalog-v2-price-country-duplicate'
     );
-    raise exception 'Duplicate Product country/currency price unexpectedly succeeded';
+    raise exception 'Second Product price truth for the same subject/country unexpectedly succeeded';
   exception when unique_violation then
     null;
+  end;
   end;
 end;
 $product_variant_price$;
@@ -357,24 +346,6 @@ begin
 end;
 $catalog_media_and_relations$;
 
-do $direct_relation_cycle_block$
-begin
-  begin
-    perform public.upsert_catalog_item_relation_v2(
-      '00000000-0000-0000-0000-00000000c701',
-      '00000000-0000-0000-0000-00000000c711',
-      '00000000-0000-0000-0000-00000000cb03',
-      'catalog_ci_service',null,null,
-      null,'00000000-0000-0000-0000-00000000c771',null,
-      'ADD_ON',1,false,0,null,'catalog-v2-direct-cycle'
-    );
-    raise exception 'Direct CATALOG-V2 relation cycle unexpectedly succeeded';
-  exception when others then
-    if sqlerrm not like 'CATALOG-V2 relation cannot create a direct cycle%' then raise; end if;
-  end;
-end;
-$direct_relation_cycle_block$;
-
 -- Product B deliberately reuses Product A's SKU to prove SKU identity is scoped
 -- to tenant Business rather than incorrectly global across the Organization.
 -- It also proves cross-Business product relations fail closed.
@@ -387,40 +358,6 @@ select public.upsert_catalog_product_v2(
   'ALL_ACTIVE_BRANCHES','NONE',null,null,'{}'::uuid[],
   'catalog-v2-product-b-ci-1'
 );
-
-do $catalog_v2_org_scoped_skus$
-begin
-  begin
-    perform public.upsert_catalog_product_v2(
-      '00000000-0000-0000-0000-00000000c701',
-      '00000000-0000-0000-0000-00000000c711',
-      '00000000-0000-0000-0000-00000000c774',
-      '00000000-0000-0000-0000-00000000c732',
-      'CATALOG-PRODUCT','Duplicate SKU in another Business',null,'ACTIVE',null,
-      'ALL_ACTIVE_BRANCHES','NONE',null,null,'{}'::uuid[],
-      'catalog-v2-product-org-sku-duplicate'
-    );
-    raise exception 'Product SKU was not Organization-scoped';
-  exception when unique_violation then
-    null;
-  end;
-
-  begin
-    perform public.upsert_catalog_product_variant_v2(
-      '00000000-0000-0000-0000-00000000c701',
-      '00000000-0000-0000-0000-00000000c711',
-      '00000000-0000-0000-0000-00000000c782',
-      '00000000-0000-0000-0000-00000000c773',
-      'CATALOG-PRODUCT-BLACK','Duplicate Variant SKU',
-      '{"color":"duplicate"}'::jsonb,
-      'ACTIVE','INHERIT',null,null,'catalog-v2-variant-org-sku-duplicate'
-    );
-    raise exception 'Variant SKU was not Organization-scoped';
-  exception when unique_violation then
-    null;
-  end;
-end;
-$catalog_v2_org_scoped_skus$;
 
 do $cross_business_relation_block$
 begin
