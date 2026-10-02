@@ -67,7 +67,7 @@ begin
     jsonb_build_array(jsonb_build_object(
       'subjectKind','VARIANT',
       'variantId','00000000-0000-0000-0000-00000000c781',
-      'quantity',2,'discountBps',0,'taxBps',500
+      'quantity',2,'discountBps',0,'taxBps',0
     )),
     'order-engine-source-quote-1'
   );
