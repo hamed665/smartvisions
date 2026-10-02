@@ -552,7 +552,16 @@ begin
 
   if p_lines is null or jsonb_typeof(p_lines)<>'array'
      or jsonb_array_length(p_lines) not between 1 and 500
-     or v_country !~ '^[A-Z]{2}
+     or v_country !~ '^[A-Z]{2}$'
+     or v_currency !~ '^[A-Z]{3}$'
+     or p_valid_until is null or p_valid_until<=v_now
+     or p_valid_until>v_now+interval '365 days'
+     or (p_terms is not null and length(btrim(p_terms)) not between 1 and 12000)
+     or (p_notes is not null and length(btrim(p_notes)) not between 1 and 12000)
+  then
+    raise exception 'QUOTE-ENGINE version payload is invalid';
+  end if;
+
   for v_line in select value from jsonb_array_elements(p_lines)
   loop
     v_line_no:=v_line_no+1;
