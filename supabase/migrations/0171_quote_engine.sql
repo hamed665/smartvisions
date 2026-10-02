@@ -745,13 +745,26 @@ begin
     'seller',v_seller,'buyer',v_buyer,'countryCode',v_country,'currency',v_currency,
     'validUntil',p_valid_until,
     'terms',nullif(btrim(coalesce(p_terms,'')),''),
-    'notes',nullif(btrim(coalesce(p_notes,'')),''),
-    'lines',v_resolved,
+    'lines',(
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'lineNo',(x->>'lineNo')::integer,
+        'subjectKind',x->>'subjectKind',
+        'name',x->>'name',
+        'sku',nullif(x->>'sku',''),
+        'description',nullif(x->>'description',''),
+        'quantity',(x->>'quantity')::numeric,
+        'unitPrice',(x->>'unitPrice')::numeric,
+        'discountAmount',(x->>'discountAmount')::numeric,
+        'taxAmount',(x->>'taxAmount')::numeric,
+        'lineSubtotal',(x->>'lineSubtotal')::numeric,
+        'lineTotal',(x->>'lineTotal')::numeric
+      ) order by (x->>'lineNo')::integer),'[]'::jsonb)
+      from jsonb_array_elements(v_resolved) x
+    ),
     'totals',jsonb_build_object(
       'subtotal',round(v_subtotal,4),'discount',round(v_discount_total,4),
       'tax',round(v_tax_total,4),'total',round(v_total,4)
-    ),
-    'approvalActionKeys',to_jsonb(v_actions),'reviewFlags',to_jsonb(v_flags)
+    )
   );
 
   perform set_config('app.quote_engine_mutation','allowed',true);
