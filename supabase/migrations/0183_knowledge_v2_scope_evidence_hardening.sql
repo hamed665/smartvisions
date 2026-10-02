@@ -115,7 +115,7 @@ create index knowledge_versions_org_team_scope_idx
 
 -- The historical index encoded Organization-wide uniqueness and therefore made
 -- scoped Knowledge mutually exclusive. Preserve one active version per key+scope.
-drop index public.knowledge_versions_one_active_uidx;
+drop index if exists public.knowledge_versions_one_active_uidx;
 create unique index knowledge_versions_one_active_scope_uidx
   on public.knowledge_versions(
     organization_id,knowledge_key,scope_type,
@@ -476,8 +476,10 @@ begin
   perform pg_advisory_xact_lock(hashtextextended(
     p_organization_id::text||':knowledge:'||v_key||':'||
     v_source.scope_type||':'||
-    coalesce(v_source.brand_id,v_source.tenant_business_id,v_source.branch_id,
-             v_source.department_id,v_source.team_id)::text,0
+    coalesce(
+      v_source.brand_id::text,v_source.tenant_business_id::text,v_source.branch_id::text,
+      v_source.department_id::text,v_source.team_id::text,'ORGANIZATION'
+    ),0
   ));
 
   select * into v_active
@@ -772,8 +774,10 @@ begin
   perform pg_advisory_xact_lock(hashtextextended(
     p_organization_id::text||':knowledge:'||v_target.knowledge_key||':'||
     v_target.scope_type||':'||
-    coalesce(v_target.brand_id,v_target.tenant_business_id,v_target.branch_id,
-             v_target.department_id,v_target.team_id)::text,0
+    coalesce(
+      v_target.brand_id::text,v_target.tenant_business_id::text,v_target.branch_id::text,
+      v_target.department_id::text,v_target.team_id::text,'ORGANIZATION'
+    ),0
   ));
 
   select * into v_active from public.knowledge_versions
@@ -915,8 +919,12 @@ as $knowledge_context_scoped$
   limit greatest(1,least(coalesce(p_limit,50),100));
 $knowledge_context_scoped$;
 
+-- PostgreSQL cannot CREATE OR REPLACE a function with a changed TABLE return shape.
+-- Drop only the exact legacy signature, then recreate it as a compatibility wrapper.
+drop function public.get_knowledge_context_v2(uuid,uuid,uuid,boolean,integer);
+
 -- Preserve the original 5-argument resolver while enriching its evidence contract.
-create or replace function public.get_knowledge_context_v2(
+create function public.get_knowledge_context_v2(
   p_organization_id uuid,
   p_tenant_business_id uuid default null,
   p_branch_id uuid default null,
