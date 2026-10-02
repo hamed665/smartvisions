@@ -64,7 +64,7 @@ export function QuoteComposer(props:Props) {
 
   return <form action={action} className="settingsGrid">
     <input type="hidden" name="quote_id" value={props.quoteId} />
-    <input type="hidden" name="request_key" value={'quote-ui:' + props.quoteId + ':' + crypto.randomUUID()} />
+    <input type="hidden" name="request_key" value={requestKey} />
     <input type="hidden" name="lines_json" value={payload} />
     {props.expectedQuoteVersion!=null
       ? <input type="hidden" name="expected_quote_version" value={props.expectedQuoteVersion} />
