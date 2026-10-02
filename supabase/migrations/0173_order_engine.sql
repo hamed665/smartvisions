@@ -358,20 +358,36 @@ begin
      and tg_op<>'INSERT' then
     raise exception 'ORDER-ENGINE immutable evidence cannot be changed';
   end if;
-  if tg_table_name='order_line_fulfillment' and tg_op='UPDATE'
-     and new.ordered_quantity is distinct from old.ordered_quantity then
-    raise exception 'ORDER-ENGINE ordered quantity snapshot is immutable';
-  end if;
   return case when tg_op='DELETE' then old else new end;
 end;
-$$;
+$;
+
+create or replace function public.guard_order_fulfillment_mutation()
+returns trigger
+language plpgsql
+security invoker
+set search_path=public,pg_catalog
+as $
+begin
+  if coalesce(current_setting('app.order_engine_mutation',true),'')<>'allowed' then
+    raise exception 'ORDER-ENGINE state requires governed command';
+  end if;
+  if tg_op='DELETE' then
+    raise exception 'ORDER-ENGINE fulfillment summary cannot be deleted';
+  end if;
+  if tg_op='UPDATE' and new.ordered_quantity is distinct from old.ordered_quantity then
+    raise exception 'ORDER-ENGINE ordered quantity snapshot is immutable';
+  end if;
+  return new;
+end;
+$;
 
 create trigger orders_guard before insert or update or delete on public.orders
 for each row execute function public.guard_order_engine_mutation();
 create trigger order_lines_guard before insert or update or delete on public.order_line_items
 for each row execute function public.guard_order_engine_mutation();
 create trigger order_fulfillment_guard before insert or update or delete on public.order_line_fulfillment
-for each row execute function public.guard_order_engine_mutation();
+for each row execute function public.guard_order_fulfillment_mutation();
 create trigger order_returns_guard before insert or update or delete on public.order_returns
 for each row execute function public.guard_order_engine_mutation();
 create trigger order_return_lines_guard before insert or update or delete on public.order_return_lines
@@ -1622,6 +1638,7 @@ $$;
 
 -- Trusted mutation RPCs stay service-role only. Customer360 remains a scoped authenticated read composition.
 revoke all on function public.guard_order_engine_mutation() from public,anon,authenticated,service_role;
+revoke all on function public.guard_order_fulfillment_mutation() from public,anon,authenticated,service_role;
 revoke all on function private.order_engine_actor_role(uuid,uuid) from public,anon,authenticated,service_role;
 revoke all on function private.order_engine_assert_manage(uuid,uuid,uuid) from public,anon,authenticated,service_role;
 revoke all on function private.order_engine_assert_manager(uuid,uuid) from public,anon,authenticated,service_role;
