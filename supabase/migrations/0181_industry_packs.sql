@@ -121,11 +121,14 @@ returns trigger
 language plpgsql
 security invoker
 set search_path=public,pg_catalog
-as $$
+as $
 begin
+  if coalesce(current_setting('app.industry_pack_catalog_migration',true),'')='allowed' then
+    return case when tg_op='DELETE' then old else new end;
+  end if;
   raise exception 'Industry Pack catalog/versions are migration-versioned and immutable at runtime';
 end;
-$$;
+$;
 
 create trigger industry_packs_immutable
 before update or delete on public.industry_packs
