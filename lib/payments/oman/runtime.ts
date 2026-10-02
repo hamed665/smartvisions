@@ -11,6 +11,7 @@ import {
   mapTapEvent,
   normalizeThawaniRefund,
   normalizeThawaniSession,
+  retrieveTapCharge,
   retrieveThawaniSession,
 } from './provider';
 
@@ -50,7 +51,7 @@ export async function createOmanPaymentLink(input:{
         invoiceId,
         organizationId:input.organizationId,
         postUrl:base+'/api/payments/oman/tap/webhook',
-        redirectUrl:base+'/payments/'+input.paymentIntentId,
+        redirectUrl:base+'/api/payments/oman/tap/return?payment_intent_id='+encodeURIComponent(input.paymentIntentId),
       });
     }else{
       created=await createThawaniCheckoutSession({
@@ -62,7 +63,7 @@ export async function createOmanPaymentLink(input:{
         paymentIntentId:input.paymentIntentId,
         paymentNumber,
         successUrl:base+'/api/payments/oman/thawani/reconcile?payment_intent_id='+encodeURIComponent(input.paymentIntentId),
-        cancelUrl:base+'/payments/'+input.paymentIntentId+'?payment=cancelled',
+        cancelUrl:base+'/api/payments/oman/thawani/reconcile?payment_intent_id='+encodeURIComponent(input.paymentIntentId)+'&cancelled=1',
       });
     }
 
@@ -111,6 +112,76 @@ export async function createOmanPaymentLink(input:{
     }
     throw error;
   }
+}
+
+export async function reconcileTapPayment(input:{
+  organizationId:string;
+  paymentIntentId:string;
+}){
+  const service=createSupabaseServiceClient();
+  const {data:payment,error}=await service.from('payment_intents').select('id,amount,currency,status')
+    .eq('organization_id',input.organizationId).eq('id',input.paymentIntentId).maybeSingle();
+  if(error||!payment)throw new Error('Payment Intent not found');
+
+  const {data:link,error:linkError}=await service.from('payment_links')
+    .select('provider_link_id')
+    .eq('organization_id',input.organizationId)
+    .eq('payment_intent_id',input.paymentIntentId)
+    .eq('provider','TAP')
+    .order('created_at',{ascending:false}).limit(1).maybeSingle();
+  if(linkError||!link)throw new Error('Tap Payment Link not found');
+
+  const chargeId=String(link.provider_link_id);
+  const cfg=await loadOmanProviderConfig(input.organizationId,'TAP');
+  const raw=await retrieveTapCharge(cfg.secretKey,chargeId);
+  const metadata=(raw.metadata&&typeof raw.metadata==='object'&&!Array.isArray(raw.metadata))
+    ? raw.metadata as Record<string,unknown>:{};
+  if(String(raw.id??'')!==chargeId
+     || String(metadata.sv_org_id??'')!==input.organizationId
+     || String(metadata.sv_payment_intent_id??'')!==input.paymentIntentId){
+    throw new Error('Tap provider readback identity mismatch');
+  }
+  if(String(raw.currency??'').toUpperCase()!=='OMR')throw new Error('Tap currency mismatch');
+  const providerAmount=Number(raw.amount);
+  if(!Number.isFinite(providerAmount)||Math.abs(providerAmount-Number(payment.amount))>0.0001){
+    throw new Error('Tap amount mismatch');
+  }
+
+  const status=String(raw.status??'').toUpperCase();
+  await recordOmanProviderHealth({
+    organizationId:input.organizationId,provider:'TAP',healthy:true,
+    detail:'Charge read back from Tap API',
+    evidence:{operation:'RETRIEVE_CHARGE',chargeId,status,mode:cfg.mode},
+    requestKey:('payment-oman-health:TAP:'+chargeId+':'+status).slice(0,240),
+  });
+
+  const mapped=mapTapEvent(raw);
+  if(!mapped)return {settled:false,status:status||'UNKNOWN'};
+
+  const transaction=(raw.transaction&&typeof raw.transaction==='object'&&!Array.isArray(raw.transaction))
+    ? raw.transaction as Record<string,unknown>:{};
+  const reference=(raw.reference&&typeof raw.reference==='object'&&!Array.isArray(raw.reference))
+    ? raw.reference as Record<string,unknown>:{};
+  const created=String(transaction.created??raw.created??'');
+  const providerEventId=('tap:'+chargeId+':'+status+':'+created).slice(0,240);
+  const providerReference=String(reference.gateway??reference.payment??chargeId);
+  const {data:result,error:recordError}=await service.rpc('record_payment_provider_event_v1',{
+    p_organization_id:input.organizationId,
+    p_payment_intent_id:input.paymentIntentId,
+    p_refund_id:null,
+    p_provider:'TAP',
+    p_provider_event_id:providerEventId,
+    p_event_kind:mapped.kind,
+    p_provider_reference:providerReference,
+    p_amount:mapped.amount,
+    p_currency:'OMR',
+    p_authenticity:'EXPLICIT_RECONCILIATION',
+    p_raw_evidence:raw,
+    p_normalized_evidence:{tapId:chargeId,status,providerReadback:true,providerReference},
+    p_request_key:('payment-oman-tap-readback:'+providerEventId).slice(0,240),
+  });
+  rpcError('Tap settlement reconciliation failed',recordError);
+  return {settled:mapped.kind==='CAPTURED',status,result};
 }
 
 export async function reconcileThawaniPayment(input:{
