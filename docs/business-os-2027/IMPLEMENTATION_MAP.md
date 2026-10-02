@@ -1,3 +1,28 @@
+## BRAIN-INDUSTRY-PACKS Production closeout — 2026-10-03
+
+- Work Package: `SECTION BUSINESS_INTELLIGENCE_AI -> BRAIN-INDUSTRY-PACKS`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled Industry Pack framework/catalog/activation boundary. Pack-declared future Custom Objects remain **DEFERRED_WITH_REASON** until a canonical Custom Object authority exists; the Pack layer does not invent one.
+- Implementation PR #415 final head `6ee0a67a2b1450860ee6edf07985b0b79dd49795` passed exact-head CI `37071851033` across lint, typecheck, unit tests, the complete PostgreSQL 17 migration chain plus Industry Pack controlled smoke, Next build, Vinext and Cloudflare scheduled verification.
+- PR #415 squash-merged to canonical `main@3d62c5de926f1f66ca278ca0182a452be86b2d48`. Exact-main CI `37072203881` succeeded on that exact SHA. Cloudflare Production Deploy `37072497317` also succeeded on the same SHA.
+- Production migration source `supabase/migrations/0181_industry_packs.sql` is applied as `0181_industry_packs@20261002222659`; merged migration blob SHA is `b24f5e6018e0559f72a4eb8de98e86b934590553`.
+- Nine migration-versioned built-in Pack manifests are live: Dental & Medical, Pet Clinic, Automotive / Garage / Showroom, Salon / Spa / Beauty, Restaurant / Cafe, Home Services, Real Estate, Education and Retail / Professional Services.
+- Packs are configuration blueprints over canonical modules. They may describe onboarding facts/capabilities, Lead/Deal Custom Field blueprints, Pipeline blueprints, Automation recipes, metrics, templates, AI evaluation scenarios and Business Twin defaults; activation does not silently create CRM fields, Deals, Catalog items, Bookings, Payments, messages or Automation rules.
+- Runtime readiness validates Pack Custom Field types, Pipeline stage contracts, available Automation triggers and allowed Business Twin configuration keys against current canonical authorities. All 9 current Pack v1 manifests report `runtimeReady=true`.
+- Future/external Custom Object blueprints are surfaced as `DEPENDENCY_PENDING` instead of creating a parallel object store. Eight current packs expose one such pending Custom Object dependency; Restaurant / Cafe currently exposes none.
+- Pack catalog and versions are runtime-immutable but migration-upgradable. Business-scoped activation/deactivation is service-role-only, OWNER/ADMIN-provenanced, optimistic-versioned, request-key/audit protected and guarded against direct table mutation.
+- Business Twin V2 adds bounded Industry Pack references only; the full versioned Pack manifest resolves separately. Existing hierarchy, CRM, Catalog, Booking, Payment, Knowledge, IAM and Automation authorities remain canonical.
+- Production verification is side-effect clean: 9 Packs, 9 Pack versions, 0 Pack activations, 0 canonical Businesses, 0 Brands, 0 Branches and 0 Business Twin snapshots. No fake tenant hierarchy, operational Pack materialization or Twin snapshot was created.
+- Read-only Production compilation succeeds for Smart Visions with Business Twin schemaVersion 2 and an empty `industryPackReferences` array, which is correct while no canonical Business/Pack activation exists.
+- Runtime ACL verification confirms service-role Pack activation and Twin V2 publish are executable; authenticated callers cannot execute either trusted mutation. Authenticated Pack-context resolution remains available under RLS/member scope. Catalog/version/activation guards are enabled.
+- Fresh routed Production smoke verifies `/industry-packs` is deployed and remains session-protected: unauthenticated request returns `307 -> /login`.
+- Fresh advisor baseline remains unchanged in tracked security/performance debt: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`. Generic `unused_index` is now 419 INFO findings, expected to include fresh zero-row Pack indexes before real workload.
+
+**Fresh continuation cursor:** `SECTION BUSINESS_INTELLIGENCE_AI -> KNOWLEDGE-V2`.
+
+Before mutation, fresh-audit current Knowledge tables/functions/UI, website/file/FAQ/catalog ingestion paths, source provenance, approvals, versioning, retrieval permissions and stale/conflict behavior. KNOWLEDGE-V2 must extend the canonical Knowledge authority, not create a second Knowledge Base, vector store authority, ingestion queue or approval model.
+
+---
+
 # Business OS 2027 — Dependency-Ordered Implementation Map
 
 ## BRAIN-BUSINESS-TWIN Production closeout — 2026-10-03
