@@ -477,6 +477,14 @@ export async function runAutomationRuntimeTick(input: {
     throw new Error(`Booking automation event reconciliation failed: ${bookingEvents.error.message}`);
   }
 
+  const quoteExpiry = await input.supabase.rpc(
+    'reconcile_due_quotes_v1',
+    { p_limit: 100 },
+  );
+  if (quoteExpiry.error && quoteExpiry.error.code !== 'PGRST202') {
+    throw new Error(`Quote expiry reconciliation failed: ${quoteExpiry.error.message}`);
+  }
+
   const quoteEvents = await input.supabase.rpc(
     'reconcile_quote_automation_events',
     { p_limit: 100 },
@@ -547,6 +555,7 @@ export async function runAutomationRuntimeTick(input: {
     waiting: waitingCount,
     failed,
     bookingEvents: bookingEvents.error ? {} : record(bookingEvents.data),
+    quoteExpiry: quoteExpiry.error ? {} : record(quoteExpiry.data),
     quoteEvents: quoteEvents.error ? {} : record(quoteEvents.data),
     approvalDeadlines: record(approvalDeadlines.data),
     reconciliation: record(waiting.data),
