@@ -62,6 +62,14 @@ export default async function IndustryPacksPage(){
   }
   const activationByBusiness=new Map(activations.map(row=>[row.tenant_business_id,row]));
   const packNames=new Map(packs.map(row=>[row.pack_key,row.name]));
+  const readinessEntries=await Promise.all([...latestVersions.entries()].map(async([packKey,version])=>{
+    const {data,error}=await supabase.rpc('get_industry_pack_readiness_v1',{
+      p_pack_key:packKey,
+      p_pack_version:version.version,
+    });
+    return [packKey,error?{}:obj(data)] as const;
+  }));
+  const readinessByPack=new Map(readinessEntries);
 
   return <div>
     <div className="headerRow">
@@ -111,12 +119,17 @@ export default async function IndustryPacksPage(){
           const version=latestVersions.get(pack.pack_key);
           const manifest=obj(version?.manifest);
           const onboarding=obj(manifest.onboarding);
+          const readiness=readinessByPack.get(pack.pack_key)??{};
+          const pendingCustomObjects=arr(readiness.pendingCustomObjects);
+          const runtimeReady=readiness.runtimeReady===true;
           return <div className="settingsRow" key={pack.pack_key}><div>
             <strong>{pack.name}</strong>
             <span className="muted smallText">{pack.category} · {pack.pack_key} · v{version?.version??'—'}</span>
             <p>{pack.description}</p>
             <span className="muted smallText">Required facts: {list(onboarding.requiredFacts).join(', ')||'none'} · Capabilities: {list(onboarding.requiredCapabilities).join(', ')||'none'}</span>
             <span className="muted smallText">Blueprints: {blueprintCount(manifest,'customFieldBlueprints')} custom fields · {blueprintCount(manifest,'customObjectBlueprints')} custom objects · {blueprintCount(manifest,'pipelineBlueprints')} pipelines · {blueprintCount(manifest,'automationBlueprints')} automations · {blueprintCount(manifest,'metrics')} metrics · {blueprintCount(manifest,'aiEvaluationScenarios')} AI evaluations</span>
+            <span className="muted smallText">Canonical readiness: {runtimeReady?'READY':'BLOCKED'} · Future/external custom-object dependencies: {pendingCustomObjects.length}</span>
+            <details><summary>Inspect readiness</summary><pre className="smallText">{JSON.stringify(readiness,null,2)}</pre></details>
             <details><summary>Inspect versioned manifest</summary><pre className="smallText">{JSON.stringify(manifest,null,2)}</pre></details>
           </div></div>;
         })}
