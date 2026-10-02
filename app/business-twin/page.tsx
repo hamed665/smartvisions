@@ -1,3 +1,4 @@
+import {notFound} from 'next/navigation';
 import {
   deleteBusinessTwinConfigurationV1,
   publishBusinessTwinV1,
@@ -64,6 +65,8 @@ function targetLabel(row:ConfigRow,brands:Map<string,string>,businesses:Map<stri
 
 export default async function BusinessTwinPage(){
   const {supabase,organizationId,role}=await getCurrentOrganization();
+  const canManage=['OWNER','ADMIN'].includes(String(role));
+  if(!canManage)notFound();
   const service=createSupabaseServiceClient();
 
   const [
@@ -88,8 +91,6 @@ export default async function BusinessTwinPage(){
   const brands=(brandResult.data??[]) as NamedRow[];
   const businesses=(businessResult.data??[]) as NamedRow[];
   const branches=(branchResult.data??[]) as BranchRow[];
-  const canManage=['OWNER','ADMIN'].includes(String(role));
-
   const brandNames=new Map(brands.map(x=>[x.id,x.name]));
   const businessNames=new Map(businesses.map(x=>[x.id,x.name]));
   const branchNames=new Map(branches.map(x=>[x.id,x.name+' ('+x.code+')']));
