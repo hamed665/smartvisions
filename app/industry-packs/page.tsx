@@ -97,7 +97,6 @@ export default async function IndustryPacksPage(){
               <label>Pack<select name="pack_key" defaultValue={activation?.pack_key??packs[0]?.pack_key}>
                 {packs.map(pack=><option key={pack.pack_key} value={pack.pack_key}>{pack.name}</option>)}
               </select></label>
-              <input type="hidden" name="pack_version" value={activation?latestVersions.get(activation.pack_key)?.version??activation.pack_version:1}/>
               <button>{activation?'Change / Reactivate':'Activate Pack'}</button>
             </form>
           </div></div>;
