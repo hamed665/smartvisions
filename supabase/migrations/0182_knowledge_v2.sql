@@ -1025,8 +1025,13 @@ $knowledge_context$;
 -- The V1 owner-direct publisher is superseded. Keep the function object for old
 -- migrations/history but remove runtime execute capability so V2 governance
 -- cannot be bypassed.
-revoke all on function public.publish_knowledge_version(uuid,text,jsonb)
-  from public,anon,authenticated,service_role;
+do $knowledge_legacy_publisher_acl$
+begin
+  if to_regprocedure('public.publish_knowledge_version(uuid,text,jsonb)') is not null then
+    execute 'revoke all on function public.publish_knowledge_version(uuid,text,jsonb) from public,anon,authenticated,service_role';
+  end if;
+end;
+$knowledge_legacy_publisher_acl$;
 
 revoke all on function public.guard_knowledge_source_v2_mutation() from public,anon,authenticated,service_role;
 revoke all on function public.guard_knowledge_version_v2_mutation() from public,anon,authenticated,service_role;
