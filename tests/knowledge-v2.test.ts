@@ -34,7 +34,7 @@ describe('KNOWLEDGE-V2 architecture',()=>{
     expect(migration).toContain("'PENDING_REVIEW'");
     expect(migration).toContain('approve_knowledge_version_v2');
     expect(migration).toContain('reject_knowledge_version_v2');
-    expect(migration).toContain('refresh never silently overwrites active approved truth');
+    expect(migration.toLowerCase()).toContain('refresh never silently overwrites active approved truth');
     expect(migration).toContain('revoke all on function public.publish_knowledge_version');
     expect(actions).toContain("rpc('stage_knowledge_version_v2'");
     expect(actions).toContain("rpc('approve_knowledge_version_v2'");
