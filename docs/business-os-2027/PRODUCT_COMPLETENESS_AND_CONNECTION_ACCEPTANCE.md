@@ -1,5 +1,29 @@
 # Product completeness and customer connection acceptance — Business OS 2027
 
+## INVOICE-ENGINE Production closeout — 2026-10-02
+
+- Work Package: `SECTION COMMERCE_PAYMENTS -> INVOICE-ENGINE`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled canonical Invoice/Credit Note scope.
+- Implementation PR #404 final head `a1017fdbb30580343e7f3243743d19978650c2dd` passed exact-head CI `37028750396` across lint, typecheck, tests, the full PostgreSQL 17 migration chain plus INVOICE-ENGINE controlled smoke, Next build, Vinext and Cloudflare scheduled verification.
+- PR #404 squash-merged to canonical `main@f5cd536af673c6f3f18085d78e3976ba279c596f`. Exact-main push CI `37029188586` succeeded on that exact merge SHA. Cloudflare Production Deploy `37029594495` succeeded on the same SHA through exact-green checkout, release-candidate smoke, controlled SSR load, Production promotion, routed smoke and safe API/webhook rejection smoke.
+- Production migration `0177_invoice_engine@20261002154909` is live from merged migration blob `07382072f26b9f457ecd12b801717e354f2f344b`.
+- Canonical Invoice authority is `public.invoices` with immutable `invoice_line_items`, immutable `invoice_credit_notes` / `invoice_credit_note_line_items`, and durable `invoice_lifecycle_events`. One canonical Invoice is allowed per canonical Order; creation converges on the existing Invoice rather than manufacturing a parallel commercial document.
+- Invoice commercial values and tax/VAT evidence snapshot canonical ORDER-ENGINE evidence. INVOICE-ENGINE does not re-price Catalog data, does not create a second tax authority, and persists immutable issue-time customer documents with governed print/Save-as-PDF surfaces.
+- Governed lifecycle covers Draft, Issued, Overdue and Void plus bounded line-level Credit Notes. Credit Notes reduce commercial balance only and never execute a money refund. `paid_total` is deliberately frozen until `PAYMENT-CORE` owns governed settlement projection; Payment/refund transaction truth is not invented in this slice.
+- `INVOICE_ISSUED` and `INVOICE_OVERDUE` are now AVAILABLE canonical Automation triggers with subject `INVOICE`. Due/overdue reconciliation and Invoice event projection reuse the existing Automation Runtime scheduler. The same runtime wiring also now invokes the pre-existing `reconcile_order_automation_events` producer so already-AVAILABLE Order triggers are actually drained without adding another scheduler.
+- Customer 360 V5 composes Invoice truth over V4 with a cutover-safe fallback during app-before-migration deployment windows. Business Web exposes `/invoices`, Order -> Invoice creation, governed issue/void/Credit Note operations, lifecycle evidence and immutable Invoice/Credit Note document routes.
+- Production verification is side-effect clean: `invoices=0`, `invoice_line_items=0`, `invoice_credit_notes=0`, `invoice_credit_note_line_items=0`, and `invoice_lifecycle_events=0`. No synthetic Production Invoice, Credit Note, customer, Order, payment, refund or provider evidence was created.
+- RLS is enabled on all five exposed Invoice tables; governed mutation/reconciliation RPCs are service-role-only while authenticated access remains scoped read-only. Runtime verification confirms the Invoice RPCs, Customer360 V5, Payment-Core freeze guard and AVAILABLE Invoice Automation triggers are live.
+- Post-`0177` advisor categories/counts are unchanged from the pre-Invoice baseline: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`. Fresh zero-row Invoice indexes may appear as unused-index INFO and are not an integrity regression.
+- Existing real-tenant WhatsApp E2E / same-number Coexistence blockers remain external-evidence gated and unchanged.
+
+**Fresh continuation cursor:** `SECTION COMMERCE_PAYMENTS -> PAYMENT-CORE`.
+
+Before mutation, fresh-audit current Invoice/Order/Quote/Customer/Deal/Booking/Billing ledger/payment-link/provider/webhook/refund/idempotency/approval/Automation authorities plus Production provider credentials and activation state. PAYMENT-CORE must introduce one canonical payment/settlement/refund transaction authority only; it must not rewrite immutable Invoice evidence, invent provider acceptance, or create a second billing ledger/provider-send plane.
+
+---
+
+
 ## INVENTORY-FULFILLMENT Production closeout — 2026-10-02
 
 - Work Package: `SECTION COMMERCE_PAYMENTS -> INVENTORY-FULFILLMENT`.
