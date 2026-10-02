@@ -1,5 +1,27 @@
 # Smart Visions Growth OS — Current Production State
 
+## WhatsApp customer onboarding Slice 7 controlled-scope Production closeout — 2026-10-02
+
+- Contract slice: **Official coexistence + native activity + Human/AI arbitration**. The internally controlled native-activity/arbitration path extends only the existing Meta WhatsApp webhook journal, canonical CRM/conversation/message authorities, human-takeover semantics, final send gate and Chatwoot reconciliation worker. No second provider stack, message store, queue, webhook journal, CRM, IAM, secret store or Chatwoot plane was introduced.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled Slice-7 native activity, arbitration, reconciliation, schema and deploy scope. **Official same-number Coexistence activation and first real-tenant native E2E are not claimed** and remain external-evidence dependent.
+- Implementation PR #389 final head `75ad62a8bc88fa3b69226208e7b19ce5231fb6ef` passed exact-head CI `36943804916` across lint, typecheck, unit tests, the complete PostgreSQL 17 migration chain plus Slice-7 SQL smoke, Next build, Vinext and Cloudflare scheduled verification.
+- PR #389 squash-merged to canonical `main@917913736fe6ac2cf5c87626d8ac92f422541df5`. Exact-main CI `36944138334` succeeded on that exact merge SHA.
+- Cloudflare Production Deploy `36944402017` succeeded on the same merge SHA through exact-green checkout, isolated release-candidate deployment/smoke, controlled SSR load, exact-bundle Production promotion, Worker Route verification, immediate routed Production smoke and safe API/webhook rejection smoke. No provider send was used merely to prove setup.
+- Production migration `0168_whatsapp_coexistence_native_arbitration@20261002000822` is live; exact merged migration blob SHA `0f3411fc50599e6241510362125a8f37c83c6e77`.
+- Current `smb_message_echoes` events are normalized as native human activity only when canonical existing customer/Lead/WhatsApp Conversation scope is resolvable. The business sender number is never treated as the customer recipient. Canonical messages use `HUMAN_NATIVE_WHATSAPP / META_WHATSAPP` provenance/source identity and existing cross-plane dedupe.
+- A current native human reply atomically moves the existing Lead and Conversation to HUMAN takeover semantics with `stage_reason=WHATSAPP_NATIVE_ACTIVITY`. The existing final provider send gate re-reads that state, so previously queued/approved AI cannot override the newer human reply.
+- Native canonical outbound evidence is projected into Chatwoot through the existing reconciliation worker with durable `PENDING -> PROCESSING -> ACCEPTED / RECONCILIATION_REQUIRED` state. Replays are idempotent and ambiguous Chatwoot outcomes are not blindly retried.
+- Historical synchronization is deliberately excluded from the live native-human parser/takeover path. Same-number Business App activation remains fail-closed and non-destructive until real Meta/provider/runtime eligibility can verify it; Smart Visions still never requires deleting or uninstalling the customer's mobile WhatsApp Business account.
+- Production verification remained side-effect clean: 37 Conversation Messages, 136 WhatsApp Events, 0 Unified Inbox projections and 0 WhatsApp bindings; Slice-7 smoke message/event/handoff residues are all 0. The three new RPCs are executable by `service_role` only, not `anon` or `authenticated`.
+- Production safety is unchanged: Shadow Mode ON; global Kill Switch OFF; WhatsApp AI pause OFF; Agents pause OFF. Fresh Supabase advisors report no Slice-7-specific security or performance finding; broader pre-existing advisor findings remain.
+- **Not claimed here:** official Meta same-number Coexistence activation/eligibility, live real-customer `HUMAN_NATIVE_WHATSAPP` evidence, reconnect/revoke/disconnect or first real tenant Meta ↔ Smart Core ↔ Chatwoot E2E.
+
+**Owner-prioritized WhatsApp continuation:** contract Slice 8 — **Reconnect/revoke/disconnect + first real tenant E2E acceptance**. Preserve the same canonical binding and fail closed on revoked/invalid credentials; never mutate or delete the customer's mobile WhatsApp account.
+
+**Stable program cursor preserved for return after the owner-prioritized WhatsApp work:** `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.
+
+---
+
 ## WhatsApp customer onboarding Slice 6 Production closeout — 2026-10-02
 
 - Contract slice: **Message/status/media bridge + provenance + dedupe**, implemented by extending the existing Meta WhatsApp journal/persistence, canonical `conversation_messages`, existing Smart Core send gate, Chatwoot signed-webhook journal, Unified Inbox projection and existing reconciliation runtime. No second message store, provider stack, webhook journal, queue, CRM, secret store, IAM or Chatwoot plane was introduced.
