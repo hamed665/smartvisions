@@ -39,6 +39,10 @@ function branchIds(formData: FormData) {
   return formData.getAll('branch_id').map((value) => String(value).trim()).filter(Boolean);
 }
 
+function requestKey(formData: FormData, prefix: string, entityId: string) {
+  return optionalText(formData, 'request_key') ?? `${prefix}:${entityId}:${crypto.randomUUID()}`;
+}
+
 function parseObject(raw: string) {
   const value = raw.trim() ? JSON.parse(raw) as unknown : {};
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -84,7 +88,7 @@ export async function configureServiceCatalogV2(formData: FormData) {
     p_availability_mode: requiredText(formData, 'availability_mode').toUpperCase(),
     p_expected_version: optionalInteger(formData, 'expected_version'),
     p_branch_ids: branchIds(formData),
-    p_request_key: `catalog-v2-service:${serviceId}:${crypto.randomUUID()}`,
+    p_request_key: requestKey(formData, 'catalog-v2-service', serviceId),
   });
   if (error) throw new Error(error.message);
   refreshCatalog();
@@ -109,7 +113,7 @@ export async function saveCatalogProductV2(formData: FormData) {
     p_inventory_reference: optionalText(formData, 'inventory_reference'),
     p_expected_version: optionalInteger(formData, 'expected_version'),
     p_branch_ids: branchIds(formData),
-    p_request_key: `catalog-v2-product:${productId}:${crypto.randomUUID()}`,
+    p_request_key: requestKey(formData, 'catalog-v2-product', productId),
   });
   if (error) throw new Error(error.message);
   refreshCatalog();
@@ -132,7 +136,7 @@ export async function saveCatalogVariantV2(formData: FormData) {
     p_inventory_mode: requiredText(formData, 'inventory_mode').toUpperCase(),
     p_inventory_reference: optionalText(formData, 'inventory_reference'),
     p_expected_version: optionalInteger(formData, 'expected_version'),
-    p_request_key: `catalog-v2-variant:${variantId}:${crypto.randomUUID()}`,
+    p_request_key: requestKey(formData, 'catalog-v2-variant', variantId),
   });
   if (error) throw new Error(error.message);
   refreshCatalog();
@@ -154,7 +158,7 @@ export async function saveCatalogProductPriceV2(formData: FormData) {
     p_minimum_price: numberValue(formData, 'minimum_price', null),
     p_compare_at_price: numberValue(formData, 'compare_at_price', null),
     p_expected_version: optionalInteger(formData, 'expected_version'),
-    p_request_key: `catalog-v2-price:${priceId}:${crypto.randomUUID()}`,
+    p_request_key: requestKey(formData, 'catalog-v2-price', priceId),
   });
   if (error) throw new Error(error.message);
   refreshCatalog();
@@ -180,7 +184,7 @@ export async function saveCatalogMediaV2(formData: FormData) {
     p_sort_order: Math.trunc(numberValue(formData, 'sort_order', 0) ?? 0),
     p_approved: formData.get('approved') === 'on',
     p_expected_version: optionalInteger(formData, 'expected_version'),
-    p_request_key: `catalog-v2-media:${mediaId}:${crypto.randomUUID()}`,
+    p_request_key: requestKey(formData, 'catalog-v2-media', mediaId),
   });
   if (error) throw new Error(error.message);
   refreshCatalog();
@@ -207,7 +211,7 @@ export async function saveCatalogRelationV2(formData: FormData) {
     p_required: formData.get('required') === 'on',
     p_sort_order: Math.trunc(numberValue(formData, 'sort_order', 0) ?? 0),
     p_expected_version: optionalInteger(formData, 'expected_version'),
-    p_request_key: `catalog-v2-relation:${relationId}:${crypto.randomUUID()}`,
+    p_request_key: requestKey(formData, 'catalog-v2-relation', relationId),
   });
   if (error) throw new Error(error.message);
   refreshCatalog();
