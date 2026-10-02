@@ -166,18 +166,32 @@ on public.knowledge_versions
 for select
 to authenticated
 using (
-  public.can_access_unified_inbox_scope(
-    organization_id,null,tenant_business_id,branch_id,null,null
+  exists(
+    select 1 from public.organization_members m
+    where m.organization_id=knowledge_versions.organization_id
+      and m.user_id=(select auth.uid())
+      and m.role in ('OWNER','ADMIN')
+  )
+  or (
+    approval_status='APPROVED'
+    and active=true
+    and retrieval_enabled=true
+    and public.can_access_unified_inbox_scope(
+      organization_id,null,tenant_business_id,branch_id,null,null
+    )
   )
 );
 
-create policy knowledge_sources_scoped_read
+create policy knowledge_sources_manager_read
 on public.knowledge_sources
 for select
 to authenticated
 using (
-  public.can_access_unified_inbox_scope(
-    organization_id,null,tenant_business_id,branch_id,null,null
+  exists(
+    select 1 from public.organization_members m
+    where m.organization_id=knowledge_sources.organization_id
+      and m.user_id=(select auth.uid())
+      and m.role in ('OWNER','ADMIN')
   )
 );
 
