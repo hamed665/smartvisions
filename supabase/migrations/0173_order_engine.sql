@@ -1019,6 +1019,8 @@ declare
   v_now timestamptz:=statement_timestamp();
   v_all boolean;
   v_any boolean;
+  v_any_returned boolean;
+  v_all_returned boolean;
   v_to text;
   v_fulfillment text;
   v_transition text;
@@ -1043,11 +1045,17 @@ begin
   )::text);
   if private.order_engine_is_replay(p_organization_id,'ORDER_ENGINE_FULFILLMENT_RECORDED','order',p_order_id::text,p_request_key,v_hash)
   then
-    select status into v_to from public.orders where organization_id=p_organization_id and id=p_order_id;
+    select a.after_data->>'status' into v_to
+    from public.audit_logs a
+    where a.organization_id=p_organization_id
+      and a.action='ORDER_ENGINE_FULFILLMENT_RECORDED'
+      and a.entity_type='order' and a.entity_id=p_order_id::text
+      and a.correlation_id=p_request_key
+    order by a.created_at desc,a.id desc limit 1;
     return v_to;
   end if;
 
-  if o.version<>p_expected_version or o.status not in ('CONFIRMED','PROCESSING') then
+  if o.version<>p_expected_version or o.status not in ('CONFIRMED','PROCESSING','PARTIALLY_RETURNED') then
     raise exception 'ORDER-ENGINE fulfillment is not allowed at expected version';
   end if;
 
@@ -1072,6 +1080,7 @@ begin
     update public.order_line_fulfillment
     set fulfilled_quantity=fulfilled_quantity+v_qty,
         status=case
+          when returned_quantity>0 then 'PARTIALLY_RETURNED'
           when fulfilled_quantity+v_qty=ordered_quantity then 'FULFILLED'
           else 'PARTIAL'
         end,
@@ -1079,14 +1088,33 @@ begin
     where organization_id=p_organization_id and order_line_item_id=v_line_id;
   end loop;
 
-  select bool_and(fulfilled_quantity=ordered_quantity),bool_or(fulfilled_quantity>0)
-  into v_all,v_any
+  select
+    bool_and(fulfilled_quantity=ordered_quantity),
+    bool_or(fulfilled_quantity>0),
+    bool_or(returned_quantity>0),
+    bool_and(returned_quantity=ordered_quantity)
+  into v_all,v_any,v_any_returned,v_all_returned
   from public.order_line_fulfillment
   where organization_id=p_organization_id and order_id=p_order_id;
 
-  v_to:=case when v_all then 'COMPLETED' else 'PROCESSING' end;
-  v_fulfillment:=case when v_all then 'FULFILLED' else 'PARTIAL' end;
-  v_transition:=case when v_all then 'FULFILLED' else 'FULFILLMENT_RECORDED' end;
+  v_to:=case
+    when v_all_returned then 'RETURNED'
+    when v_any_returned then 'PARTIALLY_RETURNED'
+    when v_all then 'COMPLETED'
+    else 'PROCESSING'
+  end;
+  v_fulfillment:=case
+    when v_all_returned then 'RETURNED'
+    when v_any_returned then 'PARTIALLY_RETURNED'
+    when v_all then 'FULFILLED'
+    else 'PARTIAL'
+  end;
+  v_transition:=case
+    when v_all_returned then 'RETURNED'
+    when v_any_returned then 'FULFILLMENT_RECORDED'
+    when v_all then 'FULFILLED'
+    else 'FULFILLMENT_RECORDED'
+  end;
 
   update public.orders
   set status=v_to,fulfillment_status=v_fulfillment,
@@ -1381,7 +1409,13 @@ begin
   v_hash:=md5(jsonb_build_object('returnId',p_return_id,'evidence',p_evidence)::text);
   if private.order_engine_is_replay(p_organization_id,'ORDER_ENGINE_RETURN_RECEIVED','order_return',p_return_id::text,p_request_key,v_hash)
   then
-    select status into v_to from public.orders where organization_id=p_organization_id and id=r.order_id;
+    select a.after_data->>'orderStatus' into v_to
+    from public.audit_logs a
+    where a.organization_id=p_organization_id
+      and a.action='ORDER_ENGINE_RETURN_RECEIVED'
+      and a.entity_type='order_return' and a.entity_id=p_return_id::text
+      and a.correlation_id=p_request_key
+    order by a.created_at desc,a.id desc limit 1;
     return v_to;
   end if;
 
