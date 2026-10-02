@@ -310,9 +310,8 @@ grant select,insert,update on table
   public.quotes,public.quote_version_reviews
 to service_role;
 grant select,insert on table
-  public.quote_versions,public.quote_line_items
+  public.quote_versions,public.quote_line_items,public.quote_lifecycle_events
 to service_role;
-grant select,insert,update on table public.quote_lifecycle_events to service_role;
 
 create or replace function public.guard_quote_engine_mutation()
 returns trigger
@@ -346,6 +345,10 @@ for each row execute function public.guard_quote_engine_mutation();
 create unique index quote_engine_audit_request_uidx
   on public.audit_logs(organization_id,action,entity_type,entity_id,correlation_id)
   where action like 'QUOTE_ENGINE_%' and correlation_id is not null;
+
+create unique index quote_automation_projection_request_uidx
+  on public.audit_logs(organization_id,action,correlation_id)
+  where action='QUOTE_AUTOMATION_EVENT_PROJECTED' and correlation_id is not null;
 
 create unique index quote_automation_projection_uidx
   on public.audit_logs(organization_id,action,correlation_id)
@@ -1512,6 +1515,19 @@ begin
     limit p_limit
   loop
     v_source_key:='quote-lifecycle:'||e.id::text;
+
+    -- Event evidence stays immutable. Serialize projection workers by source key,
+    -- then recheck durable projection evidence after acquiring the transaction lock.
+    perform pg_advisory_xact_lock(hashtextextended(v_source_key,0));
+    if exists(
+      select 1 from public.audit_logs a
+      where a.organization_id=e.organization_id
+        and a.action='QUOTE_AUTOMATION_EVENT_PROJECTED'
+        and a.correlation_id=v_source_key
+    ) then
+      continue;
+    end if;
+
     v_result:=public.enqueue_automation_runtime_event(
       e.organization_id,'QUOTE_ACCEPTED',v_source_key,
       'QUOTE',e.quote_id,
