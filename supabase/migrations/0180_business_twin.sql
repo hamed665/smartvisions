@@ -32,9 +32,17 @@ create index business_twin_versions_publisher_idx
 
 alter table public.business_twin_versions enable row level security;
 
-create policy business_twin_versions_member_read
+create policy business_twin_versions_manager_read
   on public.business_twin_versions for select to authenticated
-  using (public.is_org_member(organization_id));
+  using (
+    exists(
+      select 1
+      from public.organization_members m
+      where m.organization_id=business_twin_versions.organization_id
+        and m.user_id=(select auth.uid())
+        and m.role in ('OWNER','ADMIN')
+    )
+  );
 
 revoke all on table public.business_twin_versions from public,anon,authenticated,service_role;
 grant select on table public.business_twin_versions to authenticated;
