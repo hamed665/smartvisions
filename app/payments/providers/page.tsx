@@ -26,7 +26,7 @@ export default async function PaymentProvidersPage(){
 
     <section className="panel">
       <h2>Provider extension boundary</h2>
-      <p className="muted">Gateway adapters declare countries, currencies and capabilities but never own settlement truth. Credentials stay in Supabase Vault, provider links are evidence only, and a future country/gateway must register an adapter instead of creating another payment ledger or refund engine.</p>
+      <p className="muted">Gateway adapters declare countries, currencies and capabilities but never own settlement truth. Credentials stay in Supabase Vault and this page never displays stored keys. Provider links are evidence only, and a future country/gateway must register an adapter instead of creating another payment ledger or refund engine.</p>
     </section>
 
     {providers.map(provider=>{
