@@ -368,6 +368,10 @@ begin
   if (select availability from public.automation_trigger_catalog where trigger_key='QUOTE_ACCEPTED')<>'AVAILABLE' then
     raise exception 'QUOTE_ACCEPTED trigger was not activated after canonical producer implementation';
   end if;
+
+  if public.automation_trigger_expected_condition_subject('QUOTE_ACCEPTED')<>'QUOTE' then
+    raise exception 'QUOTE_ACCEPTED trigger does not resolve canonical QUOTE subject scope';
+  end if;
 end;
 $immutability_and_acl$;
 
