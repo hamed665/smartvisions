@@ -227,6 +227,21 @@ begin
   );
   if p.version<>1 then raise exception 'CATALOG-V2 Product replay mutated version'; end if;
 
+  begin
+    perform public.upsert_catalog_product_v2(
+      '00000000-0000-0000-0000-00000000c701',
+      '00000000-0000-0000-0000-00000000c711',
+      '00000000-0000-0000-0000-00000000c775',
+      '00000000-0000-0000-0000-00000000c731',
+      'WARRANTY-BOUND','Warranty bound check',null,'ACTIVE',repeat('w',4001),
+      'ALL_ACTIVE_BRANCHES','NONE',null,null,'{}'::uuid[],
+      'catalog-v2-product-warranty-bound'
+    );
+    raise exception 'Overlong CATALOG-V2 Product warranty unexpectedly succeeded';
+  exception when others then
+    if sqlerrm not like 'CATALOG-V2 product payload is invalid%' then raise; end if;
+  end;
+
   if not exists(
     select 1 from public.catalog_branch_availability
     where organization_id='00000000-0000-0000-0000-00000000c701'
@@ -331,6 +346,34 @@ begin
     raise exception 'Product HTTPS media was not linked';
   end if;
 
+  begin
+    perform public.upsert_catalog_media_asset_v2(
+      '00000000-0000-0000-0000-00000000c701',
+      '00000000-0000-0000-0000-00000000c711',
+      '00000000-0000-0000-0000-00000000ca03',
+      null,'00000000-0000-0000-0000-00000000c771',null,
+      'IMAGE','HTTPS_URL','http://example.com/not-https.jpg',
+      null,'Invalid URL',2,true,null,'catalog-v2-media-http-block'
+    );
+    raise exception 'Non-HTTPS CATALOG-V2 media unexpectedly succeeded';
+  exception when others then
+    if sqlerrm not like 'CATALOG-V2 HTTPS media source is invalid%' then raise; end if;
+  end;
+
+  begin
+    perform public.upsert_catalog_media_asset_v2(
+      '00000000-0000-0000-0000-00000000c701',
+      '00000000-0000-0000-0000-00000000c711',
+      '00000000-0000-0000-0000-00000000ca04',
+      null,'00000000-0000-0000-0000-00000000c771',null,
+      'IMAGE','HTTPS_URL','https://' || repeat('x',2042),
+      null,'Overlong URL',3,true,null,'catalog-v2-media-length-block'
+    );
+    raise exception 'Overlong CATALOG-V2 media URL unexpectedly succeeded';
+  exception when others then
+    if sqlerrm not like 'CATALOG-V2 HTTPS media source is invalid%' then raise; end if;
+  end;
+
   select * into r from public.upsert_catalog_item_relation_v2(
     '00000000-0000-0000-0000-00000000c701',
     '00000000-0000-0000-0000-00000000c711',
@@ -340,6 +383,20 @@ begin
     'ADD_ON',1,false,0,null,'catalog-v2-relation-ci-1'
   );
   if r.relation_type<>'ADD_ON' then raise exception 'CATALOG-V2 Add-on relation was not created'; end if;
+
+  begin
+    perform public.upsert_catalog_item_relation_v2(
+      '00000000-0000-0000-0000-00000000c701',
+      '00000000-0000-0000-0000-00000000c711',
+      '00000000-0000-0000-0000-00000000cb04',
+      null,'00000000-0000-0000-0000-00000000c771',null,
+      null,'00000000-0000-0000-0000-00000000c771',null,
+      'BUNDLE_COMPONENT',1,true,0,null,'catalog-v2-self-relation'
+    );
+    raise exception 'Self-referential CATALOG-V2 relation unexpectedly succeeded';
+  exception when others then
+    if sqlerrm not like 'CATALOG-V2 relation payload is invalid%' then raise; end if;
+  end;
 
   begin
     perform public.upsert_catalog_item_relation_v2(
