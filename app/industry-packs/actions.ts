@@ -27,12 +27,14 @@ export async function activateIndustryPackV1(fd:FormData){
   const service=createSupabaseServiceClient();
   const tenantBusinessId=businessId(fd);
   const packKey=field(fd,'pack_key').toLowerCase();
-  const packVersion=Number(field(fd,'pack_version'));
   const expectedRaw=field(fd,'expected_version');
   const expectedVersion=expectedRaw?Number(expectedRaw):null;
 
   if(!/^[a-z][a-z0-9_]{1,63}$/.test(packKey))throw new Error('Industry Pack key is invalid');
-  if(!Number.isInteger(packVersion)||packVersion<1)throw new Error('Industry Pack version is invalid');
+  const {data:versionRow,error:versionError}=await service.from('industry_pack_versions')
+    .select('version').eq('pack_key',packKey).order('version',{ascending:false}).limit(1).maybeSingle();
+  if(versionError||!versionRow)throw new Error('Industry Pack version is unavailable');
+  const packVersion=Number(versionRow.version);
   if(expectedVersion!==null&&(!Number.isInteger(expectedVersion)||expectedVersion<1)){
     throw new Error('Industry Pack expected version is invalid');
   }
