@@ -31,10 +31,16 @@ type ReconcilePaymentInput={
   providerReference?:string;
 };
 
+export type PaymentReconciliationResult={
+  settled:boolean;
+  status:string;
+  result?:unknown;
+};
+
 type PaymentProviderAdapter={
   createPaymentLink(input:CreatePaymentLinkInput):Promise<{linkId:string;url:string}>;
   executeRefund(input:ExecuteRefundInput):Promise<unknown>;
-  reconcilePayment(input:ReconcilePaymentInput):Promise<unknown>;
+  reconcilePayment(input:ReconcilePaymentInput):Promise<PaymentReconciliationResult>;
 };
 
 const ADAPTERS:Record<RegisteredPaymentProviderCode,PaymentProviderAdapter>={
@@ -158,7 +164,7 @@ export async function reconcilePaymentWithProvider(input:{
   paymentIntentId:string;
   provider:string;
   providerReference?:string;
-}){
+}):Promise<PaymentReconciliationResult>{
   const provider=normalizeRegisteredPaymentProvider(input.provider);
   if(!paymentProviderSupports(provider,'SERVER_READBACK')){
     throw new Error(provider+' does not support server readback reconciliation');
