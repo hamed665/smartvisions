@@ -575,6 +575,13 @@ begin
     raise exception 'QUOTE-ENGINE version payload is invalid';
   end if;
 
+  if p_expected_quote_version is null or p_expected_quote_version<>v_quote.version then
+    raise exception 'QUOTE-ENGINE Quote version changed';
+  end if;
+  if v_quote.status in ('ACCEPTED','REJECTED','EXPIRED','PAYMENT_PENDING','CONVERTED') then
+    raise exception 'QUOTE-ENGINE terminal or downstream Quote cannot be revised';
+  end if;
+
   for v_line in select value from jsonb_array_elements(p_lines)
   loop
     v_line_no:=v_line_no+1;
