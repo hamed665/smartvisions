@@ -161,11 +161,6 @@ begin
      or jsonb_typeof(ctx->'manifest')<>'object'
   then raise exception 'Industry Pack context resolution failed'; end if;
 
-  if exists(select 1 from public.crm_custom_field_definitions where organization_id='00000000-0000-0000-0000-00000000e701')
-     or exists(select 1 from public.crm_pipelines where organization_id='00000000-0000-0000-0000-00000000e701')
-     or exists(select 1 from public.automation_rules where organization_id='00000000-0000-0000-0000-00000000e701')
-  then raise exception 'Industry Pack activation created parallel/implicit operational configuration'; end if;
-
   twin:=public.compile_business_twin_v2('00000000-0000-0000-0000-00000000e701');
   if twin#>>'{schemaVersion}'<>'2'
      or jsonb_array_length(twin->'industryPackReferences')<>1
@@ -201,6 +196,15 @@ end;
 $activation_contract$;
 
 reset role;
+
+do $no_implicit_operational_materialization$
+begin
+  if exists(select 1 from public.crm_custom_field_definitions where organization_id='00000000-0000-0000-0000-00000000e701')
+     or exists(select 1 from public.crm_pipelines where organization_id='00000000-0000-0000-0000-00000000e701')
+     or exists(select 1 from public.automation_rules where organization_id='00000000-0000-0000-0000-00000000e701')
+  then raise exception 'Industry Pack activation created parallel/implicit operational configuration'; end if;
+end;
+$no_implicit_operational_materialization$;
 
 do $acl_contract$
 begin
