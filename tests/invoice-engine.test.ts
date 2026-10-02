@@ -36,11 +36,14 @@ describe('INVOICE-ENGINE contract',()=>{
     expect(migration).toContain('issue_invoice_credit_note_v1');
     expect(migration).toContain('Credit Note quantity exceeds remaining Invoice line quantity');
     expect(migration).toContain("'refundTruthCreated',false");
+    expect(migration).toContain('paid balance is frozen until PAYMENT-CORE');
+    expect(migration).toContain('cancelled source Order cannot be issued');
   });
 
   it('activates real Invoice automation producers through the existing runtime scheduler',()=>{
     expect(migration).toContain("where trigger_key in ('INVOICE_ISSUED','INVOICE_OVERDUE')");
     expect(migration).toContain('reconcile_invoice_automation_events');
+    expect(runtime).toContain("'reconcile_order_automation_events'");
     expect(runtime).toContain("'reconcile_due_invoices_v1'");
     expect(runtime).toContain("'reconcile_invoice_automation_events'");
   });

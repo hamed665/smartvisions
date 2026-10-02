@@ -361,8 +361,11 @@ begin
       if old.document_snapshot is not null and new.document_snapshot is distinct from old.document_snapshot then
         raise exception 'INVOICE-ENGINE issued document snapshot is immutable';
       end if;
-      if new.paid_total<old.paid_total or new.credited_total<old.credited_total then
-        raise exception 'INVOICE-ENGINE balance evidence cannot decrease';
+      if new.paid_total is distinct from old.paid_total then
+        raise exception 'INVOICE-ENGINE paid balance is frozen until PAYMENT-CORE owns governed settlement projection';
+      end if;
+      if new.credited_total<old.credited_total then
+        raise exception 'INVOICE-ENGINE credited balance evidence cannot decrease';
       end if;
     end if;
   end if;
@@ -659,6 +662,7 @@ declare
   v_document jsonb;
   v_event uuid;
   v_order_number text;
+  v_order_status text;
   v_status text;
 begin
   select * into i from public.invoices
@@ -683,9 +687,13 @@ begin
   end if;
   if i.status<>'DRAFT' then raise exception 'INVOICE-ENGINE only Draft Invoice can be issued'; end if;
 
-  select o.order_number into v_order_number
+  select o.order_number,o.status into v_order_number,v_order_status
   from public.orders o
   where o.organization_id=p_organization_id and o.id=i.order_id;
+
+  if v_order_status='CANCELLED' then
+    raise exception 'INVOICE-ENGINE cancelled source Order cannot be issued';
+  end if;
 
   select coalesce(jsonb_agg(jsonb_build_object(
     'lineNo',l.line_no,'invoiceLineItemId',l.id,'orderLineItemId',l.order_line_item_id,

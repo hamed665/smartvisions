@@ -47,7 +47,9 @@ export default async function OrderDetailPage({params}:Props){
  const {data:invoice,error:invoiceError}=await supabase.from('invoices')
   .select('id,invoice_number,status,balance_due,currency,due_date')
   .eq('organization_id',organizationId).eq('order_id',id).maybeSingle();
- const defaultDueDate=new Date(Date.now()+30*24*60*60*1000).toISOString().slice(0,10);
+ const dueBase=new Date(String(order.confirmed_at??order.created_at));
+ dueBase.setUTCDate(dueBase.getUTCDate()+30);
+ const defaultDueDate=dueBase.toISOString().slice(0,10);
  const roleText=String(role);
  const canManage=['OWNER','ADMIN','SALES_MANAGER'].includes(roleText)||(roleText==='SALES_AGENT'&&String(order.owner_user_id)===String(userId));
  const canManager=['OWNER','ADMIN','SALES_MANAGER'].includes(roleText);

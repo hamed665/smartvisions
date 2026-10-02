@@ -91,6 +91,17 @@ begin
     if sqlerrm not like 'INVOICE-ENGINE state requires governed command%' then raise; end if;
   end;
 
+  begin
+    perform set_config('app.invoice_engine_mutation','allowed',true);
+    update public.invoices set paid_total=0.0001
+    where organization_id=o.organization_id and id=iid;
+    raise exception 'INVOICE-ENGINE paid_total moved before PAYMENT-CORE';
+  exception when others then
+    perform set_config('app.invoice_engine_mutation','0',true);
+    if sqlerrm not like 'INVOICE-ENGINE paid balance is frozen until PAYMENT-CORE%' then raise; end if;
+  end;
+  perform set_config('app.invoice_engine_mutation','0',true);
+
   issued:=public.issue_invoice_v1(
     o.organization_id,
     '00000000-0000-0000-0000-00000000c711',
