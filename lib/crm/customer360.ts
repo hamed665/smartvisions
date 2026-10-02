@@ -22,7 +22,7 @@ export async function getCrmCustomer360(input: {
   personId: string;
   limit: number;
 }) {
-  const { data, error } = await input.supabase.rpc('get_crm_customer360_v2', {
+  const { data, error } = await input.supabase.rpc('get_crm_customer360_v3', {
     p_organization_id: input.organizationId,
     p_person_id: input.personId,
     p_limit: input.limit,
