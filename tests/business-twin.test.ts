@@ -49,7 +49,7 @@ describe('BRAIN-BUSINESS-TWIN contract',()=>{
     expect(migration).toContain("m.role in ('OWNER','ADMIN')");
     expect(migration).toContain('business_twin_versions_manager_read');
     expect(actions).toContain("const MANAGER_ROLES=new Set(['OWNER','ADMIN'])");
-    expect(actions).toContain("rpc('publish_business_twin_v1'");
+    expect(actions).toContain("rpc('publish_business_twin_v2'");
     expect(actions).toContain("rpc('set_business_twin_configuration_v1'");
   });
 
