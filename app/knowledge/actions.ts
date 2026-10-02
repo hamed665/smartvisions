@@ -36,7 +36,12 @@ export async function configureKnowledgeSourceV2(fd:FormData){
   const refreshPolicy=field(fd,'refresh_policy').toUpperCase()||'MANUAL';
   const intervalRaw=field(fd,'refresh_interval_minutes');
   const scopeType=field(fd,'scope_type').toUpperCase()||'ORGANIZATION';
-  const {error}=await service.rpc('configure_knowledge_source_v2',{
+  const scopeField:Record<string,string>={
+    BRAND:'brand_id',BUSINESS:'tenant_business_id',BRANCH:'branch_id',
+    DEPARTMENT:'department_id',TEAM:'team_id',
+  };
+  const scopeId=scopeType==='ORGANIZATION'?null:maybeUuid(field(fd,scopeField[scopeType]??''));
+  const {error}=await service.rpc('configure_knowledge_source_scope_v2',{
     p_organization_id:current.organizationId,
     p_actor_user_id:current.userId,
     p_source_key:field(fd,'source_key').toLowerCase(),
@@ -44,8 +49,7 @@ export async function configureKnowledgeSourceV2(fd:FormData){
     p_title:field(fd,'title'),
     p_source_locator:field(fd,'source_locator')||null,
     p_scope_type:scopeType,
-    p_tenant_business_id:scopeType==='BUSINESS'?maybeUuid(field(fd,'tenant_business_id')):null,
-    p_branch_id:scopeType==='BRANCH'?maybeUuid(field(fd,'branch_id')):null,
+    p_scope_id:scopeId,
     p_sensitivity:field(fd,'sensitivity').toUpperCase()||'INTERNAL',
     p_status:field(fd,'status').toUpperCase()||'ACTIVE',
     p_refresh_policy:refreshPolicy,
