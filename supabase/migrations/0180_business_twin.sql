@@ -676,11 +676,13 @@ begin
     return v_result;
   end if;
 
+  -- The Organization row is already locked above, which serializes publishes per
+  -- Organization. Avoid SELECT ... FOR UPDATE here so service_role does not need
+  -- UPDATE privilege on the immutable snapshot table.
   select * into v_latest
   from public.business_twin_versions
   where organization_id=p_organization_id
-  order by version desc limit 1
-  for update;
+  order by version desc limit 1;
 
   if v_latest.id is not null and v_latest.source_hash=v_hash then
     v_result:=v_latest;
