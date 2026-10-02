@@ -63,7 +63,7 @@ create table public.catalog_products (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (organization_id,id),
-  unique (organization_id,tenant_business_id,sku),
+  unique (organization_id,sku),
   foreign key (organization_id,tenant_business_id)
     references public.tenant_businesses(organization_id,id) on delete restrict,
   foreign key (organization_id,created_by_user_id)
@@ -103,7 +103,7 @@ create table public.catalog_product_variants (
   updated_at timestamptz not null default now(),
   unique (organization_id,id),
   unique (organization_id,id,product_id),
-  unique (organization_id,product_id,sku),
+  unique (organization_id,sku),
   foreign key (organization_id,product_id)
     references public.catalog_products(organization_id,id) on delete cascade,
   foreign key (organization_id,created_by_user_id)
@@ -148,12 +148,13 @@ create table public.catalog_product_prices (
   check (minimum_price is null or (minimum_price>=0 and minimum_price<=price)),
   check (compare_at_price is null or compare_at_price>=price)
 );
-create unique index catalog_product_prices_subject_country_uidx
+create unique index catalog_product_prices_subject_country_currency_uidx
   on public.catalog_product_prices(
     organization_id,
     product_id,
     coalesce(variant_id,'00000000-0000-0000-0000-000000000000'::uuid),
-    country_code
+    country_code,
+    currency
   );
 comment on table public.catalog_product_prices is
   'Canonical Product/Variant pricing. Service pricing remains exclusively public.service_prices.';
