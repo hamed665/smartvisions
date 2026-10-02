@@ -409,25 +409,6 @@ begin
 end;
 $catalog_v2_acl$;
 
--- Cleanup disposable fixture to keep subsequent smoke assertions deterministic.
-reset role;
-set role service_role;
-select set_config('app.catalog_v2_mutation','allowed',true);
-delete from public.catalog_item_relations where organization_id='00000000-0000-0000-0000-00000000c701';
-delete from public.catalog_media_assets where organization_id='00000000-0000-0000-0000-00000000c701';
-delete from public.catalog_branch_availability where organization_id='00000000-0000-0000-0000-00000000c701';
-delete from public.catalog_product_prices where organization_id='00000000-0000-0000-0000-00000000c701';
-delete from public.catalog_product_variants where organization_id='00000000-0000-0000-0000-00000000c701';
-delete from public.catalog_products where organization_id='00000000-0000-0000-0000-00000000c701';
-delete from public.catalog_service_profiles where organization_id='00000000-0000-0000-0000-00000000c701';
-select set_config('app.catalog_v2_mutation','0',true);
-delete from public.portfolio_items where organization_id='00000000-0000-0000-0000-00000000c701';
-delete from public.service_prices where organization_id='00000000-0000-0000-0000-00000000c701';
-delete from public.services where organization_id='00000000-0000-0000-0000-00000000c701';
-delete from public.branches where organization_id='00000000-0000-0000-0000-00000000c701';
-delete from public.tenant_businesses where organization_id='00000000-0000-0000-0000-00000000c701';
-delete from public.brands where organization_id='00000000-0000-0000-0000-00000000c701';
-delete from public.organization_members where organization_id='00000000-0000-0000-0000-00000000c701';
-delete from auth.users where id='00000000-0000-0000-0000-00000000c711';
-delete from public.organizations where id='00000000-0000-0000-0000-00000000c701';
-reset role;
+-- The PostgreSQL CI database is disposable. Keep the isolated c701 fixture in-place
+-- for later smoke files rather than deleting hierarchy rows referenced by canonical
+-- audit evidence; Production verification never creates this fixture.
