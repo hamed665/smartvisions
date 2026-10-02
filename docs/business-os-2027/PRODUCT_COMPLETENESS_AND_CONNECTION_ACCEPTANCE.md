@@ -1,5 +1,23 @@
 # Product completeness and customer connection acceptance — Business OS 2027
 
+## WhatsApp onboarding Slice 8 checkpoint — 2026-10-02
+
+**Disposition: IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled reconnect/revoke/disconnect lifecycle and deploy scope. **First real consented tenant E2E and real same-number Coexistence remain BLOCKED_EXTERNAL / pending real external evidence.**
+
+- PR #391 final head `09697e4127fbd3bb8a8216bc945bd16fbcfa637b` passed exact-head CI `36979621813`; canonical merge is `main@5051d6984e1d6413a0077da8da3142f89ef740cd`.
+- Exact-main CI `36979959886` and Cloudflare Production Deploy `36980189935` succeeded on that exact merge SHA.
+- Production migration `0169_whatsapp_reconnect_disconnect_lifecycle@20261002074458` is live; merged blob SHA `10dd1fd8fdefed603dd8688f92130e70b7348774`.
+- Reconnect reuses the canonical binding/version/setup-attempt/Vault authorities, rotates credentials on the same logical binding and rejects WABA/phone retargeting.
+- Canonical Meta inbound/outbound resolution fails closed for `MANUAL_DISCONNECTED`, `META_CREDENTIAL_INVALID_OR_REVOKED`, `META_CREDENTIAL_HEALTH_UNCONFIRMED` and `META_PROVIDER_SUBSCRIPTION_MISSING`.
+- Owner health verification is evidence-only and sends no test customer message. Safe disconnect blocks local provider actions before attempting WABA app unsubscribe, then reconciles provider truth by readback and does not blindly retry ambiguous external mutation.
+- Active setup attempts are superseded and active Unified Inbox projections are degraded on disconnect. Audit evidence explicitly records that the customer’s mobile WhatsApp account was not changed.
+- Lifecycle command RPCs are executable by `service_role` only, not `anon` or `authenticated`.
+- Production stayed side-effect clean at 0 WhatsApp bindings, 0 setup attempts, 37 Conversation Messages, 136 WhatsApp Events and 0 Unified Inbox projections; lifecycle incident counts remain 0.
+- Same-number Business App Coexistence remains intentionally fail-closed/non-destructive until real Meta/provider/runtime eligibility confirms activation. The first real consented tenant E2E must be recorded separately and may not be replaced with synthetic Production data.
+- With internally controlled Slices 1–8 closed, execution returns to the stable program cursor `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.
+
+---
+
 ## FIELD-SERVICE Production closeout — 2026-10-01
 
 - Work Package: `SECTION BOOKING_OPERATIONS -> FIELD-SERVICE`.
