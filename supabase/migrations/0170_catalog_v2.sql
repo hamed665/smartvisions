@@ -637,6 +637,22 @@ begin
     )
   ) then raise exception 'CATALOG-V2 service references missing or inactive branch'; end if;
 
+  v_hash:=md5(jsonb_build_object(
+    'serviceId',p_service_id,'description',nullif(btrim(coalesce(p_description,'')),''),
+    'warranty',nullif(btrim(coalesce(p_warranty_text,'')),''),
+    'availabilityMode',v_mode,'branchIds',to_jsonb(v_branches),
+    'expectedVersion',p_expected_version
+  )::text);
+
+  if private.catalog_v2_is_replay(
+    p_organization_id,'CATALOG_V2_SERVICE_CONFIGURED','catalog_service',
+    p_service_id,p_request_key,v_hash
+  ) then
+    select * into v_result from public.catalog_service_profiles
+    where organization_id=p_organization_id and service_id=p_service_id;
+    return v_result;
+  end if;
+
   select * into v_current from public.catalog_service_profiles
   where organization_id=p_organization_id and service_id=p_service_id
   for update;
@@ -789,6 +805,24 @@ begin
     )
   ) then raise exception 'CATALOG-V2 product branch scope is invalid'; end if;
 
+  v_hash:=md5(jsonb_build_object(
+    'productId',p_product_id,'businessId',p_tenant_business_id,'sku',v_sku,
+    'name',v_name,'description',nullif(btrim(coalesce(p_description,'')),''),
+    'status',v_status,'warranty',nullif(btrim(coalesce(p_warranty_text,'')),''),
+    'availabilityMode',v_mode,'inventoryMode',v_inventory,
+    'inventoryReference',v_inventory_ref,'branchIds',to_jsonb(v_branches),
+    'expectedVersion',p_expected_version
+  )::text);
+
+  if private.catalog_v2_is_replay(
+    p_organization_id,'CATALOG_V2_PRODUCT_CONFIGURED','catalog_product',
+    p_product_id::text,p_request_key,v_hash
+  ) then
+    select * into v_result from public.catalog_products
+    where organization_id=p_organization_id and id=p_product_id;
+    return v_result;
+  end if;
+
   select * into v_current from public.catalog_products
   where organization_id=p_organization_id and id=p_product_id
   for update;
@@ -925,6 +959,21 @@ begin
      or jsonb_typeof(v_attrs)<>'object' or octet_length(v_attrs::text)>8192
   then raise exception 'CATALOG-V2 variant payload is invalid'; end if;
 
+  v_hash:=md5(jsonb_build_object(
+    'variantId',p_variant_id,'productId',p_product_id,'sku',v_sku,'name',v_name,
+    'attributes',v_attrs,'status',v_status,'inventoryMode',v_inventory,
+    'inventoryReference',v_inventory_ref,'expectedVersion',p_expected_version
+  )::text);
+
+  if private.catalog_v2_is_replay(
+    p_organization_id,'CATALOG_V2_VARIANT_CONFIGURED','catalog_variant',
+    p_variant_id::text,p_request_key,v_hash
+  ) then
+    select * into v_result from public.catalog_product_variants
+    where organization_id=p_organization_id and id=p_variant_id;
+    return v_result;
+  end if;
+
   select * into v_current from public.catalog_product_variants
   where organization_id=p_organization_id and id=p_variant_id
   for update;
@@ -1030,6 +1079,22 @@ begin
      or (p_minimum_price is not null and (p_minimum_price<0 or p_minimum_price>p_price))
      or (p_compare_at_price is not null and p_compare_at_price<p_price)
   then raise exception 'CATALOG-V2 price payload is invalid'; end if;
+
+  v_hash:=md5(jsonb_build_object(
+    'priceId',p_price_id,'productId',p_product_id,'variantId',p_variant_id,
+    'country',v_country,'currency',v_currency,'price',p_price,
+    'minimumPrice',p_minimum_price,'compareAtPrice',p_compare_at_price,
+    'expectedVersion',p_expected_version
+  )::text);
+
+  if private.catalog_v2_is_replay(
+    p_organization_id,'CATALOG_V2_PRODUCT_PRICE_CONFIGURED','catalog_product_price',
+    p_price_id::text,p_request_key,v_hash
+  ) then
+    select * into v_result from public.catalog_product_prices
+    where organization_id=p_organization_id and id=p_price_id;
+    return v_result;
+  end if;
 
   select * into v_current from public.catalog_product_prices
   where organization_id=p_organization_id and id=p_price_id
@@ -1159,6 +1224,22 @@ begin
     p_organization_id,p_service_id,p_product_id,p_variant_id
   );
 
+  v_hash:=md5(jsonb_build_object(
+    'mediaId',p_media_id,'serviceId',p_service_id,'productId',p_product_id,
+    'variantId',p_variant_id,'mediaType',v_media_type,'sourceType',v_source,
+    'publicUrl',v_url,'portfolioItemId',p_portfolio_item_id,'altText',v_alt,
+    'sortOrder',p_sort_order,'approved',p_approved,'expectedVersion',p_expected_version
+  )::text);
+
+  if private.catalog_v2_is_replay(
+    p_organization_id,'CATALOG_V2_MEDIA_CONFIGURED','catalog_media',
+    p_media_id::text,p_request_key,v_hash
+  ) then
+    select * into v_result from public.catalog_media_assets
+    where organization_id=p_organization_id and id=p_media_id;
+    return v_result;
+  end if;
+
   select * into v_current from public.catalog_media_assets
   where organization_id=p_organization_id and id=p_media_id for update;
 
@@ -1284,6 +1365,24 @@ begin
   if v_source_business is not null and v_target_business is not null
      and v_source_business<>v_target_business
   then raise exception 'CATALOG-V2 relation cannot cross Product Business ownership'; end if;
+
+  v_hash:=md5(jsonb_build_object(
+    'relationId',p_relation_id,
+    'sourceServiceId',p_source_service_id,'sourceProductId',p_source_product_id,
+    'sourceVariantId',p_source_variant_id,'targetServiceId',p_target_service_id,
+    'targetProductId',p_target_product_id,'targetVariantId',p_target_variant_id,
+    'relationType',v_type,'quantity',p_quantity,'required',p_required,
+    'sortOrder',p_sort_order,'expectedVersion',p_expected_version
+  )::text);
+
+  if private.catalog_v2_is_replay(
+    p_organization_id,'CATALOG_V2_RELATION_CONFIGURED','catalog_relation',
+    p_relation_id::text,p_request_key,v_hash
+  ) then
+    select * into v_result from public.catalog_item_relations
+    where organization_id=p_organization_id and id=p_relation_id;
+    return v_result;
+  end if;
 
   select * into v_current from public.catalog_item_relations
   where organization_id=p_organization_id and id=p_relation_id for update;
