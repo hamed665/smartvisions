@@ -5,6 +5,7 @@ import {
  cancelOrderV1,decideOrderReturnV1,receiveOrderReturnV1,startOrderProcessingV1,
 } from '../actions';
 import {OrderFulfillmentForm,OrderReturnForm} from '../order-operations';
+import {createInvoiceFromOrderV1} from '../../invoices/actions';
 import {getCurrentOrganization} from '@/lib/supabase/org';
 
 export const dynamic='force-dynamic';
@@ -43,6 +44,10 @@ export default async function OrderDetailPage({params}:Props){
   }
   return false;
  }).map(line=>String(line.id)));
+ const {data:invoice,error:invoiceError}=await supabase.from('invoices')
+  .select('id,invoice_number,status,balance_due,currency,due_date')
+  .eq('organization_id',organizationId).eq('order_id',id).maybeSingle();
+ const defaultDueDate=new Date(Date.now()+30*24*60*60*1000).toISOString().slice(0,10);
  const roleText=String(role);
  const canManage=['OWNER','ADMIN','SALES_MANAGER'].includes(roleText)||(roleText==='SALES_AGENT'&&String(order.owner_user_id)===String(userId));
  const canManager=['OWNER','ADMIN','SALES_MANAGER'].includes(roleText);
@@ -75,7 +80,20 @@ export default async function OrderDetailPage({params}:Props){
    <p className="muted">{order.source_kind==='QUOTE'?'Accepted Quote snapshot is the immutable commercial source.':'Direct Order resolved canonical Catalog prices at creation.'}</p>
    {order.quote_id?<p><Link className="textLink" href={'/quotes/'+order.quote_id}>Open source Quote →</Link></p>:null}
    {order.booking_id?<p className="muted">Linked Booking: {String(order.booking_id)}</p>:null}
-   <p className="muted smallText">Inventory stock is owned by INVENTORY-FULFILLMENT. Invoice and Payment/refund remain in later Commerce packages.</p>
+   <p className="muted smallText">Inventory stock is owned by INVENTORY-FULFILLMENT. Invoice evidence is owned by INVOICE-ENGINE; Payment/refund remains with PAYMENT-CORE.</p>
+  </section>
+
+  <section className="panel"><h2>Invoice</h2>
+   {invoiceError?<p className="muted">Invoice schema is not ready in this runtime yet. Creation stays fail-closed.</p>
+   :invoice?<div className="settingsRow"><div><strong>{invoice.invoice_number}</strong><span className="muted smallText">{invoice.status} · balance {money(invoice.balance_due,invoice.currency)} · due {new Date(String(invoice.due_date)+'T00:00:00').toLocaleDateString()}</span></div><Link className="textLink" href={'/invoices/'+invoice.id}>Open Invoice →</Link></div>
+   :canManage&&order.status!=='CANCELLED'?<form action={createInvoiceFromOrderV1} className="settingsGrid">
+     <input type="hidden" name="invoice_id" value={crypto.randomUUID()}/>
+     <input type="hidden" name="order_id" value={id}/>
+     <input type="hidden" name="request_key" value={'invoice-from-order:'+id+':v'+order.version}/>
+     <label>Due date<input name="due_date" type="date" defaultValue={defaultDueDate} required/></label>
+     <div><button>Create Invoice</button></div>
+    </form>
+   :<p className="muted">No Invoice exists for this Order.</p>}
   </section>
 
   <section className="panel"><h2>Lines and fulfillment</h2><div className="settingsList">
@@ -111,7 +129,7 @@ export default async function OrderDetailPage({params}:Props){
   </form></section>:null}
 
   {canManage&&['PROCESSING','COMPLETED','PARTIALLY_RETURNED'].includes(String(order.status))&&anyReturnable?<section className="panel"><h2>Request return</h2>
-   <p className="muted">Return receipt is commercial evidence only. Refund and credit-note execution belong to later Payment/Invoice packages.</p>
+   <p className="muted">Return receipt is Order evidence only. Credit Notes belong to INVOICE-ENGINE and money refunds belong to PAYMENT-CORE.</p>
    <OrderReturnForm orderId={id} version={Number(order.version)} lines={opsLines}/>
   </section>:null}
 

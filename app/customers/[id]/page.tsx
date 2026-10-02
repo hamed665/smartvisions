@@ -32,6 +32,7 @@ type Customer360 = {
   deals: Item[];
   quotes: Item[];
   orders: Item[];
+  invoices: Item[];
   supportCases: Item[];
   activityTimeline: Item[];
   linkCandidates: {
@@ -151,6 +152,12 @@ export default async function CustomerDetailPage({ params }: Props) {
     </section>
 
     <section className="panel">
+      <h2>Invoices</h2>
+      <p className="muted">Only canonical INVOICE-ENGINE records explicitly linked to this Person are shown. Credit Notes adjust commercial balance; Payment execution remains separate.</p>
+      {sectionRows(customer.invoices ?? [], [['Status', 'status'], ['Settlement', 'settlementStatus'], ['Total', 'total'], ['Balance', 'balanceDue'], ['Currency', 'currency'], ['Due', 'dueDate']])}
+    </section>
+
+    <section className="panel">
       <h2>Support Cases</h2>
       <p className="muted">Only Cases created with this explicit canonical Person context are shown. Customer 360 does not rewrite immutable Support Case identity/context.</p>
       {sectionRows(customer.supportCases ?? [], [['Status', 'status'], ['Priority', 'priority'], ['Escalation', 'escalationLevel'], ['CSAT', 'csatScore'], ['Updated', 'updatedAt']])}
@@ -179,7 +186,7 @@ export default async function CustomerDetailPage({ params }: Props) {
       <div className="healthList">
         {Object.entries(customer.moduleStatus ?? {}).map(([module, status]) => <span key={module}>{module} <strong>{status}</strong></span>)}
       </div>
-      <p className="muted">Missing modules remain explicit. Customer 360 now reads canonical Quote and Order truth but does not create placeholder Invoice, Payment, inventory, Document or Consent truth. Scoped internal Notes stay outside this Organization-wide read model until their authorization can be preserved.</p>
+      <p className="muted">Missing modules remain explicit. Customer 360 now reads canonical Quote, Order and Invoice truth but does not create placeholder Payment, generic Document or Consent truth. Scoped internal Notes stay outside this Organization-wide read model until their authorization can be preserved.</p>
     </section>
   </div>;
 }

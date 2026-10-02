@@ -22,11 +22,24 @@ export async function getCrmCustomer360(input: {
   personId: string;
   limit: number;
 }) {
-  const { data, error } = await input.supabase.rpc('get_crm_customer360_v4', {
+  let { data, error } = await input.supabase.rpc('get_crm_customer360_v5', {
     p_organization_id: input.organizationId,
     p_person_id: input.personId,
     p_limit: input.limit,
   });
+
+  // Cloudflare can promote an exact-green app bundle just before the matching
+  // database migration is applied. Keep that short cutover window read-safe
+  // without creating a second Customer 360 authority.
+  if (error?.code === 'PGRST202') {
+    const fallback = await input.supabase.rpc('get_crm_customer360_v4', {
+      p_organization_id: input.organizationId,
+      p_person_id: input.personId,
+      p_limit: input.limit,
+    });
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) throw new Error(`CRM Customer 360 lookup failed: ${error.message}`);
   if (!data || typeof data !== 'object') throw new Error('CRM Customer 360 returned no data');

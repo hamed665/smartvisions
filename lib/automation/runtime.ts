@@ -493,6 +493,22 @@ export async function runAutomationRuntimeTick(input: {
     throw new Error(`Quote automation event reconciliation failed: ${quoteEvents.error.message}`);
   }
 
+  const invoiceDue = await input.supabase.rpc(
+    'reconcile_due_invoices_v1',
+    { p_limit: 100 },
+  );
+  if (invoiceDue.error && invoiceDue.error.code !== 'PGRST202') {
+    throw new Error(`Invoice due-date reconciliation failed: ${invoiceDue.error.message}`);
+  }
+
+  const invoiceEvents = await input.supabase.rpc(
+    'reconcile_invoice_automation_events',
+    { p_limit: 100 },
+  );
+  if (invoiceEvents.error && invoiceEvents.error.code !== 'PGRST202') {
+    throw new Error(`Invoice automation event reconciliation failed: ${invoiceEvents.error.message}`);
+  }
+
   const approvalDeadlines = await input.supabase.rpc(
     'reconcile_automation_runtime_approval_deadlines',
     { p_limit: 100 },
@@ -557,6 +573,8 @@ export async function runAutomationRuntimeTick(input: {
     bookingEvents: bookingEvents.error ? {} : record(bookingEvents.data),
     quoteExpiry: quoteExpiry.error ? {} : record(quoteExpiry.data),
     quoteEvents: quoteEvents.error ? {} : record(quoteEvents.data),
+    invoiceDue: invoiceDue.error ? {} : record(invoiceDue.data),
+    invoiceEvents: invoiceEvents.error ? {} : record(invoiceEvents.data),
     approvalDeadlines: record(approvalDeadlines.data),
     reconciliation: record(waiting.data),
     timeoutRecovery: record(timeouts.data),

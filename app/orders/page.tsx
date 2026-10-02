@@ -38,7 +38,7 @@ export default async function OrdersPage(){
  ].filter(x=>x.prices.length>0);
 
  return <div>
-  <div className="headerRow"><div><h1>Orders</h1><p className="muted">Canonical commercial Orders, fulfillment evidence, cancellation and returns. Invoice, Payment and inventory stock remain separate authorities.</p></div><span className="status">{orders?.length??0} orders</span></div>
+  <div className="headerRow"><div><h1>Orders</h1><p className="muted">Canonical commercial Orders, fulfillment evidence, cancellation and returns. Invoice, Payment and Inventory remain separate canonical authorities.</p></div><span className="status">{orders?.length??0} orders</span></div>
   <section className="panel"><h2>Authority boundary</h2><p className="muted">Accepted Quotes can become one canonical Order. Direct Orders use canonical Catalog prices and cannot bypass Quote discount governance. Fulfillment here records customer-facing quantities only, not warehouse stock or reservation movements.</p></section>
   <section className="panel settingsCreate"><h2>Create direct Order</h2>
    {!canDirect?<p className="muted">Direct Orders require Owner, Admin or Sales Manager permission.</p>
