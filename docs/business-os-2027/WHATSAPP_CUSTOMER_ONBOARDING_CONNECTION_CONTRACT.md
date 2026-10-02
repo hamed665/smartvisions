@@ -1,8 +1,28 @@
 # WhatsApp customer onboarding connection contract
 
-Status: **OWNER-APPROVED SCOPE LOCK — SLICES 1–7 CONTROLLED SCOPE PRODUCTION_VERIFIED; SLICE 8 PENDING; REAL COEXISTENCE / REAL-TENANT E2E BLOCKED_EXTERNAL**
+Status: **OWNER-APPROVED SCOPE LOCK — SLICES 1–8 CONTROLLED SCOPE PRODUCTION_VERIFIED; REAL COEXISTENCE / FIRST REAL-TENANT E2E BLOCKED_EXTERNAL**
 
 Date: 2026-10-02
+
+## Production checkpoint — Slice 8
+
+Slice 8 is **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** as of 2026-10-02 for the internally controlled reconnect/revoke/disconnect lifecycle, credential/subscription health, fail-closed provider routing, UI, schema and deploy scope.
+
+Evidence:
+- implementation PR #391, final head `09697e4127fbd3bb8a8216bc945bd16fbcfa637b`, exact-head CI `36979621813`, merge `5051d6984e1d6413a0077da8da3142f89ef740cd`;
+- exact-main CI `36979959886` and Cloudflare Production Deploy `36980189935` succeeded on that exact merge SHA;
+- Production migration `0169_whatsapp_reconnect_disconnect_lifecycle@20261002074458`, merged blob SHA `10dd1fd8fdefed603dd8688f92130e70b7348774`;
+- reconnect stays on the same canonical `communication_channel_bindings.id`, rotates the existing Vault credential and refuses WABA/phone identity drift;
+- inbound/outbound canonical provider resolution is fail-closed for manual disconnect, invalid/revoked credential, unconfirmed credential health and missing WABA app subscription;
+- owner health verification performs bounded Meta readback only and sends no test customer message;
+- disconnect blocks Smart Core provider actions first, supersedes active setup attempts, degrades active Unified Inbox projections, then reconciles WABA webhook unsubscribe by provider readback with no blind retry after ambiguous mutation;
+- lifecycle RPCs are service-role-only;
+- exact Production state remains 0 WhatsApp bindings, 0 setup attempts, 37 Conversation Messages, 136 WhatsApp Events and 0 Unified Inbox projections; no synthetic tenant/credential/customer/message/provider operation was introduced for acceptance;
+- safety remains Shadow Mode ON, global Kill Switch OFF, WhatsApp AI pause OFF and Agents pause OFF; fresh advisors show no Slice-8-specific new finding.
+
+This checkpoint does **not** claim first real consented tenant Meta ↔ Smart Core ↔ Chatwoot E2E or real same-number Business App Coexistence activation. Those require real tenant/provider/Meta eligibility evidence and remain `BLOCKED_EXTERNAL`. The customer's WhatsApp Business mobile app must never be deleted or uninstalled as a prerequisite.
+
+**WhatsApp onboarding overlay is internally complete through Slice 8. Stable roadmap execution resumes at `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.**
 
 ## Production checkpoint — Slice 7
 
