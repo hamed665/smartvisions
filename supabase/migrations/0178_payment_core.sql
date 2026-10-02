@@ -216,7 +216,7 @@ create table public.payment_transactions (
   check (currency=upper(btrim(currency)) and currency ~ '^[A-Z]{3}$'),
   check (provider=upper(btrim(provider)) and provider ~ '^[A-Z0-9_-]{2,40}$'),
   check (provider_reference is null or length(btrim(provider_reference)) between 1 and 240),
-  check (length(btrim(request_key)) between 8 and 300),
+  check (length(btrim(request_key)) between 8 and 400),
   check (length(request_hash)=32),
   check (jsonb_typeof(evidence)='object' and evidence<>'{}'::jsonb and octet_length(evidence::text)<=32768),
   check ((transaction_type in ('REFUNDED','REFUND_FAILED') and refund_id is not null)
@@ -227,7 +227,6 @@ comment on table public.payment_transactions is
 create index payment_transactions_intent_idx on public.payment_transactions(organization_id,payment_intent_id,occurred_at,id);
 create index payment_transactions_invoice_idx on public.payment_transactions(organization_id,invoice_id,occurred_at,id);
 create index payment_transactions_refund_fk_idx on public.payment_transactions(organization_id,refund_id,payment_intent_id) where refund_id is not null;
-create index payment_transactions_provider_event_fk_idx on public.payment_transactions(organization_id,provider_event_id);
 
 alter table public.payment_intents enable row level security;
 alter table public.payment_links enable row level security;
