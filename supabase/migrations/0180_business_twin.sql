@@ -16,7 +16,6 @@ create table public.business_twin_versions (
   created_at timestamptz not null default now(),
   unique (organization_id,id),
   unique (organization_id,version),
-  unique (organization_id,source_hash),
   foreign key (organization_id,published_by_user_id)
     references public.organization_members(organization_id,user_id) on delete restrict
 );
@@ -26,6 +25,8 @@ comment on table public.business_twin_versions is
 
 create index business_twin_versions_org_created_idx
   on public.business_twin_versions(organization_id,created_at desc,id desc);
+create index business_twin_versions_source_hash_idx
+  on public.business_twin_versions(organization_id,source_hash);
 create index business_twin_versions_publisher_idx
   on public.business_twin_versions(organization_id,published_by_user_id);
 
@@ -690,6 +691,8 @@ begin
 end;
 $$;
 
+revoke all on function public.guard_business_twin_version_immutable() from public,anon,authenticated,service_role;
+revoke all on function public.guard_business_twin_scope_configuration() from public,anon,authenticated,service_role;
 revoke all on function public.compile_business_twin_v1(uuid) from public,anon,authenticated,service_role;
 revoke all on function public.set_business_twin_configuration_v1(uuid,uuid,text,uuid,uuid,uuid,text,jsonb,integer,text) from public,anon,authenticated,service_role;
 revoke all on function public.delete_business_twin_configuration_v1(uuid,uuid,uuid,integer,text) from public,anon,authenticated,service_role;
