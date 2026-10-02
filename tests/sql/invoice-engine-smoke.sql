@@ -70,6 +70,18 @@ begin
   );
   if replay_id<>iid then raise exception 'INVOICE-ENGINE create replay failed'; end if;
 
+  -- A second create attempt for the same Order must converge on the existing
+  -- canonical Invoice even when a caller presents a fresh candidate UUID.
+  replay_id:=public.create_invoice_from_order_v1(
+    o.organization_id,
+    '00000000-0000-0000-0000-00000000c711',
+    '00000000-0000-0000-0000-00000000d859',
+    oid,
+    current_date-1,
+    'invoice-engine-create-converge-1'
+  );
+  if replay_id<>iid then raise exception 'INVOICE-ENGINE one-Invoice-per-Order convergence failed'; end if;
+
   select * into i from public.invoices where organization_id=o.organization_id and id=iid;
   select * into ol from public.order_line_items where organization_id=o.organization_id and order_id=oid and line_no=1;
   select * into il from public.invoice_line_items where organization_id=o.organization_id and invoice_id=iid and line_no=1;

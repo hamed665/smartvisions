@@ -85,8 +85,6 @@ export default async function InvoiceDetailPage({params}:Props){
       <CreditNoteForm
         invoiceId={id}
         orderId={String(invoice.order_id)}
-        creditNoteId={crypto.randomUUID()}
-        requestKey={'invoice-credit:'+id+':'+crypto.randomUUID()}
         lines={creditable}
       />
     </section>:null}

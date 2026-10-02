@@ -89,9 +89,7 @@ export default async function OrderDetailPage({params}:Props){
    {invoiceError?<p className="muted">Invoice schema is not ready in this runtime yet. Creation stays fail-closed.</p>
    :invoice?<div className="settingsRow"><div><strong>{invoice.invoice_number}</strong><span className="muted smallText">{invoice.status} · balance {money(invoice.balance_due,invoice.currency)} · due {new Date(String(invoice.due_date)+'T00:00:00').toLocaleDateString()}</span></div><Link className="textLink" href={'/invoices/'+invoice.id}>Open Invoice →</Link></div>
    :canManage&&order.status!=='CANCELLED'?<form action={createInvoiceFromOrderV1} className="settingsGrid">
-     <input type="hidden" name="invoice_id" value={crypto.randomUUID()}/>
      <input type="hidden" name="order_id" value={id}/>
-     <input type="hidden" name="request_key" value={'invoice-from-order:'+id+':v'+order.version}/>
      <label>Due date<input name="due_date" type="date" defaultValue={defaultDueDate} required/></label>
      <div><button>Create Invoice</button></div>
     </form>

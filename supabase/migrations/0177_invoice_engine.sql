@@ -572,8 +572,9 @@ begin
   from public.invoices
   where organization_id=p_organization_id and order_id=p_order_id;
   if v_existing is not null then
-    if v_existing=p_invoice_id then return p_invoice_id; end if;
-    raise exception 'INVOICE-ENGINE Order already has canonical Invoice';
+    -- One canonical Invoice per Order. Repeated create requests converge on the
+    -- existing aggregate instead of manufacturing a parallel commercial document.
+    return v_existing;
   end if;
 
   v_number:='I-'||upper(right(replace(p_invoice_id::text,'-',''),16));

@@ -35,20 +35,21 @@ function refresh(invoiceId?:string,orderId?:string){
 
 export async function createInvoiceFromOrderV1(fd:FormData){
   const {organizationId,userId,service}=await context();
-  const invoiceId=field(fd,'invoice_id');
+  const invoiceId=crypto.randomUUID();
   const orderId=field(fd,'order_id');
   const dueDate=field(fd,'due_date');
   if(!/^\d{4}-\d{2}-\d{2}$/.test(dueDate))throw new Error('Due date is required');
-  const {error}=await service.rpc('create_invoice_from_order_v1',{
+  const {data,error}=await service.rpc('create_invoice_from_order_v1',{
     p_organization_id:organizationId,
     p_actor_user_id:userId,
     p_invoice_id:invoiceId,
     p_order_id:orderId,
     p_due_date:dueDate,
-    p_request_key:field(fd,'request_key'),
+    p_request_key:'invoice-from-order:'+orderId,
   });
   rpcError('Create Invoice failed',error);
-  refresh(invoiceId,orderId);
+  const canonicalInvoiceId=typeof data==='string'?data:invoiceId;
+  refresh(canonicalInvoiceId,orderId);
 }
 
 export async function issueInvoiceV1(fd:FormData){

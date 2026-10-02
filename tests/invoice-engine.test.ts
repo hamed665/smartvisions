@@ -38,6 +38,7 @@ describe('INVOICE-ENGINE contract',()=>{
     expect(migration).toContain("'refundTruthCreated',false");
     expect(migration).toContain('paid balance is frozen until PAYMENT-CORE');
     expect(migration).toContain('cancelled source Order cannot be issued');
+    expect(migration).toContain('Repeated create requests converge on the');
   });
 
   it('activates real Invoice automation producers through the existing runtime scheduler',()=>{
@@ -58,6 +59,7 @@ describe('INVOICE-ENGINE contract',()=>{
 
   it('exposes governed Order-to-Invoice and immutable print surfaces',()=>{
     expect(orderPage).toContain('createInvoiceFromOrderV1');
+    expect(orderPage).not.toContain('crypto.randomUUID()');
     expect(invoicePage).toContain('CreditNoteForm');
     expect(invoiceDocument).toContain('document_snapshot');
     expect(invoiceDocument).toContain('PrintInvoiceButton');
