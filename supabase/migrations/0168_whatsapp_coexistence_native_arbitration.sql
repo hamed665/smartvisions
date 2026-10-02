@@ -124,10 +124,10 @@ begin
      and id=p_conversation_id;
 
   insert into public.handoff_events(
-    organization_id,lead_id,conversation_id,from_mode,to_mode,reasons,
+    id,organization_id,lead_id,conversation_id,from_mode,to_mode,reasons,
     actor_type,actor_id,request_key
   ) values (
-    p_organization_id,p_lead_id,p_conversation_id,v_from_mode,'HUMAN',
+    gen_random_uuid(),p_organization_id,p_lead_id,p_conversation_id,v_from_mode,'HUMAN',
     jsonb_build_array('WHATSAPP_NATIVE_ACTIVITY'),
     'SYSTEM','meta-whatsapp-native',v_request_key
   );
