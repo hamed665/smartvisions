@@ -432,7 +432,7 @@ language plpgsql
 security invoker
 set search_path=public,pg_catalog
 as $$
-declare v_id uuid;
+declare v_id uuid; v_hash text;
 begin
   insert into public.quote_lifecycle_events(
     organization_id,quote_id,quote_version_no,transition,from_status,to_status,
@@ -441,9 +441,17 @@ begin
     p_organization_id,p_quote_id,p_quote_version_no,p_transition,p_from_status,p_to_status,
     p_actor_type,p_actor_user_id,p_request_key,p_request_hash,coalesce(p_evidence,'{}'::jsonb)
   )
-  on conflict (organization_id,request_key) do update
-    set request_key=excluded.request_key
+  on conflict (organization_id,request_key) do nothing
   returning id into v_id;
+
+  if v_id is null then
+    select id,request_hash into v_id,v_hash
+    from public.quote_lifecycle_events
+    where organization_id=p_organization_id and request_key=p_request_key;
+    if v_hash is distinct from p_request_hash then
+      raise exception 'QUOTE-ENGINE lifecycle request key conflict';
+    end if;
+  end if;
   return v_id;
 end;
 $$;
@@ -804,7 +812,7 @@ begin
 
   v_event_id:=private.quote_engine_event(
     p_organization_id,p_quote_id,v_version_no,'VERSION_CREATED',v_quote.status,'DRAFT',
-    'USER',p_actor_user_id,p_request_key||':event',v_hash,
+    'USER',p_actor_user_id,'qe:'||md5(p_request_key||':event'),v_hash,
     jsonb_build_object('versionNo',v_version_no,'total',round(v_total,4),'currency',v_currency)
   );
 
@@ -947,7 +955,7 @@ begin
   perform set_config('app.quote_engine_mutation','allowed',true);
   v_event_id:=private.quote_engine_event(
     p_organization_id,p_quote_id,v_version,'CREATED',null,'DRAFT',
-    'USER',p_actor_user_id,p_request_key||':created-event',v_hash,
+    'USER',p_actor_user_id,'qe:'||md5(p_request_key||':created-event'),v_hash,
     jsonb_build_object('quoteNumber',v_number,'versionNo',v_version)
   );
   perform set_config('app.quote_engine_mutation','0',true);
@@ -1015,7 +1023,7 @@ begin
   where organization_id=p_organization_id and id=p_quote_id;
   v_event:=private.quote_engine_event(
     p_organization_id,p_quote_id,q.current_version,'REVIEW_SUBMITTED','DRAFT','REVIEW',
-    'USER',p_actor_user_id,p_request_key||':event',v_hash,
+    'USER',p_actor_user_id,'qe:'||md5(p_request_key||':event'),v_hash,
     jsonb_build_object('reviewStatus',r.status,'reviewerRoles',to_jsonb(r.reviewer_roles))
   );
   perform set_config('app.quote_engine_mutation','0',true);
@@ -1087,7 +1095,7 @@ begin
   v_event:=private.quote_engine_event(
     p_organization_id,p_quote_id,q.current_version,
     case when v_decision='APPROVE' then 'REVIEW_APPROVED' else 'REVIEW_REJECTED' end,
-    'REVIEW',v_to,'USER',p_actor_user_id,p_request_key||':event',v_hash,
+    'REVIEW',v_to,'USER',p_actor_user_id,'qe:'||md5(p_request_key||':event'),v_hash,
     jsonb_build_object('decision',v_decision,'note',nullif(btrim(coalesce(p_note,'')),''))
   );
   perform set_config('app.quote_engine_mutation','0',true);
@@ -1143,7 +1151,7 @@ begin
   update public.quotes set status='SENT',sent_at=v_now,version=version+1,updated_by_user_id=p_actor_user_id,updated_at=v_now
   where organization_id=p_organization_id and id=p_quote_id;
   v_event:=private.quote_engine_event(p_organization_id,p_quote_id,q.current_version,'SENT','REVIEW','SENT',
-    'USER',p_actor_user_id,p_request_key||':event',v_hash,jsonb_build_object('versionNo',q.current_version));
+    'USER',p_actor_user_id,'qe:'||md5(p_request_key||':event'),v_hash,jsonb_build_object('versionNo',q.current_version));
   perform set_config('app.quote_engine_mutation','0',true);
 
   insert into public.audit_logs(organization_id,actor_type,actor_id,action,entity_type,entity_id,after_data,correlation_id,tenant_business_id,branch_id)
@@ -1181,7 +1189,7 @@ begin
   update public.quotes set status='VIEWED',viewed_at=coalesce(viewed_at,v_now),version=version+1,updated_at=v_now
   where organization_id=p_organization_id and id=p_quote_id;
   v_event:=private.quote_engine_event(p_organization_id,p_quote_id,q.current_version,'VIEWED',q.status,'VIEWED',
-    'CUSTOMER',null,p_request_key||':event',v_hash,p_evidence);
+    'CUSTOMER',null,'qe:'||md5(p_request_key||':event'),v_hash,p_evidence);
   perform set_config('app.quote_engine_mutation','0',true);
 
   insert into public.audit_logs(organization_id,actor_type,actor_id,action,entity_type,entity_id,after_data,correlation_id,tenant_business_id,branch_id)
@@ -1253,7 +1261,7 @@ begin
   v_event:=private.quote_engine_event(
     p_organization_id,p_quote_id,q.current_version,
     case when v_to='ACCEPTED' then 'ACCEPTED' else 'REJECTED' end,
-    q.status,v_to,v_actor_type,p_actor_user_id,p_request_key||':event',v_hash,
+    q.status,v_to,v_actor_type,p_actor_user_id,'qe:'||md5(p_request_key||':event'),v_hash,
     jsonb_build_object('source',v_source,'evidence',p_evidence)
   );
   perform set_config('app.quote_engine_mutation','0',true);
@@ -1297,7 +1305,7 @@ begin
   update public.quotes set status='EXPIRED',expired_at=v_now,version=version+1,updated_at=v_now
   where organization_id=p_organization_id and id=p_quote_id;
   v_event:=private.quote_engine_event(p_organization_id,p_quote_id,q.current_version,'EXPIRED',q.status,'EXPIRED',
-    'SYSTEM',null,p_request_key||':event',v_hash,jsonb_build_object('validUntil',v.valid_until));
+    'SYSTEM',null,'qe:'||md5(p_request_key||':event'),v_hash,jsonb_build_object('validUntil',v.valid_until));
   perform set_config('app.quote_engine_mutation','0',true);
 
   insert into public.audit_logs(organization_id,actor_type,actor_id,action,entity_type,entity_id,after_data,correlation_id,tenant_business_id,branch_id)
@@ -1348,7 +1356,7 @@ begin
       conversion_evidence=p_evidence,version=version+1,updated_at=v_now
   where organization_id=p_organization_id and id=p_quote_id;
   v_event:=private.quote_engine_event(p_organization_id,p_quote_id,q.current_version,'CONVERTED','ACCEPTED','CONVERTED',
-    'SYSTEM',null,p_request_key||':event',v_hash,jsonb_build_object('kind',v_kind,'reference',v_ref,'evidence',p_evidence));
+    'SYSTEM',null,'qe:'||md5(p_request_key||':event'),v_hash,jsonb_build_object('kind',v_kind,'reference',v_ref,'evidence',p_evidence));
   perform set_config('app.quote_engine_mutation','0',true);
 
   insert into public.audit_logs(organization_id,actor_type,actor_id,action,entity_type,entity_id,after_data,correlation_id,tenant_business_id,branch_id)
