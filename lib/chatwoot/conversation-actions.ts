@@ -1851,7 +1851,7 @@ export async function mirrorCanonicalWhatsAppOutboundToChatwoot(input: {
   canonicalMessageId: string;
   providerMessageId: string;
   content: string;
-  provenance: 'AI' | 'HUMAN_SMARTVISIONS' | 'SYSTEM';
+  provenance: 'AI' | 'HUMAN_SMARTVISIONS' | 'HUMAN_NATIVE_WHATSAPP' | 'SYSTEM';
   fetchImpl?: typeof fetch;
 }) {
   const content = input.content.trim();

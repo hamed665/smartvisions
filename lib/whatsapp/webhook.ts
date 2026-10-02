@@ -64,13 +64,37 @@ export type NormalizedWhatsAppStatus = {
   errorTitle?: string;
 };
 
+export type NormalizedWhatsAppNativeEcho = {
+  providerMessageId: string;
+  destination: WhatsAppDestinationContext;
+  from?: string;
+  to?: string;
+  recipientWaId?: string;
+  recipientUserId?: string;
+  recipientParentUserId?: string;
+  timestamp?: string;
+  type: string;
+  text?: string;
+  mediaId?: string;
+  mimeType?: string;
+  filename?: string;
+  caption?: string;
+  voice?: boolean;
+};
+
 type WhatsAppWebhookRoot = {
   entry?: Array<{
     id?: string;
     changes?: Array<{
+      field?: string;
       value?: {
         metadata?: { display_phone_number?: string; phone_number_id?: string };
-        contacts?: Array<{ profile?: { name?: string }; wa_id?: string }>;
+        contacts?: Array<{
+          profile?: { name?: string; username?: string };
+          wa_id?: string;
+          user_id?: string;
+          parent_user_id?: string;
+        }>;
         messages?: Array<{
           id?: string;
           from?: string;
@@ -92,6 +116,21 @@ type WhatsAppWebhookRoot = {
           conversation?: { id?: string };
           pricing?: { category?: string };
           errors?: Array<{ code?: number | string; title?: string }>;
+        }>;
+        message_echoes?: Array<{
+          id?: string;
+          from?: string;
+          to?: string;
+          to_user_id?: string;
+          to_parent_user_id?: string;
+          timestamp?: string;
+          type?: string;
+          text?: { body?: string };
+          audio?: { id?: string; mime_type?: string; voice?: boolean };
+          image?: { id?: string; mime_type?: string; caption?: string };
+          video?: { id?: string; mime_type?: string; caption?: string };
+          document?: { id?: string; mime_type?: string; filename?: string; caption?: string };
+          sticker?: { id?: string; mime_type?: string; animated?: boolean };
         }>;
       };
     }>;
@@ -159,6 +198,44 @@ export function extractWhatsAppInbound(payload: unknown): NormalizedWhatsAppInbo
           caption,
           voice: message.audio?.voice,
           referral: referralContext(message.referral),
+        });
+      }
+    }
+  }
+  return events;
+}
+
+export function extractWhatsAppNativeEchoes(payload: unknown): NormalizedWhatsAppNativeEcho[] {
+  const events: NormalizedWhatsAppNativeEcho[] = [];
+  for (const entry of webhookRoot(payload).entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      if (change.field !== 'smb_message_echoes') continue;
+      const value = change.value;
+      const destination = destinationContext({
+        entryId: entry.id,
+        metadata: value?.metadata,
+      });
+      const contact = value?.contacts?.[0];
+      for (const echo of value?.message_echoes ?? []) {
+        if (!echo.id || !echo.type) continue;
+        const media = echo.audio ?? echo.image ?? echo.video ?? echo.document ?? echo.sticker;
+        const caption = clean(echo.image?.caption ?? echo.video?.caption ?? echo.document?.caption);
+        events.push({
+          providerMessageId: echo.id,
+          destination,
+          from: clean(echo.from),
+          to: clean(echo.to),
+          recipientWaId: clean(echo.to) ?? clean(contact?.wa_id),
+          recipientUserId: clean(echo.to_user_id) ?? clean(contact?.user_id),
+          recipientParentUserId: clean(echo.to_parent_user_id) ?? clean(contact?.parent_user_id),
+          timestamp: clean(echo.timestamp),
+          type: echo.type,
+          text: clean(echo.text?.body),
+          mediaId: clean(media?.id),
+          mimeType: clean(media?.mime_type),
+          filename: clean(echo.document?.filename),
+          caption,
+          voice: echo.audio?.voice,
         });
       }
     }
