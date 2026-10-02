@@ -151,7 +151,7 @@ exception
     perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
     raise;
 end;
-$;
+$$;
 
 -- Operationally disconnected/revoked bindings remain the same logical ACTIVE
 -- binding so reconnect can rotate credentials without manufacturing a new identity.
@@ -454,7 +454,7 @@ exception
     perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
     raise;
 end;
-$;
+$$;
 
 create or replace function public.mark_meta_whatsapp_binding_health(
   p_organization_id uuid,
@@ -584,7 +584,7 @@ exception
     perform set_config('smartvisions.chatwoot_bridge_command', '0', true);
     raise;
 end;
-$;
+$$;
 
 revoke all on function public.resolve_meta_whatsapp_destination(text,text)
   from public, anon, authenticated, service_role;
