@@ -1002,8 +1002,9 @@ set search_path=public,pg_catalog
 as $knowledge_context_scoped$
   select
     k.knowledge_key,k.version,k.payload,
-    coalesce(s.source_type,k.provenance->>'sourceType','MANUAL') as source_type,
-    s.source_locator,k.provenance,k.sensitivity,k.scope_type,
+    coalesce(k.provenance->>'sourceType',s.source_type,'MANUAL') as source_type,
+    coalesce(k.provenance->>'sourceLocator',s.source_locator) as source_locator,
+    k.provenance,k.sensitivity,k.scope_type,
     coalesce(coalesce(k.stale_after_at,s.stale_after_at)<statement_timestamp(),false) as stale,
     k.conflict_state,k.confidence,k.approval_status as review_state
   from public.knowledge_versions k
