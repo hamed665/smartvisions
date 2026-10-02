@@ -1,8 +1,31 @@
 # WhatsApp customer onboarding connection contract
 
-Status: **OWNER-APPROVED SCOPE LOCK — SLICES 1–6 PRODUCTION_VERIFIED; SLICES 7–8 PENDING**
+Status: **OWNER-APPROVED SCOPE LOCK — SLICES 1–7 CONTROLLED SCOPE PRODUCTION_VERIFIED; SLICE 8 PENDING; REAL COEXISTENCE / REAL-TENANT E2E BLOCKED_EXTERNAL**
 
 Date: 2026-10-02
+
+## Production checkpoint — Slice 7
+
+Slice 7 is **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** as of 2026-10-02 for the internally controlled native Business App activity, Human/AI arbitration, canonical provenance/dedupe, durable Chatwoot reconciliation, schema and deploy scope.
+
+Evidence:
+- implementation PR #389, final head `75ad62a8bc88fa3b69226208e7b19ce5231fb6ef`, exact-head CI `36943804916`, merge `917913736fe6ac2cf5c87626d8ac92f422541df5`;
+- exact-main CI `36944138334` and Cloudflare Production Deploy `36944402017` succeeded on that exact merge SHA;
+- Production migration `0168_whatsapp_coexistence_native_arbitration@20261002000822`, merged blob SHA `0f3411fc50599e6241510362125a8f37c83c6e77`;
+- exact Production state remains 37 Conversation Messages, 136 WhatsApp Events, 0 Unified Inbox projections and 0 WhatsApp bindings; Slice-7 smoke message/event/handoff residue is 0;
+- all three Slice-7 trusted RPCs are `service_role`-only; `anon` and `authenticated` have no EXECUTE;
+- safety remains Shadow Mode ON, global Kill Switch OFF, WhatsApp AI pause OFF and Agents pause OFF;
+- fresh Supabase advisors report no Slice-7-specific security/performance finding.
+
+Current `smb_message_echoes` provider evidence is normalized through the existing signed webhook/journal authority. The business WhatsApp sender number remains provider/business context; the customer is resolved from the recipient identity against existing canonical CRM scope. No native echo may fabricate a new customer or conversation merely to make onboarding appear complete.
+
+When current native-human evidence resolves an existing canonical WhatsApp conversation, the canonical message uses `HUMAN_NATIVE_WHATSAPP / META_WHATSAPP` source identity and existing dedupe, then atomically moves the existing Lead and Conversation into HUMAN takeover semantics with `stage_reason=WHATSAPP_NATIVE_ACTIVITY`. The existing final send gate re-reads that current state immediately before provider mutation, so stale queued/approved AI work cannot override the newer human action.
+
+Native canonical outbound evidence is projected into Chatwoot only through the existing reconciliation worker using durable `PENDING -> PROCESSING -> ACCEPTED / RECONCILIATION_REQUIRED` semantics. Replay is idempotent and ambiguous external mutation is not blindly retried. Historical synchronization is deliberately not classified as current live native-human takeover evidence.
+
+This checkpoint does **not** claim that Meta has enabled/approved same-number Business App Coexistence for a real customer, that a real customer's mobile-app reply has already produced live `HUMAN_NATIVE_WHATSAPP` evidence in Production, or that first real-tenant Meta ↔ Smart Core ↔ Chatwoot E2E has passed. Same-number activation therefore remains non-destructive and fail-closed until real provider/runtime evidence proves eligibility. The customer's WhatsApp Business app must never be deleted or uninstalled as a prerequisite.
+
+**Next owner-prioritized contract slice:** Slice 8 — reconnect/revoke/disconnect + first real tenant E2E acceptance.
 
 ## Production checkpoint — Slice 1
 
@@ -89,7 +112,7 @@ Slice 6 extends the existing canonical message/journal/reconciliation authoritie
 
 This checkpoint does **not** claim official Business App Coexistence/native activity, `HUMAN_NATIVE_WHATSAPP` live evidence, or a real-customer Meta ↔ Smart Core ↔ Chatwoot E2E. Those require later slices plus real provider/tenant evidence.
 
-**Next owner-prioritized contract slice:** Slice 7 — Official coexistence + native activity + Human/AI arbitration. Same-number Coexistence remains non-destructive and fail-closed until official provider/runtime evidence supports activation.
+**Slice-6 next-slice pointer superseded:** Slice 7 is now closed for the internally controlled scope above; current continuation is Slice 8 — reconnect/revoke/disconnect + first real tenant E2E acceptance.
 
 
 

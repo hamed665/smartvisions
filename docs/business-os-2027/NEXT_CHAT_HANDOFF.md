@@ -1,5 +1,27 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## WhatsApp customer onboarding Slice 7 controlled-scope Production closeout — 2026-10-02
+
+- Slices 1–6 remain **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for their internally controlled canonical setup/provider/Chatwoot/message bridge scopes.
+- Slice 7 disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for internally controlled native WhatsApp Business App activity, Human/AI arbitration, durable Chatwoot reconciliation, schema and deploy scope. Real same-number Coexistence activation and real-customer native E2E remain external-evidence dependent.
+- PR #389 final head `75ad62a8bc88fa3b69226208e7b19ce5231fb6ef` passed exact-head CI `36943804916`, then squash-merged to `main@917913736fe6ac2cf5c87626d8ac92f422541df5`.
+- Exact-main CI `36944138334` and Cloudflare Production Deploy `36944402017` both succeeded on that exact merge SHA. Production deploy passed release-candidate smoke, SSR load, routed Production smoke and safe API/webhook rejection smoke without a provider send for acceptance.
+- Production migration `0168_whatsapp_coexistence_native_arbitration@20261002000822` is live; exact merged migration blob SHA is `0f3411fc50599e6241510362125a8f37c83c6e77`.
+- `smb_message_echoes` now enters the existing WhatsApp journal/canonical lifecycle as current native-human evidence only after exact existing customer/Lead/Conversation scope resolves. The business sender number is not projected as a CRM customer.
+- Canonical native messages use `HUMAN_NATIVE_WHATSAPP` provenance and existing source identity/dedupe. Current native activity atomically sets the existing Lead/Conversation to HUMAN takeover with `WHATSAPP_NATIVE_ACTIVITY`; the existing final send gate blocks stale queued/approved AI after that newer human action.
+- The existing Chatwoot reconciler now drains native outbound evidence with durable claim/finalize semantics and no blind retry after ambiguous external mutation. Historical synchronization is excluded from current-live takeover semantics.
+- Production remained side-effect clean: Conversation Messages 37, WhatsApp Events 136, Unified Inbox projections 0, WhatsApp bindings 0 and Slice-7 controlled-smoke residue 0. New RPC ACLs are service-role-only.
+- Safety remains unchanged: Shadow Mode ON; global Kill Switch OFF; WhatsApp AI pause OFF; Agents pause OFF. Supabase advisors show no Slice-7-specific finding.
+- Same-number Business App Coexistence activation remains intentionally fail-closed/non-destructive until real Meta/provider/runtime evidence confirms eligibility. Never delete/uninstall the customer's mobile WhatsApp Business app merely to connect the API.
+
+**Owner-prioritized continuation overlay:** WhatsApp onboarding contract **Slice 8 — reconnect/revoke/disconnect + first real tenant E2E acceptance**.
+
+Fresh-audit existing binding/integration/Vault lifecycle, credential revocation handling, disconnect semantics, webhook/provider recovery and real-tenant acceptance gates before mutation. Reuse those exact authorities. Do not create a second connection state machine, secret store or provider stack.
+
+**Stable program cursor preserved for return after the owner-prioritized WhatsApp onboarding work:** `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.
+
+---
+
 ## WhatsApp customer onboarding Slice 6 Production closeout — 2026-10-02
 
 - Slices 1–5 remain **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** and their canonical connection/setup/provider/Chatwoot authorities remain unchanged.
