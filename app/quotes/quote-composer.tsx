@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 
 import { createQuoteV1, createQuoteVersionV1 } from './actions';
 
@@ -49,6 +49,7 @@ function subjectPayload(line:Line) {
 }
 
 export function QuoteComposer(props:Props) {
+  const requestKey='quote-ui:' + props.quoteId + ':' + useId().replace(/[^A-Za-z0-9_-]/g,'');
   const [seller,setSeller]=useState(props.tenantBusinesses[0]?.id ?? '');
   const [lines,setLines]=useState<Line[]>(props.initialLines?.length ? props.initialLines : [blankLine(props.catalog)]);
   const catalog=useMemo(
