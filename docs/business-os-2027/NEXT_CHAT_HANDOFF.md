@@ -1,5 +1,32 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## PAYMENT-CORE Production closeout — 2026-10-02
+
+- Work Package: `SECTION COMMERCE_PAYMENTS -> PAYMENT-CORE`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled provider-neutral Payment Core scope.
+- Implementation PR #406 final head `4f9a9124fb113615a6bcd379fa0bce2302ce3c82` passed exact-head CI `37040760574` across lint, typecheck, tests, the full PostgreSQL 17 migration chain plus PAYMENT-CORE controlled smoke, Next build, Vinext and Cloudflare scheduled verification.
+- PR #406 squash-merged to canonical `main@1669f47eb214427860983377d56aa37572119067`. Exact-main push CI `37041194204` succeeded on that exact merge SHA. Cloudflare Production Deploy `37041596109` succeeded on the same SHA through exact-green checkout, release-candidate smoke, controlled SSR load, Production promotion, routed Production smoke and safe API/webhook rejection smoke.
+- Production migration `0178_payment_core@20261002173449` is live from merged migration blob `bbd54adcdaa84e12445c303288a3da794707a2f9`.
+- Canonical Payment authority is one provider-neutral chain: `public.payment_intents`, `payment_links`, immutable `payment_provider_events`, immutable `payment_transactions`, and governed `payment_refunds`. It does not create a second Invoice, Order, Catalog, SaaS billing ledger, provider send plane, outbox, approval engine or scheduler.
+- Invoice commercial truth remains owned by INVOICE-ENGINE. Payment Core owns money intent/provider evidence/settlement/refund truth and is the only governed writer of the Invoice `paid_total` settlement projection. Payment Link creation, provider request acceptance or ambiguous HTTP outcomes never mark an Invoice paid.
+- Settlement/refund ingress accepts only verified provider-webhook evidence or explicit reconciliation evidence. Provider event IDs are replay-safe/idempotent; conflicting replay fails closed. Ambiguous outcomes enter `RECONCILIATION_REQUIRED` rather than manufacturing success.
+- Partial Invoice collection is supported by bounded exact-amount Payment Intents. Capture enforces current Invoice balance and prevents over-settlement. Refund requests do not move money; only verified/ref reconciled refund evidence decreases the governed Invoice paid projection. Refund and Credit Note remain distinct money-movement vs commercial-correction concepts.
+- `PAYMENT_INTENT`, `PAYMENT_CAPTURED`, `PAYMENT_FAILED`, and `PAYMENT_REFUNDED` are now AVAILABLE canonical Automation triggers with subject `PAYMENT`, drained by the existing Automation Runtime. No second scheduler/event plane was introduced.
+- Customer 360 V6 composes Payment truth over V5 with a cutover-safe V6 -> V5 app fallback. Business Web exposes `/payments`, Payment evidence detail, Invoice -> Payment Intent creation, unresolved-intent cancellation and governed Refund request surfaces; there is no manual “mark paid” shortcut.
+- Production verification is side-effect clean: `payment_intents=0`, `payment_links=0`, `payment_refunds=0`, `payment_provider_events=0`, and `payment_transactions=0`. No synthetic Production Payment Intent, link, transaction, refund, provider callback, customer or merchant success was created.
+- RLS is enabled on all five exposed Payment tables. Authenticated access is scoped read-only; direct authenticated INSERT/UPDATE is absent. Trusted financial mutation/provider-event RPCs are service-role-only while Customer360 V6 remains authenticated-readable through its governed composition.
+- Runtime verification confirms canonical Payment RPCs, Customer360 V6, Invoice Payment projection guard and Payment Automation triggers are live.
+- Post-`0178` advisor categories/counts remain unchanged from the pre-Payment baseline: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`. Fresh zero-row Payment indexes may appear as unused-index INFO and are not an integrity regression.
+- Production Vault currently has no Tap-, Thawani- or generic Payment-named secret records. PAYMENT-CORE therefore does **not** claim real provider activation, merchant approval or real-money E2E evidence. Those provider-specific responsibilities belong to the next official Work Package, `PAYMENT-OMAN`.
+- Existing real-tenant WhatsApp E2E / same-number Coexistence blockers remain external-evidence gated and unchanged.
+
+**Fresh continuation cursor:** `SECTION COMMERCE_PAYMENTS -> PAYMENT-OMAN`.
+
+Before mutation, fresh-audit existing provider abstractions, integration bindings, Vault refs, provider webhook journals/idempotency/reconciliation patterns, current Tap/Thawani code/docs/credentials/merchant activation state, Payment Core adapter boundaries, approval/audit/Automation reuse, and current Production webhook/deploy routing. PAYMENT-OMAN must extend canonical PAYMENT-CORE only; it must not create provider-specific payment ledgers, a second webhook plane, a second refund engine, or fake provider success.
+
+---
+
+
 ## INVOICE-ENGINE Production closeout — 2026-10-02
 
 - Work Package: `SECTION COMMERCE_PAYMENTS -> INVOICE-ENGINE`.
