@@ -383,8 +383,11 @@ begin
 end;
 $quote_expiry_reconciler$;
 
-do $immutability_and_acl$
+reset role;
+
+do $immutability_trigger$
 begin
+  perform set_config('app.quote_engine_mutation','allowed',true);
   begin
     update public.quote_versions
     set notes='tamper'
@@ -393,6 +396,17 @@ begin
   exception when others then
     if sqlerrm not like 'QUOTE-ENGINE immutable evidence cannot be changed%' then raise; end if;
   end;
+  perform set_config('app.quote_engine_mutation','0',true);
+end;
+$immutability_trigger$;
+
+set role service_role;
+
+do $immutability_and_acl$
+begin
+  if has_table_privilege('service_role','public.quote_versions','UPDATE') then
+    raise exception 'service_role unexpectedly has UPDATE on immutable quote_versions';
+  end if;
 
   if has_function_privilege(
     'authenticated',
