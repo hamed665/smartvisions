@@ -556,6 +556,13 @@ begin
     return v_version_no;
   end if;
 
+  if p_expected_quote_version is null or p_expected_quote_version<>v_quote.version then
+    raise exception 'QUOTE-ENGINE Quote version changed';
+  end if;
+  if v_quote.status in ('ACCEPTED','REJECTED','EXPIRED','PAYMENT_PENDING','CONVERTED') then
+    raise exception 'QUOTE-ENGINE terminal or downstream Quote cannot be revised';
+  end if;
+
   if p_lines is null or jsonb_typeof(p_lines)<>'array'
      or jsonb_array_length(p_lines) not between 1 and 500
      or v_country !~ '^[A-Z]{2}$'
