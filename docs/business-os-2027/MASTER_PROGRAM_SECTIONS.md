@@ -1,5 +1,21 @@
 # Smart Visions AI Business OS 2027 — Master Program Sections
 
+## ORDER-ENGINE Production closeout — 2026-10-02
+
+- Work Package: `SECTION COMMERCE_PAYMENTS -> ORDER-ENGINE`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled canonical Order scope.
+- Implementation PR #398 final head `4e2f3007c944cc3fb40b791359cc9558cffe30d5`; exact-head CI `37009383921`; canonical implementation merge `main@4c5d5b26d33b460e4d19c6e13551a65eda4d98dc`; exact-main CI `37009775188`; Cloudflare Production Deploy `37010061631`.
+- Production migration `0173_order_engine@20261002130127` is live from merged blob `9123adb5a748a0b5440039ccb81ebe69cfff3236`.
+- Canonical Order authority is `orders` with immutable line snapshots, bounded fulfillment evidence, governed returns and lifecycle events. Quote conversion, direct canonical-price Orders, Customer 360 V4 and ORDER Automation triggers reuse existing authorities; no Invoice, Payment/refund or inventory stock truth was introduced.
+- Hardening PR #399 final head `4935cbcfad527f2084123faa722ab1ada9ba9cb0`; exact-head CI `37010634724`; merge `main@ac65d781251f8be112a351aa3ca73cd110314b68`; exact-main CI `37011043404`; Cloudflare Production Deploy `37011371669`.
+- Production hardening migration `0174_order_engine_fk_index_hardening@20261002131210` is live from merged blob `b799d423d2db191f10c22a63ec116d09774ae683`; the three new FK indexing findings are closed and advisor `unindexed_foreign_keys` is back at baseline 14.
+- Production acceptance was side-effect clean: all six Order tables remain 0-row. No synthetic Order/customer/return/payment/provider evidence was created.
+- Managerial estimate after this Work Package: Phase 8 approximately **58% complete / 42% remaining**; overall program approximately **66% complete / 34% remaining**. Planning estimate only.
+
+**Fresh continuation cursor:** `SECTION COMMERCE_PAYMENTS -> INVENTORY-FULFILLMENT`.
+
+---
+
 ## QUOTE-ENGINE Production closeout — 2026-10-02
 
 - Work Package: `SECTION COMMERCE_PAYMENTS -> QUOTE-ENGINE`.
@@ -1204,6 +1220,8 @@ Canonical pricing ownership must remain explicit.
 
 ## ORDER-ENGINE
 
+**Disposition:** **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** (`0173_order_engine@20261002130127`; FK hardening `0174_order_engine_fk_index_hardening@20261002131210`).
+
 - Quote -> Order;
 - direct order where permitted;
 - fulfillment;
@@ -1213,6 +1231,8 @@ Canonical pricing ownership must remain explicit.
 - linked customer/booking/payment.
 
 ## INVENTORY-FULFILLMENT
+
+**Execution cursor:** **NEXT** after verified ORDER-ENGINE closeout.
 
 When enabled:
 
