@@ -68,6 +68,10 @@ alter table public.locale_profiles enable row level security;
 alter table public.market_settings enable row level security;
 alter table public.knowledge_versions enable row level security;
 
+-- Production's legacy lineage grants service_role read access to Organization
+-- identity. Reproduce that permission here because the compact CI bootstrap predates it.
+grant select on public.organizations to service_role;
+
 grant select,insert,update,delete on
   public.organization_settings,
   public.locale_profiles,
