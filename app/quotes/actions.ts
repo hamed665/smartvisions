@@ -19,6 +19,11 @@ function integer(formData: FormData, key: string) {
   if (!Number.isInteger(value)) throw new Error(key + ' must be an integer');
   return value;
 }
+function parseDate(raw: string) {
+  const value = raw.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error('valid_until must be a date');
+  return new Date(value + 'T23:59:59.999Z').toISOString();
+}
 function parseLines(raw: string) {
   const value = JSON.parse(raw || '[]');
   if (!Array.isArray(value) || value.length<1 || value.length>500) {
@@ -59,7 +64,7 @@ export async function createQuoteV1(formData: FormData) {
     p_owner_user_id:userId,
     p_country_code:field(formData,'country_code'),
     p_currency:field(formData,'currency'),
-    p_valid_until:field(formData,'valid_until'),
+    p_valid_until:parseDate(field(formData,'valid_until')),
     p_terms:optional(formData,'terms'),
     p_notes:optional(formData,'notes'),
     p_lines:parseLines(field(formData,'lines_json')),
@@ -79,7 +84,7 @@ export async function createQuoteVersionV1(formData: FormData) {
     p_expected_quote_version:integer(formData,'expected_quote_version'),
     p_country_code:field(formData,'country_code'),
     p_currency:field(formData,'currency'),
-    p_valid_until:field(formData,'valid_until'),
+    p_valid_until:parseDate(field(formData,'valid_until')),
     p_terms:optional(formData,'terms'),
     p_notes:optional(formData,'notes'),
     p_lines:parseLines(field(formData,'lines_json')),
