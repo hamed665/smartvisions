@@ -602,8 +602,12 @@ begin
     raise exception 'Business Twin request key is invalid';
   end if;
 
-  perform 1 from public.organizations where id=p_organization_id for update;
-  if not found then raise exception 'Business Twin Organization not found'; end if;
+  if not exists(select 1 from public.organizations where id=p_organization_id) then
+    raise exception 'Business Twin Organization not found';
+  end if;
+  -- Serialize Business Twin V2 publication without granting service_role UPDATE
+  -- authority over the canonical Organization row merely for locking.
+  perform pg_advisory_xact_lock(hashtextextended(p_organization_id::text,0));
 
   v_payload:=public.compile_business_twin_v2(p_organization_id);
   if v_payload is null or v_payload='{}'::jsonb then
