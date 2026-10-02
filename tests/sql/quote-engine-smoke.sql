@@ -144,6 +144,13 @@ begin
     raise exception 'QUOTE-ENGINE did not snapshot canonical Service price';
   end if;
 
+  if (select document_snapshot ? 'notes' from public.quote_versions where quote_id=qid and version_no=1)
+     or (select document_snapshot::text like '%servicePriceId%' from public.quote_versions where quote_id=qid and version_no=1)
+     or (select document_snapshot::text like '%approvalActionKeys%' from public.quote_versions where quote_id=qid and version_no=1)
+  then
+    raise exception 'QUOTE-ENGINE customer document snapshot leaked internal-only metadata';
+  end if;
+
   update public.service_prices set price=110
   where organization_id='00000000-0000-0000-0000-00000000c701'
     and service_id='catalog_ci_service' and country_code='OM' and currency='OMR';
