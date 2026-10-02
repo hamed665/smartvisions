@@ -158,13 +158,13 @@ export async function hydrateAgentContext(input: {
         .order('created_at', { ascending: false })
         .limit(40)
       : Promise.resolve({ data: [], error: null }),
-    supabase
-      .from('knowledge_versions')
-      .select('knowledge_key,version,payload,created_at')
-      .eq('organization_id', organizationId)
-      .eq('active', true)
-      .order('created_at', { ascending: false })
-      .limit(16),
+    supabase.rpc('get_knowledge_context_v2', {
+      p_organization_id: organizationId,
+      p_tenant_business_id: null,
+      p_branch_id: null,
+      p_include_stale: false,
+      p_limit: 16,
+    }),
     supabase
       .from('prompt_versions')
       .select('agent_name,version,prompt_text,created_at')
