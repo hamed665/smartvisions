@@ -22,7 +22,7 @@ export async function getCrmCustomer360(input: {
   personId: string;
   limit: number;
 }) {
-  let { data, error } = await input.supabase.rpc('get_crm_customer360_v5', {
+  let { data, error } = await input.supabase.rpc('get_crm_customer360_v6', {
     p_organization_id: input.organizationId,
     p_person_id: input.personId,
     p_limit: input.limit,
@@ -32,7 +32,7 @@ export async function getCrmCustomer360(input: {
   // database migration is applied. Keep that short cutover window read-safe
   // without creating a second Customer 360 authority.
   if (error?.code === 'PGRST202') {
-    const fallback = await input.supabase.rpc('get_crm_customer360_v4', {
+    const fallback = await input.supabase.rpc('get_crm_customer360_v5', {
       p_organization_id: input.organizationId,
       p_person_id: input.personId,
       p_limit: input.limit,
