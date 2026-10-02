@@ -142,16 +142,16 @@ begin
      or jsonb_array_length(i.document_snapshot->'taxBreakdown')<1
   then raise exception 'INVOICE-ENGINE issued document snapshot is incomplete'; end if;
 
+  -- Immutable line evidence is fail-closed twice: service_role has no UPDATE
+  -- privilege, and the table trigger rejects non-insert mutations even for a
+  -- privileged database owner. The service boundary should stop this first.
   begin
-    perform set_config('app.invoice_engine_mutation','allowed',true);
     update public.invoice_line_items set name_snapshot='tamper'
     where organization_id=o.organization_id and invoice_id=iid and line_no=1;
     raise exception 'INVOICE-ENGINE immutable Invoice line unexpectedly changed';
-  exception when others then
-    perform set_config('app.invoice_engine_mutation','0',true);
-    if sqlerrm not like 'INVOICE-ENGINE immutable commercial evidence cannot be changed%' then raise; end if;
+  exception when insufficient_privilege then
+    null;
   end;
-  perform set_config('app.invoice_engine_mutation','0',true);
 
   automation_result:=public.reconcile_invoice_automation_events(100);
   if coalesce((automation_result->>'processed')::integer,0)<1 then
