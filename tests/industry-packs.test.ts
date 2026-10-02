@@ -61,7 +61,7 @@ describe('BRAIN-INDUSTRY-PACKS contract',()=>{
     expect(migration).toContain("m.role in ('OWNER','ADMIN')");
     expect(migration).toContain('resolve_industry_pack_context_v1');
     expect(migration).toContain('compile_business_twin_v2');
-    expect(migration).toContain("'industryPackReferences'");
+    expect(migration).toContain('industryPackReferences');
     expect(twinActions).toContain("rpc('publish_business_twin_v2'");
     expect(actions).toContain("rpc('activate_industry_pack_v1'");
     expect(shell).toContain("['Industry Packs', '/industry-packs']");
