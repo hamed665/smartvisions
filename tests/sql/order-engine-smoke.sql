@@ -151,6 +151,8 @@ declare
   o public.orders%rowtype;
   v_before numeric;
   v_status text;
+  pp public.catalog_product_prices%rowtype;
+  pp_after public.catalog_product_prices%rowtype;
   projected jsonb;
 begin
   perform public.create_direct_order_v1(
@@ -179,17 +181,31 @@ begin
     raise exception 'ORDER-ENGINE direct canonical-price totals are wrong: %/%/%',o.total,o.discount_total,o.tax_total;
   end if;
 
-  -- Catalog changes after Order confirmation must not rewrite commercial evidence.
+  -- Canonical Catalog changes after Order confirmation must not rewrite commercial evidence.
   select unit_price into v_before from public.order_line_items where id=line_id;
-  update public.catalog_product_prices set price=31
+  select * into pp from public.catalog_product_prices
   where organization_id='00000000-0000-0000-0000-00000000c701'
     and id='00000000-0000-0000-0000-00000000c791';
+
+  perform public.upsert_catalog_product_price_v2(
+    pp.organization_id,'00000000-0000-0000-0000-00000000c711',
+    pp.id,pp.product_id,pp.variant_id,pp.country_code,pp.currency,
+    pp.price+1,pp.minimum_price,
+    case when pp.compare_at_price is null then null else greatest(pp.compare_at_price,pp.price+1) end,
+    pp.version,'order-engine-catalog-price-change-1'
+  );
   if (select unit_price from public.order_line_items where id=line_id)<>v_before then
-    raise exception 'ORDER-ENGINE historical line changed after Catalog price edit';
+    raise exception 'ORDER-ENGINE historical line changed after governed Catalog price edit';
   end if;
-  update public.catalog_product_prices set price=25
-  where organization_id='00000000-0000-0000-0000-00000000c701'
-    and id='00000000-0000-0000-0000-00000000c791';
+
+  select * into pp_after from public.catalog_product_prices
+  where organization_id=pp.organization_id and id=pp.id;
+  perform public.upsert_catalog_product_price_v2(
+    pp.organization_id,'00000000-0000-0000-0000-00000000c711',
+    pp.id,pp.product_id,pp.variant_id,pp.country_code,pp.currency,
+    pp.price,pp.minimum_price,pp.compare_at_price,
+    pp_after.version,'order-engine-catalog-price-restore-1'
+  );
 
   if public.record_order_fulfillment_v1(
     '00000000-0000-0000-0000-00000000c701',
