@@ -3,11 +3,13 @@ import {readFileSync} from 'node:fs';
 import {describe,expect,it} from 'vitest';
 
 import {mapTapEvent,omrToBaisa,tapHashInput,verifyTapHashstring} from '../lib/payments/oman/provider';
+import {shouldBypassSession} from '../lib/supabase/proxy';
 
 const migration=readFileSync('supabase/migrations/0179_payment_oman.sql','utf8');
 const runtime=readFileSync('lib/payments/oman/runtime.ts','utf8');
 const config=readFileSync('lib/payments/oman/config.ts','utf8');
 const tapRoute=readFileSync('app/api/payments/oman/tap/webhook/route.ts','utf8');
+const tapReturn=readFileSync('app/api/payments/oman/tap/return/route.ts','utf8');
 const thawaniRoute=readFileSync('app/api/payments/oman/thawani/reconcile/route.ts','utf8');
 const providerActions=readFileSync('app/payments/provider-actions.ts','utf8');
 const providerPage=readFileSync('app/payments/providers/page.tsx','utf8');
@@ -53,6 +55,21 @@ describe('PAYMENT-OMAN contract',()=>{
     expect(verifyTapHashstring(payload,'00'.repeat(32),secret)).toBe(false);
     expect(tapRoute).toContain("p_authenticity:'VERIFIED_WEBHOOK'");
     expect(tapRoute.indexOf('verifyTapHashstring')).toBeLessThan(tapRoute.indexOf("record_payment_provider_event_v1"));
+  });
+
+  it('keeps gateway callbacks public while operator payment pages remain session protected',()=>{
+    expect(shouldBypassSession('/api/payments/oman/tap/webhook')).toBe(true);
+    expect(shouldBypassSession('/api/payments/oman/tap/return')).toBe(true);
+    expect(shouldBypassSession('/api/payments/oman/thawani/reconcile')).toBe(true);
+    expect(shouldBypassSession('/payments/providers')).toBe(false);
+    expect(shouldBypassSession('/payments/00000000-0000-0000-0000-000000000000')).toBe(false);
+    expect(runtime).toContain("/api/payments/oman/tap/return?payment_intent_id=");
+    expect(runtime).toContain("/api/payments/oman/thawani/reconcile?payment_intent_id=");
+    expect(tapReturn).toContain('reconcileTapPayment');
+    expect(tapReturn).toContain('Payment status pending');
+    expect(thawaniRoute).toContain('Payment status pending');
+    expect(tapReturn).not.toContain("'/payments/");
+    expect(thawaniRoute).not.toContain("NextResponse.redirect");
   });
 
   it('uses authenticated provider readback for Thawani instead of trusting an unsigned callback',()=>{
