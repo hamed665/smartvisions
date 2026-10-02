@@ -1,5 +1,28 @@
 # Smart Visions AI Business OS 2027 — Next Chat Handoff
 
+## CATALOG-V2 Production closeout — 2026-10-02
+
+- Work Package: `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled canonical Catalog V2 scope.
+- Implementation PR #393 final head `0e7b24d24144e6614f5eca13b5a4e8e475107ae7` passed exact-head CI `36983839157` across lint, typecheck, unit tests, the complete PostgreSQL 17 migration chain plus CATALOG-V2 smoke, Next build, Vinext and Cloudflare scheduled verification.
+- PR #393 squash-merged to canonical `main@7e128fda4d644ea7374ad4244fc50083e6af7bb8`. Exact-main push CI `36984294927` succeeded on that exact merge SHA.
+- Cloudflare Production Deploy `36984634584` succeeded on the same exact merge SHA through exact-green checkout, isolated release-candidate deploy/smoke, controlled SSR load, exact-bundle Production promotion, Worker Route verification, routed Production smoke and safe API/webhook rejection smoke.
+- Production migration `0170_catalog_v2@20261002083318` is live; merged migration blob SHA is `435516227f772e2788bbf2b3c976e2d2f445507e`.
+- Canonical Service identity remains `public.services` and canonical Service pricing remains `public.service_prices`. CATALOG-V2 adds canonical Product, Product Variant and Product/Variant pricing authorities without introducing a second Service catalog, generic catalog identity registry or second Service pricing truth.
+- Product and Variant SKU uniqueness is Organization-scoped. Product/Variant price ownership is explicit by catalog subject + country + currency. Branch availability references canonical `public.branches`; media and warranty are bounded catalog metadata; Bundle/Add-on relations reject self-reference and direct reverse cycles.
+- Inventory remains deliberately bounded to mode/reference metadata. CATALOG-V2 introduced no stock quantity, reservation, movement, warehouse or fulfillment truth; those remain owned by `INVENTORY-FULFILLMENT`. Quote, Order, Invoice and Payment authorities were not introduced early.
+- All seven new catalog tables have RLS enabled. `authenticated` has scoped SELECT only; trusted mutations remain service-role governed with direct partial mutation guards, OWNER authorization, optimistic versioning, replay/idempotency evidence and existing `audit_logs`.
+- Production verification remained side-effect clean: all seven CATALOG-V2 tables are 0-row; `services=8`, `service_prices=37`, `branches=0`, `tenant_businesses=0`, and CATALOG-V2 audit rows remain 0. No synthetic Product, Business, Branch, customer or provider evidence was created.
+- Post-0170 advisor comparison shows no new security, unindexed-FK, auth-RLS-initPlan or multiple-permissive-policy regression. Unused-index INFO increased from 266 to 294 because 28 indexes were added on fresh zero-row catalog tables.
+- Existing WhatsApp external blockers are unchanged: first real consented tenant Meta ↔ Smart Core ↔ Chatwoot E2E and real same-number Business App Coexistence remain `BLOCKED_EXTERNAL`; no Catalog work altered those safety gates.
+- Managerial recalibration after this verified slice: Phase 8 Billing & Commercial Platform is approximately **42% complete / 58% remaining**; overall program is approximately **64% complete / 36% remaining**. These are planning estimates, not canonical database state.
+
+**Fresh continuation cursor:** `SECTION COMMERCE_PAYMENTS -> QUOTE-ENGINE`.
+
+Before mutation, fresh-audit current Quote/Deal/Product/Service/Product Price/Service Price/tax/discount/approval/document/customer/Booking/Order authorities plus open PRs and Production schema. Extend canonical Commerce authorities only; do not create a second catalog, pricing truth, CRM Deal truth, document store, approval engine, Order engine or Payment truth.
+
+---
+
 ## WhatsApp customer onboarding Slice 8 controlled-scope Production closeout — 2026-10-02
 
 - Slices 1–7 remain **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for their internally controlled scopes.
