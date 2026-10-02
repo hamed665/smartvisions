@@ -211,16 +211,29 @@ begin
     raise exception 'Changed Business Twin truth did not create v2';
   end if;
 
+end;
+$twin_compile_and_publish$;
+
+reset role;
+
+do $twin_owner_immutable_guard$
+declare
+  v_id uuid;
+begin
+  select id into v_id
+  from public.business_twin_versions
+  where organization_id='00000000-0000-0000-0000-00000000d701'
+  order by version
+  limit 1;
+
   begin
-    update public.business_twin_versions set payload='{"changed":true}'::jsonb where id=v1.id;
+    update public.business_twin_versions set payload='{"changed":true}'::jsonb where id=v_id;
     raise exception 'Business Twin immutable version update unexpectedly succeeded';
   exception when others then
     if sqlerrm not like 'Business Twin versions are immutable%' then raise; end if;
   end;
 end;
-$twin_compile_and_publish$;
-
-reset role;
+$twin_owner_immutable_guard$;
 
 do $twin_acl$
 begin
@@ -229,6 +242,10 @@ begin
     'public.publish_business_twin_v1(uuid,uuid,text)'::regprocedure,
     'EXECUTE'
   ) then raise exception 'service_role cannot publish Business Twin'; end if;
+
+  if has_table_privilege('service_role','public.business_twin_versions','UPDATE')
+     or has_table_privilege('service_role','public.business_twin_versions','DELETE')
+  then raise exception 'service_role unexpectedly has mutable Business Twin table privileges'; end if;
 
   if has_function_privilege(
     'authenticated',
