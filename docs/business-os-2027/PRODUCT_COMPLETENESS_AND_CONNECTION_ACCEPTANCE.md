@@ -1,5 +1,30 @@
 # Product completeness and customer connection acceptance — Business OS 2027
 
+## PAYMENT-EXTENSION Production closeout — 2026-10-02
+
+- Work Package: `SECTION COMMERCE_PAYMENTS -> PAYMENT-EXTENSION`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled provider-extension boundary. No future gateway was fabricated merely to prove extensibility.
+- Implementation PR #411 final head `731fd3738dc5367c3ecedb441d610cfef682a69a` passed exact-head CI `37057706351` across lint, typecheck, tests, the full PostgreSQL 17 migration/smoke chain, Next build, Vinext and Cloudflare scheduled verification. An earlier exact-head run `37057515931` failed one pre-existing PAYMENT-OMAN wording assertion after the provider page became generic; the visible secret-disclosure guard wording was restored and the final exact-head rerun passed cleanly.
+- PR #411 squash-merged to canonical `main@36bb227b50cc7efb35e37633be43ce358714075e`. Exact-main CI `37058095341` and Cloudflare Production Deploy `37058390433` both succeeded on that exact SHA.
+- PAYMENT-EXTENSION required **no database migration**. Production schema therefore correctly remains through `payment_oman@20261002185224`; no provider-registry table, second ledger, provider-specific refund store, webhook journal, queue, IAM or scheduler was introduced.
+- The provider boundary is now explicit in `lib/payments/providers/catalog.ts` and `lib/payments/providers/runtime.ts`. Every executable gateway must be registered with a stable provider code, supported countries/currencies, explicit capabilities and `settlementAuthority=PAYMENT_CORE`.
+- Current registered adapters are Tap and Thawani. Their protocol-specific signature/readback/API logic remains in the existing Oman adapter boundary, while operator configuration, Payment Link creation, Refund execution and server reconciliation now cross the provider-neutral registry/runtime.
+- Unknown providers fail closed. Currency and capability compatibility are checked before provider execution. Current Tap truth advertises OMR hosted links, verified webhook, server readback, refund and partial refund. Current Thawani truth advertises OMR hosted links, server readback and refund, but does not falsely advertise partial refund.
+- `integration_connections` plus the existing Supabase Vault remain the only provider configuration/credential authority. The new abstraction does not persist plaintext credentials or return stored secrets to the browser.
+- PAYMENT-CORE remains the only settlement/refund transaction authority. Provider-created links and HTTP success never become paid/refunded truth by themselves; only verified webhook or authenticated provider readback evidence can enter the canonical provider-event/transaction path.
+- Business Web provider configuration and Payment Intent detail are now catalog-driven instead of hardcoded to Oman provider names. Adding another country/gateway is constrained to registration + adapter/configuration/callback evidence rather than forking the payment system.
+- Fresh routed Production smoke after deploy verifies the operator provider page remains session-protected (`307` unauthenticated), while Tap return and Thawani reconciliation routes reach public handlers and safely return `400` for missing required identity; invalid Tap webhook input also returns `400`.
+- Production remains side-effect clean: `payment_intents=0`, `payment_links=0`, `payment_refunds=0`, `payment_provider_events=0`, `payment_transactions=0`, registered Oman provider connections `0`, and Payment/Tap/Thawani-named Vault secrets `0`. No synthetic future provider, merchant, credential, Payment Link, capture, Refund or webhook success was created.
+- Fresh advisor baseline is unchanged: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`.
+- Real Tap/Thawani merchant activation and real-money E2E remain **BLOCKED_EXTERNAL** until legitimate merchant credentials/approval exist. Future provider activation likewise requires real external evidence and is not implied by this abstraction.
+
+**Fresh continuation cursor:** `SECTION BUSINESS_INTELLIGENCE_AI -> BRAIN-BUSINESS-TWIN`.
+
+Before mutation, fresh-audit current organization/business/branch/service/catalog/pricing/policy/hours/staff/locale/knowledge/CRM/booking/payment operational truths and existing settings/knowledge tables. BRAIN-BUSINESS-TWIN must compose/version canonical business truth without inventing a second Catalog, CRM, settings store, Knowledge Base, pricing authority or tenant hierarchy.
+
+---
+
+
 ## PAYMENT-OMAN Production closeout — 2026-10-02
 
 - Work Package: `SECTION COMMERCE_PAYMENTS -> PAYMENT-OMAN`.
@@ -1086,7 +1111,7 @@ The following baseline inventory preserves every existing semantic Work Package,
 - `INVOICE-ENGINE` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**
 - `PAYMENT-CORE` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**
 - `PAYMENT-OMAN` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for internally controlled scope; real merchant activation/E2E **BLOCKED_EXTERNAL**
-- `PAYMENT-EXTENSION` — **NEXT**
+- `PAYMENT-EXTENSION` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**
 
 ### BUSINESS_INTELLIGENCE_AI — Business Twin, knowledge, memory and agents
 
