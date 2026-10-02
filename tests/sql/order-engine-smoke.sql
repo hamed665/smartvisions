@@ -474,3 +474,15 @@ begin
   ) then raise exception 'ORDER-ENGINE exposed table is missing RLS'; end if;
 end;
 $rls_presence$;
+
+
+do $order_fk_index_hardening$
+begin
+  if to_regclass('public.order_line_fulfillment_line_order_fk_idx') is null
+     or to_regclass('public.order_return_lines_line_order_fk_idx') is null
+     or to_regclass('public.order_return_lines_return_order_fk_idx') is null
+  then
+    raise exception 'ORDER-ENGINE FK hardening indexes are missing';
+  end if;
+end;
+$order_fk_index_hardening$;
