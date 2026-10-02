@@ -2,6 +2,7 @@ import {readFileSync} from 'node:fs';
 import {describe,expect,it} from 'vitest';
 
 const migration=readFileSync('supabase/migrations/0182_knowledge_v2.sql','utf8');
+const hardening=readFileSync('supabase/migrations/0183_knowledge_v2_scope_evidence_hardening.sql','utf8');
 const page=readFileSync('app/knowledge/page.tsx','utf8');
 const actions=readFileSync('app/knowledge/actions.ts','utf8');
 const ingestion=readFileSync('lib/knowledge/ingestion.ts','utf8');
@@ -66,5 +67,52 @@ describe('KNOWLEDGE-V2 architecture',()=>{
     expect(actions).toContain('UNTRUSTED_FILE_REQUIRES_APPROVAL');
     expect(ingestion).toContain(".replace(/<script\\b[\\s\\S]*?<\\/script>/gi,' ')");
     expect(ingestion).toContain(".replace(/<style\\b[\\s\\S]*?<\\/style>/gi,' ')");
+  });
+});
+
+
+describe('KNOWLEDGE-V2 hierarchy/evidence hardening',()=>{
+  it('supports all canonical hierarchy scopes without a parallel hierarchy authority',()=>{
+    for(const scope of ['ORGANIZATION','BRAND','BUSINESS','BRANCH','DEPARTMENT','TEAM']){
+      expect(hardening).toContain(`'${scope}'`);
+    }
+    expect(hardening).toContain('references public.brands(organization_id,id)');
+    expect(hardening).toContain('references public.departments(organization_id,id)');
+    expect(hardening).toContain('references public.teams(organization_id,id)');
+    expect(hardening).toContain('can_access_unified_inbox_scope');
+    expect(page).toContain('<option>BRAND</option>');
+    expect(page).toContain('<option>DEPARTMENT</option>');
+    expect(page).toContain('<option>TEAM</option>');
+  });
+
+  it('allows one active version per key and scope rather than one per organization',()=>{
+    expect(hardening).toContain('drop index public.knowledge_versions_one_active_uidx');
+    expect(hardening).toContain('knowledge_versions_one_active_scope_uidx');
+    expect(hardening).toContain('nulls not distinct');
+    expect(hardening).toContain('and scope_type=v_target.scope_type');
+  });
+
+  it('covers the required provenance taxonomy while preserving legacy file types',()=>{
+    for(const type of ['MANUAL','WEBSITE','FILE','FAQ','CATALOG','SERVICE','POLICY','INTEGRATION','API','SYSTEM','PDF','DOC','TEXT']){
+      expect(hardening).toContain(`'${type}'`);
+    }
+    expect(actions).toContain("rpc('configure_knowledge_source_scope_v2'");
+  });
+
+  it('surfaces lifecycle history from the existing audit log instead of inventing ingestion runs',()=>{
+    expect(page).toContain("from('audit_logs')");
+    expect(page).toContain("like('action','KNOWLEDGE_%')");
+    expect(page).toContain('Knowledge lifecycle history');
+    expect(hardening).not.toContain('create table public.knowledge_ingestion_runs');
+  });
+
+  it('preserves source, scope, freshness, conflict, confidence and review evidence for agents',()=>{
+    expect(hardening).toContain('confidence numeric(5,4)');
+    expect(hardening).toContain('review_state text');
+    expect(hydrator).toContain('sourceType: clip(row.source_type');
+    expect(hydrator).toContain('scopeType: clip(row.scope_type');
+    expect(hydrator).toContain('stale: row.stale === true');
+    expect(hydrator).toContain('confidence: row.confidence == null');
+    expect(hydrator).toContain('reviewState: clip(row.review_state');
   });
 });
