@@ -261,15 +261,21 @@ create index quotes_org_buyer_business_idx on public.quotes(organization_id,buye
 create index quotes_org_deal_idx on public.quotes(organization_id,deal_id) where deal_id is not null;
 create index quotes_owner_idx on public.quotes(organization_id,owner_user_id,status);
 create index quotes_branch_idx on public.quotes(organization_id,branch_id) where branch_id is not null;
+create index quotes_seller_idx on public.quotes(organization_id,tenant_business_id);
+create index quotes_creator_idx on public.quotes(organization_id,created_by_user_id);
+create index quotes_updater_idx on public.quotes(organization_id,updated_by_user_id);
 create index quote_versions_quote_idx on public.quote_versions(organization_id,quote_id,version_no desc);
 create index quote_versions_creator_idx on public.quote_versions(organization_id,created_by_user_id);
 create index quote_lines_quote_idx on public.quote_line_items(organization_id,quote_id,version_no,line_no);
+create index quote_lines_version_fk_idx on public.quote_line_items(organization_id,quote_version_id,quote_id);
 create index quote_lines_service_idx on public.quote_line_items(organization_id,service_id) where service_id is not null;
 create index quote_lines_product_idx on public.quote_line_items(organization_id,product_id) where product_id is not null;
 create index quote_lines_variant_idx on public.quote_line_items(organization_id,variant_id) where variant_id is not null;
 create index quote_lines_service_price_idx on public.quote_line_items(organization_id,service_price_id) where service_price_id is not null;
 create index quote_lines_product_price_idx on public.quote_line_items(organization_id,product_price_id) where product_price_id is not null;
+create index quote_review_version_fk_idx on public.quote_version_reviews(organization_id,quote_version_id,quote_id);
 create index quote_review_decider_idx on public.quote_version_reviews(organization_id,decided_by_user_id) where decided_by_user_id is not null;
+create index quote_events_quote_idx on public.quote_lifecycle_events(organization_id,quote_id,occurred_at desc,id);
 create index quote_events_projection_idx on public.quote_lifecycle_events(transition,occurred_at,id);
 create index quote_events_actor_idx on public.quote_lifecycle_events(organization_id,actor_user_id) where actor_user_id is not null;
 
