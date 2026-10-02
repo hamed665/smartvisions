@@ -110,7 +110,9 @@ begin
     raise exception 'INVOICE-ENGINE paid_total moved before PAYMENT-CORE';
   exception when others then
     perform set_config('app.invoice_engine_mutation','0',true);
-    if sqlerrm not like 'INVOICE-ENGINE paid balance is frozen until PAYMENT-CORE%' then raise; end if;
+    if sqlerrm not like 'INVOICE-ENGINE paid balance is frozen until PAYMENT-CORE%'
+       and sqlerrm not like 'INVOICE-ENGINE paid balance is PAYMENT-CORE governed settlement projection%'
+    then raise; end if;
   end;
   perform set_config('app.invoice_engine_mutation','0',true);
 

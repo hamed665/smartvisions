@@ -52,9 +52,9 @@ describe('INVOICE-ENGINE contract',()=>{
   it('extends Customer 360 cutover-safely instead of replacing it',()=>{
     expect(migration).toContain('get_crm_customer360_v5');
     expect(migration).toContain('get_crm_customer360_v4');
-    expect(customer360).toContain("rpc('get_crm_customer360_v5'");
+    expect(customer360).toContain("rpc('get_crm_customer360_v6'");
     expect(customer360).toContain("error?.code === 'PGRST202'");
-    expect(customer360).toContain("rpc('get_crm_customer360_v4'");
+    expect(customer360).toContain("rpc('get_crm_customer360_v5'");
   });
 
   it('exposes governed Order-to-Invoice and immutable print surfaces',()=>{
