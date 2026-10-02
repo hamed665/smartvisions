@@ -180,6 +180,10 @@ export default async function CatalogPage() {
     })),
   ];
 
+  const productCreateId = crypto.randomUUID();
+  const mediaCreateId = crypto.randomUUID();
+  const relationCreateId = crypto.randomUUID();
+
   function relationLabel(row: typeof relationRows[number], side: 'source' | 'target') {
     const serviceId = side === 'source' ? row.source_service_id : row.target_service_id;
     const productId = side === 'source' ? row.source_product_id : row.target_product_id;
@@ -231,6 +235,7 @@ export default async function CatalogPage() {
           const prices = pricesByService.get(String(service.id)) ?? [];
           return <form action={configureServiceCatalogV2} className="settingsRow" key={service.id}>
             <input type="hidden" name="service_id" value={service.id} />
+            <input type="hidden" name="request_key" value={`catalog-v2-service:${service.id}:${crypto.randomUUID()}`} />
             {profile ? <input type="hidden" name="expected_version" value={profile.version} /> : null}
             <div>
               <strong>{service.name}</strong>
@@ -278,6 +283,8 @@ export default async function CatalogPage() {
       <h2>Create Product</h2>
       <p className="muted">Products require an existing active tenant Business. Production currently stays empty until a real Business exists.</p>
       {businessRows.length ? <form action={saveCatalogProductV2} className="settingsGrid">
+        <input type="hidden" name="product_id" value={productCreateId} />
+        <input type="hidden" name="request_key" value={`catalog-v2-product:${productCreateId}:${crypto.randomUUID()}`} />
         <label>Business
           <select name="tenant_business_id" required disabled={!editable}>
             {businessRows.map((business) => <option key={business.id} value={business.id}>{business.name}</option>)}
@@ -325,12 +332,15 @@ export default async function CatalogPage() {
         const productPrices = pricesByProduct.get(String(product.id)) ?? [];
         const selectedBranches = branchesByProduct.get(String(product.id)) ?? new Set<string>();
         const productBranches = branchRows.filter((branch) => String(branch.tenant_business_id) === String(product.tenant_business_id));
+        const variantCreateId = crypto.randomUUID();
+        const priceCreateId = crypto.randomUUID();
 
         return <section className="panel" key={product.id}>
           <form action={saveCatalogProductV2} className="settingsRow">
             <input type="hidden" name="product_id" value={product.id} />
             <input type="hidden" name="tenant_business_id" value={product.tenant_business_id} />
             <input type="hidden" name="expected_version" value={product.version} />
+            <input type="hidden" name="request_key" value={`catalog-v2-product:${product.id}:${crypto.randomUUID()}`} />
             <div>
               <strong>{product.name}</strong>
               <span className="muted smallText">{product.sku} · {businessNameById.get(String(product.tenant_business_id)) ?? product.tenant_business_id}</span>
@@ -381,7 +391,9 @@ export default async function CatalogPage() {
             <h3>Variants</h3>
             <p className="muted smallText">Variants inherit Product branch availability in CATALOG-V2. Stock quantities remain deferred.</p>
             <form action={saveCatalogVariantV2} className="settingsGrid">
+              <input type="hidden" name="variant_id" value={variantCreateId} />
               <input type="hidden" name="product_id" value={product.id} />
+              <input type="hidden" name="request_key" value={`catalog-v2-variant:${variantCreateId}:${crypto.randomUUID()}`} />
               <label>SKU<input name="sku" required disabled={!editable} /></label>
               <label>Name<input name="name" required disabled={!editable} /></label>
               <label>Attributes JSON<input name="attributes_json" defaultValue="{}" disabled={!editable} /></label>
@@ -406,6 +418,7 @@ export default async function CatalogPage() {
               <input type="hidden" name="variant_id" value={variant.id} />
               <input type="hidden" name="product_id" value={product.id} />
               <input type="hidden" name="expected_version" value={variant.version} />
+              <input type="hidden" name="request_key" value={`catalog-v2-variant:${variant.id}:${crypto.randomUUID()}`} />
               <div>
                 <strong>{variant.name}</strong>
                 <span className="muted smallText">{variant.sku} · v{variant.version}</span>
@@ -437,7 +450,9 @@ export default async function CatalogPage() {
             <h3>Product pricing</h3>
             <p className="muted smallText">This is Product/Variant pricing only. Existing Service prices are not copied here.</p>
             <form action={saveCatalogProductPriceV2} className="settingsGrid">
+              <input type="hidden" name="price_id" value={priceCreateId} />
               <input type="hidden" name="product_id" value={product.id} />
+              <input type="hidden" name="request_key" value={`catalog-v2-price:${priceCreateId}:${crypto.randomUUID()}`} />
               <label>Variant
                 <select name="variant_id" defaultValue="" disabled={!editable}>
                   <option value="">Base Product</option>
@@ -455,6 +470,7 @@ export default async function CatalogPage() {
               <input type="hidden" name="price_id" value={price.id} />
               <input type="hidden" name="product_id" value={product.id} />
               <input type="hidden" name="expected_version" value={price.version} />
+              <input type="hidden" name="request_key" value={`catalog-v2-price:${price.id}:${crypto.randomUUID()}`} />
               <div>
                 <strong>{price.variant_id ? variantNameById.get(String(price.variant_id)) ?? 'Variant' : 'Base Product'}</strong>
                 <span className="muted smallText">v{price.version}</span>
@@ -481,6 +497,8 @@ export default async function CatalogPage() {
       <h2>Catalog media</h2>
       <p className="muted">Media is metadata/reference only. No parallel binary media store is created.</p>
       {subjects.length ? <form action={saveCatalogMediaV2} className="settingsGrid">
+        <input type="hidden" name="media_id" value={mediaCreateId} />
+        <input type="hidden" name="request_key" value={`catalog-v2-media:${mediaCreateId}:${crypto.randomUUID()}`} />
         <label>Catalog item
           <select name="subject_ref" required disabled={!editable}>
             {subjects.map((subject) => <option value={subject.ref} key={subject.ref}>{subject.label}</option>)}
@@ -516,6 +534,7 @@ export default async function CatalogPage() {
         {mediaRows.map((item) => <form action={saveCatalogMediaV2} className="settingsRow" key={item.id}>
           <input type="hidden" name="media_id" value={item.id} />
           <input type="hidden" name="expected_version" value={item.version} />
+          <input type="hidden" name="request_key" value={`catalog-v2-media:${item.id}:${crypto.randomUUID()}`} />
           <input
             type="hidden"
             name="subject_ref"
@@ -568,6 +587,8 @@ export default async function CatalogPage() {
       <h2>Bundles & add-ons</h2>
       <p className="muted">Relations reference canonical Service/Product/Variant identities. Product-to-Product cross-Business relations fail closed.</p>
       {subjects.length >= 2 ? <form action={saveCatalogRelationV2} className="settingsGrid">
+        <input type="hidden" name="relation_id" value={relationCreateId} />
+        <input type="hidden" name="request_key" value={`catalog-v2-relation:${relationCreateId}:${crypto.randomUUID()}`} />
         <label>Source
           <select name="source_ref" required disabled={!editable}>
             {subjects.map((subject) => <option value={subject.ref} key={subject.ref}>{subject.label}</option>)}
@@ -594,6 +615,7 @@ export default async function CatalogPage() {
         {relationRows.map((row) => <form action={saveCatalogRelationV2} className="settingsRow" key={row.id}>
           <input type="hidden" name="relation_id" value={row.id} />
           <input type="hidden" name="expected_version" value={row.version} />
+          <input type="hidden" name="request_key" value={`catalog-v2-relation:${row.id}:${crypto.randomUUID()}`} />
           <input
             type="hidden"
             name="source_ref"
