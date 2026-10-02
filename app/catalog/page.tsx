@@ -311,7 +311,8 @@ export default async function CatalogPage() {
         <label>Inventory mode
           <select name="inventory_mode" defaultValue="NONE" disabled={!editable}>
             <option value="NONE">No inventory linkage</option>
-            <option value="REFERENCE_ONLY">External/reference only</option>
+            <option value="STOCKED">Stock managed by Inventory</option>
+                  <option value="REFERENCE_ONLY">External/reference only</option>
           </select>
         </label>
         <label>Inventory reference<input name="inventory_reference" maxLength={512} disabled={!editable} placeholder="ERP/SKU/reference only" /></label>
@@ -367,7 +368,8 @@ export default async function CatalogPage() {
             <label>Inventory mode
               <select name="inventory_mode" defaultValue={product.inventory_mode} disabled={!editable}>
                 <option value="NONE">No inventory linkage</option>
-                <option value="REFERENCE_ONLY">External/reference only</option>
+                <option value="STOCKED">Stock managed by Inventory</option>
+                  <option value="REFERENCE_ONLY">External/reference only</option>
               </select>
             </label>
             <label>Inventory reference<input name="inventory_reference" defaultValue={product.inventory_reference ?? ''} disabled={!editable} /></label>
@@ -407,6 +409,7 @@ export default async function CatalogPage() {
                 <select name="inventory_mode" defaultValue="INHERIT" disabled={!editable}>
                   <option value="INHERIT">Inherit Product</option>
                   <option value="NONE">No inventory linkage</option>
+                  <option value="STOCKED">Stock managed by Inventory</option>
                   <option value="REFERENCE_ONLY">External/reference only</option>
                 </select>
               </label>
@@ -438,6 +441,7 @@ export default async function CatalogPage() {
                 <select name="inventory_mode" defaultValue={variant.inventory_mode} disabled={!editable}>
                   <option value="INHERIT">Inherit Product</option>
                   <option value="NONE">No inventory linkage</option>
+                  <option value="STOCKED">Stock managed by Inventory</option>
                   <option value="REFERENCE_ONLY">External/reference only</option>
                 </select>
               </label>
