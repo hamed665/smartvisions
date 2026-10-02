@@ -2,7 +2,13 @@ import Link from 'next/link';
 import {notFound} from 'next/navigation';
 
 import {cancelPaymentIntentV1,requestPaymentRefundV1} from '../actions';
-import {createOmanPaymentLinkV1,executeOmanRefundV1} from '../provider-actions';
+import {createPaymentLinkV1,executePaymentRefundV1} from '../provider-actions';
+import {
+  getPaymentProviderDefinition,
+  listPaymentProviders,
+  paymentProviderSupports,
+  paymentProviderSupportsCurrency,
+} from '@/lib/payments/providers/catalog';
 import {getCurrentOrganization} from '@/lib/supabase/org';
 
 export const dynamic='force-dynamic';
@@ -16,6 +22,9 @@ function money(value:unknown,currency:unknown){
 export default async function PaymentDetailPage({params}:Props){
   const {id}=await params;
   const {supabase,organizationId,role}=await getCurrentOrganization();
+  const providerCatalog=listPaymentProviders();
+  const providerCodes=providerCatalog.map(provider=>provider.code);
+  const registeredProviders=new Set(providerCodes);
   const {data:payment}=await supabase.from('payment_intents').select('*')
     .eq('organization_id',organizationId).eq('id',id).maybeSingle();
   if(!payment)notFound();
@@ -29,7 +38,7 @@ export default async function PaymentDetailPage({params}:Props){
     supabase.from('invoices').select('id,invoice_number,status,paid_total,credited_total,balance_due,total,currency')
       .eq('organization_id',organizationId).eq('id',payment.invoice_id).maybeSingle(),
     supabase.from('integration_connections').select('provider,status,enabled')
-      .eq('organization_id',organizationId).eq('channel','PAYMENT').in('provider',['TAP','THAWANI']),
+      .eq('organization_id',organizationId).eq('channel','PAYMENT').in('provider',providerCodes),
   ]);
 
   const roleText=String(role);
@@ -44,7 +53,13 @@ export default async function PaymentDetailPage({params}:Props){
   const configuredProviders=(providerRows??[])
     .filter(row=>row.enabled&&['READY','CONNECTED','DEGRADED'].includes(String(row.status)))
     .map(row=>String(row.provider))
+    .filter(provider=>registeredProviders.has(provider))
+    .filter(provider=>paymentProviderSupportsCurrency(provider,String(payment.currency)))
     .filter(provider=>!payment.provider||String(payment.provider)===provider);
+  const boundProvider=String(payment.provider??'');
+  const canExecuteProviderRefund=isManager
+    &&registeredProviders.has(boundProvider)
+    &&paymentProviderSupports(boundProvider,'REFUND');
 
   return <div>
     <div className="headerRow">
@@ -60,18 +75,21 @@ export default async function PaymentDetailPage({params}:Props){
     </section>
 
     <section className="panel"><h2>Settlement boundary</h2>
-      <p className="muted">Provider: {payment.provider??'not bound'}. Provider acceptance and links are not settlement. Tap settles only through verified hashstring webhook or authenticated readback; Thawani success is confirmed by server-to-server session readback before Payment Core moves money.</p>
+      <p className="muted">Provider: {payment.provider??'not bound'}. Provider acceptance and links are not settlement. Every registered adapter must feed verified webhook or authenticated readback evidence into the same Payment Core before money state changes.</p>
       {invoice?<p className="muted smallText">Invoice: total {money(invoice.total,invoice.currency)} · paid projection {money(invoice.paid_total,invoice.currency)} · credited {money(invoice.credited_total,invoice.currency)} · balance {money(invoice.balance_due,invoice.currency)}</p>:null}
       {payment.reconciliation_reason?<p><strong>Reconciliation required:</strong> {payment.reconciliation_reason}</p>:null}
     </section>
 
-    {canOperate&&unresolved&&!activeLink&&String(payment.currency)==='OMR'?<section className="panel"><h2>Create Oman Payment Link</h2>
-      {configuredProviders.length?<div className="settingsList">{configuredProviders.map(provider=><form action={createOmanPaymentLinkV1} className="settingsRow" key={provider}>
-        <input type="hidden" name="payment_intent_id" value={id}/>
-        <input type="hidden" name="provider" value={provider}/>
-        <div><strong>{provider==='TAP'?'Tap Payments':'Thawani Pay'}</strong><span className="muted smallText">Hosted checkout · settlement remains evidence-gated</span></div>
-        <button>Create link</button>
-      </form>)}</div>:<p className="muted">No Oman gateway is configured. <Link className="textLink" href="/payments/providers">Configure Tap or Thawani →</Link></p>}
+    {canOperate&&unresolved&&!activeLink?<section className="panel"><h2>Create Payment Link</h2>
+      {configuredProviders.length?<div className="settingsList">{configuredProviders.map(provider=>{
+        const definition=getPaymentProviderDefinition(provider);
+        return <form action={createPaymentLinkV1} className="settingsRow" key={provider}>
+          <input type="hidden" name="payment_intent_id" value={id}/>
+          <input type="hidden" name="provider" value={provider}/>
+          <div><strong>{definition.label}</strong><span className="muted smallText">Hosted checkout · {definition.currencies.join(', ')} · settlement remains evidence-gated</span></div>
+          <button>Create link</button>
+        </form>;
+      })}</div>:<p className="muted">No registered provider is configured for {String(payment.currency)}. <Link className="textLink" href="/payments/providers">Configure a compatible provider →</Link></p>}
     </section>:null}
 
     <section className="panel"><h2>Payment links</h2><div className="settingsList">
@@ -104,10 +122,10 @@ export default async function PaymentDetailPage({params}:Props){
         <span className="muted smallText">{money(refund.amount,refund.currency)} · {refund.reason}</span>
       </div><div>
         <span className="muted smallText">{refund.provider_reference??'provider outcome pending'}</span>
-        {isManager&&String(refund.status)==='REQUESTED'&&['TAP','THAWANI'].includes(String(payment.provider))?<form action={executeOmanRefundV1}>
+        {canExecuteProviderRefund&&String(refund.status)==='REQUESTED'?<form action={executePaymentRefundV1}>
           <input type="hidden" name="payment_intent_id" value={id}/>
           <input type="hidden" name="refund_id" value={refund.id}/>
-          <button>Execute with {payment.provider}</button>
+          <button>Execute with {getPaymentProviderDefinition(boundProvider).label}</button>
         </form>:null}
       </div></div>)}
       {!(refunds?.length)?<p className="muted">No Refund requests. Refund is money movement and does not create or replace a Credit Note.</p>:null}
