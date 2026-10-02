@@ -460,22 +460,17 @@ begin
     insert into public.knowledge_sources(
       organization_id,source_key,source_type,title,source_locator,
       scope_type,tenant_business_id,branch_id,sensitivity,status,
-      refresh_policy,refresh_interval_minutes,metadata,version,last_request_key,
-      created_by_user_id,updated_by_user_id
+      refresh_policy,refresh_interval_minutes,next_refresh_at,stale_after_at,
+      metadata,version,last_request_key,created_by_user_id,updated_by_user_id
     ) values (
       p_organization_id,v_key,v_type,btrim(p_title),
       nullif(btrim(coalesce(p_source_locator,'')),''),
       v_scope,p_tenant_business_id,p_branch_id,v_sensitivity,v_status,
       v_refresh,case when v_refresh='INTERVAL' then p_refresh_interval_minutes else null end,
+      case when v_refresh='INTERVAL' then statement_timestamp() else null end,
+      case when v_refresh='INTERVAL' then statement_timestamp() else null end,
       p_metadata,1,p_request_key,p_actor_user_id,p_actor_user_id
     ) returning * into v_result;
-    if v_refresh='INTERVAL' then
-      update public.knowledge_sources
-      set next_refresh_at=statement_timestamp(),stale_after_at=statement_timestamp(),
-          version=version+1,last_request_key=p_request_key,updated_by_user_id=p_actor_user_id
-      where id=v_result.id
-      returning * into v_result;
-    end if;
   else
     update public.knowledge_sources
     set source_type=v_type,title=btrim(p_title),
