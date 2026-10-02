@@ -469,6 +469,13 @@ begin
       v_refresh,case when v_refresh='INTERVAL' then p_refresh_interval_minutes else null end,
       p_metadata,1,p_request_key,p_actor_user_id,p_actor_user_id
     ) returning * into v_result;
+    if v_refresh='INTERVAL' then
+      update public.knowledge_sources
+      set next_refresh_at=statement_timestamp(),stale_after_at=statement_timestamp(),
+          version=version+1,last_request_key=p_request_key,updated_by_user_id=p_actor_user_id
+      where id=v_result.id
+      returning * into v_result;
+    end if;
   else
     update public.knowledge_sources
     set source_type=v_type,title=btrim(p_title),
@@ -476,6 +483,14 @@ begin
         scope_type=v_scope,tenant_business_id=p_tenant_business_id,branch_id=p_branch_id,
         sensitivity=v_sensitivity,status=v_status,refresh_policy=v_refresh,
         refresh_interval_minutes=case when v_refresh='INTERVAL' then p_refresh_interval_minutes else null end,
+        next_refresh_at=case
+          when v_refresh='INTERVAL' and last_refreshed_at is null then statement_timestamp()
+          when v_refresh='INTERVAL' then last_refreshed_at+make_interval(mins=>p_refresh_interval_minutes)
+          else null end,
+        stale_after_at=case
+          when v_refresh='INTERVAL' and last_refreshed_at is null then statement_timestamp()
+          when v_refresh='INTERVAL' then last_refreshed_at+make_interval(mins=>p_refresh_interval_minutes*2)
+          else null end,
         metadata=p_metadata,version=version+1,last_request_key=p_request_key,
         updated_by_user_id=p_actor_user_id
     where id=v_existing.id
@@ -630,6 +645,31 @@ begin
       jsonb_build_object(
         'requestHash',v_request_hash,'versionId',v_existing.id,'version',v_existing.version,
         'approvalStatus',v_existing.approval_status,'unchanged',true,'sourceId',v_source.id
+      ),p_request_key
+    );
+    return query select v_existing.id,v_existing.version,v_existing.approval_status,true;
+    return;
+  end if;
+
+  select * into v_existing
+  from public.knowledge_versions
+  where organization_id=p_organization_id
+    and knowledge_key=v_key
+    and content_hash=v_hash
+    and approval_status='PENDING_REVIEW'
+  order by version desc
+  limit 1;
+
+  if v_existing.id is not null then
+    insert into public.audit_logs(
+      organization_id,actor_type,actor_id,action,entity_type,entity_id,after_data,correlation_id
+    ) values (
+      p_organization_id,'USER',p_actor_user_id::text,'KNOWLEDGE_VERSION_STAGED',
+      'knowledge',v_key,
+      jsonb_build_object(
+        'requestHash',v_request_hash,'versionId',v_existing.id,'version',v_existing.version,
+        'approvalStatus',v_existing.approval_status,'unchanged',true,'sourceId',v_source.id,
+        'pendingDeduplicated',true
       ),p_request_key
     );
     return query select v_existing.id,v_existing.version,v_existing.approval_status,true;
