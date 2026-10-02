@@ -1,3 +1,28 @@
+## BRAIN-INDUSTRY-PACKS Production closeout — 2026-10-03
+
+- Work Package: `SECTION BUSINESS_INTELLIGENCE_AI -> BRAIN-INDUSTRY-PACKS`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled versioned Pack framework, built-in catalog and governed Business activation boundary. Future/external Custom Object materialization remains **DEFERRED_WITH_REASON** until a canonical Custom Object authority exists; the Pack layer does not create a parallel object runtime.
+- Implementation PR #415 final head `6ee0a67a2b1450860ee6edf07985b0b79dd49795` passed exact-head CI `37071851033`: lint, typecheck, tests, complete PostgreSQL 17 migration/smoke chain, Next build, Vinext and Cloudflare scheduled verification all succeeded.
+- PR #415 squash-merged to canonical `main@3d62c5de926f1f66ca278ca0182a452be86b2d48`. Exact-main CI `37072203881` succeeded on that exact merge SHA. Cloudflare Production Deploy `37072497317` also succeeded on the same SHA.
+- Exact merged migration source is `supabase/migrations/0181_industry_packs.sql`, blob `b24f5e6018e0559f72a4eb8de98e86b934590553`. Supabase Production records `0181_industry_packs@20261002222659`.
+- Production contains exactly 9 active built-in Pack definitions and 9 immutable V1 manifests: Dental/Medical, Pet Clinic, Automotive, Beauty/Wellness, Restaurant/Cafe, Home Services, Real Estate, Education and Retail/Professional Services.
+- Every built-in Pack reports `runtimeReady=true` against the current canonical runtime. Readiness validates supported CRM Custom Field entity/data types, Pipeline shape, currently AVAILABLE Automation triggers and allowed Business Twin default keys before activation.
+- Future/external Custom Object blueprints remain explicit `DEPENDENCY_PENDING` evidence rather than silently creating a second object store. Eight current packs expose one pending Custom Object dependency; Restaurant/Cafe exposes none.
+- Pack activation is Business-scoped, OWNER/ADMIN governed, service-role executed, audit/idempotency protected and optimistic-versioned. Direct authenticated activation/deactivation is denied.
+- Activation remains declarative: it does **not** silently create CRM Custom Fields, Pipelines, Automations, Catalog items, Bookings, Payments, messages or Deals. Those existing modules remain the only operational authorities and any future materialization must cross their governed contracts.
+- Runtime catalog/version rows are immutable during normal runtime and migration-upgradable only through the explicit migration guard. Catalog/version/activation guards are enabled.
+- Business Twin V2 composes bounded Pack references only, not full Pack operational state. Read-only Production compilation succeeds at `schemaVersion=2` with `industryPackReferences=[]` because Production still has zero canonical tenant Businesses and therefore zero legitimate Pack activations.
+- Production is side-effect clean: `industry_packs=9`, `industry_pack_versions=9`, `industry_pack_activations=0`, `tenant_businesses=0`, `brands=0`, `branches=0`, `business_twin_versions=0`. No demo Business, activation, operational Pack materialization or Twin snapshot was manufactured.
+- Runtime ACL verification confirms service-role Pack activation and Twin V2 publish are executable; authenticated callers cannot execute either trusted mutation. Authenticated Pack-context resolution remains available under RLS/member scope.
+- Fresh routed Production smoke verifies `/industry-packs` is deployed and remains session-protected: unauthenticated request returns `307 -> /login`.
+- Fresh advisor baseline remains unchanged in tracked security/performance debt: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`. Generic `unused_index` is currently `419` INFO findings, including fresh zero-row indexes and not treated as a security/authority regression.
+
+**Fresh continuation cursor:** `SECTION BUSINESS_INTELLIGENCE_AI -> KNOWLEDGE-V2`.
+
+Before mutation, fresh-audit the existing Knowledge authority, ingestion/publish/versioning path, current `knowledge_versions` usage, website/file/FAQ/catalog ingestion, provenance, approval, freshness, scoped retrieval and stale/conflicting-source behavior. KNOWLEDGE-V2 must extend the canonical Knowledge path rather than create a second Knowledge Base, vector authority, ingestion queue or approval model.
+
+---
+
 # Smart Visions AI Business OS 2027 — Master Program Sections
 
 ## BRAIN-BUSINESS-TWIN Production closeout — 2026-10-03
@@ -10,7 +35,7 @@
 - Business Twin is a compiled/versioned read model over existing canonical authorities only. It does **not** create a second Catalog, pricing store, Booking engine, Payment ledger, Knowledge Base, tenant hierarchy, CRM or secret store.
 - The compiler composes Organization/Brand/Business/Branch hierarchy, staff/scope assignments, locale/market settings, Services/prices, Catalog products/variants/prices, Service booking profiles, Payment-provider readiness and active Knowledge version references.
 - Business-hours, customer/refund/warranty policies, booking/payment/delivery rules, brand tone, language preferences, escalation rules and operational constraints reuse the existing `scope_configuration_overrides` authority under the guarded `business_twin` namespace. Direct namespace mutation is blocked; OWNER/ADMIN provenance and optimistic version checks are enforced through governed service-role RPCs.
-- Published Twin versions are immutable and source-hash deduplicated. The Organization row lock serializes publication per Organization; unchanged canonical truth reuses the latest version rather than manufacturing a new snapshot.
+- Published Twin versions are immutable and source-hash deduplicated. A per-Organization advisory transaction lock serializes publication; unchanged canonical truth reuses the latest version rather than manufacturing a new snapshot.
 - Stored provider secrets and Knowledge payload bodies are intentionally excluded from Twin snapshots. Payment/provider truth and Knowledge content remain owned by their canonical modules.
 - Production verification is side-effect clean: `business_twin_versions=0`, Business-Twin scoped configuration rows `0`, Brands `0`, Businesses `0`, Branches `0`, Catalog Products `0`. No synthetic Business, Branch, Catalog item, policy, Twin snapshot, Payment or Knowledge record was created.
 - Read-only Production compilation succeeds against real Smart Visions canonical state: 1 Organization/OWNER, 8 Services, 6 locale profiles, 2 active Knowledge references, and currently 0 canonical Businesses/Branches/Products. This confirms composition without seeding missing business hierarchy.
@@ -1474,6 +1499,8 @@ Versioned business truth:
 Each pack may define onboarding, custom objects, pipelines, workflows, metrics, AI evaluation scenarios and templates.
 
 ## KNOWLEDGE-V2
+
+**Next Work Package.**
 
 - website ingestion;
 - PDFs;
