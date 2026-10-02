@@ -1305,8 +1305,8 @@ begin
 
   insert into public.order_return_lines(organization_id,return_id,order_id,order_line_item_id,quantity,created_at)
   select p_organization_id,p_return_id,p_order_id,
-         nullif(x->>'orderLineId','')::uuid,(x->>'quantity')::numeric,v_now
-  from jsonb_array_elements(p_lines) x;
+         nullif(j.value->>'orderLineId','')::uuid,(j.value->>'quantity')::numeric,v_now
+  from jsonb_array_elements(p_lines) as j(value);
 
   v_event:=private.order_engine_event(
     p_organization_id,p_order_id,'RETURN_REQUESTED',o.status,o.status,'USER',p_actor_user_id,
