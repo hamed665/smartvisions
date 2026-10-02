@@ -359,6 +359,10 @@ begin
     raise exception 'Business Twin request key is invalid';
   end if;
 
+  v_hash:=md5(jsonb_build_object(
+    'configurationId',p_configuration_id,'expectedVersion',p_expected_version
+  )::text);
+
   select * into v_existing
   from public.scope_configuration_overrides
   where organization_id=p_organization_id
@@ -375,7 +379,10 @@ begin
       and a.entity_type='business_twin_configuration'
       and a.correlation_id=p_request_key
     order by a.created_at desc,a.id desc limit 1;
-    if v_audit_hash is not null then return true; end if;
+    if v_audit_hash is not null then
+      if v_audit_hash<>v_hash then raise exception 'Business Twin request key conflict'; end if;
+      return true;
+    end if;
     raise exception 'Business Twin configuration not found';
   end if;
 
@@ -387,9 +394,6 @@ begin
     v_existing.scope_type,v_existing.brand_id,v_existing.tenant_business_id,v_existing.branch_id
   );
   v_entity_id:=v_scope_ref||':'||v_existing.config_key;
-  v_hash:=md5(jsonb_build_object(
-    'configurationId',p_configuration_id,'expectedVersion',p_expected_version
-  )::text);
 
   select a.after_data->>'requestHash' into v_audit_hash
   from public.audit_logs a
