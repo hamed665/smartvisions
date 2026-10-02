@@ -4,6 +4,9 @@ import { NextResponse, type NextRequest } from 'next/server';
 const SESSION_BYPASS_PATHS = new Set([
   '/api/email/webhook',
   '/api/whatsapp/webhook',
+  '/api/payments/oman/tap/webhook',
+  '/api/payments/oman/tap/return',
+  '/api/payments/oman/thawani/reconcile',
   '/api/ai/process-inbound',
   '/api/outreach/approved-send',
   '/api/operations/channel-guard',
