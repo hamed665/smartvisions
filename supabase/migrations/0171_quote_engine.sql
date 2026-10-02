@@ -1,8 +1,8 @@
-\set ON_ERROR_STOP on
-
 -- QUOTE-ENGINE: canonical commercial Quote aggregate over existing CRM/Catalog authorities.
 -- This migration intentionally does NOT create Order, Invoice, Payment, inventory or generic Document truth.
 
+create unique index if not exists businesses_org_id_uidx
+  on public.businesses(organization_id,id);
 create unique index if not exists service_prices_org_id_uidx
   on public.service_prices(organization_id,id);
 create unique index if not exists catalog_product_prices_org_id_uidx
@@ -304,8 +304,9 @@ grant select,insert,update on table
   public.quotes,public.quote_version_reviews
 to service_role;
 grant select,insert on table
-  public.quote_versions,public.quote_line_items,public.quote_lifecycle_events
+  public.quote_versions,public.quote_line_items
 to service_role;
+grant select,insert,update on table public.quote_lifecycle_events to service_role;
 
 create or replace function public.guard_quote_engine_mutation()
 returns trigger
