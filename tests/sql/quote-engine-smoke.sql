@@ -2,11 +2,11 @@
 
 -- QUOTE-ENGINE disposable controlled acceptance. Reuses CATALOG-V2 CI fixtures only.
 
-insert into public.businesses(id,organization_id,name,country_code,city,category)
+insert into public.businesses(id,organization_id,name,country_code)
 values (
   '00000000-0000-0000-0000-00000000d801',
   '00000000-0000-0000-0000-00000000c701',
-  'QUOTE Buyer LLC','OM','Muscat','CI'
+  'QUOTE Buyer LLC','OM'
 )
 on conflict (id) do update set name=excluded.name;
 
