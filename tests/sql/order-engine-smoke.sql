@@ -285,6 +285,71 @@ begin
 end;
 $direct_order_and_fulfillment$;
 
+do $partial_return_then_continue_fulfillment$
+declare
+  oid uuid:='00000000-0000-0000-0000-00000000d835';
+  rid uuid:='00000000-0000-0000-0000-00000000d845';
+  line_id uuid;
+  o public.orders%rowtype;
+begin
+  perform public.create_direct_order_v1(
+    '00000000-0000-0000-0000-00000000c701',
+    '00000000-0000-0000-0000-00000000c711',
+    oid,'00000000-0000-0000-0000-00000000c731',
+    null,null,'00000000-0000-0000-0000-00000000d801',null,null,
+    '00000000-0000-0000-0000-00000000c711',
+    'OM','OMR',null,'Partial return continuation fixture','{"confirmed":true}'::jsonb,
+    jsonb_build_array(jsonb_build_object(
+      'subjectKind','VARIANT','variantId','00000000-0000-0000-0000-00000000c781',
+      'quantity',2,'discountBps',0,'taxBps',0
+    )),
+    'order-engine-partial-return-create-1'
+  );
+
+  select * into o from public.orders where id=oid;
+  select id into line_id from public.order_line_items where order_id=oid and line_no=1;
+
+  if public.record_order_fulfillment_v1(
+    o.organization_id,'00000000-0000-0000-0000-00000000c711',oid,o.version,
+    jsonb_build_array(jsonb_build_object('orderLineId',line_id,'quantity',1)),
+    '{"proof":"first-half"}'::jsonb,'order-engine-partial-return-fulfill-1'
+  )<>'PROCESSING' then raise exception 'ORDER-ENGINE partial-return fixture did not enter PROCESSING'; end if;
+
+  perform public.request_order_return_v1(
+    o.organization_id,'00000000-0000-0000-0000-00000000c711',
+    rid,oid,'Return first fulfilled unit',
+    jsonb_build_array(jsonb_build_object('orderLineId',line_id,'quantity',1)),
+    '{"request":"partial-return"}'::jsonb,'order-engine-partial-return-request-1'
+  );
+  perform public.decide_order_return_v1(
+    o.organization_id,'00000000-0000-0000-0000-00000000c711',
+    rid,'APPROVE','Approved continuation scenario',
+    '{"decision":"approved"}'::jsonb,'order-engine-partial-return-approve-1'
+  );
+  if public.receive_order_return_v1(
+    o.organization_id,'00000000-0000-0000-0000-00000000c711',
+    rid,'{"receipt":"first-unit-returned"}'::jsonb,'order-engine-partial-return-receive-1'
+  )<>'PARTIALLY_RETURNED' then
+    raise exception 'ORDER-ENGINE partial return did not preserve open Order state';
+  end if;
+
+  select * into o from public.orders where id=oid;
+  if public.record_order_fulfillment_v1(
+    o.organization_id,'00000000-0000-0000-0000-00000000c711',oid,o.version,
+    jsonb_build_array(jsonb_build_object('orderLineId',line_id,'quantity',1)),
+    '{"proof":"second-half"}'::jsonb,'order-engine-partial-return-fulfill-2'
+  )<>'PARTIALLY_RETURNED' then
+    raise exception 'ORDER-ENGINE could not continue fulfillment after partial return';
+  end if;
+
+  select * into o from public.orders where id=oid;
+  if o.status<>'PARTIALLY_RETURNED' or o.fulfillment_status<>'PARTIALLY_RETURNED'
+     or (select fulfilled_quantity from public.order_line_fulfillment where order_line_item_id=line_id)<>2
+     or (select returned_quantity from public.order_line_fulfillment where order_line_item_id=line_id)<>1
+  then raise exception 'ORDER-ENGINE partial-return continuation totals/state are wrong'; end if;
+end;
+$partial_return_then_continue_fulfillment$;
+
 do $direct_discount_rejection$
 begin
   begin
