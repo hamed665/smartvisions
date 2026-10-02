@@ -65,7 +65,7 @@ describe('PAYMENT-OMAN contract',()=>{
     expect(shouldBypassSession('/payments/00000000-0000-0000-0000-000000000000')).toBe(false);
     expect(runtime).toContain("/api/payments/oman/tap/return?payment_intent_id=");
     expect(runtime).toContain("/api/payments/oman/thawani/reconcile?payment_intent_id=");
-    expect(tapReturn).toContain('reconcileTapPayment');
+    expect(tapReturn).toContain("provider:'TAP'");
     expect(tapReturn).toContain('Payment status pending');
     expect(thawaniRoute).toContain('Payment status pending');
     expect(tapReturn).not.toContain("'/payments/");
@@ -73,7 +73,7 @@ describe('PAYMENT-OMAN contract',()=>{
   });
 
   it('uses authenticated provider readback for Thawani instead of trusting an unsigned callback',()=>{
-    expect(thawaniRoute).toContain('reconcileThawaniPayment');
+    expect(thawaniRoute).toContain("provider:'THAWANI'");
     expect(runtime).toContain("p_authenticity:'EXPLICIT_RECONCILIATION'");
     expect(runtime).toContain('retrieveThawaniSession');
     expect(thawaniRoute).not.toContain("VERIFIED_WEBHOOK");
@@ -89,10 +89,10 @@ describe('PAYMENT-OMAN contract',()=>{
   });
 
   it('exposes governed operator surfaces and controlled PostgreSQL acceptance',()=>{
-    expect(providerActions).toContain('configureOmanPaymentProviderV1');
-    expect(providerActions).toContain('createOmanPaymentLinkV1');
-    expect(providerActions).toContain('executeOmanRefundV1');
-    expect(paymentDetail).toContain('Create Oman Payment Link');
+    expect(providerActions).toContain('configurePaymentProviderV1');
+    expect(providerActions).toContain('createPaymentLinkV1');
+    expect(providerActions).toContain('executePaymentRefundV1');
+    expect(paymentDetail).toContain('Create Payment Link');
     expect(paymentDetail).toContain('settlement remains evidence-gated');
     expect(ci).toContain('payment-oman-smoke.sql');
   });

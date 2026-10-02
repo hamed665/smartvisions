@@ -1,7 +1,7 @@
 import {NextResponse} from 'next/server';
 
 import {createSupabaseServiceClient} from '@/lib/supabase/service';
-import {reconcileThawaniPayment} from '@/lib/payments/oman/runtime';
+import {reconcilePaymentWithProvider} from '@/lib/payments/providers/runtime';
 
 type JsonRecord=Record<string,unknown>;
 function child(value:unknown):JsonRecord{return value&&typeof value==='object'&&!Array.isArray(value)?value as JsonRecord:{};}
@@ -40,7 +40,7 @@ export async function GET(request:Request){
   if(!paymentIntentId)return NextResponse.json({error:'payment_intent_id required'},{status:400});
   try{
     const target=await byIntent(paymentIntentId);
-    const result=await reconcileThawaniPayment(target);
+    const result=await reconcilePaymentWithProvider({...target,provider:'THAWANI'});
     return customerResponse(result.settled);
   }catch{
     return customerResponse(false);
@@ -56,7 +56,7 @@ export async function POST(request:Request){
 
   try{
     const target=await bySession(sessionId);
-    const result=await reconcileThawaniPayment({...target,sessionId});
+    const result=await reconcilePaymentWithProvider({...target,provider:'THAWANI',providerReference:sessionId});
     return NextResponse.json({accepted:true,reconciled:true,settled:result.settled});
   }catch{
     return NextResponse.json({accepted:true,reconciled:false,reason:'SERVER_READBACK_REQUIRED_OR_FAILED'},{status:202});

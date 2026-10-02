@@ -1,7 +1,7 @@
 import {NextResponse} from 'next/server';
 
 import {createSupabaseServiceClient} from '@/lib/supabase/service';
-import {reconcileTapPayment} from '@/lib/payments/oman/runtime';
+import {reconcilePaymentWithProvider} from '@/lib/payments/providers/runtime';
 
 async function byIntent(paymentIntentId:string){
   const service=createSupabaseServiceClient();
@@ -28,7 +28,7 @@ export async function GET(request:Request){
   if(!paymentIntentId)return NextResponse.json({error:'payment_intent_id required'},{status:400});
   try{
     const target=await byIntent(paymentIntentId);
-    const result=await reconcileTapPayment(target);
+    const result=await reconcilePaymentWithProvider({...target,provider:'TAP'});
     return customerResponse(result.settled);
   }catch{
     return customerResponse(false);

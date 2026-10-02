@@ -116,9 +116,9 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
     createKnowledge:'knowledge.publish', createPromptVersion:'prompt.publish',
   },
   'app/payments/provider-actions.ts': {
-    configureOmanPaymentProviderV1:'SPECIALIZED:PAYMENT_OMAN',
-    createOmanPaymentLinkV1:'SPECIALIZED:PAYMENT_OMAN',
-    executeOmanRefundV1:'SPECIALIZED:PAYMENT_OMAN',
+    configurePaymentProviderV1:'SPECIALIZED:PAYMENT_EXTENSION',
+    createPaymentLinkV1:'SPECIALIZED:PAYMENT_EXTENSION',
+    executePaymentRefundV1:'SPECIALIZED:PAYMENT_EXTENSION',
   },
   'app/preview-actions.ts': {
     generateControlledPreviewPilot:'preview.generate_pilot', approvePreview:'preview.approve', markPreviewSent:'preview.mark_sent', markControlledPreviewShared:'preview.mark_internal_shared',
