@@ -347,6 +347,10 @@ create unique index quote_engine_audit_request_uidx
   on public.audit_logs(organization_id,action,entity_type,entity_id,correlation_id)
   where action like 'QUOTE_ENGINE_%' and correlation_id is not null;
 
+create unique index quote_automation_projection_uidx
+  on public.audit_logs(organization_id,action,correlation_id)
+  where action='QUOTE_AUTOMATION_EVENT_PROJECTED' and correlation_id is not null;
+
 create or replace function private.quote_engine_actor_role(
   p_organization_id uuid,
   p_actor_user_id uuid
@@ -1505,7 +1509,6 @@ begin
           and a.correlation_id='quote-lifecycle:'||qle.id::text
       )
     order by qle.occurred_at,qle.id
-    for update skip locked
     limit p_limit
   loop
     v_source_key:='quote-lifecycle:'||e.id::text;
