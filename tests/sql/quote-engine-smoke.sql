@@ -211,6 +211,38 @@ begin
     where quote_id=qid and transition='ACCEPTED'
   ) then raise exception 'QUOTE-ENGINE acceptance event evidence missing'; end if;
 
+  -- Network retries after later lifecycle changes must return the original result, not fail on new state.
+  if public.submit_quote_review_v1(
+    '00000000-0000-0000-0000-00000000c701',
+    '00000000-0000-0000-0000-00000000c711',
+    qid,2,'quote-engine-review-submit-1'
+  )<>'REVIEW' then raise exception 'QUOTE-ENGINE review retry is not idempotent'; end if;
+
+  if public.decide_quote_review_v1(
+    '00000000-0000-0000-0000-00000000c701',
+    '00000000-0000-0000-0000-00000000c711',
+    qid,'APPROVE','CI owner approval','quote-engine-review-approve-1'
+  )<>'APPROVED' then raise exception 'QUOTE-ENGINE approval retry is not idempotent'; end if;
+
+  if public.mark_quote_sent_v1(
+    '00000000-0000-0000-0000-00000000c701',
+    '00000000-0000-0000-0000-00000000c711',
+    qid,q.version,'quote-engine-send-1'
+  )<>'SENT' then raise exception 'QUOTE-ENGINE send retry is not idempotent'; end if;
+
+  if public.record_quote_viewed_v1(
+    '00000000-0000-0000-0000-00000000c701',qid,
+    '{"portalSession":"ci-verified"}'::jsonb,'quote-engine-viewed-1'
+  )<>'VIEWED' then raise exception 'QUOTE-ENGINE viewed retry is not idempotent'; end if;
+
+  if public.record_quote_customer_decision_v1(
+    '00000000-0000-0000-0000-00000000c701',
+    '00000000-0000-0000-0000-00000000c711',
+    qid,'ACCEPT','MANUAL_CONFIRMED',
+    '{"confirmation":"signed acceptance captured in CI"}'::jsonb,
+    'quote-engine-accepted-1'
+  )<>'ACCEPTED' then raise exception 'QUOTE-ENGINE decision retry is not idempotent'; end if;
+
   projected:=public.reconcile_quote_automation_events(100);
   if coalesce((projected->>'processed')::integer,0)<1 then
     raise exception 'QUOTE-ENGINE acceptance did not project to Automation Runtime';
@@ -222,6 +254,13 @@ begin
     '{"verified":true,"note":"No Order truth created by QUOTE-ENGINE"}'::jsonb,
     'quote-engine-convert-1'
   )<>'CONVERTED' then raise exception 'QUOTE-ENGINE conversion evidence failed'; end if;
+
+  if public.record_quote_conversion_v1(
+    '00000000-0000-0000-0000-00000000c701',qid,
+    'EXTERNAL_ORDER','ci-order-evidence-1',
+    '{"verified":true,"note":"No Order truth created by QUOTE-ENGINE"}'::jsonb,
+    'quote-engine-convert-1'
+  )<>'CONVERTED' then raise exception 'QUOTE-ENGINE conversion retry is not idempotent'; end if;
 
   select * into q from public.quotes where id=qid;
   if q.status<>'CONVERTED'
@@ -269,6 +308,20 @@ begin
 
   select * into r from public.quote_version_reviews where quote_id=qid and version_no=1;
   if r.status<>'NOT_REQUIRED' then raise exception 'QUOTE-ENGINE clean canonical price unexpectedly required approval'; end if;
+
+  if public.create_quote_version_v1(
+    '00000000-0000-0000-0000-00000000c701',
+    '00000000-0000-0000-0000-00000000c711',
+    qid,1,'OM','OMR',
+    (select valid_until from public.quote_versions where quote_id=qid and version_no=1),
+    null,null,
+    jsonb_build_array(jsonb_build_object(
+      'subjectKind','VARIANT',
+      'variantId','00000000-0000-0000-0000-00000000c781',
+      'quantity',3,'discountBps',0,'taxBps',0
+    )),
+    'quote-engine-create-variant-1:v1'
+  )<>1 then raise exception 'QUOTE-ENGINE version retry is not idempotent'; end if;
 
   begin
     perform public.create_quote_v1(
