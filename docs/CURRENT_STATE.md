@@ -1,5 +1,27 @@
 # Smart Visions Growth OS — Current Production State
 
+## ORDER-ENGINE Production closeout — 2026-10-02
+
+- Work Package: `SECTION COMMERCE_PAYMENTS -> ORDER-ENGINE`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled canonical Order scope.
+- Implementation PR #398 final head `4e2f3007c944cc3fb40b791359cc9558cffe30d5` passed exact-head CI `37009383921` across lint, typecheck, unit tests, the complete PostgreSQL 17 migration chain plus ORDER-ENGINE smoke, Next build, Vinext and Cloudflare scheduled verification.
+- PR #398 squash-merged to canonical `main@4c5d5b26d33b460e4d19c6e13551a65eda4d98dc`. Exact-main push CI `37009775188` succeeded on that exact merge SHA. Cloudflare Production Deploy `37010061631` succeeded on the same implementation merge SHA.
+- Production migration `0173_order_engine@20261002130127` is live; merged migration blob SHA is `9123adb5a748a0b5440039ccb81ebe69cfff3236`.
+- Canonical Order authority is now `public.orders` with immutable `order_line_items`, bounded `order_line_fulfillment`, governed `order_returns` / `order_return_lines`, and durable `order_lifecycle_events`. Accepted Quote conversion consumes canonical Quote evidence atomically; permitted direct Orders snapshot canonical Catalog pricing rather than creating a second pricing truth.
+- ORDER-ENGINE supports processing, fulfillment evidence, cancellation before fulfillment, governed request/approve/reject/receive return lifecycle, Customer 360 V4 composition, and canonical Automation triggers `ORDER_CREATED` / `ORDER_STATUS_CHANGED`. Invoice, Payment/refund execution, live stock quantity, reservation, warehouse and stock-movement truth were not introduced early.
+- All six Order tables have RLS enabled. `anon` has no Order read; `authenticated` has scoped SELECT and no direct INSERT/UPDATE/DELETE; trusted mutation/reconciliation RPCs are service-role-only. `get_crm_customer360_v4` remains the bounded authenticated read composition.
+- Production verification remained side-effect clean: `orders=0`, `order_line_items=0`, `order_line_fulfillment=0`, `order_returns=0`, `order_return_lines=0`, `order_lifecycle_events=0`; upstream `quotes=0`, `catalog_products=0`, `catalog_product_variants=0`, `catalog_product_prices=0`. No synthetic Production Order, return, customer, Quote, Product, provider or payment evidence was created.
+- Post-0173 advisors exposed exactly three new composite-FK indexing findings, with no new Order security regression. Hardening PR #399 final head `4935cbcfad527f2084123faa722ab1ada9ba9cb0` passed exact-head CI `37010634724`, squash-merged to `main@ac65d781251f8be112a351aa3ca73cd110314b68`, and exact-main CI `37011043404` plus Cloudflare Production Deploy `37011371669` succeeded.
+- Production hardening migration `0174_order_engine_fk_index_hardening@20261002131210` is live; merged migration blob SHA is `b799d423d2db191f10c22a63ec116d09774ae683`. All three covering indexes are live and the performance advisor `unindexed_foreign_keys` count returned from 17 to the pre-Order baseline 14. Security remains the existing baseline: RLS-enabled/no-policy INFO 15 plus leaked-password-protection WARN 1; auth RLS initPlan remains 16 and multiple permissive policies remain 6. Fresh zero-row Order indexes may appear as unused-index INFO until real traffic exists.
+- Existing WhatsApp external blockers are unchanged: first real consented tenant Meta ↔ Smart Core ↔ Chatwoot E2E and real same-number Business App Coexistence remain external-evidence gated.
+- Managerial recalibration after this verified slice: Phase 8 Billing & Commercial Platform is approximately **58% complete / 42% remaining**; overall program is approximately **66% complete / 34% remaining**. These are planning estimates, not canonical runtime state.
+
+**Fresh continuation cursor:** `SECTION COMMERCE_PAYMENTS -> INVENTORY-FULFILLMENT`.
+
+Before mutation, fresh-audit current Product/Variant/Branch availability, Order fulfillment evidence, Field Service material usage, any existing inventory/reference tables, Booking resources, Invoice/Payment boundaries, open PRs and Production schema. INVENTORY-FULFILLMENT may introduce the canonical stock/reservation/warehouse/movement/fulfillment truth where required, but must not create a second Catalog, Order, Booking, Field Service or Payment authority.
+
+---
+
 ## QUOTE-ENGINE Production closeout — 2026-10-02
 
 - Work Package: `SECTION COMMERCE_PAYMENTS -> QUOTE-ENGINE`.

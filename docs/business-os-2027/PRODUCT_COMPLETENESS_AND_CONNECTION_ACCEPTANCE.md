@@ -1,5 +1,24 @@
 # Product completeness and customer connection acceptance — Business OS 2027
 
+## ORDER-ENGINE Production closeout — 2026-10-02
+
+- Work Package: `SECTION COMMERCE_PAYMENTS -> ORDER-ENGINE`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled canonical Order scope.
+- Implementation PR #398 final head `4e2f3007c944cc3fb40b791359cc9558cffe30d5` passed exact-head CI `37009383921`; canonical merge `main@4c5d5b26d33b460e4d19c6e13551a65eda4d98dc` passed exact-main CI `37009775188` and Cloudflare Production Deploy `37010061631`.
+- Production migration `0173_order_engine@20261002130127` is live from merged blob `9123adb5a748a0b5440039ccb81ebe69cfff3236`.
+- Acceptance verified: accepted Quote -> Order conversion, permitted direct canonical-price Order creation, immutable commercial line snapshots, processing/fulfillment evidence, pre-fulfillment cancellation, governed return request/decision/receipt, linked Customer 360 V4, and AVAILABLE `ORDER_CREATED` / `ORDER_STATUS_CHANGED` Automation triggers.
+- Authority boundaries verified: Catalog/Service/Product pricing remain canonical upstream truth; Booking/Field Service remain their own operational authorities; ORDER-ENGINE introduced no Invoice, Payment/refund, stock quantity, reservation, warehouse or stock-movement authority.
+- Security verified: all six Order tables have RLS; authenticated users have scoped SELECT only and no direct DML; trusted Order mutation/reconciliation RPCs are service-role-only; no second IAM or approval/runtime plane was created.
+- Production acceptance remained side-effect clean with all six Order tables at 0 rows. No synthetic Production Order, return, customer, Product, Quote, payment or provider fixture was used.
+- Advisor follow-up found exactly three new composite-FK index gaps. Hardening PR #399 final head `4935cbcfad527f2084123faa722ab1ada9ba9cb0` passed exact-head CI `37010634724`, merged as `main@ac65d781251f8be112a351aa3ca73cd110314b68`, and passed exact-main CI `37011043404` plus Cloudflare Production Deploy `37011371669`.
+- Production hardening migration `0174_order_engine_fk_index_hardening@20261002131210` is live from merged blob `b799d423d2db191f10c22a63ec116d09774ae683`. The Order-specific FK findings are closed and `unindexed_foreign_keys` returned to baseline 14 with no new Order security finding.
+- Existing WhatsApp real-tenant E2E and same-number Coexistence acceptance remain external-evidence gated and unchanged.
+- Managerial estimate after ORDER-ENGINE: Phase 8 approximately **58% complete / 42% remaining**; overall program approximately **66% complete / 34% remaining**. Planning estimate only.
+
+**Fresh continuation cursor:** `SECTION COMMERCE_PAYMENTS -> INVENTORY-FULFILLMENT`.
+
+---
+
 ## QUOTE-ENGINE Production closeout — 2026-10-02
 
 - Work Package: `SECTION COMMERCE_PAYMENTS -> QUOTE-ENGINE`.
@@ -964,8 +983,8 @@ The following baseline inventory preserves every existing semantic Work Package,
 
 - `CATALOG-V2` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** (`0170_catalog_v2@20261002083318`)
 - `QUOTE-ENGINE` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** (`0171_quote_engine@20261002101923`, hardening `0172_quote_engine_postdeploy_hardening@20261002102818`)
-- `ORDER-ENGINE` — **NEXT**
-- `INVENTORY-FULFILLMENT`
+- `ORDER-ENGINE` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** (`0173_order_engine@20261002130127`, hardening `0174_order_engine_fk_index_hardening@20261002131210`)
+- `INVENTORY-FULFILLMENT` — **NEXT**
 - `INVOICE-ENGINE`
 - `PAYMENT-CORE`
 - `PAYMENT-OMAN`
