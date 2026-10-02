@@ -1,5 +1,31 @@
 # Smart Visions Growth OS — Current Production State
 
+## QUOTE-ENGINE Production closeout — 2026-10-02
+
+- Work Package: `SECTION COMMERCE_PAYMENTS -> QUOTE-ENGINE`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled canonical Quote scope.
+- Implementation PR #395 final head `f1a081a9337319e85e122bd9aff21e07c33d9673` passed exact-head CI `36993458750` across lint, typecheck, unit tests, the complete PostgreSQL 17 migration chain plus QUOTE-ENGINE smoke, Next build, Vinext and Cloudflare scheduled verification.
+- PR #395 squash-merged to canonical `main@9eda74e080d00c2c691430709635d8719f7f885b`. Exact-main push CI `36994472061` succeeded on that exact merge SHA. Cloudflare Production Deploy `36994762553` succeeded on the same implementation merge SHA.
+- Production migration `0171_quote_engine@20261002101923` is live; merged migration blob SHA is `688e38ed30df6706e1c67021e909638538b00c8c`.
+- Post-deploy advisor review found three physically duplicate indexes only. Hardening PR #396 final head `adb843bd9aa2ab2fe8197788b3c43b40dcbdda9b` passed exact-head CI `36994998689`, squash-merged to `main@3eec7169ff51c70a737b358c54a1a2612c6257d8`, and exact-main CI `36995343955` plus Cloudflare Production Deploy `36995601281` succeeded.
+- Production hardening migration `0172_quote_engine_postdeploy_hardening@20261002102818` is live; merged migration blob SHA is `07a2ee52a75376cddcdb730fcd81e69c54859803`. The three redundant indexes are gone while the existing canonical equivalents remain.
+- Canonical Quote authority is `public.quotes` with immutable `quote_versions` and `quote_line_items`, governed `quote_version_reviews`, and durable `quote_lifecycle_events`. Service/Product/Variant identity and pricing remain owned by the existing Catalog authorities; QUOTE-ENGINE snapshots those prices and does not become a second Catalog or pricing truth.
+- Quote lifecycle is governed and idempotent across Draft, Review, Sent, Viewed, Accepted, Rejected, Expired and evidence-only Conversion. Approval policy remains owned by `approval_rules`; `QUOTE_ACCEPTED` is now AVAILABLE in the canonical Automation Trigger Catalog with expected subject `QUOTE`.
+- Customer-facing Quote document snapshots exclude internal notes, approval metadata and internal price IDs. Business Web exposes `/quotes`, version/review/customer-decision controls and a print/Save-as-PDF document surface without creating a second Document authority.
+- Customer 360 V3 composes explicitly linked Quote truth. No Order, Invoice, Payment, inventory/stock, generic Document store, second approval engine, second scheduler or parallel event bus was introduced.
+- Production verification remained side-effect clean: `quotes=0`, `quote_versions=0`, `quote_line_items=0`, `quote_version_reviews=0`, `quote_lifecycle_events=0`. No synthetic Production Business, Person, Deal, Quote, customer decision, provider event or Order was created.
+- All five Quote tables have RLS enabled; `anon` has no SELECT, `authenticated` has scoped SELECT only and no INSERT, trusted mutation RPCs are service-role-only, and Customer360 V3 is the bounded authenticated read composition.
+- Post-0172 advisors show no QUOTE-ENGINE-specific new security, unindexed-FK, multiple-permissive-policy or duplicate-index regression. Remaining advisor findings pre-date this slice; unused-index INFO on zero-row Quote tables is expected until real traffic exists.
+- Existing WhatsApp external blockers are unchanged.
+- Managerial recalibration after this verified slice: Phase 8 Billing & Commercial Platform is approximately **50% complete / 50% remaining**; overall program is approximately **65% complete / 35% remaining**. These are planning estimates, not canonical runtime state.
+
+**Fresh continuation cursor:** `SECTION COMMERCE_PAYMENTS -> ORDER-ENGINE`.
+
+Before mutation, fresh-audit current Quote/Deal/Catalog/Booking/Order/Invoice/Payment/Inventory authorities, open PRs and Production schema. ORDER-ENGINE must consume accepted canonical Quote evidence without creating a second Quote, Catalog, CRM, Invoice or Payment truth.
+
+---
+
+
 ## CATALOG-V2 Production closeout — 2026-10-02
 
 - Work Package: `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.
