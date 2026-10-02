@@ -1,5 +1,25 @@
 # Product completeness and customer connection acceptance — Business OS 2027
 
+## CATALOG-V2 Production closeout — 2026-10-02
+
+- Work Package: `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled canonical Catalog V2 scope.
+- Implementation PR #393 final head `0e7b24d24144e6614f5eca13b5a4e8e475107ae7` passed exact-head CI `36983839157`; canonical merge is `main@7e128fda4d644ea7374ad4244fc50083e6af7bb8`.
+- Exact-main push CI `36984294927` and Cloudflare Production Deploy `36984634584` succeeded on that exact merge SHA.
+- Production migration `0170_catalog_v2@20261002083318` is live; merged migration blob SHA is `435516227f772e2788bbf2b3c976e2d2f445507e`.
+- `public.services` remains canonical Service identity and `public.service_prices` remains canonical Service pricing. Product, Variant and Product/Variant pricing are explicit new canonical authorities; Branch availability references `public.branches`.
+- Product and Variant SKU uniqueness is Organization-scoped; Product/Variant price uniqueness is subject + country + currency. Media/warranty are bounded and Bundle/Add-on relations reject self-reference/direct reverse cycles.
+- Inventory is reference-only at this stage: no stock quantity, reservation, movement, warehouse or fulfillment authority was introduced. Quote/Order/Invoice/Payment authorities also remain deferred to their owning Work Packages.
+- Seven catalog tables are live with RLS. Authenticated access is scoped SELECT-only; trusted mutations are service-role governed with OWNER authorization, mutation guards, version/replay semantics and canonical audit evidence.
+- Production remained side-effect clean: all seven CATALOG-V2 tables 0-row, `services=8`, `service_prices=37`, `branches=0`, `tenant_businesses=0`, no CATALOG-V2 audit rows, and no synthetic Product/Business/Branch/customer/provider evidence.
+- Advisor comparison found no new security, unindexed-FK, auth-RLS-initPlan or multiple-permissive-policy regression; unused-index INFO moved 266 -> 294 because 28 fresh zero-row catalog indexes are unused.
+- Existing WhatsApp real-tenant E2E and same-number Coexistence external blockers remain unchanged.
+- Managerial estimate after CATALOG-V2: Phase 8 approximately **42% complete / 58% remaining**; overall program approximately **64% complete / 36% remaining**.
+
+**Fresh continuation cursor:** `SECTION COMMERCE_PAYMENTS -> QUOTE-ENGINE`.
+
+---
+
 ## WhatsApp onboarding Slice 8 checkpoint — 2026-10-02
 
 **Disposition: IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled reconnect/revoke/disconnect lifecycle and deploy scope. **First real consented tenant E2E and real same-number Coexistence remain BLOCKED_EXTERNAL / pending real external evidence.**
@@ -916,8 +936,8 @@ The following baseline inventory preserves every existing semantic Work Package,
 
 ### COMMERCE_PAYMENTS — Catalog, quotes, orders, invoices and money
 
-- `CATALOG-V2`
-- `QUOTE-ENGINE`
+- `CATALOG-V2` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** (`0170_catalog_v2@20261002083318`)
+- `QUOTE-ENGINE` — **NEXT**
 - `ORDER-ENGINE`
 - `INVENTORY-FULFILLMENT`
 - `INVOICE-ENGINE`
