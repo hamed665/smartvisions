@@ -19,8 +19,11 @@ type SourceRow={
   title:string;
   source_locator:string|null;
   scope_type:string;
+  brand_id:string|null;
   tenant_business_id:string|null;
   branch_id:string|null;
+  department_id:string|null;
+  team_id:string|null;
   sensitivity:string;
   status:string;
   refresh_policy:string;
@@ -43,10 +46,18 @@ type VersionRow={
   stale_after_at:string|null;
   sensitivity:string;
   scope_type:string;
+  confidence:number|null;
   created_at:string;
 };
+type BrandRow={id:string;name:string};
 type BusinessRow={id:string;name:string};
 type BranchRow={id:string;name:string};
+type DepartmentRow={id:string;name:string};
+type TeamRow={id:string;name:string};
+type AuditRow={
+  id:string;action:string;entity_type:string;entity_id:string;
+  after_data:Record<string,unknown>|null;actor_type:string;actor_id:string|null;created_at:string;
+};
 
 function textPayload(payload:unknown){
   if(payload&&typeof payload==='object'&&!Array.isArray(payload)){
@@ -63,15 +74,18 @@ export default async function KnowledgePage(){
   const {supabase,organizationId,role}=await getCurrentOrganization();
   const manager=['OWNER','ADMIN'].includes(String(role));
 
-  const [versionsResult,sourcesResult,businessesResult,branchesResult]=await Promise.all([
+  const [versionsResult,sourcesResult,brandsResult,businessesResult,branchesResult,departmentsResult,teamsResult,historyResult]=await Promise.all([
     supabase.from('knowledge_versions')
-      .select('id,knowledge_key,version,payload,active,approval_status,source_id,provenance,conflict_state,stale_after_at,sensitivity,scope_type,created_at')
+      .select('id,knowledge_key,version,payload,active,approval_status,source_id,provenance,conflict_state,stale_after_at,sensitivity,scope_type,confidence,created_at')
       .eq('organization_id',organizationId)
       .order('knowledge_key').order('version',{ascending:false}),
     manager
       ? supabase.from('knowledge_sources')
-        .select('id,source_key,source_type,title,source_locator,scope_type,tenant_business_id,branch_id,sensitivity,status,refresh_policy,refresh_interval_minutes,last_refreshed_at,stale_after_at,last_error_code,version')
+        .select('id,source_key,source_type,title,source_locator,scope_type,brand_id,tenant_business_id,branch_id,department_id,team_id,sensitivity,status,refresh_policy,refresh_interval_minutes,last_refreshed_at,stale_after_at,last_error_code,version')
         .eq('organization_id',organizationId).order('updated_at',{ascending:false})
+      : Promise.resolve({data:[],error:null}),
+    manager
+      ? supabase.from('brands').select('id,name').eq('organization_id',organizationId).eq('status','ACTIVE').order('name')
       : Promise.resolve({data:[],error:null}),
     manager
       ? supabase.from('tenant_businesses').select('id,name').eq('organization_id',organizationId).eq('status','ACTIVE').order('name')
@@ -79,20 +93,37 @@ export default async function KnowledgePage(){
     manager
       ? supabase.from('branches').select('id,name').eq('organization_id',organizationId).eq('status','ACTIVE').order('name')
       : Promise.resolve({data:[],error:null}),
+    manager
+      ? supabase.from('departments').select('id,name').eq('organization_id',organizationId).eq('status','ACTIVE').order('name')
+      : Promise.resolve({data:[],error:null}),
+    manager
+      ? supabase.from('teams').select('id,name').eq('organization_id',organizationId).eq('status','ACTIVE').order('name')
+      : Promise.resolve({data:[],error:null}),
+    manager
+      ? supabase.from('audit_logs')
+        .select('id,action,entity_type,entity_id,after_data,actor_type,actor_id,created_at')
+        .eq('organization_id',organizationId).like('action','KNOWLEDGE_%')
+        .order('created_at',{ascending:false}).limit(50)
+      : Promise.resolve({data:[],error:null}),
   ]);
-  const firstError=[versionsResult,sourcesResult,businessesResult,branchesResult].map(r=>r.error).find(Boolean);
+  const firstError=[versionsResult,sourcesResult,brandsResult,businessesResult,branchesResult,departmentsResult,teamsResult,historyResult].map(r=>r.error).find(Boolean);
   if(firstError)throw new Error('Knowledge Base read failed: '+firstError.message);
 
   const rows=(versionsResult.data??[]) as VersionRow[];
   const sources=(sourcesResult.data??[]) as SourceRow[];
+  const brands=(brandsResult.data??[]) as BrandRow[];
   const businesses=(businessesResult.data??[]) as BusinessRow[];
   const branches=(branchesResult.data??[]) as BranchRow[];
+  const departments=(departmentsResult.data??[]) as DepartmentRow[];
+  const teams=(teamsResult.data??[]) as TeamRow[];
+  const history=(historyResult.data??[]) as AuditRow[];
   const sourceById=new Map(sources.map(row=>[row.id,row]));
   const active=rows.filter(row=>row.active&&row.approval_status==='APPROVED');
   const pending=manager?rows.filter(row=>row.approval_status==='PENDING_REVIEW'):[];
   const websites=sources.filter(row=>row.source_type==='WEBSITE'&&row.status==='ACTIVE');
   const catalogs=sources.filter(row=>row.source_type==='CATALOG'&&row.status==='ACTIVE');
-  const fileSources=sources.filter(row=>['PDF','DOC','TEXT','MANUAL','FAQ','POLICY'].includes(row.source_type)&&row.status==='ACTIVE');
+  const fileSources=sources.filter(row=>['FILE','PDF','DOC','TEXT'].includes(row.source_type)&&row.status==='ACTIVE');
+  const textSources=sources.filter(row=>['FAQ','POLICY','MANUAL','SERVICE','INTEGRATION','API','SYSTEM','TEXT','FILE'].includes(row.source_type)&&row.status==='ACTIVE');
 
   return <div>
     <div className="headerRow">
@@ -115,7 +146,7 @@ export default async function KnowledgePage(){
           const source=row.source_id?sourceById.get(row.source_id):undefined;
           return <div className="settingsRow" key={row.id}><div>
             <strong>{row.knowledge_key}</strong>
-            <span className="muted smallText">v{row.version} · {row.scope_type} · {row.sensitivity} · {source?.source_type??String(row.provenance?.sourceType??'MANUAL')}{stale(row.stale_after_at)?' · STALE':''}</span>
+            <span className="muted smallText">v{row.version} · {row.scope_type} · {row.sensitivity} · {source?.source_type??String(row.provenance?.sourceType??'MANUAL')} · confidence {row.confidence==null?'n/a':row.confidence}{stale(row.stale_after_at)?' · STALE':''}</span>
             {source?.source_locator?<span className="muted smallText">{source.source_locator}</span>:null}
           </div><div className="wideField"><pre className="knowledgeText">{textPayload(row.payload)}</pre></div></div>;
         })}
@@ -150,6 +181,18 @@ export default async function KnowledgePage(){
       </section>
 
       <section className="panel">
+        <h2>Knowledge lifecycle history</h2>
+        <p className="muted">Read-only verification and ingestion history from the existing audit log authority. No second ingestion-runs table is used.</p>
+        {!history.length?<p className="muted">No Knowledge lifecycle events recorded yet.</p>:<div className="settingsList">
+          {history.map(event=><div className="settingsRow" key={event.id}><div>
+            <strong>{event.action}</strong>
+            <span className="muted smallText">{event.entity_type} · {event.entity_id} · {new Date(event.created_at).toISOString()}</span>
+            <span className="muted smallText">actor {event.actor_type}{event.actor_id?' · '+event.actor_id.slice(0,8):''}</span>
+          </div><div className="wideField"><pre className="knowledgeText">{JSON.stringify(event.after_data??{},null,2)}</pre></div></div>)}
+        </div>}
+      </section>
+
+      <section className="panel">
         <h2>Source registry</h2>
         {!sources.length?<p className="muted">No registered Knowledge sources yet. Existing approved legacy/manual versions remain canonical and usable.</p>:<div className="settingsList">
           {sources.map(source=><div className="settingsRow" key={source.id}><div>
@@ -166,17 +209,26 @@ export default async function KnowledgePage(){
           <label>Source key<input name="source_key" placeholder="support_faq" required pattern="[a-z][a-z0-9_.-]{1,119}"/></label>
           <label>Title<input name="title" required maxLength={240}/></label>
           <label>Type<select name="source_type" defaultValue="FAQ">
-            {['WEBSITE','PDF','DOC','FAQ','POLICY','MANUAL','CATALOG','TEXT'].map(value=><option key={value}>{value}</option>)}
+            {['MANUAL','WEBSITE','FILE','PDF','DOC','TEXT','FAQ','CATALOG','SERVICE','POLICY','INTEGRATION','API','SYSTEM'].map(value=><option key={value}>{value}</option>)}
           </select></label>
           <label>Locator / URL<input name="source_locator" maxLength={2000} placeholder="https://… or file/catalog reference"/></label>
           <label>Scope<select name="scope_type" defaultValue="ORGANIZATION">
-            <option>ORGANIZATION</option><option>BUSINESS</option><option>BRANCH</option>
+            <option>ORGANIZATION</option><option>BRAND</option><option>BUSINESS</option><option>BRANCH</option><option>DEPARTMENT</option><option>TEAM</option>
+          </select></label>
+          <label>Brand<select name="brand_id" defaultValue="">
+            <option value="">None</option>{brands.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}
           </select></label>
           <label>Business<select name="tenant_business_id" defaultValue="">
             <option value="">None</option>{businesses.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}
           </select></label>
           <label>Branch<select name="branch_id" defaultValue="">
             <option value="">None</option>{branches.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}
+          </select></label>
+          <label>Department<select name="department_id" defaultValue="">
+            <option value="">None</option>{departments.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}
+          </select></label>
+          <label>Team<select name="team_id" defaultValue="">
+            <option value="">None</option>{teams.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}
           </select></label>
           <label>Sensitivity<select name="sensitivity" defaultValue="INTERNAL">
             <option>PUBLIC</option><option>INTERNAL</option><option>CONFIDENTIAL</option>
@@ -214,11 +266,11 @@ export default async function KnowledgePage(){
         <h3>FAQ / policy / manual text</h3>
         <form action={stageKnowledgeTextV2} className="settingsGrid">
           <label>Source<select name="source_id" required defaultValue="">
-            <option value="" disabled>Select source</option>{fileSources.map(row=><option key={row.id} value={row.id}>{row.title} · {row.source_type}</option>)}
+            <option value="" disabled>Select source</option>{textSources.map(row=><option key={row.id} value={row.id}>{row.title} · {row.source_type}</option>)}
           </select></label>
           <label>Knowledge key<input name="knowledge_key" required pattern="[a-z][a-z0-9_.-]{1,119}"/></label>
           <label className="wideField">Content<textarea name="content" rows={10} required minLength={10}/></label>
-          <button disabled={!fileSources.length}>Stage for review</button>
+          <button disabled={!textSources.length}>Stage for review</button>
         </form>
 
         <h3>Canonical Catalog description snapshot</h3>
