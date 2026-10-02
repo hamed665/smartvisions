@@ -1,3 +1,29 @@
+## KNOWLEDGE-V2 Production closeout — 2026-10-03
+
+- Work Package: `SECTION BUSINESS_INTELLIGENCE_AI -> KNOWLEDGE-V2`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled Knowledge V2 authority, governance, ingestion, review, freshness and retrieval scope.
+- Implementation PR #417 final head `014fcc4763dd6a53a46f0a46fb7fbd7408cc1f11` passed exact-head CI `37075843449`. PR #417 squash-merged to canonical `main@1b371ae8746053023c5bc13df8f2140bebbd5260`; exact-main CI `37077335921` succeeded on that exact SHA and Cloudflare Production Deploy `37077559597` succeeded on the same SHA.
+- Exact merged migration source is `supabase/migrations/0182_knowledge_v2.sql`, blob `45bc9e14ba69b07a7ea69f91d68931c60b71a142`. Supabase Production records `0182_knowledge_v2@20261002232638`.
+- KNOWLEDGE-V2 extends the existing canonical `knowledge_versions` authority. It does **not** create a second Knowledge Base, vector authority, ingestion queue, approval system or IAM model.
+- `knowledge_sources` is a provenance/freshness registry for WEBSITE, PDF, DOC, FAQ, POLICY, MANUAL, CATALOG and TEXT sources. Canonical content versions remain in `knowledge_versions`.
+- Existing Knowledge rows were migrated in place without changing payload, version or active state. Production remains exactly 3 versions, 2 active/approved and 1 inactive historical version; `knowledge_sources=0`, pending review=0 and rejected=0. No synthetic website, file, FAQ, Catalog source or Knowledge version was created for verification.
+- Existing rows are explicitly marked as approved legacy provenance, Organization-scoped, retrieval-enabled, non-stale and conflict-resolved. Read-only Production resolution returns `smartvisions_brand_positioning v1` and `smartvisions_customer_journey v2`.
+- External/file/Catalog ingestion is review-gated. A changed candidate becomes `PENDING_REVIEW` and cannot displace active approved truth before explicit manager approval. Identical refreshes deduplicate instead of manufacturing versions.
+- Manual manager-authored Knowledge publishing is routed through the governed V2 service-role contract. The legacy browser-executable `publish_knowledge_version` path has no authenticated execute privilege.
+- Website ingestion is bounded to HTTP/HTTPS with redirect, port, local/private-literal host, timeout, content-type and size controls; source text is untrusted and review-gated. No claim is made that a real external website has been ingested in Production.
+- File ingestion supports text-bearing PDF, DOCX, TXT, Markdown, HTML, CSV and JSON with a 5 MB source limit. Image-only/scanned PDF OCR is **DEFERRED_WITH_REASON** to the future governed Vision/OCR capability rather than fabricated here.
+- Catalog ingestion derives descriptive retrieval evidence from canonical Services/Catalog records while explicitly excluding Price, Inventory and Payment as Knowledge authorities. Execution-time commercial/stock/payment truth remains in their canonical modules.
+- Retrieval excludes stale content by default and supports ORGANIZATION/BUSINESS/BRANCH scopes while reusing canonical IAM scope checks. Current agent hydration intentionally requests Organization scope because Production has zero canonical tenant Businesses/Branches; narrower-scope runtime consumption must wait for legitimate tenant hierarchy/routing context rather than inventing one.
+- Runtime ACL verification confirms service-role source configuration, staging, approval, manual publish and resolution are available; authenticated callers cannot execute trusted mutations or the legacy publisher. Knowledge Source and Knowledge Version governed-mutation triggers are enabled.
+- Fresh routed Production smoke verifies `/knowledge` is deployed and session-protected: unauthenticated request returns `307 -> /login`.
+- Fresh advisor baseline shows no tracked authority/security regression: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`. Generic `unused_index=430` is INFO and includes new zero-workload Knowledge indexes.
+
+**Fresh continuation cursor:** `SECTION BUSINESS_INTELLIGENCE_AI -> MEMORY-V2`.
+
+Before mutation, fresh-audit current conversation history/summaries, sales state, Customer 360/Person/Account relationships, tasks/events, Business Twin/Knowledge references and any existing memory-like state. MEMORY-V2 must add typed memory semantics without creating a second CRM, conversation store, Business Twin, Knowledge Base, audit log or agent-learning authority.
+
+---
+
 ## BRAIN-INDUSTRY-PACKS Production closeout — 2026-10-03
 
 - Work Package: `SECTION BUSINESS_INTELLIGENCE_AI -> BRAIN-INDUSTRY-PACKS`.
@@ -1500,7 +1526,7 @@ Each pack may define onboarding, custom objects, pipelines, workflows, metrics, 
 
 ## KNOWLEDGE-V2
 
-**Next Work Package.**
+**Disposition: IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED.**
 
 - website ingestion;
 - PDFs;
