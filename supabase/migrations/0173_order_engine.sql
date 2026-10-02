@@ -360,14 +360,14 @@ begin
   end if;
   return case when tg_op='DELETE' then old else new end;
 end;
-$;
+$$;
 
 create or replace function public.guard_order_fulfillment_mutation()
 returns trigger
 language plpgsql
 security invoker
 set search_path=public,pg_catalog
-as $
+as $$
 begin
   if coalesce(current_setting('app.order_engine_mutation',true),'')<>'allowed' then
     raise exception 'ORDER-ENGINE state requires governed command';
@@ -380,7 +380,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 create trigger orders_guard before insert or update or delete on public.orders
 for each row execute function public.guard_order_engine_mutation();
