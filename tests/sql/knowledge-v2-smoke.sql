@@ -265,6 +265,8 @@ do $scope_hardening_contract$
 declare
   org_version record;
   team_source public.knowledge_sources%rowtype;
+  failure_source public.knowledge_sources%rowtype;
+  failed_source public.knowledge_sources%rowtype;
   team_staged record;
   team_approved public.knowledge_versions%rowtype;
   active_count integer;
@@ -288,6 +290,36 @@ begin
     '00000000-0000-0000-0000-00000000f711',
     'scope_shared','{"text":"Organization truth."}'::jsonb,'knowledge-scope-org-ci'
   );
+
+  select * into failure_source from public.configure_knowledge_source_scope_v2(
+    '00000000-0000-0000-0000-00000000f701',
+    '00000000-0000-0000-0000-00000000f711',
+    'failure_source','WEBSITE','Failure Source','https://example.invalid','ORGANIZATION',
+    null,'INTERNAL','ACTIVE','MANUAL',null,'{"fixture":"failure"}'::jsonb,
+    null,'knowledge-failure-source-ci'
+  );
+
+  select * into failed_source from public.record_knowledge_source_failure_v2(
+    '00000000-0000-0000-0000-00000000f701',
+    '00000000-0000-0000-0000-00000000f711',
+    failure_source.id,1,'WEBSITE_FETCH_FAILED','knowledge-source-failure-ci'
+  );
+
+  if failed_source.version<>2 or failed_source.last_error_code<>'WEBSITE_FETCH_FAILED'
+     or failed_source.last_refresh_attempt_at is null then
+    raise exception 'Knowledge Source failed-refresh evidence was not persisted';
+  end if;
+  if exists(
+    select 1 from public.knowledge_versions
+    where organization_id='00000000-0000-0000-0000-00000000f701'
+      and source_id=failure_source.id
+  ) then raise exception 'Failed Knowledge refresh manufactured a Knowledge version'; end if;
+  if not exists(
+    select 1 from public.audit_logs
+    where organization_id='00000000-0000-0000-0000-00000000f701'
+      and action='KNOWLEDGE_SOURCE_REFRESH_FAILED'
+      and entity_id=failure_source.id::text
+  ) then raise exception 'Failed Knowledge refresh did not enter canonical audit history'; end if;
 
   select * into team_source from public.configure_knowledge_source_scope_v2(
     '00000000-0000-0000-0000-00000000f701',
@@ -350,6 +382,18 @@ begin
     'public.configure_knowledge_source_scope_v2(uuid,uuid,text,text,text,text,text,uuid,text,text,text,integer,jsonb,integer,text)'::regprocedure,
     'EXECUTE'
   ) then raise exception 'Full hierarchy source command leaked to authenticated'; end if;
+
+  if not has_function_privilege(
+    'service_role',
+    'public.record_knowledge_source_failure_v2(uuid,uuid,uuid,integer,text,text)'::regprocedure,
+    'EXECUTE'
+  ) then raise exception 'Knowledge Source failure evidence command is not service executable'; end if;
+
+  if has_function_privilege(
+    'authenticated',
+    'public.record_knowledge_source_failure_v2(uuid,uuid,uuid,integer,text,text)'::regprocedure,
+    'EXECUTE'
+  ) then raise exception 'Knowledge Source failure evidence command leaked to authenticated'; end if;
 end;
 $scope_hardening_contract$;
 
