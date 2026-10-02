@@ -114,6 +114,21 @@ begin
     raise exception 'INVENTORY-FULFILLMENT low-stock evidence is missing';
   end if;
 
+  -- Legacy ORDER-ENGINE fulfillment must fail closed for STOCKED lines.
+  select * into o from public.orders
+  where organization_id='00000000-0000-0000-0000-00000000c701' and id=oid;
+  begin
+    perform public.record_order_fulfillment_v1(
+      o.organization_id,'00000000-0000-0000-0000-00000000c711',oid,o.version,
+      jsonb_build_array(jsonb_build_object('orderLineId',line_id,'quantity',1)),
+      '{"proof":"must-not-bypass-inventory"}'::jsonb,
+      'inventory-direct-fulfill-block-ci-1'
+    );
+    raise exception 'Direct STOCKED Order fulfillment unexpectedly bypassed Inventory';
+  exception when others then
+    if sqlerrm not like 'INVENTORY-FULFILLMENT STOCKED Order lines require Inventory fulfillment%' then raise; end if;
+  end;
+
   begin
     perform public.reserve_order_inventory_v1(
       '00000000-0000-0000-0000-00000000c701','00000000-0000-0000-0000-00000000c711',
@@ -131,6 +146,9 @@ begin
     rid,2,'{"proof":"ci-pick-2"}'::jsonb,'inventory-fulfill-ci-1'
   );
   if s<>'PROCESSING' then raise exception 'INVENTORY-FULFILLMENT partial Order projection failed: %',s; end if;
+  if nullif(current_setting('app.inventory_fulfillment_line',true),'') is not null
+     or nullif(current_setting('app.inventory_fulfillment_qty',true),'') is not null
+  then raise exception 'INVENTORY-FULFILLMENT one-use fulfillment proof was not consumed'; end if;
 
   s:=public.fulfill_order_inventory_v1(
     '00000000-0000-0000-0000-00000000c701','00000000-0000-0000-0000-00000000c711',
@@ -206,6 +224,11 @@ $cancel_release$;
 
 do $inventory_acl$
 begin
+  if to_regclass('public.inventory_items_variant_product_fk_idx') is null
+     or to_regclass('public.inventory_reservations_line_order_fk_idx') is null
+     or to_regclass('public.inventory_movements_line_order_fk_idx') is null
+  then raise exception 'INVENTORY-FULFILLMENT FK covering indexes are missing'; end if;
+
   if has_table_privilege('authenticated','public.inventory_stock_balances','UPDATE')
      or has_table_privilege('authenticated','public.inventory_movements','INSERT')
      or has_table_privilege('anon','public.inventory_items','SELECT')

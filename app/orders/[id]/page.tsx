@@ -24,6 +24,25 @@ export default async function OrderDetailPage({params}:Props){
   supabase.from('order_return_lines').select('*').eq('organization_id',organizationId).eq('order_id',id),
   supabase.from('order_lifecycle_events').select('id,transition,from_status,to_status,actor_type,occurred_at,evidence').eq('organization_id',organizationId).eq('order_id',id).order('occurred_at',{ascending:false}).limit(100),
  ]);
+ const productIds=[...new Set((lines??[]).filter(x=>x.product_id).map(x=>String(x.product_id)))];
+ const variantIds=[...new Set((lines??[]).filter(x=>x.variant_id).map(x=>String(x.variant_id)))];
+ const productModes=productIds.length
+  ?((await supabase.from('catalog_products').select('id,inventory_mode').eq('organization_id',organizationId).in('id',productIds)).data??[])
+  :[];
+ const variantModes=variantIds.length
+  ?((await supabase.from('catalog_product_variants').select('id,product_id,inventory_mode').eq('organization_id',organizationId).in('id',variantIds)).data??[])
+  :[];
+ const productModeById=new Map(productModes.map(x=>[String(x.id),String(x.inventory_mode)]));
+ const variantModeById=new Map(variantModes.map(x=>[String(x.id),String(x.inventory_mode)]));
+ const stockedLineIds=new Set((lines??[]).filter(line=>{
+  if(line.subject_kind==='PRODUCT')return productModeById.get(String(line.product_id))==='STOCKED';
+  if(line.subject_kind==='VARIANT'){
+   const mode=variantModeById.get(String(line.variant_id));
+   const effective=mode==='INHERIT'?productModeById.get(String(line.product_id)):mode;
+   return effective==='STOCKED';
+  }
+  return false;
+ }).map(line=>String(line.id)));
  const roleText=String(role);
  const canManage=['OWNER','ADMIN','SALES_MANAGER'].includes(roleText)||(roleText==='SALES_AGENT'&&String(order.owner_user_id)===String(userId));
  const canManager=['OWNER','ADMIN','SALES_MANAGER'].includes(roleText);
@@ -31,9 +50,13 @@ export default async function OrderDetailPage({params}:Props){
  const opsLines=(lines??[]).map(x=>{const f=fByLine.get(String(x.id));return{
    id:String(x.id),name:String(x.name_snapshot),ordered:Number(x.quantity),
    fulfilled:Number(f?.fulfilled_quantity??0),returned:Number(f?.returned_quantity??0),
+   stocked:stockedLineIds.has(String(x.id)),
  };});
+ const directFulfillmentLines=opsLines.filter(x=>!x.stocked);
+ const stockedFulfillmentLines=opsLines.filter(x=>x.stocked);
  const anyFulfilled=opsLines.some(x=>x.fulfilled>0);
- const anyRemaining=opsLines.some(x=>x.fulfilled<x.ordered);
+ const anyDirectRemaining=directFulfillmentLines.some(x=>x.fulfilled<x.ordered);
+ const anyStockedRemaining=stockedFulfillmentLines.some(x=>x.fulfilled<x.ordered);
  const anyReturnable=opsLines.some(x=>x.fulfilled>x.returned);
  const returnLinesBy=new Map<string,Array<Record<string,unknown>>>();
  for(const x of returnLines??[]){const k=String(x.return_id);returnLinesBy.set(k,[...(returnLinesBy.get(k)??[]),x as Record<string,unknown>]);}
@@ -52,13 +75,13 @@ export default async function OrderDetailPage({params}:Props){
    <p className="muted">{order.source_kind==='QUOTE'?'Accepted Quote snapshot is the immutable commercial source.':'Direct Order resolved canonical Catalog prices at creation.'}</p>
    {order.quote_id?<p><Link className="textLink" href={'/quotes/'+order.quote_id}>Open source Quote →</Link></p>:null}
    {order.booking_id?<p className="muted">Linked Booking: {String(order.booking_id)}</p>:null}
-   <p className="muted smallText">Invoice, Payment/refund and inventory stock are intentionally not owned by ORDER-ENGINE.</p>
+   <p className="muted smallText">Inventory stock is owned by INVENTORY-FULFILLMENT. Invoice and Payment/refund remain in later Commerce packages.</p>
   </section>
 
   <section className="panel"><h2>Lines and fulfillment</h2><div className="settingsList">
    {(lines??[]).map(line=>{const f=fByLine.get(String(line.id));return <div className="settingsRow" key={line.id}><div>
     <strong>{line.name_snapshot}</strong>
-    <span className="muted smallText">{line.subject_kind} · qty {line.quantity} · unit {money(line.unit_price,order.currency)} · line total {money(line.line_total,order.currency)}</span>
+    <span className="muted smallText">{line.subject_kind} · qty {line.quantity} · unit {money(line.unit_price,order.currency)} · line total {money(line.line_total,order.currency)}{stockedLineIds.has(String(line.id))?' · STOCKED':''}</span>
     <span className="muted smallText">fulfilled {String(f?.fulfilled_quantity??0)} / {String(f?.ordered_quantity??line.quantity)} · returned {String(f?.returned_quantity??0)} · {String(f?.status??'PENDING')}</span>
    </div></div>;})}
   </div></section>
@@ -69,9 +92,14 @@ export default async function OrderDetailPage({params}:Props){
    <button>Start processing</button>
   </form></section>:null}
 
-  {canManage&&['CONFIRMED','PROCESSING'].includes(String(order.status))&&anyRemaining?<section className="panel"><h2>Record fulfillment</h2>
-   <p className="muted">This is customer-facing fulfillment evidence only. It does not move warehouse stock.</p>
-   <OrderFulfillmentForm orderId={id} version={Number(order.version)} lines={opsLines}/>
+  {['CONFIRMED','PROCESSING'].includes(String(order.status))&&anyStockedRemaining?<section className="panel"><h2>STOCKED fulfillment</h2>
+   <p className="muted">These lines are Inventory-managed. Reserve and fulfill them through Inventory so physical stock and canonical Order fulfillment commit atomically.</p>
+   <p><Link className="textLink" href="/inventory">Open Inventory →</Link></p>
+  </section>:null}
+
+  {canManage&&['CONFIRMED','PROCESSING'].includes(String(order.status))&&anyDirectRemaining?<section className="panel"><h2>Record non-stock fulfillment</h2>
+   <p className="muted">Only Service or non-STOCKED Catalog lines can use direct ORDER-ENGINE fulfillment.</p>
+   <OrderFulfillmentForm orderId={id} version={Number(order.version)} lines={directFulfillmentLines}/>
   </section>:null}
 
   {canManage&&['CONFIRMED','PROCESSING'].includes(String(order.status))&&!anyFulfilled?<section className="panel"><h2>Cancel Order</h2><form action={cancelOrderV1} className="settingsGrid">
