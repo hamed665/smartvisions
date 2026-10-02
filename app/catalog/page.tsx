@@ -24,6 +24,13 @@ function subjectRef(kind: 'SERVICE' | 'PRODUCT' | 'VARIANT', id: string) {
   return kind + ':' + id;
 }
 
+function catalogSubjectRef(serviceId: unknown, productId: unknown, variantId: unknown) {
+  if (serviceId) return subjectRef('SERVICE', String(serviceId));
+  if (productId) return subjectRef('PRODUCT', String(productId));
+  if (variantId) return subjectRef('VARIANT', String(variantId));
+  throw new Error('Catalog subject is missing');
+}
+
 function money(value: unknown, currency: string | null | undefined) {
   const number = Number(value);
   if (!Number.isFinite(number)) return '—';
@@ -452,11 +459,11 @@ export default async function CatalogPage() {
                 <strong>{price.variant_id ? variantNameById.get(String(price.variant_id)) ?? 'Variant' : 'Base Product'}</strong>
                 <span className="muted smallText">v{price.version}</span>
               </div>
-              <label>Variant
-                <select name="variant_id" defaultValue={price.variant_id ?? ''} disabled={!editable}>
-                  <option value="">Base Product</option>
-                  {productVariants.map((variant) => <option key={variant.id} value={variant.id}>{variant.name}</option>)}
-                </select>
+              <input type="hidden" name="variant_id" value={price.variant_id ?? ''} />
+              <label>Price subject
+                <span className="muted smallText">
+                  {price.variant_id ? variantNameById.get(String(price.variant_id)) ?? 'Variant' : 'Base Product'}
+                </span>
               </label>
               <label>Country<input name="country_code" defaultValue={price.country_code} required disabled={!editable} /></label>
               <label>Currency<input name="currency" defaultValue={price.currency} required disabled={!editable} /></label>
@@ -506,13 +513,54 @@ export default async function CatalogPage() {
       </form> : <p className="muted">No catalog subjects exist yet.</p>}
 
       <div className="settingsList">
-        {mediaRows.map((item) => <div className="settingsRow" key={item.id}>
+        {mediaRows.map((item) => <form action={saveCatalogMediaV2} className="settingsRow" key={item.id}>
+          <input type="hidden" name="media_id" value={item.id} />
+          <input type="hidden" name="expected_version" value={item.version} />
+          <input
+            type="hidden"
+            name="subject_ref"
+            value={catalogSubjectRef(item.service_id, item.product_id, item.variant_id)}
+          />
           <div>
             <strong>{item.media_type}</strong>
-            <span className="muted smallText">{item.source_type} · sort {item.sort_order} · v{item.version}</span>
+            <span className="muted smallText">{item.source_type} · v{item.version}</span>
           </div>
-          <span className="muted smallText">{item.alt_text ?? item.public_url ?? item.portfolio_item_id ?? 'No label'}</span>
-        </div>)}
+          <label>Media type
+            <select name="media_type" defaultValue={item.media_type} disabled={!editable}>
+              <option value="IMAGE">Image</option>
+              <option value="VIDEO">Video</option>
+              <option value="DOCUMENT">Document</option>
+            </select>
+          </label>
+          <label>Source
+            <select name="source_type" defaultValue={item.source_type} disabled={!editable}>
+              <option value="HTTPS_URL">HTTPS URL</option>
+              <option value="PORTFOLIO_ITEM">Approved Service portfolio item</option>
+            </select>
+          </label>
+          <label>HTTPS URL
+            <input name="public_url" type="url" defaultValue={item.public_url ?? ''} disabled={!editable} />
+          </label>
+          <label>Approved portfolio item
+            <select name="portfolio_item_id" defaultValue={item.portfolio_item_id ?? ''} disabled={!editable}>
+              <option value="">None</option>
+              {portfolioRows.map((portfolioItem) => <option value={portfolioItem.id} key={portfolioItem.id}>
+                {portfolioItem.title} · {portfolioItem.service_id ?? 'unscoped'}
+              </option>)}
+            </select>
+          </label>
+          <label>Alt text
+            <input name="alt_text" maxLength={500} defaultValue={item.alt_text ?? ''} disabled={!editable} />
+          </label>
+          <label>Sort order
+            <input name="sort_order" type="number" defaultValue={item.sort_order} disabled={!editable} />
+          </label>
+          <label className="toggleLabel">
+            <input name="approved" type="checkbox" defaultChecked={Boolean(item.approved)} disabled={!editable} />
+            Approved
+          </label>
+          <button disabled={!editable}>Save Media</button>
+        </form>)}
       </div>
     </section>
 
@@ -543,13 +591,45 @@ export default async function CatalogPage() {
       </form> : <p className="muted">At least two catalog subjects are needed for a relation.</p>}
 
       <div className="settingsList">
-        {relationRows.map((row) => <div className="settingsRow" key={row.id}>
+        {relationRows.map((row) => <form action={saveCatalogRelationV2} className="settingsRow" key={row.id}>
+          <input type="hidden" name="relation_id" value={row.id} />
+          <input type="hidden" name="expected_version" value={row.version} />
+          <input
+            type="hidden"
+            name="source_ref"
+            value={catalogSubjectRef(row.source_service_id, row.source_product_id, row.source_variant_id)}
+          />
           <div>
-            <strong>{row.relation_type}</strong>
-            <span className="muted smallText">{relationLabel(row, 'source')} → {relationLabel(row, 'target')}</span>
+            <strong>{relationLabel(row, 'source')}</strong>
+            <span className="muted smallText">Source is immutable · v{row.version}</span>
           </div>
-          <span className="muted smallText">Qty {String(row.quantity)} · {row.required ? 'required' : 'optional'} · v{row.version}</span>
-        </div>)}
+          <label>Target
+            <select
+              name="target_ref"
+              defaultValue={catalogSubjectRef(row.target_service_id, row.target_product_id, row.target_variant_id)}
+              disabled={!editable}
+            >
+              {subjects.map((subject) => <option value={subject.ref} key={subject.ref}>{subject.label}</option>)}
+            </select>
+          </label>
+          <label>Type
+            <select name="relation_type" defaultValue={row.relation_type} disabled={!editable}>
+              <option value="ADD_ON">Add-on</option>
+              <option value="BUNDLE_COMPONENT">Bundle component</option>
+            </select>
+          </label>
+          <label>Quantity
+            <input name="quantity" type="number" min="0.0001" step="0.0001" defaultValue={String(row.quantity)} disabled={!editable} />
+          </label>
+          <label>Sort order
+            <input name="sort_order" type="number" defaultValue={row.sort_order} disabled={!editable} />
+          </label>
+          <label className="toggleLabel">
+            <input name="required" type="checkbox" defaultChecked={Boolean(row.required)} disabled={!editable} />
+            Required
+          </label>
+          <button disabled={!editable}>Save Relation</button>
+        </form>)}
       </div>
     </section>
   </div>;
