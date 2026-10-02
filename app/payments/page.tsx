@@ -30,7 +30,7 @@ export default async function PaymentsPage(){
   return <div>
     <div className="headerRow">
       <div><h1>Payments</h1><p className="muted">Canonical payment intents, immutable provider transaction evidence and governed net settlement.</p></div>
-      <span className="status">{rows.length} intents</span>
+      <div><Link className="textLink" href="/payments/providers">Oman providers →</Link> · <span className="status">{rows.length} intents</span></div>
     </div>
     <section className="statsGrid fourStats">
       <article><span>Unresolved</span><strong>{unresolved.length}</strong></article>
@@ -40,7 +40,7 @@ export default async function PaymentsPage(){
     </section>
     <section className="panel">
       <h2>Authority boundary</h2>
-      <p className="muted">Payment Core owns intent, link, immutable transaction and refund truth. Invoice owns commercial truth. A provider request, HTTP success or payment link alone never marks money collected.</p>
+      <p className="muted">Payment Core owns intent, link, immutable transaction and refund truth. Invoice owns commercial truth. Tap and Thawani are provider adapters only: an API response or payment link never marks money collected without verified provider evidence.</p>
     </section>
     <section className="panel"><h2>Recent Payment Intents</h2><div className="settingsList">
       {rows.map(payment=><div className="settingsRow" key={payment.id}><div>
