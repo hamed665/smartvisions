@@ -274,6 +274,32 @@ begin
   if pr.price<>25 or pr.currency<>'OMR' then
     raise exception 'CATALOG-V2 Product price was not created';
   end if;
+
+  select * into pr from public.upsert_catalog_product_price_v2(
+    '00000000-0000-0000-0000-00000000c701',
+    '00000000-0000-0000-0000-00000000c711',
+    '00000000-0000-0000-0000-00000000c792',
+    '00000000-0000-0000-0000-00000000c771',
+    '00000000-0000-0000-0000-00000000c781',
+    'OM','USD',26,21,31,null,'catalog-v2-price-usd-ci-1'
+  );
+  if pr.currency<>'USD' then
+    raise exception 'CATALOG-V2 country/currency pricing did not allow a distinct currency';
+  end if;
+
+  begin
+    perform public.upsert_catalog_product_price_v2(
+      '00000000-0000-0000-0000-00000000c701',
+      '00000000-0000-0000-0000-00000000c711',
+      '00000000-0000-0000-0000-00000000c793',
+      '00000000-0000-0000-0000-00000000c771',
+      '00000000-0000-0000-0000-00000000c781',
+      'OM','OMR',27,22,32,null,'catalog-v2-price-duplicate-ci-1'
+    );
+    raise exception 'Duplicate Product country/currency price unexpectedly succeeded';
+  exception when unique_violation then
+    null;
+  end;
 end;
 $product_variant_price$;
 
@@ -314,6 +340,20 @@ begin
     'ADD_ON',1,false,0,null,'catalog-v2-relation-ci-1'
   );
   if r.relation_type<>'ADD_ON' then raise exception 'CATALOG-V2 Add-on relation was not created'; end if;
+
+  begin
+    perform public.upsert_catalog_item_relation_v2(
+      '00000000-0000-0000-0000-00000000c701',
+      '00000000-0000-0000-0000-00000000c711',
+      '00000000-0000-0000-0000-00000000cb03',
+      'catalog_ci_service',null,null,
+      null,'00000000-0000-0000-0000-00000000c771',null,
+      'ADD_ON',1,false,0,null,'catalog-v2-direct-cycle'
+    );
+    raise exception 'Direct CATALOG-V2 relation cycle unexpectedly succeeded';
+  exception when others then
+    if sqlerrm not like 'CATALOG-V2 relation cannot create a direct cycle%' then raise; end if;
+  end;
 end;
 $catalog_media_and_relations$;
 
@@ -327,6 +367,40 @@ select public.upsert_catalog_product_v2(
   'ALL_ACTIVE_BRANCHES','NONE',null,null,'{}'::uuid[],
   'catalog-v2-product-b-ci-1'
 );
+
+do $catalog_v2_org_scoped_skus$
+begin
+  begin
+    perform public.upsert_catalog_product_v2(
+      '00000000-0000-0000-0000-00000000c701',
+      '00000000-0000-0000-0000-00000000c711',
+      '00000000-0000-0000-0000-00000000c774',
+      '00000000-0000-0000-0000-00000000c732',
+      'CATALOG-PRODUCT','Duplicate SKU in another Business',null,'ACTIVE',null,
+      'ALL_ACTIVE_BRANCHES','NONE',null,null,'{}'::uuid[],
+      'catalog-v2-product-org-sku-duplicate'
+    );
+    raise exception 'Product SKU was not Organization-scoped';
+  exception when unique_violation then
+    null;
+  end;
+
+  begin
+    perform public.upsert_catalog_product_variant_v2(
+      '00000000-0000-0000-0000-00000000c701',
+      '00000000-0000-0000-0000-00000000c711',
+      '00000000-0000-0000-0000-00000000c782',
+      '00000000-0000-0000-0000-00000000c773',
+      'CATALOG-PRODUCT-BLACK','Duplicate Variant SKU',
+      '{"color":"duplicate"}'::jsonb,
+      'ACTIVE','INHERIT',null,null,'catalog-v2-variant-org-sku-duplicate'
+    );
+    raise exception 'Variant SKU was not Organization-scoped';
+  exception when unique_violation then
+    null;
+  end;
+end;
+$catalog_v2_org_scoped_skus$;
 
 do $cross_business_relation_block$
 begin
@@ -348,6 +422,21 @@ $cross_business_relation_block$;
 
 do $catalog_v2_no_inventory_truth$
 begin
+  if to_regclass('public.catalog_services') is not null
+     or to_regclass('public.catalog_service_prices') is not null
+     or to_regclass('public.catalog_item_registry') is not null
+  then
+    raise exception 'CATALOG-V2 introduced a parallel Service/catalog identity or Service pricing authority';
+  end if;
+
+  if exists(
+    select 1 from information_schema.columns
+    where table_schema='public'
+      and table_name='catalog_service_profiles'
+      and column_name in ('name','enabled','price','minimum_price','premium_price')
+  ) then
+    raise exception 'CATALOG-V2 duplicated canonical Service identity or pricing columns';
+  end if;
   if exists(
     select 1 from information_schema.columns
     where table_schema='public'
@@ -408,6 +497,37 @@ begin
   then raise exception 'CATALOG-V2 Service command ACL drifted'; end if;
 end;
 $catalog_v2_acl$;
+
+reset role;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000c711',false);
+set role authenticated;
+do $catalog_v2_owner_read_scope$
+begin
+  if not exists(
+    select 1 from public.catalog_products
+    where organization_id='00000000-0000-0000-0000-00000000c701'
+      and id='00000000-0000-0000-0000-00000000c771'
+  ) then
+    raise exception 'Organization owner could not read scoped CATALOG-V2 Product';
+  end if;
+end;
+$catalog_v2_owner_read_scope$;
+
+reset role;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000c712',false);
+set role authenticated;
+do $catalog_v2_cross_org_read_scope$
+begin
+  if exists(
+    select 1 from public.catalog_products
+    where organization_id='00000000-0000-0000-0000-00000000c701'
+  ) then
+    raise exception 'CATALOG-V2 RLS leaked Product rows to a non-member';
+  end if;
+end;
+$catalog_v2_cross_org_read_scope$;
+reset role;
+select set_config('request.jwt.claim.sub','',false);
 
 -- The PostgreSQL CI database is disposable. Keep the isolated c701 fixture in-place
 -- for later smoke files rather than deleting hierarchy rows referenced by canonical
