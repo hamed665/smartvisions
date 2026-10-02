@@ -1,5 +1,25 @@
 # Smart Visions Growth OS — Current Production State
 
+## WhatsApp customer onboarding Slice 8 controlled-scope Production closeout — 2026-10-02
+
+- Contract slice: **Reconnect / revoke / disconnect + first real tenant E2E acceptance**. The internally controlled lifecycle path extends only the existing canonical WhatsApp binding, setup-attempt, Vault credential, Meta provider adapter, Unified Inbox health/projection and audit authorities.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for reconnect, credential/subscription health, fail-closed revoke/disconnect behavior, UI controls, provider-unsubscribe reconciliation, schema and deploy scope. **First real consented tenant E2E remains BLOCKED_EXTERNAL / pending real tenant + Meta eligibility evidence** because Production still has zero WhatsApp bindings.
+- Implementation PR #391 final head `09697e4127fbd3bb8a8216bc945bd16fbcfa637b` passed exact-head CI `36979621813`.
+- PR #391 squash-merged to canonical `main@5051d6984e1d6413a0077da8da3142f89ef740cd`. Exact-main CI `36979959886` succeeded across lint, typecheck, unit tests, the complete PostgreSQL 17 migration chain plus Slice-8 smoke, Next build, Vinext and Cloudflare scheduled verification.
+- Cloudflare Production Deploy `36980189935` succeeded on the same merge SHA through the existing exact-green deployment workflow.
+- Production migration `0169_whatsapp_reconnect_disconnect_lifecycle@20261002074458` is live; merged migration blob SHA `10dd1fd8fdefed603dd8688f92130e70b7348774`.
+- Reconnect remains the same logical `communication_channel_bindings.id`: credentials rotate in the existing Vault secret boundary and reconnect cannot silently retarget an existing binding to a different WABA/phone identity.
+- Inbound destination and outbound credential resolution now fail closed for manual disconnect, invalid/revoked credential, unconfirmed credential health and missing Meta WABA app subscription.
+- Owner lifecycle controls can verify Meta phone/subscription evidence without sending a test message. Safe disconnect blocks Smart Core provider actions first, supersedes active setup attempts, degrades active Unified Inbox projection state and then reconciles WABA webhook unsubscribe by provider readback. Ambiguous provider mutation is not blindly retried.
+- Disconnect never deletes/uninstalls the customer’s WhatsApp Business mobile app and does not perform destructive migration. Same-number Business App Coexistence activation remains fail-closed pending real official Meta/provider/runtime eligibility.
+- Production remained side-effect clean after migration: 0 WhatsApp bindings, 0 setup attempts, 37 Conversation Messages, 136 WhatsApp Events and 0 Unified Inbox projections; lifecycle incident rows are all 0.
+- Slice-8 lifecycle RPCs are service-role-only; fresh advisors showed no Slice-8-specific new finding. Safety remains Shadow Mode ON; global Kill Switch OFF; WhatsApp AI pause OFF; Agents pause OFF.
+- **WhatsApp onboarding overlay:** internally controlled Slices 1–8 are now closed. Real same-number Coexistence activation and the first real consented tenant Meta ↔ Smart Core ↔ Chatwoot E2E remain external-evidence gated and must not be fabricated.
+
+**Stable roadmap cursor resumes:** `SECTION COMMERCE_PAYMENTS -> CATALOG-V2`.
+
+---
+
 ## WhatsApp customer onboarding Slice 7 controlled-scope Production closeout — 2026-10-02
 
 - Contract slice: **Official coexistence + native activity + Human/AI arbitration**. The internally controlled native-activity/arbitration path extends only the existing Meta WhatsApp webhook journal, canonical CRM/conversation/message authorities, human-takeover semantics, final send gate and Chatwoot reconciliation worker. No second provider stack, message store, queue, webhook journal, CRM, IAM, secret store or Chatwoot plane was introduced.
