@@ -54,9 +54,11 @@ function explicitSafetyBlock(input: string): TelegramOwnerCommand | null {
 
 function founderCommand(rawInput: string): TelegramOwnerCommand | null {
   const normalized = rawInput.replace(/\r/g, '').trim();
-  const match = normalized.match(/^\/founder(?:@[A-Za-z0-9_]+)?(?:\s+([\s\S]+))?$/i);
+  const match = normalized.match(/^\/(founder|investor)(?:@[A-Za-z0-9_]+)?(?:\s+([\s\S]+))?$/i);
   if (!match) return null;
-  const question = (match[1] ?? 'وضعیت فعلی شرکت و مهم‌ترین اقدام بعدی چیست؟').trim();
+  const question = (match[2] ?? (match[1].toLowerCase() === 'investor'
+    ? 'برای آمادگی جذب سرمایه چه شواهدی داریم، چه شواهدی کم است و اقدام بعدی چیست؟'
+    : 'وضعیت فعلی شرکت و مهم‌ترین اقدام بعدی چیست؟')).trim();
   if (!question || question.length > 4_000) return { type: 'HELP' };
   return { type: 'FOUNDER_ASK', question };
 }
