@@ -103,10 +103,14 @@ describe('AI-OWNER-COPILOT',()=>{
     expect(snapshotSource).toContain("from('orders')");
     expect(snapshotSource).toContain("from('invoices')");
     expect(snapshotSource).toContain("from('payment_intents')");
-    expect(snapshotSource).toContain("from('founder_board_reports')");
+    expect(snapshotSource).toContain("from('outreach_messages')");
+    expect(snapshotSource).toContain("from('preview_events')");
+    expect(snapshotSource).not.toContain("from('founder_board_reports')");
     expect(snapshotSource).toContain('followUps');
+    expect(snapshotSource).toContain('reports');
     expect(snapshotSource).toContain('team');
     expect(snapshotSource).toContain('not a historical analytics warehouse');
+    expect(snapshotSource).toContain('not causal attribution or Founder-only board reporting');
   });
 
   it('ships a real OWNER/ADMIN web surface while preserving Founder Copilot as read-only analysis',()=>{
