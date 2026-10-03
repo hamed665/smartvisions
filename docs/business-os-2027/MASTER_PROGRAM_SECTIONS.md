@@ -1,3 +1,20 @@
+## AI-CONTEXT-COMPILER Production closeout — 2026-10-03
+
+- Work Package: `SECTION BUSINESS_INTELLIGENCE_AI -> AI-CONTEXT-COMPILER`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**.
+- PR #427 (`15091aca8ef9a783c94cca93d075c246eb0a6d68`) passed exact-head CI `37087017247` and merged as `cfff8a71e1886e7982601f9b626f9fbcbc168191`.
+- PR #429 (`4f5ac0ab4a7b1c111e820c0e2397597f3634c135`) passed exact-head CI `37088072184` and merged to canonical `main@0415e377cdc4ac4d9c10a5d1b7cdeca75136f014`.
+- Exact-main CI `37106982355` and Cloudflare Production Deploy `37107165996` both succeeded on that exact main SHA.
+- The compiler only produces bounded deterministic projections from canonical Customer/CRM, Conversation/Sales State, Business Twin, Knowledge V2, Memory V2, Services/Pricing, Locale, IAM Permission Context and Tool Action Registry authorities. It did not create a second CRM, customer profile, conversation memory, Knowledge, Memory, pricing, IAM or Tool Registry authority.
+- Tool Registry availability remains metadata only: **tool availability is not execution authority, and model proposals are not execution permission**. Only actions explicitly registered for the `AI` execution surface are exposed to model context.
+- No Context Compiler schema migration or synthetic Production data was required or created.
+
+**Fresh continuation cursor:** `SECTION BUSINESS_INTELLIGENCE_AI -> AI-AGENT-RUNTIME`.
+
+AI-AGENT-RUNTIME must extend the existing Agent pipeline, `agent_runs`, Tool Action Registry, approval/policy gates and canonical domain runtimes. It must not create a second Agent framework, policy engine, approval engine, action gateway, provider-send path or financial execution authority.
+
+---
+
 ## KNOWLEDGE-V2 Production closeout — 2026-10-03
 
 - Work Package: `SECTION BUSINESS_INTELLIGENCE_AI -> KNOWLEDGE-V2`.
@@ -1565,7 +1582,7 @@ Every memory item needs source, confidence, freshness, sensitivity, validity and
 
 ## AI-CONTEXT-COMPILER
 
-**Next Work Package.**
+**Disposition: IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED.**
 
 Deterministically composes:
 
@@ -1582,6 +1599,8 @@ Deterministically composes:
 - tool availability.
 
 ## AI-AGENT-RUNTIME
+
+**Next Work Package.**
 
 Specialist roles may include:
 

@@ -49,16 +49,18 @@ describe('BOOKING-AI contract',()=>{
   it('keeps mutations fail closed behind current inbound evidence and Shadow Mode',()=>{
     expect(tools).toContain('explicitCustomerRequest');
     expect(tools).toContain('inboundVerified');
-    expect(tools).toContain("['CREATE','RESCHEDULE','CANCEL','SCHEDULE_REMINDER']");
+    expect(tools).toContain("['CREATE','RESCHEDULE','CANCEL','SCHEDULE_REMINDER','ESCALATE']");
     expect(tools).toContain("if (mutation && input.shadowMode)");
     expect(tools).toContain("status:'SHADOW_BLOCKED'");
-    expect(route).toContain('afterOrchestrator');
+    expect(route).toContain('proposeTool');
+    expect(route).toContain('executeToolProposal');
     expect(pipeline).toContain('bookingToolResult');
     expect(pipeline).toContain('BOOKING_TOOL_REQUIRES_REVIEW');
   });
 
   it('gives secretary verified tool evidence before customer reply composition',()=>{
-    expect(pipeline.indexOf('hooks.afterOrchestrator')).toBeLessThan(pipeline.indexOf("runAgent('secretary'"));
+    expect(pipeline.indexOf('hooks?.proposeTool')).toBeLessThan(pipeline.indexOf("runAgent('secretary'"));
+    expect(pipeline.indexOf('executeToolProposal')).toBeLessThan(pipeline.indexOf("runAgent('secretary'"));
     expect(openai).toContain('booking_tool_proposal');
     expect(openai).toContain('never tell the customer that a booking');
     expect(context).toContain('bookingContext');

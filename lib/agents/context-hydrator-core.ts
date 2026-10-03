@@ -169,6 +169,7 @@ export async function hydrateAgentContext(input: {
     toolRegistryResult,
     membershipResult,
     scopeAssignmentsResult,
+    targetScopeResult,
   ] = await Promise.all([
     authoritativeLeadId && conversationId && conversationChannel
       ? supabase
@@ -281,12 +282,21 @@ export async function hydrateAgentContext(input: {
     input.actorUserId
       ? supabase
         .from('member_scope_assignments')
-        .select('id,scope_type,role,brand_id,tenant_business_id,branch_id,department_id,team_id')
+        .select('id,scope_type,role,brand_id,tenant_business_id,branch_id,department_id,team_id,attributes')
         .eq('organization_id', organizationId)
         .eq('user_id', input.actorUserId)
         .order('scope_type', { ascending: true })
         .limit(16)
       : Promise.resolve({ data: [], error: null }),
+    conversationId
+      ? supabase
+        .from('unified_inbox_conversation_projections')
+        .select('brand_id,tenant_business_id,branch_id,department_id,team_id,lifecycle_status')
+        .eq('organization_id', organizationId)
+        .eq('conversation_id', conversationId)
+        .in('lifecycle_status', ['ACTIVE', 'DEGRADED'])
+        .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
   ]);
 
   const firstError = [
@@ -306,10 +316,42 @@ export async function hydrateAgentContext(input: {
     toolRegistryResult,
     membershipResult,
     scopeAssignmentsResult,
+    targetScopeResult,
   ]
     .map((result) => result.error)
     .find(Boolean);
   if (firstError) throw new Error(`Agent context hydration failed: ${firstError.message}`);
+
+  const targetScopeRow = targetScopeResult.data as Record<string, unknown> | null;
+  const targetScope = {
+    brandId: clip(targetScopeRow?.brand_id, 80) || undefined,
+    tenantBusinessId: clip(targetScopeRow?.tenant_business_id, 80) || undefined,
+    branchId: clip(targetScopeRow?.branch_id, 80) || undefined,
+    departmentId: clip(targetScopeRow?.department_id, 80) || undefined,
+    teamId: clip(targetScopeRow?.team_id, 80) || undefined,
+  };
+  let effectiveRole: string | undefined;
+  if (input.actorUserId) {
+    if (!membershipResult.data) {
+      throw new Error('AI actor is not a member of the requested Organization');
+    }
+    const roleResult = await supabase.rpc('unified_inbox_actor_effective_role', {
+      p_organization_id: organizationId,
+      p_user_id: input.actorUserId,
+      p_brand_id: targetScope.brandId ?? null,
+      p_tenant_business_id: targetScope.tenantBusinessId ?? null,
+      p_branch_id: targetScope.branchId ?? null,
+      p_department_id: targetScope.departmentId ?? null,
+      p_team_id: targetScope.teamId ?? null,
+    });
+    if (roleResult.error) {
+      throw new Error(`AI actor scope evaluation failed: ${roleResult.error.message}`);
+    }
+    effectiveRole = clip(roleResult.data, 40).toUpperCase() || undefined;
+    if (!effectiveRole) {
+      throw new Error('AI actor is outside the canonical target scope');
+    }
+  }
 
   const conversationHistory = conversationId
     ? buildConversationMemory({
@@ -353,6 +395,8 @@ export async function hydrateAgentContext(input: {
     actorUserId: input.actorUserId,
     membership: membershipResult.data as Record<string, unknown> | null,
     scopeAssignments: (scopeAssignmentsResult.data ?? []) as Array<Record<string, unknown>>,
+    effectiveRole,
+    targetScope,
   });
 
   const activePrompts: Partial<Record<AgentName, ActivePromptSnapshot>> = {};
@@ -543,7 +587,9 @@ export async function hydrateAgentContext(input: {
       refs: [
         permissionContext.actorType,
         permissionContext.organizationRole ?? '',
+        permissionContext.effectiveRole ?? '',
         ...(permissionContext.userId ? [permissionContext.userId] : []),
+        ...Object.values(permissionContext.targetScope).filter((value): value is string => Boolean(value)),
       ],
     },
   ]);

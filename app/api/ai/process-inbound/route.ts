@@ -14,7 +14,12 @@ import { assertRuntimeControlsAllow, getRuntimeSafetyControls } from '@/lib/reli
 import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { notifyTelegramOwner } from '@/lib/telegram/notifications';
 import { buildSalesTelegramAlert } from '@/lib/telegram/sales-alerts';
-import { executeBookingAiTool, extractBookingAiProposal } from '@/lib/booking/ai-tools';
+import {
+  agentToolProposalToBookingProposal,
+  bookingProposalToAgentToolProposal,
+  executeBookingAiTool,
+  extractBookingAiProposal,
+} from '@/lib/booking/ai-tools';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -105,20 +110,37 @@ function maxVersion(values: Array<number | undefined>) {
   return usable.length ? Math.max(...usable) : null;
 }
 
+function canonicalUuid(value: unknown) {
+  if (value == null || value === '') return undefined;
+  const text = String(value).trim().toLowerCase();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(text)
+    ? text
+    : null;
+}
+
 export async function POST(request: Request) {
   const authError = requireInternalApiKey(request);
   if (authError) return authError;
 
-  const body = await request.json() as { context?: AgentContext; idempotencyKey?: string; deliveryContext?: unknown };
+  const body = await request.json() as {
+    context?: AgentContext;
+    idempotencyKey?: string;
+    deliveryContext?: unknown;
+    actorUserId?: string;
+  };
   if (!body.context?.message || !body.context.organizationId) {
     return NextResponse.json({ error: 'context.message and context.organizationId are required' }, { status: 400 });
   }
 
   let requestKey: string;
   let requestedDeliveryContext: RequestedWhatsAppDeliveryContext | null;
+  let actorUserId: string | undefined;
   try {
     requestKey = normalizeIdempotencyKey(String(body.idempotencyKey ?? ''));
     requestedDeliveryContext = parseDeliveryContext(body.deliveryContext);
+    const parsedActor = canonicalUuid(body.actorUserId);
+    if (parsedActor === null) throw new Error('actorUserId must be a canonical UUID');
+    actorUserId = parsedActor;
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid request' }, { status: 400 });
   }
@@ -256,6 +278,7 @@ export async function POST(request: Request) {
       supabase,
       context: trustedContext,
       trustedConversationId: deliveryContext?.conversationId ?? requestedDeliveryContext?.conversationId,
+      actorUserId,
     });
     effectiveContext = { ...hydrated.context, shadowMode: controls.shadow_mode };
     runtimeEvidence = hydrated.evidence;
@@ -365,20 +388,32 @@ export async function POST(request: Request) {
   try {
     const result = await processInboundMessage(
       effectiveContext,
-      { agentsPaused: controls.agents_paused },
+      { agentsPaused: controls.agents_paused, signal: request.signal },
       runtime,
       {
-        afterOrchestrator: async ({ specialistResults, orchestratorResult }) => {
-          const proposal = extractBookingAiProposal(
+        proposeTool: ({ specialistResults, orchestratorResult }) => {
+          const bookingProposal = extractBookingAiProposal(
             orchestratorResult ? [...specialistResults, orchestratorResult] : specialistResults,
           );
-          if (!proposal || proposal.action === 'NONE') return undefined;
-          if (!effectiveContext.conversationId) {
+          return bookingProposalToAgentToolProposal(bookingProposal);
+        },
+        executeToolProposal: async ({ proposal }) => {
+          const bookingProposal = agentToolProposalToBookingProposal(proposal);
+          if (!bookingProposal) {
             return {
-              action: proposal.action,
               status: 'BLOCKED',
               executed: false,
-              mutation: false,
+              mutation: proposal.mutation,
+              requiresReview: true,
+              error: 'Generic Agent tool proposal does not match the canonical Booking contract',
+            };
+          }
+          if (!effectiveContext.conversationId) {
+            return {
+              action: bookingProposal.action,
+              status: 'BLOCKED',
+              executed: false,
+              mutation: proposal.mutation,
               requiresReview: true,
               error: 'Canonical conversation is required for Booking AI tool execution',
             };
@@ -391,7 +426,7 @@ export async function POST(request: Request) {
             message: effectiveContext.message,
             requestKey,
             shadowMode: controls.shadow_mode,
-            proposal,
+            proposal: bookingProposal,
           });
         },
       },
@@ -402,16 +437,28 @@ export async function POST(request: Request) {
       runtime: runtimeName,
       runtimeContext: runtimeEvidence,
     };
-    const completedAt = new Date().toISOString();
-    const { error: completeError } = await supabase.from('agent_runs').update({
-      status: 'COMPLETED',
-      routed_agents: result.trace.routedAgents,
-      trace: result.trace,
-      result_payload: payload,
-      completed_at: completedAt,
-    }).eq('organization_id', organizationId).eq('id', claimed.id).eq('status', 'PROCESSING');
+    const { error: completeError } = await supabase.rpc('persist_agent_runtime_outcome', {
+      p_organization_id: organizationId,
+      p_run_id: claimed.id,
+      p_actor_user_id: actorUserId ?? null,
+      p_routed_agents: result.trace.routedAgents,
+      p_agent_outputs: result.trace.agentResults,
+      p_reply_decision: {
+        commercialDecision: result.trace.decision,
+        customerDraft: result.draft.text,
+        draftLanguage: result.draft.language,
+        relevancePassed: result.trace.relevancePassed,
+        delivery: result.trace.delivery,
+      },
+      p_trace: result.trace,
+      p_result_payload: payload,
+    });
     if (completeError) {
-      return NextResponse.json({ error: 'AI processing completed but result persistence requires reconciliation', runId: claimed.id, reconciliationRequired: true }, { status: 202 });
+      return NextResponse.json({
+        error: 'AI processing completed but atomic runtime persistence requires reconciliation',
+        runId: claimed.id,
+        reconciliationRequired: true,
+      }, { status: 202 });
     }
 
     const handoffState = await reconcileHandoff(payload, {
@@ -450,11 +497,16 @@ export async function POST(request: Request) {
     return NextResponse.json(responsePayload);
   } catch (error) {
     const message = error instanceof Error ? error.message.slice(0, 600) : 'Inbound AI processing failed';
-    await supabase.from('agent_runs').update({
-      status: 'FAILED',
-      trace: { error: message, automatic_retry: false, runtimeContext: runtimeEvidence },
-      completed_at: new Date().toISOString(),
-    }).eq('organization_id', organizationId).eq('id', claimed.id).eq('status', 'PROCESSING');
+    await supabase.rpc('fail_agent_runtime', {
+      p_organization_id: organizationId,
+      p_run_id: claimed.id,
+      p_actor_user_id: actorUserId ?? null,
+      p_trace: {
+        error: message,
+        automatic_retry: false,
+        runtimeContext: runtimeEvidence,
+      },
+    });
     const handoffState = await persistFailureHandoff('AI_RUNTIME_FAILURE');
     return NextResponse.json({
       error: message,

@@ -194,6 +194,9 @@ export function projectToolAvailability(rows: Array<Record<string, unknown>>): T
         requiredWorkPackages: Array.isArray(row.required_work_packages)
           ? row.required_work_packages.filter((item): item is string => typeof item === 'string').slice(0, 12)
           : [],
+        providerSend: metadata.providerSend === true,
+        paymentExecution: metadata.paymentExecution === true,
+        shadowMutationBlocked: metadata.shadowMutationBlocked === true,
         runtimeAuthorizationRequired: true,
       }];
     })
@@ -206,9 +209,30 @@ export function projectPermissionContext(input: {
   actorUserId?: string;
   membership?: Record<string, unknown> | null;
   scopeAssignments?: Array<Record<string, unknown>>;
+  effectiveRole?: string;
+  targetScope?: {
+    brandId?: string;
+    tenantBusinessId?: string;
+    branchId?: string;
+    departmentId?: string;
+    teamId?: string;
+  };
 }): PermissionContextSnapshot {
   const userId = clip(input.actorUserId, 80);
   const organizationRole = clip(input.membership?.role, 40).toUpperCase();
+  const effectiveRole = clip(input.effectiveRole, 40).toUpperCase();
+  const brandId = clip(input.targetScope?.brandId, 80);
+  const tenantBusinessId = clip(input.targetScope?.tenantBusinessId, 80);
+  const branchId = clip(input.targetScope?.branchId, 80);
+  const departmentId = clip(input.targetScope?.departmentId, 80);
+  const teamId = clip(input.targetScope?.teamId, 80);
+  const targetScope = {
+    ...(brandId ? { brandId } : {}),
+    ...(tenantBusinessId ? { tenantBusinessId } : {}),
+    ...(branchId ? { branchId } : {}),
+    ...(departmentId ? { departmentId } : {}),
+    ...(teamId ? { teamId } : {}),
+  };
   const scopeAssignments = (input.scopeAssignments ?? [])
     .map((row) => ({
       id: clip(row.id, 80),
@@ -227,6 +251,7 @@ export function projectPermissionContext(input: {
   if (!userId) {
     return {
       actorType: 'SYSTEM',
+      targetScope,
       scopeAssignments: [],
       source: 'IAM_CANONICAL',
       runtimeAuthorizationRequired: true,
@@ -237,6 +262,8 @@ export function projectPermissionContext(input: {
     actorType: 'USER',
     userId,
     ...(organizationRole ? { organizationRole } : {}),
+    ...(effectiveRole ? { effectiveRole } : {}),
+    targetScope,
     scopeAssignments,
     source: 'IAM_CANONICAL',
     runtimeAuthorizationRequired: true,
