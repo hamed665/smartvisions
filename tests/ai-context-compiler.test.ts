@@ -6,6 +6,7 @@ import {
   projectBusinessTwinContext,
   projectCustomerContext,
   projectMemoryContext,
+  projectPermissionContext,
   projectToolAvailability,
 } from '@/lib/agents/context-compiler';
 import { buildAgentInputForRuntime } from '@/lib/agents/openai-runtime-core';
@@ -19,6 +20,8 @@ describe('AI-CONTEXT-COMPILER', () => {
     expect(hydrator).toContain("rpc('get_memory_context_v2'");
     expect(hydrator).toContain("from('tool_action_registry')");
     expect(hydrator).toContain("from('crm_people')");
+    expect(hydrator).toContain("from('organization_members')");
+    expect(hydrator).toContain("from('member_scope_assignments')");
     expect(hydrator).not.toMatch(/from\(['"](?:context_store|agent_context_store|ai_context_store)['"]\)/);
   });
 
@@ -134,6 +137,46 @@ describe('AI-CONTEXT-COMPILER', () => {
     expect(tools[0]).not.toHaveProperty('authorized');
   });
 
+  it('separates IAM permission context from Tool Registry permission requirements', () => {
+    const system = projectPermissionContext({});
+    expect(system).toEqual({
+      actorType: 'SYSTEM',
+      scopeAssignments: [],
+      source: 'IAM_CANONICAL',
+      runtimeAuthorizationRequired: true,
+    });
+
+    const user = projectPermissionContext({
+      actorUserId: 'user-1',
+      membership: { role: 'ADMIN' },
+      scopeAssignments: [
+        {
+          id: 'scope-2',
+          scope_type: 'BRANCH',
+          role: 'SALES',
+          branch_id: 'branch-1',
+          attributes: { shouldNotLeak: true },
+        },
+        {
+          id: 'scope-1',
+          scope_type: 'BUSINESS',
+          role: 'ADMIN',
+          tenant_business_id: 'business-1',
+        },
+      ],
+    });
+
+    expect(user).toMatchObject({
+      actorType: 'USER',
+      userId: 'user-1',
+      organizationRole: 'ADMIN',
+      source: 'IAM_CANONICAL',
+      runtimeAuthorizationRequired: true,
+    });
+    expect(user.scopeAssignments.map((item) => item.scopeType)).toEqual(['BRANCH', 'BUSINESS']);
+    expect(user.scopeAssignments[0]).not.toHaveProperty('attributes');
+  });
+
   it('builds a deterministic sorted evidence manifest', () => {
     const input = [
       { authority: 'MEMORY', count: 2, refs: ['b', 'a', 'a'] },
@@ -161,6 +204,12 @@ describe('AI-CONTEXT-COMPILER', () => {
         policyConfiguration: [],
         sourceSummary: { serviceCount: 8 },
       },
+      permissionContext: {
+        actorType: 'SYSTEM',
+        scopeAssignments: [],
+        source: 'IAM_CANONICAL',
+        runtimeAuthorizationRequired: true,
+      },
       toolAvailability: [{
         actionKey: 'SEND_FOLLOWUP',
         toolKey: 'OUTREACH_SEND',
@@ -184,11 +233,13 @@ describe('AI-CONTEXT-COMPILER', () => {
       memoryContext?: unknown[];
       businessTwinContext?: unknown;
       toolAvailability?: unknown[];
+      permissionContext?: unknown;
       contextEvidence?: unknown;
     };
     expect(input.memoryContext).toHaveLength(12);
     expect(input.businessTwinContext).toEqual(context.businessTwinContext);
     expect(input.toolAvailability).toEqual(context.toolAvailability);
+    expect(input.permissionContext).toEqual(context.permissionContext);
     expect(input.contextEvidence).toEqual(context.contextEvidence);
   });
 });
