@@ -12,6 +12,7 @@ import {
 import type { FounderStatusSnapshotV1 } from './contracts';
 import { runOwnerJsonModel } from '@/lib/ai/owner-model-gateway';
 import type { FounderFinanceV1 } from './finance';
+import type { FounderInvestorWorkspaceV1 } from './investor';
 
 const schema = {
   type: 'object',
@@ -77,6 +78,7 @@ export async function analyzeFounderQuestion(input: {
   question: string;
   status: FounderStatusSnapshotV1;
   finance?: FounderFinanceV1 | null;
+  investor?: FounderInvestorWorkspaceV1 | null;
   history?: FounderConversationTurn[];
   signal?: AbortSignal;
 }): Promise<FounderIntelligenceResult> {
@@ -98,6 +100,11 @@ export async function analyzeFounderQuestion(input: {
     'FOUNDER_STATUS.founderFinance.scenarios are explicitly ASSUMPTIONS. Scenario values, customer-count projections and derived metrics may be analyzed as assumptions/scenarios but must never be returned as FACTS or described as observed company performance.',
     'FOUNDER_STATUS.founderFinance.missingEvidence is authoritative about finance metrics without a canonical authority. Never substitute invoice totals, collected cash, provider spend, model memory or scenario values for a metric marked MISSING.',
     'Provider Cost Guard spend is not company burn. Company runway may be stated as a fact only when COMPANY_FINANCE is VERIFIED and the confirmed snapshot contains cash balance and monthly net burn.',
+    'FOUNDER_STATUS.founderInvestor keeps fundraising assumptions, external research and canonical CRM workflow separate. FUNDRAISING_STRUCTURE, INVESTOR_RESEARCH and INVESTOR_PIPELINE may be cited only when VERIFIED in FOUNDER_STATUS.evidence.',
+    'A DISCOVERED_EXTERNAL investor candidate is external research evidence only. It is not a confirmed CRM identity, investor interest, outreach, meeting, diligence, term sheet or commitment.',
+    'CRM_CONFIRMED means the external record was explicitly linked to canonical CRM Company/Person evidence. It still does not prove investor interest or commitment.',
+    'Fundraising round target raise, valuation, valuation cap, discount and target runway fields are OWNER assumptions unless separately supported. Never relabel them as market valuation or agreed terms.',
+    'FUNDRAISING CRM Deal stages are workflow evidence. Do not turn stage probability into probability of raising capital. CLOSED records are not cash-receipt evidence unless a separate payment/bank authority supports that claim.',
     liveResearch
       ? 'Every current external claim must be represented in external_facts as {text, source_url}. source_url must be a URL actually returned by web_search. Never invent a URL, source, market size, competitor price, regulation, investor, benchmark or event.'
       : 'Never invent revenue, MRR, ARR, customers, traction, conversion, runway, valuation, market size, competitor pricing, investor interest, or external events.',
@@ -120,7 +127,7 @@ export async function analyzeFounderQuestion(input: {
     instructions,
     payload: {
       founder_question: question,
-      founder_status: founderStatusModelPayload(input.status, input.finance),
+      founder_status: founderStatusModelPayload(input.status, input.finance, input.investor),
       conversation_history: history,
     },
     schemaName: 'founder_intelligence_v1',
@@ -135,5 +142,6 @@ export async function analyzeFounderQuestion(input: {
     status: input.status,
     webSources: response.webSources,
     finance: input.finance,
+    investor: input.investor,
   });
 }

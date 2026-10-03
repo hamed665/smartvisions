@@ -271,9 +271,7 @@ export async function createFounderInvestorPipelineEntry(form: FormData) {
   const candidateId = uuid(required(form, 'candidate_id'), 'candidate_id');
   const roundId = uuid(required(form, 'round_id'), 'round_id');
   const amount = optionalNonNegative(form, 'amount');
-  const currency = amount == null
-    ? null
-    : currencyValue(optional(form, 'currency') ?? required(form, 'round_currency'), true);
+  const requestedCurrency = optional(form, 'currency');
   const expectedCloseAt = dateOnlyToIso(optional(form, 'expected_close_date'), 'expected_close_date');
 
   const [candidateResult, roundResult] = await Promise.all([
@@ -350,7 +348,7 @@ export async function createFounderInvestorPipelineEntry(form: FormData) {
     title: `${String(candidate.fund_name).slice(0, 150)} · ${String(round.name).slice(0, 80)}`.slice(0, 240),
     state: 'OPEN',
     amount,
-    currency: currency ?? (amount != null ? String(round.currency) : null),
+    currency: amount == null ? null : currencyValue(requestedCurrency ?? String(round.currency), true),
     expected_close_at: expectedCloseAt,
     owner_user_id: ctx.userId,
     source_type: 'MANUAL',

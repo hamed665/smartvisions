@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { FounderStatusSnapshotV1 } from '@/lib/founder/contracts';
+import type { FounderInvestorWorkspaceV1 } from '@/lib/founder/investor';
 import {
   founderStatusModelPayload,
   normalizeFounderHistory,
@@ -204,5 +205,96 @@ describe('Founder intelligence evidence boundary', () => {
     expect(payload.investorReadiness.mode).toBe('READ_ONLY_EVIDENCE');
     expect(payload.investorReadiness.items.find((item) => item.key === 'COMPANY_FINANCIALS')?.state).toBe('MISSING');
     expect(payload).not.toHaveProperty('rawRows');
+  });
+});
+
+
+const investor: FounderInvestorWorkspaceV1 = {
+  schemaVersion: 1,
+  generatedAt: '2026-10-03T15:00:00.000Z',
+  rounds: [{
+    id: '00000000-0000-4000-8000-000000000301',
+    name: 'Seed',
+    status: 'ACTIVE',
+    instrument: 'EQUITY',
+    currency: 'USD',
+    targetRaise: 1000000,
+    preMoneyValuationAssumption: 4000000,
+    valuationCapAssumption: null,
+    discountBpsAssumption: null,
+    targetRunwayMonthsAssumption: 18,
+    useOfFunds: {},
+    assumptionSourceRef: 'owner-plan',
+    notes: null,
+    evidenceClass: 'ASSUMPTION',
+    version: 1,
+    updatedAt: '2026-10-03T15:00:00.000Z',
+  }],
+  candidates: [{
+    id: '00000000-0000-4000-8000-000000000302',
+    recordState: 'DISCOVERED_EXTERNAL',
+    fundName: 'Research Fund',
+    personName: null,
+    geography: 'GCC',
+    stageFit: 'Seed',
+    ticketMin: 250000,
+    ticketMax: 1000000,
+    currency: 'USD',
+    sectorFit: 'B2B SaaS',
+    aiSaasFit: true,
+    menaGccFit: true,
+    sourceUrl: 'https://example.com/fund',
+    sourceTitle: 'Fund page',
+    lastVerifiedAt: '2026-10-03T15:00:00.000Z',
+    businessId: null,
+    personId: null,
+    confirmationMethod: null,
+    confirmedAt: null,
+    notes: null,
+    evidenceClass: 'EXTERNAL_RESEARCH',
+    version: 1,
+    updatedAt: '2026-10-03T15:00:00.000Z',
+  }],
+  pipeline: { id: null, name: null, status: null, stages: [], deals: [] },
+  crmOptions: { businesses: [], people: [] },
+  evidence: [
+    { authority: 'FUNDRAISING_STRUCTURE', quality: 'VERIFIED', evidenceClass: 'VERIFIED_PRODUCTION', count: 1, detail: 'verified' },
+    { authority: 'INVESTOR_RESEARCH', quality: 'VERIFIED', evidenceClass: 'VERIFIED_PRODUCTION', count: 1, detail: 'verified' },
+    { authority: 'INVESTOR_PIPELINE', quality: 'VERIFIED', evidenceClass: 'VERIFIED_PRODUCTION', count: 0, detail: 'verified' },
+  ],
+};
+
+describe('Founder investor intelligence boundary', () => {
+  it('includes bounded investor evidence in model context without promoting external discovery to CRM confirmation', () => {
+    const payload = founderStatusModelPayload(status, null, investor);
+    expect(payload.founderInvestor?.rounds[0]?.evidenceClass).toBe('ASSUMPTION');
+    expect(payload.founderInvestor?.candidates[0]?.recordState).toBe('DISCOVERED_EXTERNAL');
+    expect(payload.evidence.map((item) => item.authority)).toContain('INVESTOR_RESEARCH');
+    expect(payload.investorReadiness.items.find((item) => item.key === 'FUNDRAISING_STRUCTURE')?.state).toBe('PARTIAL');
+  });
+
+  it('accepts grounded investor facts only through verified investor authorities', () => {
+    const result = parseFounderIntelligence({
+      status,
+      investor,
+      raw: {
+        question_kind: 'INVESTOR',
+        answer: 'One external investor research record exists.',
+        facts: [
+          { text: 'One governed investor research record exists.', authority: 'INVESTOR_RESEARCH' },
+          { text: 'The investor is interested.', authority: 'INVESTOR_INTEREST' },
+        ],
+        external_facts: [],
+        gaps: ['Investor interest is not evidenced.'],
+        next_action: 'Confirm identity before pipeline entry.',
+        kpi: 'CRM-confirmed investor records.',
+        risks: ['Research is not interest.'],
+        confidence: 'HIGH',
+      },
+    });
+    expect(result.facts).toEqual([
+      { text: 'One governed investor research record exists.', authority: 'INVESTOR_RESEARCH' },
+    ]);
+    expect(result.evidenceAuthorities).toEqual(['INVESTOR_RESEARCH']);
   });
 });
