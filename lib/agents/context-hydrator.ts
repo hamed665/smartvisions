@@ -98,6 +98,7 @@ export async function hydrateAgentContext(input: {
   supabase: SupabaseClient;
   context: AgentContext;
   trustedConversationId?: string;
+  actorUserId?: string;
 }) {
   const coreHydrated = await hydrateCore(input);
   if (coreHydrated.context.organizationId && coreHydrated.context.conversationId && coreHydrated.context.salesState) {
