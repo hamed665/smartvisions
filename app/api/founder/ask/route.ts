@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { analyzeFounderQuestion } from '@/lib/founder/intelligence';
 import { normalizeFounderHistory } from '@/lib/founder/intelligence-core';
 import { founderOsV1Enabled, loadFounderStatusV1 } from '@/lib/founder/server';
+import { loadFounderFinanceV1 } from '@/lib/founder/finance-server';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
 
@@ -31,14 +32,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Founder OS is not enabled' }, { status: 404 });
     }
 
-    const status = await loadFounderStatusV1({
-      supabase: service,
-      organizationId: current.organizationId,
-    });
+    const [status, finance] = await Promise.all([
+      loadFounderStatusV1({
+        supabase: service,
+        organizationId: current.organizationId,
+      }),
+      loadFounderFinanceV1({
+        supabase: service,
+        organizationId: current.organizationId,
+      }),
+    ]);
     const result = await analyzeFounderQuestion({
       organizationId: current.organizationId,
       question,
       status,
+      finance,
       history: normalizeFounderHistory(body.history),
       signal: request.signal,
     });
