@@ -65,8 +65,25 @@ export type ConversationMemoryItem = {
   direction: 'INBOUND' | 'OUTBOUND';
   channel?: string;
   status?: 'RECEIVED' | 'SENT';
+  mediaType?: 'TEXT' | 'VOICE' | 'AUDIO' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'OTHER';
+  mediaEvidenceStatus?: 'TRANSCRIPT' | 'ANALYZED' | 'CAPTION_ONLY' | 'UNAVAILABLE';
   body: string;
   at?: string;
+};
+
+export type MediaContextSnapshot = {
+  mediaType: 'VOICE' | 'AUDIO' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'OTHER';
+  mimeType?: string;
+  caption?: string;
+  transcript?: string;
+  summary?: string;
+  extractedText?: string;
+  detectedLanguage?: string;
+  confidence?: number;
+  status: 'TRANSCRIPT' | 'ANALYZED' | 'CAPTION_ONLY';
+  source: 'CANONICAL_CONVERSATION_MESSAGE';
+  trust: 'UNTRUSTED_CUSTOMER_EVIDENCE';
+  analysisVersion?: number;
 };
 
 export type SalesStateEvidence = {
@@ -378,6 +395,7 @@ export type AgentContext = {
   message: string;
   conversationSummary?: string;
   conversationHistory?: ConversationMemoryItem[];
+  mediaContext?: MediaContextSnapshot[];
   salesState?: SalesStateSnapshot;
   knowledgeContext?: KnowledgeSnapshot[];
   serviceKnowledge?: ServiceKnowledgeSnapshot[];

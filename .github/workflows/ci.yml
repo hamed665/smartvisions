@@ -137,11 +137,16 @@ jobs:
             -f /work/tests/sql/ai-model-prompt-control-legacy-authority-bootstrap.sql
 
           # Keep every numbered migration after the explicit foundational chain under PostgreSQL 17.
-          # This closes the gap where 0102+ files existed but were never executed by CI.
+          # Supabase CLI timestamp migrations are also included so official CLI-generated files cannot bypass CI.
+          # This closes the gap where late files existed but were never executed by CI.
           late_count=0
           while IFS= read -r migration; do
             prefix="${migration%%_*}"
-            if [[ ! "$prefix" =~ ^[0-9]{4}$ ]] || (( 10#$prefix < 102 )); then
+            if [[ "$prefix" =~ ^[0-9]{4}$ ]]; then
+              if (( 10#$prefix < 102 )); then continue; fi
+            elif [[ "$prefix" =~ ^[0-9]{14}$ ]]; then
+              :
+            else
               continue
             fi
             late_count=$((late_count + 1))
@@ -229,6 +234,10 @@ jobs:
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f /work/tests/sql/ai-model-prompt-control-smoke.sql
+
+          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
+            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f /work/tests/sql/ai-voice-vision-smoke.sql
 
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \

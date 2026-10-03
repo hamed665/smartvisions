@@ -17,6 +17,7 @@ import {
   buildContextEvidenceManifest,
   projectBusinessTwinContext,
   projectCustomerContext,
+  projectMediaContext,
   projectMemoryContext,
   projectPermissionContext,
   projectToolAvailability,
@@ -64,6 +65,7 @@ export type HydratedRuntimeEvidence = {
   historyCount: number;
   customerMessageCount: number;
   sentReplyCount: number;
+  mediaEvidenceCount: number;
   salesStateVersion?: number;
   promptVersions: Partial<Record<AgentName, number>>;
   knowledgeVersions: Record<string, number>;
@@ -187,7 +189,7 @@ export async function hydrateAgentContext(input: {
     conversationId && conversationChannel
       ? supabase
         .from('conversation_messages')
-        .select('id,conversation_id,provider_message_id,direction,channel,status,original_text,transcript,sent_at,created_at,metadata')
+        .select('id,conversation_id,provider_message_id,direction,channel,status,media_type,original_text,transcript,sent_at,created_at,metadata')
         .eq('organization_id', organizationId)
         .eq('conversation_id', conversationId)
         .eq('channel', conversationChannel)
@@ -363,6 +365,9 @@ export async function hydrateAgentContext(input: {
       limit: 30,
     })
     : [];
+  const mediaContext = projectMediaContext(
+    (conversationMessagesResult.data ?? []) as Array<Record<string, unknown>>,
+  );
 
   const knowledgeContext: KnowledgeSnapshot[] = ((knowledgeResult.data ?? []) as Array<Record<string, unknown>>)
     .map((row) => ({
@@ -563,6 +568,10 @@ export async function hydrateAgentContext(input: {
       refs: conversationId ? [conversationId] : [],
     },
     {
+      authority: 'MEDIA_EVIDENCE',
+      count: mediaContext.length,
+    },
+    {
       authority: 'CRM_CUSTOMER',
       count: customerContext?.relationships.length ?? 0,
       refs: customerContext?.person?.id ? [customerContext.person.id] : [],
@@ -626,6 +635,7 @@ export async function hydrateAgentContext(input: {
       industry,
       conversationSummary,
       conversationHistory,
+      mediaContext,
       salesState,
       knowledgeContext,
       serviceKnowledge,
@@ -651,6 +661,7 @@ export async function hydrateAgentContext(input: {
       historyCount: conversationHistory.length,
       customerMessageCount: customerMessages(conversationHistory).length,
       sentReplyCount: sentReplies(conversationHistory).length,
+      mediaEvidenceCount: mediaContext.length,
       salesStateVersion: salesState.version,
       promptVersions,
       knowledgeVersions,
