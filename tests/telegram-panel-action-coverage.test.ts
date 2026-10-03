@@ -91,6 +91,14 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
     saveFounderFinanceScenario:'SPECIALIZED:FOUNDER_FINANCE',
     archiveFounderFinanceScenario:'SPECIALIZED:FOUNDER_FINANCE',
   },
+  'app/founder/investor-actions.ts': {
+    saveFounderFundraisingRound:'SPECIALIZED:FOUNDER_INVESTOR',
+    recordFounderInvestorResearchCandidate:'SPECIALIZED:FOUNDER_INVESTOR',
+    ensureFounderFundraisingPipeline:'SPECIALIZED:FOUNDER_INVESTOR',
+    confirmFounderInvestorCandidateToCrm:'SPECIALIZED:FOUNDER_INVESTOR',
+    createFounderInvestorPipelineEntry:'SPECIALIZED:FOUNDER_INVESTOR',
+    moveFounderInvestorDealStage:'SPECIALIZED:FOUNDER_INVESTOR',
+  },
   'app/growth-opportunity-actions.ts': {
     routeCachedGrowthOpportunities:'growth.rescore', recordGrowthSocialAssessment:'growth.social_review', promoteHighPrecisionGrowthCandidates:'growth.promote',
   },
@@ -201,6 +209,12 @@ describe('Control Center ↔ Telegram action coverage', () => {
     expect(CLASSIFICATION['app/founder/finance-actions.ts'].recordCompanyFinancialSnapshot).toBe('SPECIALIZED:FOUNDER_FINANCE');
     expect(CLASSIFICATION['app/founder/finance-actions.ts'].saveFounderFinanceScenario).toBe('SPECIALIZED:FOUNDER_FINANCE');
     expect(CLASSIFICATION['app/founder/finance-actions.ts'].archiveFounderFinanceScenario).toBe('SPECIALIZED:FOUNDER_FINANCE');
+    expect(CLASSIFICATION['app/founder/investor-actions.ts'].saveFounderFundraisingRound).toBe('SPECIALIZED:FOUNDER_INVESTOR');
+    expect(CLASSIFICATION['app/founder/investor-actions.ts'].recordFounderInvestorResearchCandidate).toBe('SPECIALIZED:FOUNDER_INVESTOR');
+    expect(CLASSIFICATION['app/founder/investor-actions.ts'].ensureFounderFundraisingPipeline).toBe('SPECIALIZED:FOUNDER_INVESTOR');
+    expect(CLASSIFICATION['app/founder/investor-actions.ts'].confirmFounderInvestorCandidateToCrm).toBe('SPECIALIZED:FOUNDER_INVESTOR');
+    expect(CLASSIFICATION['app/founder/investor-actions.ts'].createFounderInvestorPipelineEntry).toBe('SPECIALIZED:FOUNDER_INVESTOR');
+    expect(CLASSIFICATION['app/founder/investor-actions.ts'].moveFounderInvestorDealStage).toBe('SPECIALIZED:FOUNDER_INVESTOR');
     expect(CLASSIFICATION['app/booking/availability-actions.ts'].configureBookingAvailabilityCalendar).toBe('SPECIALIZED:BOOKING_AVAILABILITY');
     expect(CLASSIFICATION['app/booking/availability-actions.ts'].createBookingAvailabilityHold).toBe('SPECIALIZED:BOOKING_AVAILABILITY');
     expect(CLASSIFICATION['app/booking/availability-actions.ts'].releaseBookingAvailabilityHold).toBe('SPECIALIZED:BOOKING_AVAILABILITY');

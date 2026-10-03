@@ -1,5 +1,6 @@
 import type { FounderStatusSnapshotV1 } from './contracts';
 import type { FounderFinanceV1 } from './finance';
+import { founderInvestorVerifiedAuthorities, type FounderInvestorWorkspaceV1 } from './investor';
 
 export type FounderInvestorEvidenceState = 'PRESENT' | 'PARTIAL' | 'MISSING';
 
@@ -47,6 +48,7 @@ function supported(
 export function buildFounderInvestorReadinessV1(
   status: FounderStatusSnapshotV1,
   finance?: FounderFinanceV1 | null,
+  investor?: FounderInvestorWorkspaceV1 | null,
 ): FounderInvestorReadinessV1 {
   const items: FounderInvestorReadinessItem[] = [];
 
@@ -135,16 +137,28 @@ export function buildFounderInvestorReadinessV1(
     {
       key: 'FUNDRAISING_STRUCTURE',
       title: 'Fundraising structure, cap table and proposed terms',
-      state: 'MISSING',
-      detail: 'No canonical cap table, fundraising round, target raise, valuation or dilution authority is connected to Founder OS V1.',
-      authorities: [],
+      state: (investor?.rounds.length ?? 0) > 0 ? 'PARTIAL' : 'MISSING',
+      detail: (investor?.rounds.length ?? 0) > 0
+        ? 'Governed fundraising round assumptions exist, but cap table and term-sheet comparison authorities are still missing. Round valuation fields remain assumptions.'
+        : 'No governed fundraising round exists. Cap table, proposed terms and dilution evidence also remain missing.',
+      authorities: investor ? ['FUNDRAISING_STRUCTURE'] : [],
     },
     {
       key: 'INVESTOR_PIPELINE',
       title: 'Investor pipeline and outreach evidence',
-      state: 'MISSING',
-      detail: 'No canonical investor CRM or governed investor research source is connected. Founder OS will not invent investor interest or contact status.',
-      authorities: [],
+      state: (investor?.pipeline.deals.length ?? 0) > 0
+        ? 'PRESENT'
+        : (investor?.candidates.length ?? 0) > 0 || Boolean(investor?.pipeline.id)
+          ? 'PARTIAL'
+          : 'MISSING',
+      detail: (investor?.pipeline.deals.length ?? 0) > 0
+        ? 'Canonical FUNDRAISING CRM Deal records exist. Their stages are workflow evidence, not a probability of raising capital or proof of investor commitment.'
+        : (investor?.candidates.length ?? 0) > 0
+          ? 'Investor research evidence exists, but no canonical fundraising Deal is recorded. DISCOVERED_EXTERNAL candidates are not investor interest facts.'
+          : investor?.pipeline.id
+            ? 'Canonical fundraising pipeline exists, but it contains no investor Deal records.'
+            : 'No governed investor research or canonical fundraising pipeline evidence is present.',
+      authorities: investor ? ['INVESTOR_RESEARCH', 'INVESTOR_PIPELINE'] : [],
     },
   );
 
@@ -157,6 +171,7 @@ export function buildFounderInvestorReadinessV1(
     ...(finance?.evidence
       .filter((item) => item.quality === 'VERIFIED')
       .map((item) => item.authority) ?? []),
+    ...founderInvestorVerifiedAuthorities(investor),
   ]);
   const availableAuthorities = [...new Set(
     items.flatMap((item) => item.authorities)

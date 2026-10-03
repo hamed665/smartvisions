@@ -7,6 +7,8 @@ import { buildFounderInvestorReadinessV1 } from '@/lib/founder/investor-readines
 import { FounderAskPanel } from './founder-ask';
 import { loadFounderFinanceV1 } from '@/lib/founder/finance-server';
 import { FounderFinancePanel } from './finance-panel';
+import { loadFounderInvestorWorkspaceV1 } from '@/lib/founder/investor-server';
+import { FounderInvestorPanel } from './investor-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +26,7 @@ export default async function FounderPage() {
   });
   if (!flag.enabled) notFound();
 
-  const [status, finance] = await Promise.all([
+  const [status, finance, investor] = await Promise.all([
     loadFounderStatusV1({
       supabase: service,
       organizationId: current.organizationId,
@@ -33,9 +35,13 @@ export default async function FounderPage() {
       supabase: service,
       organizationId: current.organizationId,
     }),
+    loadFounderInvestorWorkspaceV1({
+      supabase: service,
+      organizationId: current.organizationId,
+    }),
   ]);
 
-  const investorReadiness = buildFounderInvestorReadinessV1(status, finance);
+  const investorReadiness = buildFounderInvestorReadinessV1(status, finance, investor);
 
   const productMetrics = [
     ['Operating mode', status.operatingMode],
@@ -67,8 +73,8 @@ export default async function FounderPage() {
       <div>
         <h1>Founder</h1>
         <p className="muted">
-          Founder analysis is OWNER-only, feature-flagged and read-only. Explicit OWNER finance evidence
-          and scenario forms use governed writes; the Copilot itself does not execute tools, mutate business state,
+          Founder analysis is OWNER-only, feature-flagged and read-only. Explicit OWNER finance and investor
+          workspace forms use governed writes; the Copilot itself does not execute tools, mutate business state,
           or bypass canonical approval and runtime gates.
         </p>
       </div>
@@ -97,6 +103,8 @@ export default async function FounderPage() {
     <FounderAskPanel />
 
     <FounderFinancePanel finance={finance} />
+
+    <FounderInvestorPanel investor={investor} />
 
     <section className="panel">
       <div className="headerRow">
