@@ -1,6 +1,7 @@
 import type { FounderStatusSnapshotV1 } from './contracts';
 import type { FounderFinanceV1 } from './finance';
 import { founderInvestorVerifiedAuthorities, type FounderInvestorWorkspaceV1 } from './investor';
+import { founderCapitalVerifiedAuthorities, type FounderCapitalWorkspaceV1 } from './capital';
 
 export type FounderInvestorEvidenceState = 'PRESENT' | 'PARTIAL' | 'MISSING';
 
@@ -13,7 +14,8 @@ export type FounderInvestorReadinessItem = {
     | 'COMPANY_FINANCIALS'
     | 'MARKET_RESEARCH'
     | 'FUNDRAISING_STRUCTURE'
-    | 'INVESTOR_PIPELINE';
+    | 'INVESTOR_PIPELINE'
+    | 'DUE_DILIGENCE_READINESS';
   title: string;
   state: FounderInvestorEvidenceState;
   detail: string;
@@ -49,6 +51,7 @@ export function buildFounderInvestorReadinessV1(
   status: FounderStatusSnapshotV1,
   finance?: FounderFinanceV1 | null,
   investor?: FounderInvestorWorkspaceV1 | null,
+  capital?: FounderCapitalWorkspaceV1 | null,
 ): FounderInvestorReadinessV1 {
   const items: FounderInvestorReadinessItem[] = [];
 
@@ -137,11 +140,30 @@ export function buildFounderInvestorReadinessV1(
     {
       key: 'FUNDRAISING_STRUCTURE',
       title: 'Fundraising structure, cap table and proposed terms',
-      state: (investor?.rounds.length ?? 0) > 0 ? 'PARTIAL' : 'MISSING',
-      detail: (investor?.rounds.length ?? 0) > 0
-        ? 'Governed fundraising round assumptions exist, but cap table and term-sheet comparison authorities are still missing. Round valuation fields remain assumptions.'
-        : 'No governed fundraising round exists. Cap table, proposed terms and dilution evidence also remain missing.',
-      authorities: investor ? ['FUNDRAISING_STRUCTURE'] : [],
+      state: (investor?.rounds.length ?? 0) > 0
+        && (capital?.capTable.totalFullyDilutedUnits ?? 0) > 0
+        && (
+          (capital?.dilutionScenarios.some(({ scenario }) => scenario.status === 'ACTIVE') ?? false)
+          || (capital?.termSheets.length ?? 0) > 0
+        )
+        ? 'PRESENT'
+        : (investor?.rounds.length ?? 0) > 0 || (capital?.capTable.totalFullyDilutedUnits ?? 0) > 0
+          ? 'PARTIAL'
+          : 'MISSING',
+      detail: (capital?.capTable.totalFullyDilutedUnits ?? 0) > 0
+        ? (
+          (capital?.dilutionScenarios.some(({ scenario }) => scenario.status === 'ACTIVE') ?? false)
+          || (capital?.termSheets.length ?? 0) > 0
+        )
+          ? 'Governed fundraising round, cap-table evidence and financing terms/scenario evidence are present. Valuation and dilution scenario values remain assumptions unless separately confirmed.'
+          : 'Governed cap-table evidence exists, but no active dilution scenario or recorded term-sheet evidence is present.'
+        : (investor?.rounds.length ?? 0) > 0
+          ? 'Governed fundraising round assumptions exist, but current cap-table evidence is still missing.'
+          : 'No governed fundraising round or cap-table evidence is present.',
+      authorities: [
+        ...(investor ? ['FUNDRAISING_STRUCTURE'] : []),
+        ...(capital ? ['CAP_TABLE','DILUTION_SCENARIOS','TERM_SHEETS'] : []),
+      ],
     },
     {
       key: 'INVESTOR_PIPELINE',
@@ -160,6 +182,21 @@ export function buildFounderInvestorReadinessV1(
             : 'No governed investor research or canonical fundraising pipeline evidence is present.',
       authorities: investor ? ['INVESTOR_RESEARCH', 'INVESTOR_PIPELINE'] : [],
     },
+    {
+      key: 'DUE_DILIGENCE_READINESS',
+      title: 'Data room and due-diligence readiness',
+      state: (capital?.diligenceCoverage.total ?? 0) === 0
+        ? 'MISSING'
+        : capital?.diligenceCoverage.coverageBps === 10000
+          ? 'PRESENT'
+          : 'PARTIAL',
+      detail: (capital?.diligenceCoverage.total ?? 0) === 0
+        ? 'No governed due-diligence checklist exists.'
+        : capital?.diligenceCoverage.coverageBps === 10000
+          ? 'All current governed diligence checklist items are READY, SHARED or explicitly NOT_APPLICABLE.'
+          : `${capital?.diligenceCoverage.outstanding.length ?? 0} current diligence item(s) remain MISSING or REQUESTED. Coverage is checklist evidence, not investor approval.`,
+      authorities: capital ? ['DUE_DILIGENCE'] : [],
+    },
   );
 
   const blockingGaps = items
@@ -172,6 +209,7 @@ export function buildFounderInvestorReadinessV1(
       .filter((item) => item.quality === 'VERIFIED')
       .map((item) => item.authority) ?? []),
     ...founderInvestorVerifiedAuthorities(investor),
+    ...founderCapitalVerifiedAuthorities(capital),
   ]);
   const availableAuthorities = [...new Set(
     items.flatMap((item) => item.authorities)
