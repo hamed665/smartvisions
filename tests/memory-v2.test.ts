@@ -54,6 +54,7 @@ describe('MEMORY-V2 architecture',()=>{
     expect(migration).toContain('conversation_id is not distinct from v_target.conversation_id');
     expect(migration).toContain('m.person_id is not distinct from p_person_id');
     expect(migration).toContain('Memory correction target must be the active matching item and target');
+    expect(migration).toContain('Memory Person/Business target requires canonical relationship evidence');
     expect(migration).toContain('Memory source conflicts with Person target');
     expect(migration).toContain('Memory source conflicts with Business target');
     expect(migration).toContain('Memory source conflicts with Conversation target');
