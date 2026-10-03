@@ -1,3 +1,29 @@
+## AI-CONTEXT-COMPILER Production closeout — 2026-10-03
+
+- Work Package: `SECTION BUSINESS_INTELLIGENCE_AI -> AI-CONTEXT-COMPILER`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled bounded context-composition path.
+- Fresh audit proved the existing `lib/agents/context-hydrator*` path is the canonical runtime entrypoint. The implementation extends that hydrator and does not create a second Agent context store, Customer profile, CRM, Conversation memory, Business Twin, Knowledge Base, Memory authority, pricing/policy store, IAM model or Tool Registry.
+- PR #427 final head `15091aca8ef9a783c94cca93d075c246eb0a6d68` passed exact-head CI `37087017247`: lint, typecheck, tests, full PostgreSQL 17 migration chain, Next build, Vinext and Cloudflare scheduled verification all succeeded.
+- PR #427 squash-merged to `main@cfff8a71e1886e7982601f9b626f9fbcbc168191`. Exact-main CI `37087295811` succeeded on that exact SHA. Cloudflare Production Deploy `37087529065` promoted the exact validated release-candidate bundle and completed routed Production plus safe API/webhook rejection smoke successfully.
+- This Work Package is application-layer only and introduces **no database migration or new persisted authority**.
+- The compiler now deterministically composes bounded evidence from canonical Conversation/Sales State, CRM Person/Relationship, Business Twin V2, Knowledge V2, Memory V2, Services/pricing, Booking context, locale, IAM role/scope and Tool Action Registry authorities.
+- Customer context is identity-light and relationship-bounded. Memory payload/evidence is depth/size/count bounded. Business Twin is projected to Organization identity, bounded Organization policy configuration and source-summary evidence rather than exposing the complete Twin/staff/commerce payload to the model.
+- Runtime model input receives at most 12 Memory items; the compiler keeps a deterministic sorted evidence manifest with source counts/versions/references for runtime traceability.
+- Tool Registry `permission_key` values are treated as **requirements, never authorization grants**. Tool schemas are not exposed to the model through this compiler. Only actions marked `AVAILABLE` may be proposed, and every side effect still crosses canonical permission -> policy -> approval -> runtime/action gateway -> verification -> audit controls.
+- Permission context is explicitly canonical IAM evidence. Autonomous customer-facing Agent runtime compiles as `SYSTEM`; a human `USER` context is emitted only when an explicit actor user ID is supplied and its Organization membership/scope assignments resolve from canonical IAM tables.
+- The real runtime caller `/api/ai/process-inbound` is internal-key protected and uses the server service-role Supabase boundary before hydration. Hydration occurs before the Agent run is claimed/processed; runtime evidence is persisted with the canonical Agent run trace/result rather than in a second context store.
+- Production source verification remains side-effect clean: `memory_items=0`, `business_twin_versions=0`, `crm_people=0`, `crm_person_business_relationships=0`, `member_scope_assignments=0`, 13 Tool Registry actions / 13 `AVAILABLE`, 8 enabled Services, 6 locale profiles and 2 active Knowledge versions. No synthetic Customer, Memory, Twin, scope assignment or Agent run was created for acceptance.
+- Read-only Production composition verifies `compile_business_twin_v2` returns `schemaVersion=2` / `CANONICAL_COMPOSITION`; the default Organization Memory resolver returns 0 real Memory items. Service-role ACL is present for Twin/Memory resolution plus the CRM/IAM/Tool Registry reads used by the compiler.
+- Independent routed smoke from the OVH VPS posted to `/api/ai/process-inbound` without the internal key and correctly returned HTTP `401 Unauthorized`. `agent_runs` stayed exactly 37 before/after the smoke, proving the rejection produced no Agent/customer/provider side effect.
+- Current policy projection intentionally consumes Organization-scoped Business Twin policy until legitimate tenant Business/Branch routing context exists. Narrower live policy composition is **DEFERRED_WITH_REASON**, not simulated with fake hierarchy rows.
+- Fresh advisor comparison shows no tracked regression: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`. Generic `unused_index=447` remains INFO.
+
+**Fresh continuation cursor:** `SECTION BUSINESS_INTELLIGENCE_AI -> AI-AGENT-RUNTIME`.
+
+Before mutation, fresh-audit the current selective-routing/pipeline/runtime, specialist role contracts, Tool Registry/Approval/Automation/Booking tool execution, idempotent Agent Run lifecycle, Human takeover, Shadow Mode, Cost Guard and provider/action boundaries. AI-AGENT-RUNTIME must extend these canonical paths without creating a second agent framework, tool executor, approval engine, workflow runtime, provider-send authority, conversation store or financial side-effect path.
+
+---
+
 ## KNOWLEDGE-V2 Production closeout — 2026-10-03
 
 - Work Package: `SECTION BUSINESS_INTELLIGENCE_AI -> KNOWLEDGE-V2`.
@@ -1199,7 +1225,7 @@ The following baseline inventory preserves every existing semantic Work Package,
 - `BRAIN-INDUSTRY-PACKS` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**; future Custom Object materialization **DEFERRED_WITH_REASON**
 - `KNOWLEDGE-V2` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**
 - `MEMORY-V2` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**
-- `AI-CONTEXT-COMPILER` — **NEXT**
+- `AI-CONTEXT-COMPILER` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**
 - `AI-AGENT-RUNTIME`
 - `AI-MODEL-PROMPT-CONTROL`
 - `AI-QUALITY-SAFETY`
