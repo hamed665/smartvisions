@@ -20,6 +20,13 @@ export type FounderFinanceCustomerProjection = {
   monthlyGrossProfit: number;
 };
 
+export type FounderFinanceForecastPoint = {
+  month: number;
+  activeCustomers: number;
+  monthlyRevenue: number;
+  monthlyGrossProfit: number;
+};
+
 export type FounderMissingFinancialEvidence = {
   metric:
     | 'RECOGNIZED_REVENUE'
@@ -54,6 +61,7 @@ export type FounderFinanceScenarioV1 = {
   cashBalanceAssumption: number;
   monthlyNetBurnAssumption: number;
   monthlySalesMarketingSpendAssumption: number;
+  startingCustomerCountAssumption: number;
   newCustomersPerMonthAssumption: number;
   targetCustomerCountAssumption: number;
   monthlyArpaAssumption: number;
@@ -104,6 +112,7 @@ export type FounderFinanceV1 = {
     scenario: FounderFinanceScenarioV1;
     metrics: FounderFinanceScenarioMetrics;
     customerCountProjections: FounderFinanceCustomerProjection[];
+    revenueForecast: FounderFinanceForecastPoint[];
   }>;
   missingEvidence: FounderMissingFinancialEvidence[];
   evidence: FounderFinanceEvidence[];
@@ -174,6 +183,29 @@ export function calculateFounderCustomerCountProjections(
   });
 }
 
+export function calculateFounderRevenueForecast(
+  scenario: FounderFinanceScenarioV1,
+  months = 12,
+): FounderFinanceForecastPoint[] {
+  const periodCount = Math.min(36, Math.max(1, Math.trunc(months)));
+  const arpa = finite(scenario.monthlyArpaAssumption);
+  const grossMargin = Math.min(1, finite(scenario.grossMarginBpsAssumption) / 10_000);
+  const monthlyChurn = Math.min(1, finite(scenario.monthlyChurnBpsAssumption) / 10_000);
+  const newCustomers = finite(scenario.newCustomersPerMonthAssumption);
+  let activeCustomers = finite(scenario.startingCustomerCountAssumption);
+
+  return Array.from({ length: periodCount }, (_, index) => {
+    activeCustomers = Math.max(0, activeCustomers * (1 - monthlyChurn) + newCustomers);
+    const monthlyRevenue = activeCustomers * arpa;
+    return {
+      month: index + 1,
+      activeCustomers: rounded(activeCustomers) ?? 0,
+      monthlyRevenue: rounded(monthlyRevenue) ?? 0,
+      monthlyGrossProfit: rounded(monthlyRevenue * grossMargin) ?? 0,
+    };
+  });
+}
+
 export function founderFinanceModelPayload(finance: FounderFinanceV1 | null | undefined) {
   if (!finance) return null;
   return {
@@ -182,7 +214,7 @@ export function founderFinanceModelPayload(finance: FounderFinanceV1 | null | un
     companySnapshot: finance.companySnapshot,
     companyRunwayMonths: finance.companyRunwayMonths,
     derived: finance.derived,
-    scenarios: finance.scenarios.map(({ scenario, metrics, customerCountProjections }) => ({
+    scenarios: finance.scenarios.map(({ scenario, metrics, customerCountProjections, revenueForecast }) => ({
       name: scenario.name,
       status: scenario.status,
       currency: scenario.currency,
@@ -190,6 +222,7 @@ export function founderFinanceModelPayload(finance: FounderFinanceV1 | null | un
         cashBalance: scenario.cashBalanceAssumption,
         monthlyNetBurn: scenario.monthlyNetBurnAssumption,
         monthlySalesMarketingSpend: scenario.monthlySalesMarketingSpendAssumption,
+        startingCustomerCount: scenario.startingCustomerCountAssumption,
         newCustomersPerMonth: scenario.newCustomersPerMonthAssumption,
         targetCustomerCount: scenario.targetCustomerCountAssumption,
         monthlyArpa: scenario.monthlyArpaAssumption,
@@ -198,6 +231,10 @@ export function founderFinanceModelPayload(finance: FounderFinanceV1 | null | un
       },
       derivedScenarioMetrics: metrics,
       customerCountProjections,
+      revenueForecast: {
+        evidenceClass: 'SCENARIO' as const,
+        points: revenueForecast,
+      },
     })),
     missingEvidence: finance.missingEvidence,
     evidence: finance.evidence,

@@ -16,6 +16,12 @@ function nonNegative(form: FormData, key: string) {
   return value;
 }
 
+function nonNegativeInteger(form: FormData, key: string) {
+  const value = nonNegative(form, key);
+  if (!Number.isInteger(value)) throw new Error(`${key} must be a non-negative integer`);
+  return value;
+}
+
 function boundedText(form: FormData, key: string, max: number) {
   const value = String(form.get(key) ?? '').trim();
   if (value.length > max) throw new Error(`${key} is too long`);
@@ -78,8 +84,9 @@ export async function saveFounderFinanceScenario(form: FormData) {
     cash_balance_assumption: nonNegative(form, 'cash_balance_assumption'),
     monthly_net_burn_assumption: nonNegative(form, 'monthly_net_burn_assumption'),
     monthly_sales_marketing_spend_assumption: nonNegative(form, 'monthly_sales_marketing_spend_assumption'),
+    starting_customer_count_assumption: nonNegativeInteger(form, 'starting_customer_count_assumption'),
     new_customers_per_month_assumption: nonNegative(form, 'new_customers_per_month_assumption'),
-    target_customer_count_assumption: nonNegative(form, 'target_customer_count_assumption'),
+    target_customer_count_assumption: nonNegativeInteger(form, 'target_customer_count_assumption'),
     monthly_arpa_assumption: nonNegative(form, 'monthly_arpa_assumption'),
     gross_margin_bps_assumption: bpsFromPercent(form, 'gross_margin_pct_assumption'),
     monthly_churn_bps_assumption: bpsFromPercent(form, 'monthly_churn_pct_assumption'),

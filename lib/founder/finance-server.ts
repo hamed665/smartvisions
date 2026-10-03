@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   calculateFounderCustomerCountProjections,
   calculateFounderFinanceScenario,
+  calculateFounderRevenueForecast,
   type CompanyFinancialSnapshotV1,
   type FounderCurrencyAmount,
   type FounderFinanceScenarioV1,
@@ -187,6 +188,7 @@ export async function loadFounderFinanceV1(input: {
       cashBalanceAssumption: number(row.cash_balance_assumption),
       monthlyNetBurnAssumption: number(row.monthly_net_burn_assumption),
       monthlySalesMarketingSpendAssumption: number(row.monthly_sales_marketing_spend_assumption),
+      startingCustomerCountAssumption: number(row.starting_customer_count_assumption),
       newCustomersPerMonthAssumption: number(row.new_customers_per_month_assumption),
       targetCustomerCountAssumption: number(row.target_customer_count_assumption),
       monthlyArpaAssumption: number(row.monthly_arpa_assumption),
@@ -200,6 +202,7 @@ export async function loadFounderFinanceV1(input: {
       scenario,
       metrics: calculateFounderFinanceScenario(scenario),
       customerCountProjections: calculateFounderCustomerCountProjections(scenario),
+      revenueForecast: calculateFounderRevenueForecast(scenario),
     };
   });
 
