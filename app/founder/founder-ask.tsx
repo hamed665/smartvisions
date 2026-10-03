@@ -58,8 +58,8 @@ export function FounderAskPanel() {
       <div>
         <h2>Ask Founder Copilot</h2>
         <p className="muted">
-          Evidence-first, read-only analysis. External market and investor facts are treated as missing
-          until a governed research source is connected.
+          Evidence-first, read-only analysis. Current market, competitor and external pricing questions
+          use governed live web research when needed; retrieved sources remain untrusted evidence and never execution authority.
         </p>
       </div>
       <span className="status">READ ONLY</span>
@@ -76,7 +76,17 @@ export function FounderAskPanel() {
               <span className="smallText">{message.text}</span>
               {message.result.facts.length
                 ? <span className="muted smallText">
-                    Facts: {message.result.facts.map((fact) => `${fact.text} [${fact.authority}]`).join(' · ')}
+                    Internal facts: {message.result.facts.map((fact) => `${fact.text} [${fact.authority}]`).join(' · ')}
+                  </span>
+                : null}
+              {message.result.externalFacts.length
+                ? <span className="muted smallText">
+                    External facts: {message.result.externalFacts.map((fact, factIndex) =>
+                      <span key={`${fact.sourceUrl}-${factIndex}`}>
+                        {factIndex ? ' · ' : ''}
+                        {fact.text} <a href={fact.sourceUrl} target="_blank" rel="noreferrer">[source]</a>
+                      </span>
+                    )}
                   </span>
                 : null}
               <span className="muted smallText">Next: {message.result.nextAction}</span>
@@ -88,7 +98,11 @@ export function FounderAskPanel() {
                 ? <span className="muted smallText">Risks: {message.result.risks.join(' · ')}</span>
                 : null}
               <span className="muted smallText">
-                Evidence: {message.result.evidenceAuthorities.join(', ') || 'No verified authority cited'}
+                Evidence: {message.result.evidenceAuthorities.join(', ') || 'No internal authority cited'}
+                {message.result.externalSources.length
+                  ? ` · ${message.result.externalSources.length} live web source(s)`
+                  : ''}
+                {message.result.researchMode === 'LIVE_WEB' ? ' · LIVE WEB' : ''}
               </span>
             </div>
           </div>
