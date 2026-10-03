@@ -19,11 +19,11 @@ values
 on conflict (organization_id,user_id) do update set role=excluded.role;
 
 insert into public.businesses(
-  id,organization_id,name,country_code,google_opening_hours,google_reviews,account_lifecycle
+  id,organization_id,name,country_code
 ) values (
   '00000000-0000-0000-0000-00000000f821',
   '00000000-0000-0000-0000-00000000f801',
-  'Memory CI Customer Business','OM','{}'::jsonb,'[]'::jsonb,'UNCLASSIFIED'
+  'Memory CI Customer Business','OM'
 )
 on conflict (id) do nothing;
 
@@ -47,11 +47,11 @@ insert into public.crm_people(
 on conflict (id) do nothing;
 
 insert into public.businesses(
-  id,organization_id,name,country_code,google_opening_hours,google_reviews,account_lifecycle
+  id,organization_id,name,country_code
 ) values (
   '00000000-0000-0000-0000-00000000f822',
   '00000000-0000-0000-0000-00000000f801',
-  'Memory CI Second Business','OM','{}'::jsonb,'[]'::jsonb,'UNCLASSIFIED'
+  'Memory CI Second Business','OM'
 )
 on conflict (id) do nothing;
 
