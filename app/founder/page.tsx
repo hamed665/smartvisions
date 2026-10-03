@@ -209,7 +209,7 @@ export default async function FounderPage() {
             <td><strong>{source.authority}</strong></td>
             <td>{source.quality}</td>
             <td>{source.count ?? '—'}</td>
-            <td>{source.observedAt ? new Date(source.observedAt).toLocaleString() : '—'}</td>
+            <td>{'observedAt' in source && source.observedAt ? new Date(source.observedAt).toLocaleString() : '—'}</td>
             <td>{source.detail ?? '—'}</td>
           </tr>)}</tbody>
         </table>
