@@ -2,6 +2,7 @@ import type { FounderStatusSnapshotV1 } from './contracts';
 import type { FounderFinanceV1 } from './finance';
 import { founderInvestorVerifiedAuthorities, type FounderInvestorWorkspaceV1 } from './investor';
 import { founderCapitalVerifiedAuthorities, type FounderCapitalWorkspaceV1 } from './capital';
+import { founderStrategyVerifiedAuthorities, type FounderStrategyWorkspaceV1 } from './strategy';
 
 export type FounderInvestorEvidenceState = 'PRESENT' | 'PARTIAL' | 'MISSING';
 
@@ -52,6 +53,7 @@ export function buildFounderInvestorReadinessV1(
   finance?: FounderFinanceV1 | null,
   investor?: FounderInvestorWorkspaceV1 | null,
   capital?: FounderCapitalWorkspaceV1 | null,
+  strategy?: FounderStrategyWorkspaceV1 | null,
 ): FounderInvestorReadinessV1 {
   const items: FounderInvestorReadinessItem[] = [];
 
@@ -133,9 +135,16 @@ export function buildFounderInvestorReadinessV1(
     {
       key: 'MARKET_RESEARCH',
       title: 'External market, TAM/SAM/SOM and competitor evidence',
-      state: 'MISSING',
-      detail: 'Live web research can answer current questions per request, but no persistent governed market-research evidence set is stored for investor diligence. Model memory and transient web results are not promoted into this deterministic readiness pillar.',
-      authorities: [],
+      state: (strategy?.marketResearch.filter((item) => item.status === 'CURRENT').length ?? 0) === 0
+        ? 'MISSING'
+        : strategy?.marketResearch.some((item) => item.status === 'CURRENT' && item.researchType === 'MARKET_SIZE')
+          && strategy?.marketResearch.some((item) => item.status === 'CURRENT' && ['COMPETITOR','PRICING'].includes(item.researchType))
+          ? 'PRESENT'
+          : 'PARTIAL',
+      detail: (strategy?.marketResearch.filter((item) => item.status === 'CURRENT').length ?? 0) === 0
+        ? 'No persistent governed sourced market-research evidence is recorded.'
+        : 'Persistent sourced external research exists. PRESENT requires current MARKET_SIZE plus COMPETITOR or PRICING evidence; this is evidence coverage, not a market attractiveness score.',
+      authorities: strategy ? ['MARKET_RESEARCH'] : [],
     },
     {
       key: 'FUNDRAISING_STRUCTURE',
@@ -210,6 +219,7 @@ export function buildFounderInvestorReadinessV1(
       .map((item) => item.authority) ?? []),
     ...founderInvestorVerifiedAuthorities(investor),
     ...founderCapitalVerifiedAuthorities(capital),
+    ...founderStrategyVerifiedAuthorities(strategy),
   ]);
   const availableAuthorities = [...new Set(
     items.flatMap((item) => item.authorities)
