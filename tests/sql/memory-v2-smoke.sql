@@ -136,6 +136,17 @@ from public.link_crm_customer360_person_context(
   '{"fixture":true}'::jsonb
 );
 
+insert into public.agent_runs(
+  id,organization_id,conversation_id,input_message,status,trace,request_key
+) values (
+  '00000000-0000-0000-0000-00000000f881',
+  '00000000-0000-0000-0000-00000000f801',
+  '00000000-0000-0000-0000-00000000f861',
+  'Controlled Memory agent source','COMPLETED','{"fixture":true}'::jsonb,
+  'memory-agent-run-ci'
+)
+on conflict (id) do nothing;
+
 do $direct_guard$
 begin
   begin
@@ -270,7 +281,7 @@ begin
     '00000000-0000-0000-0000-00000000f801','SYSTEM',null,
     'agent.learning.objection_pattern','AGENT_LEARNING',
     '{"text":"Candidate learning from repeated objection pattern."}'::jsonb,
-    'AGENT_RUNTIME','agent-run-ci-1',
+    'AGENT_RUNTIME','00000000-0000-0000-0000-00000000f881',
     '{"evaluation":"controlled","sourceConversationId":"00000000-0000-0000-0000-00000000f861"}'::jsonb,
     0.70,now(),now()+interval '7 days','INTERNAL',now(),null,now()+interval '30 days',
     '00000000-0000-0000-0000-00000000f841',
@@ -281,6 +292,24 @@ begin
   if agent_candidate.review_state<>'PENDING_REVIEW' then
     raise exception 'Agent learning bypassed review';
   end if;
+
+  begin
+    perform public.stage_memory_item_v2(
+      '00000000-0000-0000-0000-00000000f801','SYSTEM',null,
+      'agent.learning.invalid_source','AGENT_LEARNING',
+      '{"text":"must fail without a canonical run"}'::jsonb,
+      'AGENT_RUNTIME','00000000-0000-0000-0000-00000000f899',
+      '{"evaluation":"controlled"}'::jsonb,
+      0.60,now(),now()+interval '1 day','INTERNAL',now(),null,now()+interval '7 days',
+      '00000000-0000-0000-0000-00000000f841',
+      '00000000-0000-0000-0000-00000000f821',
+      '00000000-0000-0000-0000-00000000f861',
+      null,null,'memory-agent-missing-ci'
+    );
+    raise exception 'Agent Memory accepted a missing canonical agent run';
+  exception when others then
+    if sqlerrm not like 'Memory Agent Runtime source not found%' then raise; end if;
+  end;
 
   select * into stale_candidate from public.stage_memory_item_v2(
     '00000000-0000-0000-0000-00000000f801','SYSTEM',null,
