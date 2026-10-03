@@ -51,7 +51,6 @@ create table public.memory_items (
   last_request_key text not null check (length(btrim(last_request_key)) between 8 and 200),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (organization_id,memory_key,version),
   foreign key (organization_id,created_by_user_id)
     references public.organization_members(organization_id,user_id) on delete restrict,
   foreign key (organization_id,approved_by_user_id)
@@ -84,6 +83,11 @@ create unique index memory_items_one_active_target_uidx
     organization_id,memory_key,person_id,business_id,conversation_id
   ) nulls not distinct
   where state='ACTIVE';
+
+create unique index memory_items_target_version_uidx
+  on public.memory_items(
+    organization_id,memory_key,person_id,business_id,conversation_id,version
+  ) nulls not distinct;
 
 create index memory_items_org_state_idx
   on public.memory_items(organization_id,state,updated_at desc);
@@ -508,8 +512,11 @@ begin
     where organization_id=p_organization_id and id=p_supersedes_memory_id
     for update;
     if not found or v_active.state<>'ACTIVE' or v_active.memory_key<>v_key
-       or v_active.memory_type<>v_type then
-      raise exception 'Memory correction target must be the active matching item';
+       or v_active.memory_type<>v_type
+       or v_active.person_id is distinct from p_person_id
+       or v_active.business_id is distinct from p_business_id
+       or v_active.conversation_id is distinct from p_conversation_id then
+      raise exception 'Memory correction target must be the active matching item and target';
     end if;
     if length(btrim(coalesce(p_correction_reason,''))) not between 2 and 500 then
       raise exception 'Memory correction requires a reason';
@@ -583,7 +590,11 @@ begin
 
   select coalesce(max(m.version),0)+1 into v_next
   from public.memory_items m
-  where m.organization_id=p_organization_id and m.memory_key=v_key;
+  where m.organization_id=p_organization_id
+    and m.memory_key=v_key
+    and m.person_id is not distinct from p_person_id
+    and m.business_id is not distinct from p_business_id
+    and m.conversation_id is not distinct from p_conversation_id;
 
   perform set_config('app.memory_v2_mutation','allowed',true);
   insert into public.memory_items(
