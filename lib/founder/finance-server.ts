@@ -89,8 +89,9 @@ export async function loadFounderFinanceV1(input: {
         .eq('organization_id', org)
         .gt('balance_due', 0),
       db.from('crm_deals')
-        .select('amount,currency,state')
+        .select('amount,currency,state,deal_purpose')
         .eq('organization_id', org)
+        .eq('deal_purpose', 'SALES')
         .eq('state', 'WON')
         .not('amount', 'is', null),
     ]);
