@@ -11,7 +11,8 @@ function money(value: number | null) {
 }
 
 export default async function FounderPage() {
-  const current = await getCurrentOrganization(true);
+  const current = await getCurrentOrganization();
+  if (current.role !== 'OWNER') notFound();
   const service = createSupabaseServiceClient();
   const flag = await founderOsV1Enabled({
     supabase: service,
