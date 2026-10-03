@@ -1,6 +1,7 @@
 import type { AgentContext, AgentName, AgentResult } from './contracts';
 import type { AgentRuntime } from './runtime';
 import { selectRelevantKnowledge } from './knowledge-relevance';
+import { memoryForRuntime } from './context-compiler';
 import { routeAiTask, type AiTaskClass } from '@/lib/ai/model-router';
 import { estimateOpenAiCostUsd, estimateOpenAiReservationUsd } from '@/lib/ai/openai-pricing';
 import {
@@ -85,6 +86,9 @@ function commonInput(context: AgentContext, maxContextMessages: number) {
     verifiedEvidence: context.verifiedEvidence,
     approvedPortfolio: context.approvedPortfolio,
     bookingContext: context.bookingContext,
+    customerContext: context.customerContext,
+    memoryContext: memoryForRuntime(context.memoryContext, 12),
+    contextEvidence: context.contextEvidence,
     shadowMode: context.shadowMode,
   };
 }
@@ -108,6 +112,7 @@ export function buildAgentInputForRuntime(agent: AgentName, context: AgentContex
       ...common,
       knowledgeContext: selectRelevantKnowledge(context, 4),
       serviceKnowledge: context.serviceKnowledge,
+      businessTwinContext: context.businessTwinContext,
       collaboration: context.collaboration,
     };
   }
@@ -115,6 +120,8 @@ export function buildAgentInputForRuntime(agent: AgentName, context: AgentContex
     ...common,
     knowledgeContext: context.knowledgeContext,
     serviceKnowledge: context.serviceKnowledge,
+    businessTwinContext: context.businessTwinContext,
+    toolAvailability: context.toolAvailability,
     collaboration: context.collaboration,
   };
 }
