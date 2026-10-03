@@ -113,7 +113,10 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
     connectTelegramCustomerChannel:'SPECIALIZED:TELEGRAM_CUSTOMER_CHANNEL_CONNECT',
   },
   'app/versioned-intelligence-actions.ts': {
-    createKnowledge:'knowledge.publish', createPromptVersion:'prompt.publish',
+    createKnowledge:'knowledge.publish',
+    createPromptVersion:'prompt.publish',
+    configurePromptRollout:'SPECIALIZED:AI_PROMPT_CONTROL',
+    setActivePromptVersion:'SPECIALIZED:AI_PROMPT_CONTROL',
   },
   'app/payments/provider-actions.ts': {
     configurePaymentProviderV1:'SPECIALIZED:PAYMENT_EXTENSION',
