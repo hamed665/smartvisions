@@ -1548,6 +1548,8 @@ Each pack may define onboarding, custom objects, pipelines, workflows, metrics, 
 
 ## MEMORY-V2
 
+**Disposition: IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED.**
+
 Typed memory:
 
 - Conversation;
@@ -1562,6 +1564,8 @@ Typed memory:
 Every memory item needs source, confidence, freshness, sensitivity, validity and correction/expiry semantics.
 
 ## AI-CONTEXT-COMPILER
+
+**Next Work Package.**
 
 Deterministically composes:
 

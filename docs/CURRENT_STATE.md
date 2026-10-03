@@ -1,3 +1,27 @@
+## MEMORY-V2 Production closeout — 2026-10-03
+
+- Work Package: `SECTION BUSINESS_INTELLIGENCE_AI -> MEMORY-V2`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**.
+- The fresh audit reused the existing canonical authorities for Conversation history/summaries, `sales_conversations.sales_state`, CRM Person/Relationship/Business, CRM Tasks, Business Twin, Knowledge and `agent_runs`; no second CRM, conversation store, Business Twin, Knowledge Base, IAM, queue, vector store, audit log or agent-learning authority was introduced.
+- PR #423 implemented target-aware MEMORY-V2. Exact-head CI `37083874310` succeeded. It merged to `main@1b87e2ec05cc5cc03fee686c0700f95b270b44da`; exact-main CI `37084135524` and Cloudflare Production Deploy `37084337238` succeeded on that exact SHA.
+- Production migration `0184_memory_v2` is applied as version `20261003010022`.
+- Canonical `CONVERSATION`, `CUSTOMER`, `RELATIONSHIP` and `BUSINESS` memory is composed at retrieval time from source authorities. Only derived `WORKING`, `EPISODIC`, `OPERATIONAL` and `AGENT_LEARNING` assertions persist in `public.memory_items`.
+- Persisted Memory carries source/evidence, confidence, observed/freshness bounds, sensitivity, validity, correction/supersession and expiry semantics. Working Memory requires expiry within 30 days. Derived/System/Agent candidates remain `PENDING_REVIEW` until explicit OWNER/ADMIN approval.
+- Active/version identity is target-aware across Organization/Person/Business/Conversation using NULLS-NOT-DISTINCT unique indexes, so identical keys can coexist across legitimate targets without cross-customer collisions.
+- PR #425 hardened `AGENT_RUNTIME` provenance so Agent Learning must reference a real canonical `agent_runs` row in the same Organization and remain consistent with Conversation/Person/Business targets. Exact-head CI `37084937083` succeeded; it merged to `main@ac3c0198cb03861c1936ad81c7985d3389ec0751`. Exact-main CI `37085168422` and Cloudflare Production Deploy `37085331976` succeeded on that exact SHA.
+- Production migration `0185_memory_v2_agent_source_hardening` is live. Two near-simultaneous idempotent ledger entries were recorded at versions `20261003011446` and `20261003011451`; both have identical statement hash `78c2aae8fae61e5635c04a38849118b1`. The migration only replaces the validator plus ACL/comment metadata, so no duplicate data or authority was created.
+- Production runtime verification proved a real canonical Agent Run passes provenance validation while a missing Agent Run UUID is rejected. `service_role` can execute trusted Memory staging/approval/resolution; `authenticated` and `anon` cannot execute those trusted mutation/resolver functions.
+- `memory_items` RLS is enabled with OWNER/ADMIN read policy. Production currently has `memory_items=0`, active `0`, pending `0`, Agent Learning `0`; no synthetic Memory was created for verification.
+- No parallel Memory authorities exist: `memory_queue`, `memory_events`, `memory_vectors`, `memory_conversations`, `memory_customers` and `agent_learning` are absent.
+- Routed Production smoke for `/memory` resolves unauthenticated traffic to the real `/login` surface after the exact-main deploy, confirming the deployed session boundary.
+- Fresh advisor comparison after 0185 shows no tracked regression: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`. Generic `unused_index=447` remains INFO and includes zero-workload Memory indexes.
+
+**Fresh continuation cursor:** `SECTION BUSINESS_INTELLIGENCE_AI -> AI-CONTEXT-COMPILER`.
+
+Before mutation, fresh-audit the existing Agent context hydrator/contracts plus canonical Customer/Conversation/CRM/Business Twin/Knowledge/Memory/Pricing/Policy/Locale/Permission/Tool Registry inputs. The Context Compiler must deterministically compose bounded evidence from those authorities and must not create a second customer profile, conversation memory, CRM, Knowledge, Memory, pricing, policy, IAM or tool-availability authority.
+
+---
+
 ## KNOWLEDGE-V2 Production closeout — 2026-10-03
 
 - Work Package: `SECTION BUSINESS_INTELLIGENCE_AI -> KNOWLEDGE-V2`.
