@@ -65,6 +65,21 @@ describe('Founder OS V1 status', () => {
     ]));
   });
 
+  it('fails closed when canonical runtime control evidence is missing', () => {
+    const status = buildFounderStatusV1({
+      ...base,
+      controls: null,
+    });
+    expect(status.operatingMode).toBe('UNKNOWN');
+    expect(status.attention[0]).toMatchObject({
+      key: 'runtime-controls-missing',
+      level: 'BLOCKED',
+    });
+    expect(status.evidence.find((item) => item.authority === 'SYSTEM_CONTROLS')).toMatchObject({
+      quality: 'MISSING',
+    });
+  });
+
   it('keeps execution blocked when canonical runtime controls say so', () => {
     const status = buildFounderStatusV1({
       ...base,
