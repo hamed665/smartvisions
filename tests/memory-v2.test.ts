@@ -78,6 +78,9 @@ describe('MEMORY-V2 architecture',()=>{
     expect(migration).toContain('grant execute on function public.get_memory_context_v2');
     expect(migration).toContain('to service_role;');
     expect(page).toContain('Stage derived memory');
+    expect(page).toContain('Source evidence');
+    expect(page).toContain('source_evidence');
+    expect(actions).toContain('freshUntil-observed');
     expect(shell).toContain("['Memory', '/memory']");
   });
 });
