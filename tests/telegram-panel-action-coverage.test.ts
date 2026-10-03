@@ -86,6 +86,11 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
   'app/cost-actions.ts': {
     runOpenAiHealthCheck:'openai.health', updateCostGuardSettings:'cost.update',
   },
+  'app/founder/finance-actions.ts': {
+    recordCompanyFinancialSnapshot:'SPECIALIZED:FOUNDER_FINANCE',
+    saveFounderFinanceScenario:'SPECIALIZED:FOUNDER_FINANCE',
+    archiveFounderFinanceScenario:'SPECIALIZED:FOUNDER_FINANCE',
+  },
   'app/growth-opportunity-actions.ts': {
     routeCachedGrowthOpportunities:'growth.rescore', recordGrowthSocialAssessment:'growth.social_review', promoteHighPrecisionGrowthCandidates:'growth.promote',
   },
@@ -193,6 +198,9 @@ describe('Control Center ↔ Telegram action coverage', () => {
     expect(CLASSIFICATION['app/control-center-actions.ts'].updateServiceBookingCatalog).toBe('SPECIALIZED:BOOKING_CATALOG');
     expect(CLASSIFICATION['app/control-center-actions.ts'].createBookingResource).toBe('SPECIALIZED:BOOKING_CATALOG');
     expect(CLASSIFICATION['app/control-center-actions.ts'].updateBookingResource).toBe('SPECIALIZED:BOOKING_CATALOG');
+    expect(CLASSIFICATION['app/founder/finance-actions.ts'].recordCompanyFinancialSnapshot).toBe('SPECIALIZED:FOUNDER_FINANCE');
+    expect(CLASSIFICATION['app/founder/finance-actions.ts'].saveFounderFinanceScenario).toBe('SPECIALIZED:FOUNDER_FINANCE');
+    expect(CLASSIFICATION['app/founder/finance-actions.ts'].archiveFounderFinanceScenario).toBe('SPECIALIZED:FOUNDER_FINANCE');
     expect(CLASSIFICATION['app/booking/availability-actions.ts'].configureBookingAvailabilityCalendar).toBe('SPECIALIZED:BOOKING_AVAILABILITY');
     expect(CLASSIFICATION['app/booking/availability-actions.ts'].createBookingAvailabilityHold).toBe('SPECIALIZED:BOOKING_AVAILABILITY');
     expect(CLASSIFICATION['app/booking/availability-actions.ts'].releaseBookingAvailabilityHold).toBe('SPECIALIZED:BOOKING_AVAILABILITY');
