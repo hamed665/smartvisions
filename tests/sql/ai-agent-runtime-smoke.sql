@@ -308,6 +308,10 @@ begin
     'public.persist_agent_runtime_outcome(uuid,uuid,uuid,jsonb,jsonb,jsonb,jsonb,jsonb)',
     'EXECUTE'
   ) then raise exception 'service_role cannot execute completion persistence'; end if;
+
+  if not has_table_privilege('service_role','public.agent_runs','SELECT')
+     or not has_table_privilege('service_role','public.agent_runs','UPDATE')
+  then raise exception 'service_role lacks Agent run persistence privileges'; end if;
 end;
 $function_security$;
 
