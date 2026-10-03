@@ -110,7 +110,7 @@ export async function correctMemoryItemV2(fd:FormData){
   const memoryId=field(fd,'memory_id');
   if(!UUID.test(memoryId))throw new Error('Memory item is invalid');
   const {data,error}=await service.from('memory_items')
-    .select('id,memory_key,memory_type,confidence,sensitivity,person_id,business_id,conversation_id,expires_at')
+    .select('id,memory_key,memory_type,confidence,sensitivity,person_id,business_id,conversation_id,observed_at,fresh_until,expires_at')
     .eq('organization_id',current.organizationId).eq('id',memoryId).eq('state','ACTIVE').maybeSingle();
   if(error||!data)throw new Error('Active Memory item was not found');
 
@@ -119,6 +119,14 @@ export async function correctMemoryItemV2(fd:FormData){
   if(content.length<2||content.length>30000)throw new Error('Memory correction content is invalid');
   if(reason.length<2||reason.length>500)throw new Error('Memory correction reason is invalid');
   const now=Date.now();
+  let freshHours:null|number=null;
+  if(data.fresh_until){
+    const observed=Date.parse(String(data.observed_at??''));
+    const freshUntil=Date.parse(String(data.fresh_until));
+    if(Number.isFinite(observed)&&Number.isFinite(freshUntil)&&freshUntil>observed){
+      freshHours=Math.min(24*365,Math.max(1,(freshUntil-observed)/(60*60*1000)));
+    }
+  }
   let expiresHours:null|number=null;
   if(data.memory_type==='WORKING'){
     const existing=Date.parse(String(data.expires_at??''));
@@ -131,7 +139,7 @@ export async function correctMemoryItemV2(fd:FormData){
     memoryType:String(data.memory_type),
     payload:{text:content},
     confidence:Number(data.confidence),
-    freshHours:null,
+    freshHours,
     expiresHours,
     sensitivity:String(data.sensitivity),
     personId:data.person_id?String(data.person_id):null,
