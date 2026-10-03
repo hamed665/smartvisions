@@ -374,7 +374,7 @@ begin
   ) values (
     p_organization_id,
     left(coalesce(nullif(trim(p_name),''),'Investor Fundraising'),160),
-    'ACTIVE',false,v_actor,'FUNDRAISING'
+    'DRAFT',false,v_actor,'FUNDRAISING'
   )
   returning id into v_pipeline_id;
 
@@ -393,6 +393,11 @@ begin
     (p_organization_id,v_pipeline_id,'COMMITTED',9,'OPEN',true,v_actor,9000,'COMMIT',true,true,false),
     (p_organization_id,v_pipeline_id,'CLOSED',10,'WON',true,v_actor,10000,'CLOSED_WON',true,true,false),
     (p_organization_id,v_pipeline_id,'PASSED',11,'LOST',true,v_actor,0,'CLOSED_LOST',false,false,false);
+
+  update public.crm_pipelines
+  set status='ACTIVE'
+  where organization_id=p_organization_id
+    and id=v_pipeline_id;
 
   return v_pipeline_id;
 end;
