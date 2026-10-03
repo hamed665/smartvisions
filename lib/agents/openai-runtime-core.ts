@@ -88,6 +88,7 @@ function commonInput(context: AgentContext, maxContextMessages: number) {
     bookingContext: context.bookingContext,
     customerContext: context.customerContext,
     memoryContext: memoryForRuntime(context.memoryContext, 12),
+    permissionContext: context.permissionContext,
     contextEvidence: context.contextEvidence,
     shadowMode: context.shadowMode,
   };
