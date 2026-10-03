@@ -42,7 +42,6 @@ export type RawFounderIntelligence = {
   next_action?: unknown;
   kpi?: unknown;
   risks?: unknown;
-  evidence_authorities?: unknown;
   confidence?: unknown;
 };
 
@@ -137,14 +136,8 @@ export function parseFounderIntelligence(input: {
 }): FounderIntelligenceResult {
   const rawKind = text(input.raw.question_kind, 20).toUpperCase() as FounderQuestionKind;
   const questionKind = KINDS.has(rawKind) ? rawKind : 'GENERAL';
-  const allowedAuthorities = verifiedAuthorities(input.status);
-  const requestedAuthorities = list(input.raw.evidence_authorities, 12, 80)
-    .filter((authority) => allowedAuthorities.has(authority));
   const facts = groundedFacts(input.raw.facts, input.status);
-  const evidenceAuthorities = [...new Set([
-    ...facts.map((fact) => fact.authority),
-    ...requestedAuthorities,
-  ])];
+  const evidenceAuthorities = [...new Set(facts.map((fact) => fact.authority))];
 
   const confidenceRaw = text(input.raw.confidence, 12).toUpperCase();
   let confidence: FounderIntelligenceResult['confidence'] =
