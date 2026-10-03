@@ -19,6 +19,7 @@ describe('AI-CONTEXT-COMPILER', () => {
     expect(hydrator).toContain("rpc('compile_business_twin_v2'");
     expect(hydrator).toContain("rpc('get_memory_context_v2'");
     expect(hydrator).toContain("from('tool_action_registry')");
+    expect(hydrator).toContain('required_work_packages,metadata');
     expect(hydrator).toContain("from('crm_people')");
     expect(hydrator).toContain("from('organization_members')");
     expect(hydrator).toContain("from('member_scope_assignments')");
@@ -105,15 +106,13 @@ describe('AI-CONTEXT-COMPILER', () => {
     expect(customer?.relationships[0]).not.toHaveProperty('evidence');
   });
 
-  it('surfaces Tool Registry capability metadata without schemas or authorization claims', () => {
+  it('exposes only Tool Registry actions explicitly registered for AI execution', () => {
     const tools = projectToolAvailability([
       {
         action_key: 'SEND_FOLLOWUP',
         tool_key: 'OUTREACH_SEND',
         authority_key: 'APPROVED_SEND_POLICY',
         contract_version: 1,
-        input_schema: { secretShape: true },
-        output_schema: { secretShape: true },
         permission_key: 'OUTBOUND_SEND',
         scope_type: 'CONVERSATION',
         cost_class: 'PROVIDER_METERED',
@@ -121,20 +120,40 @@ describe('AI-CONTEXT-COMPILER', () => {
         approval_requirement: 'REQUIRED',
         approval_policy_key: 'OUTBOUND_SEND',
         verifier_key: 'PROVIDER_RECEIPT_RECONCILIATION',
-        availability: 'DEPENDENCY_PENDING',
-        required_work_packages: ['AUTO-APPROVAL', 'AUTO-RUNTIME'],
+        availability: 'AVAILABLE',
+        required_work_packages: [],
+        metadata: { executionSurfaces: ['AUTOMATION'] },
+      },
+      {
+        action_key: 'BOOKING_CREATE',
+        tool_key: 'BOOKING',
+        authority_key: 'BOOKING_LIFECYCLE',
+        contract_version: 1,
+        input_schema: { secretShape: true },
+        output_schema: { secretShape: true },
+        permission_key: 'BOOKING_MUTATE',
+        scope_type: 'CONVERSATION',
+        cost_class: 'INTERNAL',
+        side_effect_class: 'INTERNAL_STATE',
+        approval_requirement: 'NONE',
+        verifier_key: 'BOOKING_STATE',
+        availability: 'AVAILABLE',
+        required_work_packages: [],
+        metadata: { executionSurfaces: ['AI'], shadowMutationBlocked: true },
       },
     ]);
 
     expect(tools).toEqual([expect.objectContaining({
-      actionKey: 'SEND_FOLLOWUP',
-      permissionKey: 'OUTBOUND_SEND',
-      availability: 'DEPENDENCY_PENDING',
+      actionKey: 'BOOKING_CREATE',
+      executionSurface: 'AI',
+      permissionKey: 'BOOKING_MUTATE',
+      availability: 'AVAILABLE',
       runtimeAuthorizationRequired: true,
     })]);
-    expect(tools[0]).not.toHaveProperty('inputSchema');
-    expect(tools[0]).not.toHaveProperty('outputSchema');
-    expect(tools[0]).not.toHaveProperty('authorized');
+    expect(tools[0]).not.toHaveProperty('input_schema');
+    expect(tools[0]).not.toHaveProperty('output_schema');
+    expect(tools[0]).not.toHaveProperty('metadata');
+    expect(tools.some((tool) => tool.actionKey === 'SEND_FOLLOWUP')).toBe(false);
   });
 
   it('separates IAM permission context from Tool Registry permission requirements', () => {
@@ -211,19 +230,19 @@ describe('AI-CONTEXT-COMPILER', () => {
         runtimeAuthorizationRequired: true,
       },
       toolAvailability: [{
-        actionKey: 'SEND_FOLLOWUP',
-        toolKey: 'OUTREACH_SEND',
-        authorityKey: 'APPROVED_SEND_POLICY',
+        actionKey: 'BOOKING_CREATE',
+        executionSurface: 'AI',
+        toolKey: 'BOOKING',
+        authorityKey: 'BOOKING_LIFECYCLE',
         contractVersion: 1,
-        permissionKey: 'OUTBOUND_SEND',
+        permissionKey: 'BOOKING_MUTATE',
         scopeType: 'CONVERSATION',
-        costClass: 'PROVIDER_METERED',
-        sideEffectClass: 'EXTERNAL_PROVIDER',
-        approvalRequirement: 'REQUIRED',
-        approvalPolicyKey: 'OUTBOUND_SEND',
-        verifierKey: 'PROVIDER_RECEIPT_RECONCILIATION',
-        availability: 'DEPENDENCY_PENDING',
-        requiredWorkPackages: ['AUTO-RUNTIME'],
+        costClass: 'INTERNAL',
+        sideEffectClass: 'INTERNAL_STATE',
+        approvalRequirement: 'NONE',
+        verifierKey: 'BOOKING_STATE',
+        availability: 'AVAILABLE',
+        requiredWorkPackages: [],
         runtimeAuthorizationRequired: true,
       }],
       contextEvidence: buildContextEvidenceManifest([{ authority: 'MEMORY', count: 20 }]),

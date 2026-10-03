@@ -267,7 +267,7 @@ export async function hydrateAgentContext(input: {
       : Promise.resolve({ data: [], error: null }),
     supabase
       .from('tool_action_registry')
-      .select('action_key,tool_key,authority_key,contract_version,permission_key,scope_type,cost_class,side_effect_class,approval_requirement,approval_policy_key,verifier_key,availability,required_work_packages')
+      .select('action_key,tool_key,authority_key,contract_version,permission_key,scope_type,cost_class,side_effect_class,approval_requirement,approval_policy_key,verifier_key,availability,required_work_packages,metadata')
       .order('action_key', { ascending: true })
       .limit(32),
     input.actorUserId

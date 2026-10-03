@@ -249,6 +249,7 @@ export type BusinessTwinContextSnapshot = {
 
 export type ToolAvailabilitySnapshot = {
   actionKey: string;
+  executionSurface: 'AI';
   toolKey: string;
   authorityKey: string;
   contractVersion: number;
