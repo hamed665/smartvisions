@@ -69,7 +69,6 @@ describe('Founder intelligence evidence boundary', () => {
         next_action: 'Review qualified leads.',
         kpi: 'Observed won lead count.',
         risks: ['Pipeline counts do not prove causality.'],
-        evidence_authorities: ['CRM_PIPELINE', 'INVENTED_WEB_SOURCE'],
         confidence: 'HIGH',
       },
       nowIso: '2026-10-03T10:01:00.000Z',
@@ -96,7 +95,6 @@ describe('Founder intelligence evidence boundary', () => {
         next_action: 'Collect the missing evidence.',
         kpi: 'Investor readiness evidence coverage.',
         risks: [],
-        evidence_authorities: ['CRM_PIPELINE'],
         confidence: 'HIGH',
       },
     });
@@ -125,7 +123,6 @@ describe('Founder intelligence evidence boundary', () => {
         next_action: 'Collect external market evidence.',
         kpi: 'Verified market sources.',
         risks: [],
-        evidence_authorities: ['CRM_PIPELINE', 'EXTERNAL_MARKET'],
         confidence: 'HIGH',
       },
     });
