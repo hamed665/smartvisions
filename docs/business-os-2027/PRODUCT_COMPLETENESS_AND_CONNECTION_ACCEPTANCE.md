@@ -65,9 +65,24 @@
 - No schema migration, Production fixture, synthetic customer/conversation/Agent result, provider send, payment execution or Booking mutation was required or created for this package.
 - Cloudflare Production deployment verified the exact merged bundle through release-candidate smoke, controlled SSR load, Worker promotion, route attachment, routed Production smoke and safe API/webhook rejection smoke.
 
-**Fresh continuation cursor:** `SECTION BUSINESS_INTELLIGENCE_AI -> AI-VOICE-VISION`.
+## AI-VOICE-VISION Production closeout — 2026-10-04
 
-Before mutation, fresh-audit the existing OMNI-VOICE foundation, transcription/voice-reply paths, media normalization and download evidence, current image/document handling, consent/recording boundaries, Agent Context Compiler media inputs and provider capabilities. AI-VOICE-VISION must extend those canonical authorities rather than create a second media store, transcription authority, voice-send path, conversation store, Agent framework, Tool Registry or consent model.
+- Work Package: `SECTION BUSINESS_INTELLIGENCE_AI -> AI-VOICE-VISION`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled voice-note, transcription reconciliation, bounded image/document understanding, media-evidence and governed voice-response scope. Real inbound provider-media E2E remains **BLOCKED_EXTERNAL** until legitimate canonical customer media exists; the later phone-agent capability remains **DEFERRED_WITH_REASON** until an explicit consent/recording policy and real telephony provider evidence are in scope.
+- PR #451 final head `f689886a8cdd2f24bae73e890b98fe66016721cb` passed exact-head CI `37158512759`, including lint, typecheck, the full test suite, the complete PostgreSQL 17 migration chain plus AI-VOICE-VISION smoke, Next build, Vinext and Cloudflare scheduled-runtime verification.
+- PR #451 squash-merged to canonical `main@022633cc1c0f286d3409455242226215d06d24f4`. Exact-main CI `37158685448` and Cloudflare Production Deploy `37158895073` both succeeded on that exact SHA; the deploy passed exact-green checkout, release-candidate smoke, controlled SSR load, Production promotion, routed Production smoke and safe API/webhook rejection smoke.
+- Production migration source `supabase/migrations/20261003212542_ai_voice_vision.sql` (merged blob `8bb8b11265a68c033e796ef073faf90346431175`) is applied in Supabase Production as `ai_voice_vision@20261003223505`.
+- The package extends the canonical `conversation_messages`, bounded `voice_transcriptions` cache/evidence, existing Meta WhatsApp media authority, Agent Context Compiler, Cost Guard/usage ledger, AI Quality/Safety and the existing approved-send/voice-response path. It did not create a second media store, transcript authority, conversation/message store, Agent framework, Context Compiler, Tool Registry, Policy/Approval engine, provider-send path, billing ledger, queue/outbox, CRM, Knowledge or Memory authority.
+- Fresh and cached successful WhatsApp voice transcription can now reconcile into the exact canonical inbound Voice/Audio `conversation_messages.transcript` without buying a second transcription. Conflicting/wrong-org/wrong-conversation/non-voice targets fail closed.
+- WhatsApp IMAGE and supported PDF/DOCUMENT understanding uses replay-safe claim -> provider-start -> finalize semantics on bounded `conversation_messages.metadata.media_analysis`. Stale pre-provider work may be reclaimed; once a provider side effect may have occurred, ambiguous/finalization/accounting failure becomes `RECONCILIATION_REQUIRED` and never triggers a blind paid retry. Full-video reasoning is explicitly unsupported rather than fabricated.
+- Media summaries, extracted text/OCR and transcripts are bounded untrusted customer evidence. Provider URLs, raw payloads, file bytes, tenant/binding IDs, provider message IDs and secrets are excluded from provider-bound Agent context; embedded media prompt injection cannot override system policy, permissions, Tool Registry, approvals, pricing truth, DNC, Cost Guard or Shadow Mode.
+- Production RPCs `claim_conversation_media_analysis`, `mark_conversation_media_analysis_provider_started`, `finalize_conversation_media_analysis` and `persist_conversation_voice_transcript` are SECURITY INVOKER and executable only by `service_role`; `anon` and `authenticated` cannot execute them. The `conversation_messages_ai_media_evidence_guard` trigger is enabled and protects trusted inbound transcript/media-analysis evidence from browser mutation.
+- Production verification remained side-effect clean: `voice_transcriptions=1` with `1 SUCCEEDED`, but that historical cache row has `0` matching canonical inbound Voice/Audio messages; current canonical WhatsApp Voice/Audio/Image/Video/Document counts are empty and `media_analysis` rows are `0`. No synthetic tenant, customer, conversation, message, Voice, Vision, media analysis, provider event or Agent output was created, and no unsafe backfill was attempted.
+- Post-migration advisor categories remain on the existing baseline: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`. No AI-VOICE-VISION-specific advisor regression was introduced.
+
+**Fresh continuation cursor:** `SECTION BUSINESS_INTELLIGENCE_AI -> AI-OWNER-COPILOT`.
+
+Before mutation, fresh-audit the already Production-verified Founder OS, existing OWNER/Telegram assistants, Agent Runtime, Context Compiler, Tool Registry, IAM/permission context, approvals/policy gates and every canonical CRM/Booking/Quote/Order/Invoice/Payment/Task/Campaign/Automation runtime. AI-OWNER-COPILOT must reuse those authorities and first disposition any already-covered Founder capability as implemented/superseded evidence; it must not create a second Founder/Owner brain, CRM, tool/action gateway, approval engine, financial authority, analytics truth, Memory/Knowledge store or Telegram-specific mutation path.
 
 ---
 
@@ -1293,8 +1308,8 @@ The following baseline inventory preserves every existing semantic Work Package,
 - `AI-AGENT-RUNTIME` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** (`0186_ai_agent_runtime@20261003102633`)
 - `AI-MODEL-PROMPT-CONTROL` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** (`0187_ai_model_prompt_control@20261003120749`)
 - `AI-QUALITY-SAFETY` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**
-- `AI-VOICE-VISION` — **NEXT**
-- `AI-OWNER-COPILOT`
+- `AI-VOICE-VISION` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for internally controlled scope; real provider-media E2E **BLOCKED_EXTERNAL**; later phone agent **DEFERRED_WITH_REASON**
+- `AI-OWNER-COPILOT` — **NEXT**
 
 ### ANALYTICS_REPORTING — Metrics, attribution and decision support
 
