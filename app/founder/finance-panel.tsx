@@ -32,24 +32,24 @@ export function FounderFinancePanel({ finance }: { finance: FounderFinanceV1 }) 
 
     <div className="grid">
       <div className="card">
-        <div className="muted">Observed subscription MRR</div>
-        <div className="value smallText">{currencyList(finance.observed.subscriptionMrr)}</div>
+        <div className="muted">Derived subscription MRR</div>
+        <div className="value smallText">{currencyList(finance.derived.subscriptionMrr)}</div>
       </div>
       <div className="card">
-        <div className="muted">Observed subscription ARR</div>
-        <div className="value smallText">{currencyList(finance.observed.subscriptionArr)}</div>
+        <div className="muted">Derived subscription ARR</div>
+        <div className="value smallText">{currencyList(finance.derived.subscriptionArr)}</div>
       </div>
       <div className="card">
-        <div className="muted">Net captured · 30d</div>
-        <div className="value smallText">{currencyList(finance.observed.netCaptured30d)}</div>
+        <div className="muted">Derived net cash collected · 30d</div>
+        <div className="value smallText">{currencyList(finance.derived.netCaptured30d)}</div>
       </div>
       <div className="card">
-        <div className="muted">Outstanding invoices</div>
-        <div className="value smallText">{currencyList(finance.observed.outstandingInvoices)}</div>
+        <div className="muted">Derived outstanding invoices</div>
+        <div className="value smallText">{currencyList(finance.derived.outstandingInvoices)}</div>
       </div>
       <div className="card">
-        <div className="muted">Average WON deal value</div>
-        <div className="value smallText">{currencyList(finance.observed.averageWonDealValue)}</div>
+        <div className="muted">Derived average WON deal value</div>
+        <div className="value smallText">{currencyList(finance.derived.averageWonDealValue)}</div>
       </div>
     </div>
 

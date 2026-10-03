@@ -212,7 +212,8 @@ export async function loadFounderFinanceV1(input: {
     generatedAt: now.toISOString(),
     companySnapshot,
     companyRunwayMonths,
-    observed: {
+    derived: {
+      evidenceClass: 'DERIVED',
       subscriptionMrr,
       subscriptionArr,
       netCaptured30d,

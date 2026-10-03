@@ -92,7 +92,8 @@ export type FounderFinanceV1 = {
   generatedAt: string;
   companySnapshot: CompanyFinancialSnapshotV1 | null;
   companyRunwayMonths: number | null;
-  observed: {
+  derived: {
+    evidenceClass: 'DERIVED';
     subscriptionMrr: FounderCurrencyAmount[];
     subscriptionArr: FounderCurrencyAmount[];
     netCaptured30d: FounderCurrencyAmount[];
@@ -180,7 +181,7 @@ export function founderFinanceModelPayload(finance: FounderFinanceV1 | null | un
     generatedAt: finance.generatedAt,
     companySnapshot: finance.companySnapshot,
     companyRunwayMonths: finance.companyRunwayMonths,
-    observed: finance.observed,
+    derived: finance.derived,
     scenarios: finance.scenarios.map(({ scenario, metrics, customerCountProjections }) => ({
       name: scenario.name,
       status: scenario.status,

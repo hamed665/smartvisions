@@ -68,7 +68,8 @@ describe('Founder finance V1', () => {
       generatedAt: '2026-10-03T12:00:00.000Z',
       companySnapshot: null,
       companyRunwayMonths: null,
-      observed: {
+      derived: {
+        evidenceClass: 'DERIVED',
         subscriptionMrr: [{ currency: 'OMR', amount: 500 }],
         subscriptionArr: [{ currency: 'OMR', amount: 6000 }],
         netCaptured30d: [],
