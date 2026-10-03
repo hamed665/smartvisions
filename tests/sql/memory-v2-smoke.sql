@@ -101,17 +101,12 @@ insert into public.crm_person_business_relationships(
 on conflict (id) do nothing;
 
 insert into public.sales_conversations(
-  id,organization_id,channel,summary,stage,sales_state,person_id,
-  person_link_method,person_link_source_ref,person_link_evidence,
-  person_linked_by_user_id,person_linked_at
+  id,organization_id,channel,summary,stage,sales_state
 ) values (
   '00000000-0000-0000-0000-00000000f861',
   '00000000-0000-0000-0000-00000000f801',
   'WHATSAPP','Memory CI conversation','ACTIVE',
-  '{"version":1,"objective":"controlled memory smoke"}'::jsonb,
-  '00000000-0000-0000-0000-00000000f841',
-  'MANUAL_CONFIRMED','memory-ci-conversation','{"fixture":true}'::jsonb,
-  '00000000-0000-0000-0000-00000000f811',now()
+  '{"version":1,"objective":"controlled memory smoke"}'::jsonb
 )
 on conflict (id) do nothing;
 
@@ -128,6 +123,18 @@ on conflict (id) do nothing;
 
 reset role;
 set role service_role;
+
+select *
+from public.link_crm_customer360_person_context(
+  '00000000-0000-0000-0000-00000000f801',
+  '00000000-0000-0000-0000-00000000f811',
+  'CONVERSATION',
+  '00000000-0000-0000-0000-00000000f861',
+  '00000000-0000-0000-0000-00000000f841',
+  'MANUAL_CONFIRMED',
+  'memory-ci-conversation',
+  '{"fixture":true}'::jsonb
+);
 
 do $direct_guard$
 begin
