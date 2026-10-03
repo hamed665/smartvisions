@@ -80,9 +80,25 @@
 - Production verification remained side-effect clean: `voice_transcriptions=1` with `1 SUCCEEDED`, but that historical cache row has `0` matching canonical inbound Voice/Audio messages; current canonical WhatsApp Voice/Audio/Image/Video/Document counts are empty and `media_analysis` rows are `0`. No synthetic tenant, customer, conversation, message, Voice, Vision, media analysis, provider event or Agent output was created, and no unsafe backfill was attempted.
 - Post-migration advisor categories remain on the existing baseline: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`. No AI-VOICE-VISION-specific advisor regression was introduced.
 
-**Fresh continuation cursor:** `SECTION BUSINESS_INTELLIGENCE_AI -> AI-OWNER-COPILOT`.
+## AI-OWNER-COPILOT Production closeout — 2026-10-04
 
-Before mutation, fresh-audit the already Production-verified Founder OS, existing OWNER/Telegram assistants, Agent Runtime, Context Compiler, Tool Registry, IAM/permission context, approvals/policy gates and every canonical CRM/Booking/Quote/Order/Invoice/Payment/Task/Campaign/Automation runtime. AI-OWNER-COPILOT must reuse those authorities and first disposition any already-covered Founder capability as implemented/superseded evidence; it must not create a second Founder/Owner brain, CRM, tool/action gateway, approval engine, financial authority, analytics truth, Memory/Knowledge store or Telegram-specific mutation path.
+- Work Package: `SECTION BUSINESS_INTELLIGENCE_AI -> AI-OWNER-COPILOT`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled OWNER/ADMIN read, planning, signed Preview/Confirm and governed-action surface. Confirmed Production mutations remain intentionally blocked while canonical `system_controls.shadow_mode=true`; no runtime safety control was relaxed to manufacture an E2E mutation.
+- PR #453 final head `122df233ad93a5cfa472541630dae16053782e97` passed exact-head CI `37162651405`, including lint, typecheck, the full test suite, the complete PostgreSQL 17 migration chain plus AI-OWNER-COPILOT smoke, Next build, Vinext and Cloudflare scheduled-runtime verification.
+- PR #453 squash-merged to canonical `main@bfdebe34e9663406c94bf4c12aad6d583a77c757`. Exact-main CI `37162845953` and Cloudflare Production Deploy `37163061552` both succeeded on that exact SHA; deployment passed exact-green checkout, release-candidate smoke, controlled SSR load, Production promotion, route attachment, routed Production smoke and safe API/webhook rejection smoke.
+- Production migration source `supabase/migrations/20261003225641_ai_owner_copilot.sql` (merged blob `5addb622dc2b35564ffebb3a1d50582e05542176`) is applied in Supabase Production as `ai_owner_copilot@20261003234721`.
+- The package reuses the existing Telegram/panel-parity action adapter, canonical domain Server Actions/RPCs, Tool Action Registry, IAM/domain permissions, lifecycle/version gates, runtime controls and Audit Log. It did not create a second Founder/Owner brain, CRM, task/deal authority, action gateway, approval engine, financial authority, analytics truth, queue/outbox, provider-send path, Knowledge or Memory store.
+- OWNER/ADMIN now have a real `/copilot` web surface and `/api/owner-copilot` planner/confirm route. The model can only propose currently AVAILABLE `OWNER_COPILOT` Tool Registry actions and never receives execution authority. Missing IDs/versions/evidence/amounts/dates/statuses must clarify rather than be invented.
+- Mutation requires an HMAC-signed Preview token bound to organization, user, OWNER/ADMIN role, canonical pre-state and a one-time confirmation ID. Execution re-checks Tool Registry availability, explicit confirmation, canonical state, Global Kill Switch, Agents pause and Shadow Mode, then invokes the existing domain action, verifies canonical post-state and records correlated audit evidence.
+- Production Tool Registry verification shows `20` OWNER_COPILOT contracts, `0` malformed/unsafe contracts, `0` provider-money-execution contracts and `0` Owner Copilot tables. Payment actions can only manage internal Payment Intent/refund-request state; Quote SENT remains state evidence only; direct provider send, charge or refund execution is outside this surface.
+- The bounded operational read model covers canonical leads/customers/deals/tasks/bookings/quotes/orders/invoices/payment intents/campaigns/automations, team workload, follow-ups and operational reporting evidence without creating an analytics warehouse or causal-attribution truth. Founder-only board-report authorities were explicitly excluded from the ADMIN-capable context after privilege-boundary review.
+- Production runtime controls remain `shadow_mode=true`, `global_kill_switch=false`, `agents_paused=false`. Routed unauthenticated checks for `/copilot` and `/api/owner-copilot` both redirect to `/login`, verifying the deployed auth boundary without creating a synthetic OWNER/ADMIN session or action.
+- Production verification remained side-effect clean: no synthetic tenant, customer, Lead, Deal, Task, Booking, Quote, Order, Invoice, Payment Intent, refund, Campaign, Automation or Owner Copilot action was created.
+- Post-migration advisor categories remain on the existing baseline: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`. No AI-OWNER-COPILOT-specific advisor regression was introduced.
+
+**Fresh continuation cursor:** `SECTION ANALYTICS_REPORTING -> DATA-EVENT-METRICS`.
+
+Before mutation, fresh-audit the existing OLTP event/evidence authorities, Audit Log, Conversation/CRM/Booking/Commerce/Payment lifecycle events, usage/cost events, Marketing Attribution evidence and current report/dashboard code. DATA-EVENT-METRICS must define one canonical, versioned Metrics Registry and tenant/business/branch-scoped metric/event semantics without creating a second business-truth store, inventing attribution, or turning arbitrary Production SQL into analytics authority.
 
 ---
 
@@ -1309,11 +1325,11 @@ The following baseline inventory preserves every existing semantic Work Package,
 - `AI-MODEL-PROMPT-CONTROL` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** (`0187_ai_model_prompt_control@20261003120749`)
 - `AI-QUALITY-SAFETY` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**
 - `AI-VOICE-VISION` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for internally controlled scope; real provider-media E2E **BLOCKED_EXTERNAL**; later phone agent **DEFERRED_WITH_REASON**
-- `AI-OWNER-COPILOT` — **NEXT**
+- `AI-OWNER-COPILOT` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**; confirmed writes remain policy-gated by Production Shadow Mode
 
 ### ANALYTICS_REPORTING — Metrics, attribution and decision support
 
-- `DATA-EVENT-METRICS`
+- `DATA-EVENT-METRICS` — **NEXT**
 - `DATA-WAREHOUSE`
 - `DATA-DASHBOARDS`
 - `DATA-ATTRIBUTION`
