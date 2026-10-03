@@ -5,6 +5,8 @@ import { getCurrentOrganization } from '@/lib/supabase/org';
 import { founderOsV1Enabled, loadFounderStatusV1 } from '@/lib/founder/server';
 import { buildFounderInvestorReadinessV1 } from '@/lib/founder/investor-readiness';
 import { FounderAskPanel } from './founder-ask';
+import { loadFounderFinanceV1 } from '@/lib/founder/finance-server';
+import { FounderFinancePanel } from './finance-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,12 +24,18 @@ export default async function FounderPage() {
   });
   if (!flag.enabled) notFound();
 
-  const status = await loadFounderStatusV1({
-    supabase: service,
-    organizationId: current.organizationId,
-  });
+  const [status, finance] = await Promise.all([
+    loadFounderStatusV1({
+      supabase: service,
+      organizationId: current.organizationId,
+    }),
+    loadFounderFinanceV1({
+      supabase: service,
+      organizationId: current.organizationId,
+    }),
+  ]);
 
-  const investorReadiness = buildFounderInvestorReadinessV1(status);
+  const investorReadiness = buildFounderInvestorReadinessV1(status, finance);
 
   const productMetrics = [
     ['Operating mode', status.operatingMode],
@@ -59,8 +67,9 @@ export default async function FounderPage() {
       <div>
         <h1>Founder</h1>
         <p className="muted">
-          Founder OS V1 is an OWNER-only, feature-flagged, read-only evidence surface.
-          It does not execute tools, mutate business state, or bypass canonical approval and runtime gates.
+          Founder analysis is OWNER-only, feature-flagged and read-only. Explicit OWNER finance evidence
+          and scenario forms use governed writes; the Copilot itself does not execute tools, mutate business state,
+          or bypass canonical approval and runtime gates.
         </p>
       </div>
       <span className="status">{status.mode} · {status.operatingMode}</span>
@@ -86,6 +95,8 @@ export default async function FounderPage() {
     </section>
 
     <FounderAskPanel />
+
+    <FounderFinancePanel finance={finance} />
 
     <section className="panel">
       <div className="headerRow">

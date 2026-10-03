@@ -1,4 +1,5 @@
 import type { FounderStatusSnapshotV1 } from './contracts';
+import type { FounderFinanceV1 } from './finance';
 
 export type FounderInvestorEvidenceState = 'PRESENT' | 'PARTIAL' | 'MISSING';
 
@@ -45,6 +46,7 @@ function supported(
 
 export function buildFounderInvestorReadinessV1(
   status: FounderStatusSnapshotV1,
+  finance?: FounderFinanceV1 | null,
 ): FounderInvestorReadinessV1 {
   const items: FounderInvestorReadinessItem[] = [];
 
@@ -117,15 +119,17 @@ export function buildFounderInvestorReadinessV1(
     {
       key: 'COMPANY_FINANCIALS',
       title: 'Company financial model, burn and runway',
-      state: 'MISSING',
-      detail: 'Founder Status does not contain a canonical company cash balance, P&L, payroll, liabilities or runway authority. Provider Cost Guard must not be relabeled as company burn.',
-      authorities: [],
+      state: finance?.companySnapshot ? 'PRESENT' : 'MISSING',
+      detail: finance?.companySnapshot
+        ? `OWNER-confirmed company snapshot exists as of ${finance.companySnapshot.asOfDate}; runway is derived only from its confirmed cash balance and monthly net burn.`
+        : 'No OWNER-confirmed company cash/burn snapshot exists. Provider Cost Guard is not relabeled as company burn.',
+      authorities: finance?.companySnapshot ? ['COMPANY_FINANCE'] : [],
     },
     {
       key: 'MARKET_RESEARCH',
       title: 'External market, TAM/SAM/SOM and competitor evidence',
       state: 'MISSING',
-      detail: 'No governed current external research authority is connected to Founder OS V1. Model memory is not accepted as investor evidence.',
+      detail: 'Live web research can answer current questions per request, but no persistent governed market-research evidence set is stored for investor diligence. Model memory and transient web results are not promoted into this deterministic readiness pillar.',
       authorities: [],
     },
     {
@@ -148,9 +152,15 @@ export function buildFounderInvestorReadinessV1(
     .filter((item) => item.state === 'MISSING')
     .map((item) => item.title);
 
+  const allowedAuthorities = new Set([
+    ...verifiedAuthorities(status),
+    ...(finance?.evidence
+      .filter((item) => item.quality === 'VERIFIED')
+      .map((item) => item.authority) ?? []),
+  ]);
   const availableAuthorities = [...new Set(
     items.flatMap((item) => item.authorities)
-      .filter((authority) => verifiedAuthorities(status).has(authority)),
+      .filter((authority) => allowedAuthorities.has(authority)),
   )];
 
   return {
