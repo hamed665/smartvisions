@@ -943,8 +943,11 @@ as $memory_context$
       '_canonical_business:'||b.id::text,
       'BUSINESS',1,
       jsonb_build_object(
-        'name',b.name,'countryCode',b.country_code,'city',b.city,
-        'category',b.category,'accountLifecycle',b.account_lifecycle
+        'name',b.name,
+        'countryCode',to_jsonb(b)->>'country_code',
+        'city',to_jsonb(b)->>'city',
+        'category',to_jsonb(b)->>'category',
+        'accountLifecycle',to_jsonb(b)->>'account_lifecycle'
       ),
       'CRM_BUSINESS',b.id::text,
       jsonb_build_object('canonicalTable','businesses','sourceManaged',true),
