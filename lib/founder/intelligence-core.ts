@@ -3,6 +3,7 @@ import { buildFounderInvestorReadinessV1 } from './investor-readiness';
 import { normalizeOwnerWebUrl, type OwnerWebSource } from '@/lib/ai/owner-web-research-core';
 import { founderFinanceModelPayload, founderFinanceVerifiedAuthorities, type FounderFinanceV1 } from './finance';
 import { founderInvestorModelPayload, founderInvestorVerifiedAuthorities, type FounderInvestorWorkspaceV1 } from './investor';
+import { founderCapitalModelPayload, founderCapitalVerifiedAuthorities, type FounderCapitalWorkspaceV1 } from './capital';
 
 export type FounderQuestionKind =
   | 'STATUS'
@@ -92,6 +93,7 @@ function verifiedAuthorities(
   status: FounderStatusSnapshotV1,
   finance?: FounderFinanceV1 | null,
   investor?: FounderInvestorWorkspaceV1 | null,
+  capital?: FounderCapitalWorkspaceV1 | null,
 ) {
   return new Set([
     ...status.evidence
@@ -99,6 +101,7 @@ function verifiedAuthorities(
       .map((source) => source.authority),
     ...founderFinanceVerifiedAuthorities(finance),
     ...founderInvestorVerifiedAuthorities(investor),
+    ...founderCapitalVerifiedAuthorities(capital),
   ]);
 }
 
@@ -150,10 +153,11 @@ function groundedFacts(
   status: FounderStatusSnapshotV1,
   finance?: FounderFinanceV1 | null,
   investor?: FounderInvestorWorkspaceV1 | null,
+  capital?: FounderCapitalWorkspaceV1 | null,
   maxItems = 8,
 ): FounderGroundedFact[] {
   if (!Array.isArray(value)) return [];
-  const allowed = verifiedAuthorities(status, finance, investor);
+  const allowed = verifiedAuthorities(status, finance, investor, capital);
   const seen = new Set<string>();
   const facts: FounderGroundedFact[] = [];
   for (const item of value) {
@@ -192,6 +196,7 @@ export function founderStatusModelPayload(
   status: FounderStatusSnapshotV1,
   finance?: FounderFinanceV1 | null,
   investor?: FounderInvestorWorkspaceV1 | null,
+  capital?: FounderCapitalWorkspaceV1 | null,
 ) {
   return {
     schemaVersion: status.schemaVersion,
@@ -203,13 +208,15 @@ export function founderStatusModelPayload(
     providerCostGuard: status.finance,
     founderFinance: founderFinanceModelPayload(finance),
     founderInvestor: founderInvestorModelPayload(investor),
+    founderCapital: founderCapitalModelPayload(capital),
     attention: status.attention,
     evidence: [
       ...status.evidence,
       ...(finance?.evidence ?? []),
       ...(investor?.evidence ?? []),
+      ...(capital?.evidence ?? []),
     ],
-    investorReadiness: buildFounderInvestorReadinessV1(status, finance, investor),
+    investorReadiness: buildFounderInvestorReadinessV1(status, finance, investor, capital),
   };
 }
 
@@ -219,11 +226,12 @@ export function parseFounderIntelligence(input: {
   webSources?: OwnerWebSource[];
   finance?: FounderFinanceV1 | null;
   investor?: FounderInvestorWorkspaceV1 | null;
+  capital?: FounderCapitalWorkspaceV1 | null;
   nowIso?: string;
 }): FounderIntelligenceResult {
   const rawKind = text(input.raw.question_kind, 20).toUpperCase() as FounderQuestionKind;
   const questionKind = KINDS.has(rawKind) ? rawKind : 'GENERAL';
-  const facts = groundedFacts(input.raw.facts, input.status, input.finance, input.investor);
+  const facts = groundedFacts(input.raw.facts, input.status, input.finance, input.investor, input.capital);
   const webSources = normalizedWebSources(input.webSources ?? []);
   const acceptedExternalFacts = externalFacts(input.raw.external_facts, webSources);
   const evidenceAuthorities = [...new Set(facts.map((fact) => fact.authority))];

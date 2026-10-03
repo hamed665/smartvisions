@@ -13,6 +13,7 @@ import type { FounderStatusSnapshotV1 } from './contracts';
 import { runOwnerJsonModel } from '@/lib/ai/owner-model-gateway';
 import type { FounderFinanceV1 } from './finance';
 import type { FounderInvestorWorkspaceV1 } from './investor';
+import type { FounderCapitalWorkspaceV1 } from './capital';
 
 const schema = {
   type: 'object',
@@ -79,6 +80,7 @@ export async function analyzeFounderQuestion(input: {
   status: FounderStatusSnapshotV1;
   finance?: FounderFinanceV1 | null;
   investor?: FounderInvestorWorkspaceV1 | null;
+  capital?: FounderCapitalWorkspaceV1 | null;
   history?: FounderConversationTurn[];
   signal?: AbortSignal;
 }): Promise<FounderIntelligenceResult> {
@@ -104,6 +106,11 @@ export async function analyzeFounderQuestion(input: {
     'A DISCOVERED_EXTERNAL investor candidate is external research evidence only. It is not a confirmed CRM identity, investor interest, outreach, meeting, diligence, term sheet or commitment.',
     'CRM_CONFIRMED means the external record was explicitly linked to canonical CRM Company/Person evidence. It still does not prove investor interest or commitment.',
     'Fundraising round target raise, valuation, valuation cap, discount and target runway fields are OWNER assumptions unless separately supported. Never relabel them as market valuation or agreed terms.',
+    'FOUNDER_STATUS.founderCapital.capTable ownership percentages are DERIVED only from OWNER-confirmed ACTIVE cap-table units. CAP_TABLE records are evidence, but derived percentages are not an external legal share register.',
+    'FOUNDER_STATUS.founderCapital.dilutionScenarios are explicit SCENARIOS. Never describe projected post-money ownership or dilution as current ownership.',
+    'FOUNDER_STATUS.founderCapital.termSheets are recorded user/import-provided terms. ACCEPTED does not mean money was received; a term sheet is not payment or bank-settlement evidence.',
+    'FOUNDER_STATUS.founderCapital.diligence is checklist metadata only. READY or SHARED does not mean an investor reviewed, approved or accepted the document.',
+    'Never expose or infer private data-room evidence references; the model payload intentionally excludes them.',
     'FUNDRAISING CRM Deal stages are workflow evidence. Do not turn stage probability into probability of raising capital. CLOSED records are not cash-receipt evidence unless a separate payment/bank authority supports that claim.',
     liveResearch
       ? 'Every current external claim must be represented in external_facts as {text, source_url}. source_url must be a URL actually returned by web_search. Never invent a URL, source, market size, competitor price, regulation, investor, benchmark or event.'
@@ -127,7 +134,7 @@ export async function analyzeFounderQuestion(input: {
     instructions,
     payload: {
       founder_question: question,
-      founder_status: founderStatusModelPayload(input.status, input.finance, input.investor),
+      founder_status: founderStatusModelPayload(input.status, input.finance, input.investor, input.capital),
       conversation_history: history,
     },
     schemaName: 'founder_intelligence_v1',
@@ -143,5 +150,6 @@ export async function analyzeFounderQuestion(input: {
     webSources: response.webSources,
     finance: input.finance,
     investor: input.investor,
+    capital: input.capital,
   });
 }
