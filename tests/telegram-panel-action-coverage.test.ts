@@ -86,6 +86,14 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
   'app/cost-actions.ts': {
     runOpenAiHealthCheck:'openai.health', updateCostGuardSettings:'cost.update',
   },
+  'app/founder/capital-actions.ts': {
+    saveFounderCapTableEntry:'SPECIALIZED:FOUNDER_CAPITAL',
+    archiveFounderCapTableEntry:'SPECIALIZED:FOUNDER_CAPITAL',
+    saveFounderDilutionScenario:'SPECIALIZED:FOUNDER_CAPITAL',
+    archiveFounderDilutionScenario:'SPECIALIZED:FOUNDER_CAPITAL',
+    saveFounderTermSheet:'SPECIALIZED:FOUNDER_CAPITAL',
+    saveFounderDueDiligenceItem:'SPECIALIZED:FOUNDER_CAPITAL',
+  },
   'app/founder/finance-actions.ts': {
     recordCompanyFinancialSnapshot:'SPECIALIZED:FOUNDER_FINANCE',
     saveFounderFinanceScenario:'SPECIALIZED:FOUNDER_FINANCE',
@@ -206,6 +214,12 @@ describe('Control Center ↔ Telegram action coverage', () => {
     expect(CLASSIFICATION['app/control-center-actions.ts'].updateServiceBookingCatalog).toBe('SPECIALIZED:BOOKING_CATALOG');
     expect(CLASSIFICATION['app/control-center-actions.ts'].createBookingResource).toBe('SPECIALIZED:BOOKING_CATALOG');
     expect(CLASSIFICATION['app/control-center-actions.ts'].updateBookingResource).toBe('SPECIALIZED:BOOKING_CATALOG');
+    expect(CLASSIFICATION['app/founder/capital-actions.ts'].saveFounderCapTableEntry).toBe('SPECIALIZED:FOUNDER_CAPITAL');
+    expect(CLASSIFICATION['app/founder/capital-actions.ts'].archiveFounderCapTableEntry).toBe('SPECIALIZED:FOUNDER_CAPITAL');
+    expect(CLASSIFICATION['app/founder/capital-actions.ts'].saveFounderDilutionScenario).toBe('SPECIALIZED:FOUNDER_CAPITAL');
+    expect(CLASSIFICATION['app/founder/capital-actions.ts'].archiveFounderDilutionScenario).toBe('SPECIALIZED:FOUNDER_CAPITAL');
+    expect(CLASSIFICATION['app/founder/capital-actions.ts'].saveFounderTermSheet).toBe('SPECIALIZED:FOUNDER_CAPITAL');
+    expect(CLASSIFICATION['app/founder/capital-actions.ts'].saveFounderDueDiligenceItem).toBe('SPECIALIZED:FOUNDER_CAPITAL');
     expect(CLASSIFICATION['app/founder/finance-actions.ts'].recordCompanyFinancialSnapshot).toBe('SPECIALIZED:FOUNDER_FINANCE');
     expect(CLASSIFICATION['app/founder/finance-actions.ts'].saveFounderFinanceScenario).toBe('SPECIALIZED:FOUNDER_FINANCE');
     expect(CLASSIFICATION['app/founder/finance-actions.ts'].archiveFounderFinanceScenario).toBe('SPECIALIZED:FOUNDER_FINANCE');
