@@ -58,6 +58,8 @@ describe('MEMORY-V2 architecture',()=>{
     expect(migration).toContain('Memory source conflicts with Person target');
     expect(migration).toContain('Memory source conflicts with Business target');
     expect(migration).toContain('Memory source conflicts with Conversation target');
+    expect(migration).toContain('Memory Agent Runtime source not found');
+    expect(migration).toContain('from public.agent_runs a');
   });
 
   it('uses canonical source references and does not introduce a learning/vector/audit side authority',()=>{
