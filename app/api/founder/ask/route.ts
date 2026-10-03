@@ -40,6 +40,7 @@ export async function POST(request: Request) {
       question,
       status,
       history: normalizeFounderHistory(body.history),
+      signal: request.signal,
     });
 
     return NextResponse.json(
