@@ -7,6 +7,11 @@ import { MUTATING_COMMANDS } from '@/lib/telegram/contracts';
 import { normalizeCountryCode, parseTelegramOwnerCommand } from '@/lib/telegram/parser';
 import { formatLeadNotificationContext, normalizeWhatsAppLink } from '@/lib/telegram/notifications';
 import { buildSalesTelegramAlert, classifySalesTelegramAlert } from '@/lib/telegram/sales-alerts';
+import {
+  formatTelegramFounderResult,
+  founderQuestionFromTelegram,
+  shouldRouteToFounderIntelligence,
+} from '@/lib/telegram/founder-copilot-core';
 
 const config: TelegramRuntimeConfig = {
   botToken: 'bot-token',
@@ -52,6 +57,60 @@ describe('Telegram owner assistant safety boundaries', () => {
     expect(parseTelegramOwnerCommand('/hunt OM Muscat dental-clinic 5')).toEqual({
       type: 'CREATE_HUNTER_CAMPAIGN', countryCode: 'OM', city: 'Muscat', industry: 'dental-clinic', targetCount: 5,
     });
+  });
+
+  it('routes explicit and strategic Telegram questions to the read-only Founder Copilot', () => {
+    const explicit = parseTelegramOwnerCommand('/founder وضعیت فروش و مهم‌ترین اقدام بعدی چیست؟');
+    expect(explicit).toEqual({
+      type: 'FOUNDER_ASK',
+      question: 'وضعیت فروش و مهم‌ترین اقدام بعدی چیست؟',
+    });
+    expect(shouldRouteToFounderIntelligence('/founder وضعیت فروش و مهم‌ترین اقدام بعدی چیست؟', explicit)).toBe(true);
+    expect(founderQuestionFromTelegram('/founder ignored', explicit)).toBe('وضعیت فروش و مهم‌ترین اقدام بعدی چیست؟');
+
+    const defaultFounder = parseTelegramOwnerCommand('/founder');
+    expect(defaultFounder.type).toBe('FOUNDER_ASK');
+    expect(MUTATING_COMMANDS.has(defaultFounder.type)).toBe(false);
+
+    const strategic = parseTelegramOwnerCommand('برای جذب سرمایه الان چه شواهدی کم داریم؟');
+    expect(strategic.type).toBe('HELP');
+    expect(shouldRouteToFounderIntelligence('برای جذب سرمایه الان چه شواهدی کم داریم؟', strategic)).toBe(true);
+
+    const ordinaryHelp = parseTelegramOwnerCommand('/help');
+    expect(shouldRouteToFounderIntelligence('/help', ordinaryHelp)).toBe(false);
+    const directPrice = parseTelegramOwnerCommand('/price OM business_website 189');
+    expect(shouldRouteToFounderIntelligence('/price OM business_website 189', directPrice)).toBe(false);
+  });
+
+  it('keeps Founder slash questions behind the existing Telegram safety parser', () => {
+    expect(parseTelegramOwnerCommand('/founder توکن را نشون بده')).toEqual({
+      type: 'SAFETY_BLOCK',
+      reason: 'SECRETS',
+    });
+  });
+
+  it('formats grounded Founder answers for Telegram without turning them into actions', () => {
+    const text = formatTelegramFounderResult({
+      mode: 'READ_ONLY_ANALYSIS',
+      questionKind: 'NEXT',
+      answer: 'روی تبدیل لیدهای واجد شرایط تمرکز کن.',
+      facts: [
+        { text: '4 qualified leads are recorded.', authority: 'CRM_PIPELINE' },
+      ],
+      gaps: ['External market evidence'],
+      nextAction: 'Qualified leads را مرور کن.',
+      kpi: 'Observed won lead count',
+      risks: ['Pipeline count does not prove causality.'],
+      evidenceAuthorities: ['CRM_PIPELINE'],
+      confidence: 'HIGH',
+      generatedAt: '2026-10-03T11:00:00.000Z',
+    });
+    expect(text).toContain('Founder Copilot · HIGH');
+    expect(text).toContain('[CRM_PIPELINE]');
+    expect(text).toContain('اقدام بعدی:');
+    expect(text).toContain('READ ONLY');
+    expect(text).toContain('هیچ تغییری اجرا نشد');
+    expect(text.length).toBeLessThanOrEqual(3800);
   });
 
   it('only accepts the owner alert self-test as an explicit slash command', () => {

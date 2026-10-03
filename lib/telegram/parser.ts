@@ -52,6 +52,15 @@ function explicitSafetyBlock(input: string): TelegramOwnerCommand | null {
   return null;
 }
 
+function founderCommand(rawInput: string): TelegramOwnerCommand | null {
+  const normalized = rawInput.replace(/\r/g, '').trim();
+  const match = normalized.match(/^\/founder(?:@[A-Za-z0-9_]+)?(?:\s+([\s\S]+))?$/i);
+  if (!match) return null;
+  const question = (match[1] ?? 'وضعیت فعلی شرکت و مهم‌ترین اقدام بعدی چیست؟').trim();
+  if (!question || question.length > 4_000) return { type: 'HELP' };
+  return { type: 'FOUNDER_ASK', question };
+}
+
 function catalogCommand(rawInput: string): TelegramOwnerCommand | null {
   const normalized = toLatinDigits(rawInput).replace(/\r/g, '').trim();
   const slash = normalized.match(/^\/catalog(?:@[A-Za-z0-9_]+)?(?:\s+|\n)([\s\S]+)$/i);
@@ -181,6 +190,8 @@ export function parseTelegramOwnerCommand(rawInput: string): TelegramOwnerComman
   if (/^\/alert_?test(?:@[A-Za-z0-9_]+)?$/i.test(input)) return { type: 'TEST_OWNER_ALERT' };
   const safety = explicitSafetyBlock(input);
   if (safety) return safety;
+  const founder = founderCommand(rawInput);
+  if (founder) return founder;
   const outreach = outreachCommand(rawInput);
   if (outreach) return outreach;
   const catalog = catalogCommand(rawInput);

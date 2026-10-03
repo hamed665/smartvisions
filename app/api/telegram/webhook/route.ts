@@ -9,6 +9,11 @@ import { executePreparedMutation, executeReadCommand, prepareMutation } from '@/
 import { parseTelegramOwnerCommand } from '@/lib/telegram/parser';
 import { freeOwnerAssistantReply, shouldUseOwnerAssistantPlanner } from '@/lib/telegram/assistant-planner-core';
 import { planTelegramOwnerRequest } from '@/lib/telegram/assistant-planner';
+import {
+  founderQuestionFromTelegram,
+  shouldRouteToFounderIntelligence,
+} from '@/lib/telegram/founder-copilot-core';
+import { runTelegramFounderQuestion } from '@/lib/telegram/founder-copilot';
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -199,6 +204,74 @@ export async function POST(request: Request) {
     }
 
     let command = parseTelegramOwnerCommand(rawText);
+
+    if (shouldRouteToFounderIntelligence(rawText, command)) {
+      const founderQuestion = founderQuestionFromTelegram(rawText, command);
+      try {
+        const founder = await runTelegramFounderQuestion({
+          supabase,
+          organizationId: config.organizationId,
+          currentRunId: claimed.id,
+          question: founderQuestion,
+          signal: request.signal,
+        });
+        const persistedFounderResult = {
+          title: 'Founder Copilot',
+          text: founder.text,
+          answer: founder.result.answer,
+          mode: founder.result.mode,
+          questionKind: founder.result.questionKind,
+          confidence: founder.result.confidence,
+          facts: founder.result.facts,
+          gaps: founder.result.gaps,
+          nextAction: founder.result.nextAction,
+          kpi: founder.result.kpi,
+          risks: founder.result.risks,
+          evidenceAuthorities: founder.result.evidenceAuthorities,
+          readOnly: true,
+        };
+        const { error: completeError } = await supabase.from('telegram_command_runs').update({
+          command_type: 'FOUNDER_ASK',
+          command_payload: {
+            type: 'FOUNDER_ASK',
+            question: founderQuestion,
+            source: command.type === 'FOUNDER_ASK' ? 'EXPLICIT' : 'NATURAL_LANGUAGE',
+          },
+          status: 'COMPLETED',
+          result: persistedFounderResult,
+          completed_at: new Date().toISOString(),
+        }).eq('organization_id', config.organizationId).eq('id', claimed.id).eq('status', 'PROCESSING');
+        if (completeError) throw new Error(`Telegram Founder persistence failed: ${completeError.message}`);
+
+        try {
+          await sendTelegramMessage({ chatId, text: founder.text });
+        } catch (deliveryError) {
+          await supabase.from('telegram_command_runs').update({
+            error: deliveryError instanceof Error
+              ? deliveryError.message.slice(0, 300)
+              : 'Founder reply delivery failed',
+          }).eq('id', claimed.id);
+        }
+        return NextResponse.json({
+          ok: true,
+          completed: true,
+          founder: true,
+          questionKind: founder.result.questionKind,
+          confidence: founder.result.confidence,
+        });
+      } catch (founderError) {
+        await markRunFailed(supabase, config.organizationId, claimed.id, founderError);
+        const safeText = [
+          'Founder Copilot فعلاً در دسترس نیست یا Runtime / Cost Guard اجازه نداده است.',
+          'هیچ تغییری انجام نشد. فرمان‌های مستقیم و امن تلگرام همچنان فعال‌اند.',
+        ].join('\n');
+        try {
+          await sendTelegramMessage({ chatId, text: `⚠️ ${safeText}` });
+        } catch { /* no retry: Telegram send is not idempotent */ }
+        return NextResponse.json({ ok: true, failed: true, founder: true });
+      }
+    }
+
     let assistantMeta: Record<string, unknown> | null = null;
     if (shouldUseOwnerAssistantPlanner(rawText, command)) {
       try {
