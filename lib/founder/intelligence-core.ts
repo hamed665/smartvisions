@@ -161,6 +161,10 @@ function groundedFacts(
   return facts;
 }
 
+export function needsLiveFounderResearch(question: string) {
+  return /(بازار|market|competitor|رقیب|رقبا|benchmark|بنچمارک|tams?|sams?|soms?|market\s*size|اندازه\s*بازار|current\s*pricing|قیمت\s*(?:رقبا|بازار)|pricing\s*(?:competitor|market)|regulation|قانون|مقررات|investor\s*(?:list|search|fund)|سرمایه(?:‌| )?گذار(?:ان)?\s*(?:مناسب|پیدا|لیست)|trend|ترند|اخبار|news)/i.test(question);
+}
+
 export function normalizeFounderHistory(value: unknown): FounderConversationTurn[] {
   if (!Array.isArray(value)) return [];
   const turns: FounderConversationTurn[] = [];
