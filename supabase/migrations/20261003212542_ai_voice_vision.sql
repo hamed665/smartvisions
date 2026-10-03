@@ -146,10 +146,10 @@ begin
           'completedAt',statement_timestamp(),
           'error','STALE_AFTER_PROVIDER_START'
         );
-      update public.conversation_messages
-      set metadata=jsonb_set(coalesce(metadata,'{}'::jsonb),'{media_analysis}',v_next,true)
-      where id=m.id
-      returning * into m;
+      update public.conversation_messages as cm
+      set metadata=jsonb_set(coalesce(cm.metadata,'{}'::jsonb),'{media_analysis}',v_next,true)
+      where cm.id=m.id
+      returning cm.* into m;
 
       insert into public.audit_logs(
         organization_id,actor_type,action,entity_type,entity_id,after_data,correlation_id
@@ -174,10 +174,10 @@ begin
     'startedAt',statement_timestamp()
   );
 
-  update public.conversation_messages
-  set metadata=jsonb_set(coalesce(metadata,'{}'::jsonb),'{media_analysis}',v_next,true)
-  where id=m.id
-  returning * into m;
+  update public.conversation_messages as cm
+  set metadata=jsonb_set(coalesce(cm.metadata,'{}'::jsonb),'{media_analysis}',v_next,true)
+  where cm.id=m.id
+  returning cm.* into m;
 
   insert into public.audit_logs(
     organization_id,actor_type,action,entity_type,entity_id,after_data,correlation_id
@@ -232,9 +232,9 @@ begin
       'model',v_model,
       'providerCallStartedAt',statement_timestamp()
     );
-    update public.conversation_messages
-    set metadata=jsonb_set(coalesce(metadata,'{}'::jsonb),'{media_analysis}',v_analysis,true)
-    where id=m.id;
+    update public.conversation_messages as cm
+    set metadata=jsonb_set(coalesce(cm.metadata,'{}'::jsonb),'{media_analysis}',v_analysis,true)
+    where cm.id=m.id;
   end if;
 
   return v_analysis;
@@ -329,10 +329,10 @@ begin
     'error',v_error
   ));
 
-  update public.conversation_messages
-  set metadata=jsonb_set(coalesce(metadata,'{}'::jsonb),'{media_analysis}',v_next,true)
-  where id=m.id
-  returning * into m;
+  update public.conversation_messages as cm
+  set metadata=jsonb_set(coalesce(cm.metadata,'{}'::jsonb),'{media_analysis}',v_next,true)
+  where cm.id=m.id
+  returning cm.* into m;
 
   insert into public.audit_logs(
     organization_id,actor_type,action,entity_type,entity_id,after_data,correlation_id
@@ -423,11 +423,11 @@ begin
     'detectedLanguage',v_language
   ));
 
-  update public.conversation_messages
+  update public.conversation_messages as cm
   set transcript=v_transcript,
-      detected_language=coalesce(v_language,detected_language),
-      metadata=jsonb_set(coalesce(metadata,'{}'::jsonb),'{media_analysis}',v_analysis,true)
-  where id=m.id;
+      detected_language=coalesce(v_language,cm.detected_language),
+      metadata=jsonb_set(coalesce(cm.metadata,'{}'::jsonb),'{media_analysis}',v_analysis,true)
+  where cm.id=m.id;
 
   if not v_replayed then
     insert into public.audit_logs(
