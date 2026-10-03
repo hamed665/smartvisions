@@ -276,6 +276,7 @@ jobs:
           }
           check "/login" "200"
           check "/" "301|302|303|307|308"
+          check "/knowledge" "301|302|303|307|308"
           check "/p/cloudflare-production-missing-$GITHUB_RUN_ID" "404"
 
       - name: Safe production API and webhook rejection smoke
