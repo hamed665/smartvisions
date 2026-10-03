@@ -15,6 +15,11 @@ function optional(formData:FormData,key:string){
   return value||null;
 }
 
+function requestKey(formData:FormData,prefix:string){
+  const explicit=String(formData.get('request_key')??'').trim();
+  return explicit||prefix+crypto.randomUUID();
+}
+
 function refresh(){
   revalidatePath('/booking/lifecycle');
   revalidatePath('/booking/availability');
@@ -33,7 +38,7 @@ export async function createBookingRequest(formData:FormData){
     p_requested_starts_at:null,
     p_notes:optional(formData,'notes'),
     p_metadata:{source:'OWNER_BOOKING_LIFECYCLE'},
-    p_request_key:'booking-request:'+crypto.randomUUID(),
+    p_request_key:requestKey(formData,'booking-request:'),
   });
   if(error) throw new Error(error.message);
   refresh();
@@ -47,7 +52,7 @@ export async function holdBookingRequest(formData:FormData){
     p_actor_user_id:ctx.userId,
     p_booking_id:required(formData,'booking_id'),
     p_hold_id:required(formData,'hold_id'),
-    p_request_key:'booking-held:'+crypto.randomUUID(),
+    p_request_key:requestKey(formData,'booking-held:'),
   });
   if(error) throw new Error(error.message);
   refresh();
@@ -60,7 +65,7 @@ export async function confirmBooking(formData:FormData){
     p_organization_id:ctx.organizationId,
     p_actor_user_id:ctx.userId,
     p_booking_id:required(formData,'booking_id'),
-    p_request_key:'booking-confirm:'+crypto.randomUUID(),
+    p_request_key:requestKey(formData,'booking-confirm:'),
   });
   if(error) throw new Error(error.message);
   refresh();
@@ -75,7 +80,7 @@ export async function rescheduleBooking(formData:FormData){
     p_booking_id:required(formData,'booking_id'),
     p_new_hold_id:required(formData,'hold_id'),
     p_reason:required(formData,'reason'),
-    p_request_key:'booking-reschedule:'+crypto.randomUUID(),
+    p_request_key:requestKey(formData,'booking-reschedule:'),
   });
   if(error) throw new Error(error.message);
   refresh();
@@ -89,7 +94,7 @@ export async function cancelBooking(formData:FormData){
     p_actor_user_id:ctx.userId,
     p_booking_id:required(formData,'booking_id'),
     p_reason:required(formData,'reason'),
-    p_request_key:'booking-cancel:'+crypto.randomUUID(),
+    p_request_key:requestKey(formData,'booking-cancel:'),
   });
   if(error) throw new Error(error.message);
   refresh();
@@ -106,7 +111,7 @@ export async function finalizeBooking(formData:FormData){
     p_booking_id:required(formData,'booking_id'),
     p_target_status:target,
     p_reason:optional(formData,'reason'),
-    p_request_key:'booking-finalize:'+crypto.randomUUID(),
+    p_request_key:requestKey(formData,'booking-finalize:'),
   });
   if(error) throw new Error(error.message);
   refresh();
