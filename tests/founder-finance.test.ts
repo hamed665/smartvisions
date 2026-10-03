@@ -1,0 +1,83 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  calculateFounderFinanceScenario,
+  founderFinanceModelPayload,
+  founderFinanceVerifiedAuthorities,
+  type FounderFinanceScenarioV1,
+  type FounderFinanceV1,
+} from '@/lib/founder/finance';
+
+const scenario: FounderFinanceScenarioV1 = {
+  id: '00000000-0000-4000-8000-000000000001',
+  name: 'Base',
+  status: 'ACTIVE',
+  currency: 'OMR',
+  cashBalanceAssumption: 12000,
+  monthlyNetBurnAssumption: 2000,
+  monthlySalesMarketingSpendAssumption: 1000,
+  newCustomersPerMonthAssumption: 5,
+  monthlyArpaAssumption: 300,
+  grossMarginBpsAssumption: 8000,
+  monthlyChurnBpsAssumption: 500,
+  version: 1,
+  updatedAt: '2026-10-03T12:00:00.000Z',
+};
+
+describe('Founder finance V1', () => {
+  it('calculates scenario unit economics deterministically and labels no facts by itself', () => {
+    expect(calculateFounderFinanceScenario(scenario)).toEqual({
+      runwayMonths: 6,
+      cac: 200,
+      grossProfitPerCustomerMonthly: 240,
+      ltv: 4800,
+      ltvCacRatio: 24,
+      paybackMonths: 0.83,
+      incrementalCustomersToOffsetNetBurn: 8.33,
+    });
+  });
+
+  it('fails undefined denominators closed instead of manufacturing CAC/LTV/runway', () => {
+    const metrics = calculateFounderFinanceScenario({
+      ...scenario,
+      monthlyNetBurnAssumption: 0,
+      newCustomersPerMonthAssumption: 0,
+      monthlyChurnBpsAssumption: 0,
+    });
+    expect(metrics.runwayMonths).toBeNull();
+    expect(metrics.cac).toBeNull();
+    expect(metrics.ltv).toBeNull();
+    expect(metrics.ltvCacRatio).toBeNull();
+  });
+
+  it('exposes only verified finance authorities and keeps scenarios explicitly under assumptions', () => {
+    const finance: FounderFinanceV1 = {
+      schemaVersion: 1,
+      generatedAt: '2026-10-03T12:00:00.000Z',
+      companySnapshot: null,
+      companyRunwayMonths: null,
+      observed: {
+        subscriptionMrr: [{ currency: 'OMR', amount: 500 }],
+        subscriptionArr: [{ currency: 'OMR', amount: 6000 }],
+        netCaptured30d: [],
+        outstandingInvoices: [],
+      },
+      scenarios: [{ scenario, metrics: calculateFounderFinanceScenario(scenario) }],
+      evidence: [
+        { authority: 'COMPANY_FINANCE', quality: 'MISSING', detail: 'missing' },
+        { authority: 'SUBSCRIPTION_BILLING', quality: 'VERIFIED', count: 2, detail: 'observed' },
+        { authority: 'PAYMENT_LEDGER', quality: 'VERIFIED', count: 0, detail: 'observed' },
+        { authority: 'INVOICE_LEDGER', quality: 'VERIFIED', count: 0, detail: 'observed' },
+      ],
+    };
+    expect(founderFinanceVerifiedAuthorities(finance)).toEqual([
+      'SUBSCRIPTION_BILLING',
+      'PAYMENT_LEDGER',
+      'INVOICE_LEDGER',
+    ]);
+    const payload = founderFinanceModelPayload(finance)!;
+    expect(payload.scenarios[0]?.assumptions.monthlyArpa).toBe(300);
+    expect(payload.scenarios[0]?.derivedScenarioMetrics.ltv).toBe(4800);
+    expect(payload.companySnapshot).toBeNull();
+  });
+});
