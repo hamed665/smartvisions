@@ -14,6 +14,7 @@ import { runOwnerJsonModel } from '@/lib/ai/owner-model-gateway';
 import type { FounderFinanceV1 } from './finance';
 import type { FounderInvestorWorkspaceV1 } from './investor';
 import type { FounderCapitalWorkspaceV1 } from './capital';
+import type { FounderStrategyWorkspaceV1 } from './strategy';
 
 const schema = {
   type: 'object',
@@ -81,6 +82,7 @@ export async function analyzeFounderQuestion(input: {
   finance?: FounderFinanceV1 | null;
   investor?: FounderInvestorWorkspaceV1 | null;
   capital?: FounderCapitalWorkspaceV1 | null;
+  strategy?: FounderStrategyWorkspaceV1 | null;
   history?: FounderConversationTurn[];
   signal?: AbortSignal;
 }): Promise<FounderIntelligenceResult> {
@@ -110,6 +112,9 @@ export async function analyzeFounderQuestion(input: {
     'FOUNDER_STATUS.founderCapital.dilutionScenarios are explicit SCENARIOS. Never describe projected post-money ownership or dilution as current ownership.',
     'FOUNDER_STATUS.founderCapital.termSheets are recorded user/import-provided terms. ACCEPTED does not mean money was received; a term sheet is not payment or bank-settlement evidence.',
     'FOUNDER_STATUS.founderCapital.diligence is checklist metadata only. READY or SHARED does not mean an investor reviewed, approved or accepted the document.',
+    'FOUNDER_STATUS.founderStrategy.goals and keyResults are explicit OWNER strategy evidence. Status and current values are not independently observed business performance unless another canonical authority supports them.',
+    'FOUNDER_STATUS.founderStrategy.marketResearch contains persistent sourced external claims. MARKET_RESEARCH may support a sourced market claim, but must never be relabeled as internal company performance or guaranteed market truth.',
+    'FOUNDER_STATUS.founderStrategy.boardReports are OWNER-authored reports. PUBLISHED means published inside Founder OS and does not imply board approval.',
     'Never expose or infer private data-room evidence references; the model payload intentionally excludes them.',
     'FUNDRAISING CRM Deal stages are workflow evidence. Do not turn stage probability into probability of raising capital. CLOSED records are not cash-receipt evidence unless a separate payment/bank authority supports that claim.',
     liveResearch
@@ -134,7 +139,7 @@ export async function analyzeFounderQuestion(input: {
     instructions,
     payload: {
       founder_question: question,
-      founder_status: founderStatusModelPayload(input.status, input.finance, input.investor, input.capital),
+      founder_status: founderStatusModelPayload(input.status, input.finance, input.investor, input.capital, input.strategy),
       conversation_history: history,
     },
     schemaName: 'founder_intelligence_v1',
@@ -151,5 +156,6 @@ export async function analyzeFounderQuestion(input: {
     finance: input.finance,
     investor: input.investor,
     capital: input.capital,
+    strategy: input.strategy,
   });
 }

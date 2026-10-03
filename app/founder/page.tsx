@@ -11,6 +11,9 @@ import { loadFounderInvestorWorkspaceV1 } from '@/lib/founder/investor-server';
 import { FounderInvestorPanel } from './investor-panel';
 import { loadFounderCapitalWorkspaceV1 } from '@/lib/founder/capital-server';
 import { FounderCapitalPanel } from './capital-panel';
+import { loadFounderStrategyWorkspaceV1 } from '@/lib/founder/strategy-server';
+import { FounderStrategyPanel } from './strategy-panel';
+import { FounderInvestorDiscoveryPanel } from './investor-discovery';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +31,7 @@ export default async function FounderPage() {
   });
   if (!flag.enabled) notFound();
 
-  const [status, finance, investor, capital] = await Promise.all([
+  const [status, finance, investor, capital, strategy] = await Promise.all([
     loadFounderStatusV1({
       supabase: service,
       organizationId: current.organizationId,
@@ -45,9 +48,20 @@ export default async function FounderPage() {
       supabase: service,
       organizationId: current.organizationId,
     }),
+    loadFounderStrategyWorkspaceV1({
+      supabase: service,
+      organizationId: current.organizationId,
+    }),
   ]);
 
-  const investorReadiness = buildFounderInvestorReadinessV1(status, finance, investor, capital);
+  const investorReadiness = buildFounderInvestorReadinessV1(status, finance, investor, capital, strategy);
+  const evidenceManifest = [
+    ...status.evidence,
+    ...finance.evidence,
+    ...investor.evidence,
+    ...capital.evidence,
+    ...strategy.evidence,
+  ];
 
   const productMetrics = [
     ['Operating mode', status.operatingMode],
@@ -79,7 +93,7 @@ export default async function FounderPage() {
       <div>
         <h1>Founder</h1>
         <p className="muted">
-          Founder analysis is OWNER-only, feature-flagged and read-only. Explicit OWNER finance, investor and capital
+          Founder analysis is OWNER-only, feature-flagged and read-only. Explicit OWNER finance, investor, capital and strategy
           workspace forms use governed writes; the Copilot itself does not execute tools, mutate business state,
           or bypass canonical approval and runtime gates.
         </p>
@@ -107,6 +121,10 @@ export default async function FounderPage() {
     </section>
 
     <FounderAskPanel />
+
+    <FounderStrategyPanel strategy={strategy} />
+
+    <FounderInvestorDiscoveryPanel />
 
     <FounderFinancePanel finance={finance} />
 
@@ -187,11 +205,11 @@ export default async function FounderPage() {
       <div className="tableWrap">
         <table className="dataTable">
           <thead><tr><th>Authority</th><th>Quality</th><th>Count</th><th>Observed</th><th>Boundary</th></tr></thead>
-          <tbody>{status.evidence.map((source) => <tr key={source.authority}>
+          <tbody>{evidenceManifest.map((source) => <tr key={source.authority}>
             <td><strong>{source.authority}</strong></td>
             <td>{source.quality}</td>
             <td>{source.count ?? '—'}</td>
-            <td>{source.observedAt ? new Date(source.observedAt).toLocaleString() : '—'}</td>
+            <td>{'observedAt' in source && source.observedAt ? new Date(source.observedAt).toLocaleString() : '—'}</td>
             <td>{source.detail ?? '—'}</td>
           </tr>)}</tbody>
         </table>

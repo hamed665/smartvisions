@@ -6,6 +6,9 @@ import { analyzeFounderQuestion } from '@/lib/founder/intelligence';
 import type { FounderConversationTurn, FounderIntelligenceResult } from '@/lib/founder/intelligence-core';
 import { founderOsV1Enabled, loadFounderStatusV1 } from '@/lib/founder/server';
 import { loadFounderFinanceV1 } from '@/lib/founder/finance-server';
+import { loadFounderInvestorWorkspaceV1 } from '@/lib/founder/investor-server';
+import { loadFounderCapitalWorkspaceV1 } from '@/lib/founder/capital-server';
+import { loadFounderStrategyWorkspaceV1 } from '@/lib/founder/strategy-server';
 import { formatTelegramFounderResult } from './founder-copilot-core';
 
 function record(value: unknown): Record<string, unknown> {
@@ -41,7 +44,7 @@ export async function runTelegramFounderQuestion(input: {
   });
   if (!flag.enabled) throw new Error('Founder OS is not enabled');
 
-  const [status, finance, historyResult] = await Promise.all([
+  const [status, finance, investor, capital, strategy, historyResult] = await Promise.all([
     loadFounderStatusV1({
       supabase: input.supabase,
       organizationId: input.organizationId,
@@ -50,6 +53,9 @@ export async function runTelegramFounderQuestion(input: {
       supabase: input.supabase,
       organizationId: input.organizationId,
     }),
+    loadFounderInvestorWorkspaceV1({ supabase: input.supabase, organizationId: input.organizationId }),
+    loadFounderCapitalWorkspaceV1({ supabase: input.supabase, organizationId: input.organizationId }),
+    loadFounderStrategyWorkspaceV1({ supabase: input.supabase, organizationId: input.organizationId }),
     input.supabase
       .from('telegram_command_runs')
       .select('raw_text,result,created_at')
@@ -77,6 +83,9 @@ export async function runTelegramFounderQuestion(input: {
     question: input.question,
     status,
     finance,
+    investor,
+    capital,
+    strategy,
     history: history.slice(-6),
     signal: input.signal,
   });
