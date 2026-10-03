@@ -137,13 +137,12 @@ from public.link_crm_customer360_person_context(
 );
 
 insert into public.agent_runs(
-  id,organization_id,conversation_id,input_message,status,trace,request_key
+  id,organization_id,conversation_id,input_message,status,trace
 ) values (
   '00000000-0000-0000-0000-00000000f881',
   '00000000-0000-0000-0000-00000000f801',
   '00000000-0000-0000-0000-00000000f861',
-  'Controlled Memory agent source','COMPLETED','{"fixture":true}'::jsonb,
-  'memory-agent-run-ci'
+  'Controlled Memory agent source','COMPLETED','{"fixture":true}'::jsonb
 )
 on conflict (id) do nothing;
 
