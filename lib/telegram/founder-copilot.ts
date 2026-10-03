@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { analyzeFounderQuestion } from '@/lib/founder/intelligence';
 import type { FounderConversationTurn, FounderIntelligenceResult } from '@/lib/founder/intelligence-core';
 import { founderOsV1Enabled, loadFounderStatusV1 } from '@/lib/founder/server';
+import { loadFounderFinanceV1 } from '@/lib/founder/finance-server';
 import { formatTelegramFounderResult } from './founder-copilot-core';
 
 function record(value: unknown): Record<string, unknown> {
@@ -40,8 +41,12 @@ export async function runTelegramFounderQuestion(input: {
   });
   if (!flag.enabled) throw new Error('Founder OS is not enabled');
 
-  const [status, historyResult] = await Promise.all([
+  const [status, finance, historyResult] = await Promise.all([
     loadFounderStatusV1({
+      supabase: input.supabase,
+      organizationId: input.organizationId,
+    }),
+    loadFounderFinanceV1({
       supabase: input.supabase,
       organizationId: input.organizationId,
     }),
@@ -71,6 +76,7 @@ export async function runTelegramFounderQuestion(input: {
     organizationId: input.organizationId,
     question: input.question,
     status,
+    finance,
     history: history.slice(-6),
     signal: input.signal,
   });
