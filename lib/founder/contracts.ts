@@ -21,7 +21,7 @@ export type FounderStatusSnapshotV1 = {
   schemaVersion: 1;
   mode: 'READ_ONLY';
   generatedAt: string;
-  operatingMode: 'KILL_SWITCH' | 'AGENTS_PAUSED' | 'SHADOW' | 'LIVE';
+  operatingMode: 'UNKNOWN' | 'KILL_SWITCH' | 'AGENTS_PAUSED' | 'SHADOW' | 'LIVE';
   product: {
     enabledIntegrations: number;
     unhealthyEnabledIntegrations: number;
