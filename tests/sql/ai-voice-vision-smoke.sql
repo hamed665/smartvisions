@@ -347,7 +347,7 @@ begin
   foreach fn in array array[
     'public.claim_conversation_media_analysis(uuid,uuid,text,text)',
     'public.mark_conversation_media_analysis_provider_started(uuid,uuid,text,text)',
-    'public.finalize_conversation_media_analysis(uuid,uuid,text,text,text,text,text,text,numeric,text,text)',
+    'public.finalize_conversation_media_analysis(uuid,uuid,text,text,text,text,text,numeric,text,text)',
     'public.persist_conversation_voice_transcript(uuid,text,uuid,uuid,text,text,text)'
   ]
   loop
