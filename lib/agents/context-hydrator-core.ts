@@ -21,6 +21,7 @@ import {
   projectPermissionContext,
   projectToolAvailability,
 } from './context-compiler';
+import { parsePromptControlConfig, selectPromptForRuntime } from './prompt-control';
 
 const AGENT_NAMES: AgentName[] = [
   'intent_discovery',
@@ -203,10 +204,10 @@ export async function hydrateAgentContext(input: {
     }),
     supabase
       .from('prompt_versions')
-      .select('agent_name,version,prompt_text,created_at')
+      .select('agent_name,version,prompt_text,active,created_at')
       .eq('organization_id', organizationId)
-      .eq('active', true)
-      .order('version', { ascending: false }),
+      .order('version', { ascending: false })
+      .limit(100),
     supabase
       .from('agent_settings')
       .select('agent_name,enabled,model,confidence_threshold,config')
@@ -399,15 +400,6 @@ export async function hydrateAgentContext(input: {
     targetScope,
   });
 
-  const activePrompts: Partial<Record<AgentName, ActivePromptSnapshot>> = {};
-  for (const row of (promptsResult.data ?? []) as Array<Record<string, unknown>>) {
-    const agent = clip(row.agent_name, 80) as AgentName;
-    if (!AGENT_NAMES.includes(agent) || activePrompts[agent]) continue;
-    const text = clip(row.prompt_text, 7000);
-    if (!text) continue;
-    activePrompts[agent] = { version: numberOrZero(row.version), text };
-  }
-
   const agentSettings: Partial<Record<AgentName, AgentSettingSnapshot>> = {};
   for (const row of (settingsResult.data ?? []) as Array<Record<string, unknown>>) {
     const agent = clip(row.agent_name, 80) as AgentName;
@@ -418,6 +410,36 @@ export async function hydrateAgentContext(input: {
       confidenceThreshold: row.confidence_threshold == null ? undefined : numberOrZero(row.confidence_threshold),
       config: safeRecord(row.config),
     };
+  }
+
+  const promptRows = (promptsResult.data ?? []) as Array<Record<string, unknown>>;
+  const activePrompts: Partial<Record<AgentName, ActivePromptSnapshot>> = {};
+  for (const agent of AGENT_NAMES) {
+    const rows = promptRows.filter((row) => clip(row.agent_name, 80) === agent);
+    const baselineRow = rows.find((row) => row.active === true);
+    const control = parsePromptControlConfig(agentSettings[agent]?.config);
+    const candidateRow = control.candidateVersion
+      ? rows.find((row) => numberOrZero(row.version) === control.candidateVersion && row.active !== true)
+      : undefined;
+    const baseline = baselineRow ? {
+      version: numberOrZero(baselineRow.version),
+      text: clip(baselineRow.prompt_text, 7000),
+    } : undefined;
+    const candidate = candidateRow ? {
+      version: numberOrZero(candidateRow.version),
+      text: clip(candidateRow.prompt_text, 7000),
+    } : undefined;
+    const selected = selectPromptForRuntime({
+      baseline: baseline?.version && baseline.text ? baseline : undefined,
+      candidate: candidate?.version && candidate.text ? candidate : undefined,
+      control,
+      rolloutKey: [
+        organizationId,
+        conversationId || authoritativeLeadId || businessId || 'organization',
+        agent,
+      ].join(':'),
+    });
+    if (selected) activePrompts[agent] = selected;
   }
 
   const priceByService = new Map<string, Record<string, unknown>>();
