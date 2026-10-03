@@ -4,7 +4,7 @@ import {revalidatePath} from 'next/cache';
 
 import {getCurrentOrganization} from '@/lib/supabase/org';
 import {createSupabaseServiceClient} from '@/lib/supabase/service';
-import {extractKnowledgeFile,fetchWebsiteKnowledge} from '@/lib/knowledge/ingestion';
+import {crawlWebsiteKnowledge,extractKnowledgeFile} from '@/lib/knowledge/ingestion';
 
 const MANAGER_ROLES=new Set(['OWNER','ADMIN']);
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -124,11 +124,13 @@ export async function stageKnowledgeWebsiteV2(fd:FormData){
   const source=await sourceRow(service,current.organizationId,field(fd,'source_id'));
   if(source.source_type!=='WEBSITE')throw new Error('Selected Knowledge Source is not a website');
   if(!source.source_locator)throw new Error('Website Knowledge Source has no URL');
-  let extracted:Awaited<ReturnType<typeof fetchWebsiteKnowledge>>;
+  let extracted:Awaited<ReturnType<typeof crawlWebsiteKnowledge>>;
   try{
-    extracted=await fetchWebsiteKnowledge(source.source_locator);
+    extracted=await crawlWebsiteKnowledge(source.source_locator);
   }catch(error){
-    await recordSourceFailureV2(source.id,'WEBSITE_FETCH_FAILED');
+    const code=error instanceof Error&&error.message.includes('KNOWLEDGE_CRAWL4AI_NOT_CONFIGURED')
+      ?'CRAWL4AI_CONFIG_REQUIRED':'CRAWL4AI_AUDIT_FAILED';
+    await recordSourceFailureV2(source.id,code);
     throw error;
   }
   const {error}=await service.rpc('stage_knowledge_version_v2',{
@@ -139,17 +141,19 @@ export async function stageKnowledgeWebsiteV2(fd:FormData){
     p_payload:{
       text:extracted.text,
       title:extracted.title??source.title,
+      websiteAudit:extracted.websiteAudit??null,
     },
     p_provenance:{
       ingestion:extracted.extraction,
+      provider:'CRAWL4AI',
       contentType:extracted.contentType,
       finalUrl:extracted.sourceLocator,
       observedAt:new Date().toISOString(),
       trust:'UNTRUSTED_EXTERNAL_REQUIRES_APPROVAL',
     },
     p_expected_source_version:Number(source.version),
-    p_etag:extracted.etag??null,
-    p_last_modified:extracted.lastModified??null,
+    p_etag:null,
+    p_last_modified:null,
     p_request_key:requestKey('knowledge-website-stage'),
   });
   if(error)throw new Error('Website Knowledge ingestion failed: '+error.message);
