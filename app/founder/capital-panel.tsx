@@ -18,6 +18,9 @@ function money(currency: string | null, value: number | null) {
 function tri(value: boolean | null) {
   return value == null ? 'UNKNOWN' : value ? 'YES' : 'NO';
 }
+function dateInput(value: string | null) {
+  return value ? value.slice(0, 10) : '';
+}
 
 export function FounderCapitalPanel({
   capital,
@@ -82,6 +85,25 @@ export function FounderCapitalPanel({
         <button>Add cap-table row</button>
       </form>
     </details>
+    <div className="settingsList">
+      {capital.capEntries.filter((entry)=>entry.status==='ACTIVE').map((entry)=><details className="promptEditor" key={`edit-cap-${entry.id}`}>
+        <summary>Edit cap-table evidence · {entry.holderName}</summary>
+        <form action={saveFounderCapTableEntry} className="settingsGrid">
+          <input type="hidden" name="id" value={entry.id}/><input type="hidden" name="version" value={entry.version}/>
+          <label>Holder type<select name="holder_type" defaultValue={entry.holderType}>{['FOUNDER','EMPLOYEE','INVESTOR','OPTION_POOL','OTHER'].map((v)=><option key={v}>{v}</option>)}</select></label>
+          <label>Holder name<input name="holder_name" maxLength={240} defaultValue={entry.holderName} required/></label>
+          <label>Security<select name="security_type" defaultValue={entry.securityType}>{['COMMON','PREFERRED','OPTION_POOL','OTHER'].map((v)=><option key={v}>{v}</option>)}</select></label>
+          <label>Share class<input name="share_class" maxLength={80} defaultValue={entry.shareClass??''}/></label>
+          <label>Issued units<input name="issued_units" type="number" min="0" step="0.00000001" defaultValue={entry.issuedUnits} required/></label>
+          <label>Reserved units<input name="reserved_units" type="number" min="0" step="0.00000001" defaultValue={entry.reservedUnits} required/></label>
+          <label>CRM person<select name="person_id" defaultValue={entry.personId??''}><option value="">No link</option>{investor.crmOptions.people.map((p)=><option key={p.id} value={p.id}>{p.displayName}</option>)}</select></label>
+          <label>CRM business<select name="business_id" defaultValue={entry.businessId??''}><option value="">No link</option>{investor.crmOptions.businesses.map((b)=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
+          <label className="wideField">Evidence/source reference<input name="source_ref" maxLength={512} defaultValue={entry.sourceRef} required/></label>
+          <label className="wideField">Notes<textarea name="notes" rows={2} maxLength={4000} defaultValue={entry.notes??''}/></label>
+          <button>Save cap-table evidence</button>
+        </form>
+      </details>)}
+    </div>
 
     <h3>Dilution scenarios</h3>
     <div className="settingsList">{capital.dilutionScenarios.map(({scenario,result})=><div className="settingsRow" key={scenario.id}>
@@ -104,6 +126,23 @@ export function FounderCapitalPanel({
         <button>Create scenario</button>
       </form>
     </details>
+    <div className="settingsList">
+      {capital.dilutionScenarios.filter(({scenario})=>scenario.status==='ACTIVE').map(({scenario})=><details className="promptEditor" key={`edit-dilution-${scenario.id}`}>
+        <summary>Edit dilution scenario · {scenario.name}</summary>
+        <form action={saveFounderDilutionScenario} className="settingsGrid">
+          <input type="hidden" name="id" value={scenario.id}/><input type="hidden" name="version" value={scenario.version}/>
+          <label>Round<select name="fundraising_round_id" defaultValue={scenario.fundraisingRoundId} required><option value="">Select round</option>{activeRounds.map((r)=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
+          <label>Name<input name="name" maxLength={160} defaultValue={scenario.name} required/></label>
+          <label>Currency<input name="currency" maxLength={3} defaultValue={scenario.currency} required/></label>
+          <label>Pre-money valuation<input name="pre_money_valuation_assumption" type="number" min="0.01" step="0.01" defaultValue={scenario.preMoneyValuationAssumption} required/></label>
+          <label>New money<input name="new_money_amount_assumption" type="number" min="0.01" step="0.01" defaultValue={scenario.newMoneyAmountAssumption} required/></label>
+          <label>Option-pool top-up units<input name="option_pool_top_up_units_assumption" type="number" min="0" step="0.00000001" defaultValue={scenario.optionPoolTopUpUnitsAssumption} required/></label>
+          <label className="wideField">Assumption source reference<input name="assumption_source_ref" maxLength={512} defaultValue={scenario.assumptionSourceRef} required/></label>
+          <label className="wideField">Notes<textarea name="notes" rows={2} maxLength={4000} defaultValue={scenario.notes??''}/></label>
+          <button>Save dilution scenario</button>
+        </form>
+      </details>)}
+    </div>
 
     <h3>Term sheet comparison</h3>
     <div className="tableWrap"><table className="dataTable"><thead><tr><th>Counterparty</th><th>Status</th><th>Instrument</th><th>Investment</th><th>Pre-money / cap</th><th>Headline ownership</th><th>Rights</th></tr></thead>
@@ -131,6 +170,37 @@ export function FounderCapitalPanel({
         <label className="wideField">Notes<textarea name="notes" rows={3} maxLength={6000}/></label><button>Record term sheet</button>
       </form>
     </details>
+    <div className="settingsList">
+      {capital.termSheets.map((term)=><details className="promptEditor" key={`edit-term-${term.id}`}>
+        <summary>Edit term sheet · {term.counterpartyName} · {term.status}</summary>
+        <form action={saveFounderTermSheet} className="settingsGrid">
+          <input type="hidden" name="id" value={term.id}/><input type="hidden" name="version" value={term.version}/>
+          <label>Round<select name="fundraising_round_id" defaultValue={term.fundraisingRoundId} required><option value="">Select round</option>{activeRounds.map((r)=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
+          <label>Confirmed investor<select name="investor_candidate_id" defaultValue={term.investorCandidateId??''}><option value="">No candidate link</option>{confirmedCandidates.map((c)=><option key={c.id} value={c.id}>{c.fundName}</option>)}</select></label>
+          <label>Fundraising deal<select name="crm_deal_id" defaultValue={term.crmDealId??''}><option value="">No deal link</option>{investor.pipeline.deals.map((d)=><option key={d.id} value={d.id}>{d.businessName} · {d.stageName}</option>)}</select></label>
+          <label>Counterparty<input name="counterparty_name" maxLength={240} defaultValue={term.counterpartyName} required/></label>
+          <label>Label<input name="label" maxLength={160} defaultValue={term.label} required/></label>
+          <label>Status<select name="status" defaultValue={term.status}>{['DRAFT','RECEIVED','COUNTERED','ACCEPTED','DECLINED','WITHDRAWN'].map((v)=><option key={v}>{v}</option>)}</select></label>
+          <label>Instrument<select name="instrument" defaultValue={term.instrument}>{['EQUITY','SAFE','CONVERTIBLE_NOTE','OTHER'].map((v)=><option key={v}>{v}</option>)}</select></label>
+          <label>Currency<input name="currency" maxLength={3} defaultValue={term.currency} required/></label>
+          <label>Investment amount<input name="investment_amount" type="number" min="0.01" step="0.01" defaultValue={term.investmentAmount} required/></label>
+          <label>Pre-money<input name="pre_money_valuation" type="number" min="0.01" step="0.01" defaultValue={term.preMoneyValuation??''}/></label>
+          <label>Valuation cap<input name="valuation_cap" type="number" min="0.01" step="0.01" defaultValue={term.valuationCap??''}/></label>
+          <label>Discount %<input name="discount_pct" type="number" min="0" max="100" step="0.01" defaultValue={term.discountBps==null?'':term.discountBps/100}/></label>
+          <label>Interest %<input name="interest_rate_pct" type="number" min="0" max="100" step="0.01" defaultValue={term.interestRateBps==null?'':term.interestRateBps/100}/></label>
+          <label>Maturity months<input name="maturity_months" type="number" min="1" max="120" defaultValue={term.maturityMonths??''}/></label>
+          <label>Liquidation preference x<input name="liquidation_preference_multiple" type="number" min="0.01" max="10" step="0.01" defaultValue={term.liquidationPreferenceMultiple??''}/></label>
+          {['participating_preferred','board_seat_rights','pro_rata_rights','information_rights'].map((name)=>{
+            const current=name==='participating_preferred'?term.participatingPreferred:name==='board_seat_rights'?term.boardSeatRights:name==='pro_rata_rights'?term.proRataRights:term.informationRights;
+            return <label key={name}>{name.replaceAll('_',' ')}<select name={name} defaultValue={tri(current)}>{['UNKNOWN','YES','NO'].map((v)=><option key={v}>{v}</option>)}</select></label>;
+          })}
+          <label>Exclusivity days<input name="exclusivity_days" type="number" min="0" max="365" defaultValue={term.exclusivityDays??''}/></label>
+          <label className="wideField">Evidence/source reference<input name="source_ref" maxLength={512} defaultValue={term.sourceRef} required/></label>
+          <label className="wideField">Notes<textarea name="notes" rows={3} maxLength={6000} defaultValue={term.notes??''}/></label>
+          <button>Save term sheet</button>
+        </form>
+      </details>)}
+    </div>
 
     <h3>Data room & due diligence</h3>
     <div className="settingsList">{capital.diligenceItems.map((item)=><div className="settingsRow" key={item.id}><div><strong>{item.category} · {item.title}</strong><span className="muted smallText">{item.status} · {item.sensitivity}{item.lastVerifiedAt?` · verified ${new Date(item.lastVerifiedAt).toLocaleDateString()}`:''}</span></div></div>)}</div>
@@ -144,6 +214,23 @@ export function FounderCapitalPanel({
         <label>Last verified<input name="last_verified_date" type="date"/></label><label className="wideField">Notes<textarea name="notes" rows={2} maxLength={4000}/></label><button>Add diligence item</button>
       </form>
     </details>
+    <div className="settingsList">
+      {capital.diligenceItems.map((item)=><details className="promptEditor" key={`edit-diligence-${item.id}`}>
+        <summary>Edit diligence item · {item.category} · {item.title}</summary>
+        <form action={saveFounderDueDiligenceItem} className="settingsGrid">
+          <input type="hidden" name="id" value={item.id}/><input type="hidden" name="version" value={item.version}/>
+          <label>Round<select name="fundraising_round_id" defaultValue={item.fundraisingRoundId??''}><option value="">Company-wide</option>{investor.rounds.map((r)=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
+          <label>Category<select name="category" defaultValue={item.category}>{['CORPORATE','FINANCE','LEGAL','IP','SECURITY','PRODUCT','COMMERCIAL','HR','TAX','OTHER'].map((v)=><option key={v}>{v}</option>)}</select></label>
+          <label>Title<input name="title" maxLength={240} defaultValue={item.title} required/></label>
+          <label>Status<select name="status" defaultValue={item.status}>{['MISSING','REQUESTED','READY','SHARED','NOT_APPLICABLE'].map((v)=><option key={v}>{v}</option>)}</select></label>
+          <label>Sensitivity<select name="sensitivity" defaultValue={item.sensitivity}>{['INTERNAL','CONFIDENTIAL','RESTRICTED'].map((v)=><option key={v}>{v}</option>)}</select></label>
+          <label className="wideField">Evidence reference<input name="evidence_ref" maxLength={1024} defaultValue={item.evidenceRef??''} placeholder="Required for READY/SHARED"/></label>
+          <label>Last verified<input name="last_verified_date" type="date" defaultValue={dateInput(item.lastVerifiedAt)}/></label>
+          <label className="wideField">Notes<textarea name="notes" rows={2} maxLength={4000} defaultValue={item.notes??''}/></label>
+          <button>Save diligence item</button>
+        </form>
+      </details>)}
+    </div>
 
     <p className="muted smallText">Accepted terms do not equal received funds. SHARED diligence does not prove investor review or approval. Ownership changes stay scenarios until confirmed cap-table evidence is recorded.</p>
   </section>;
