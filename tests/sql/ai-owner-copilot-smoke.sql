@@ -30,7 +30,7 @@ begin
       or nullif(metadata->>'ownerCopilotAction','') is null
       or input_schema->>'type'<>'object'
       or jsonb_typeof(input_schema->'properties')<>'object'
-      or jsonb_object_length(input_schema->'properties')=0
+      or input_schema->'properties'='{}'::jsonb
       or jsonb_typeof(input_schema->'required')<>'array'
       or coalesce((input_schema->>'additionalProperties')::boolean,true)
     );
