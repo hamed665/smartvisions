@@ -37,9 +37,23 @@
 - Routed Production smoke after the exact-main deploy resolves both `/agents` and `/founder` through the deployed Cloudflare Worker to the authenticated login boundary when unauthenticated.
 - Fresh post-0186 advisor comparison shows no tracked regression: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`. Generic `unused_index=447` remains INFO and includes zero-workload indexes.
 
-**Fresh continuation cursor:** `SECTION BUSINESS_INTELLIGENCE_AI -> AI-MODEL-PROMPT-CONTROL`.
+## AI-MODEL-PROMPT-CONTROL Production closeout — 2026-10-03
 
-Before mutation, fresh-audit the existing Prompt Registry/versioning, `agent_settings`, current model router, Cost Guard, runtime fallback behavior, active prompt publishing/rollback, Shadow/canary controls and evaluation evidence. AI-MODEL-PROMPT-CONTROL must govern those existing authorities rather than create a second Prompt Registry, model router, Cost Guard, Agent framework or rollout authority.
+- Work Package: `SECTION BUSINESS_INTELLIGENCE_AI -> AI-MODEL-PROMPT-CONTROL`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**.
+- PR #437 final head `326a2962673e5ca461f133fb635fc23185535a25` passed exact-head CI `37121570338` across lint, typecheck, full tests, the PostgreSQL 17 migration chain plus prompt-control smoke, Next build, Vinext and scheduled-runtime verification.
+- PR #437 squash-merged to canonical `main@b2f332c32cae1c7c0415c459868dd0705378c29c`. Exact-main CI `37121940243` and Cloudflare Production Deploy `37122123877` both succeeded on that exact SHA.
+- Current `main@326ccab806fdf5473911ca37d6d82ee01d786158` still contains that lineage and is independently green: exact-main CI `37147661631` and Cloudflare Production Deploy `37147864963` both succeeded.
+- Production migration `0187_ai_model_prompt_control` is applied exactly once as version `20261003120749`.
+- Prompt control extends the canonical `prompt_versions`, `agent_settings`, model router, Cost Guard, Agent Runtime and `audit_logs` authorities. It did not add a second Prompt Registry, rollout database, model router, Cost Guard, Agent framework or provider path.
+- Candidate prompts are staged inactive; governed rollout supports deterministic `OFF / SHADOW / CANARY` selection, bounded canary percentages, explicit promotion/rollback and built-in-baseline reset. Hard runtime policy remains non-overridable.
+- Production RPCs `stage_prompt_version`, `configure_prompt_rollout` and `set_active_prompt_version` are SECURITY INVOKER. `authenticated` can execute them subject to their OWNER checks; `anon` and `service_role` cannot execute them.
+- Production remained synthetic-data clean at closeout verification: `prompt_versions=0`, `agent_settings=10`, `promptControl configs=0`. No fake prompt, rollout, canary traffic or provider evidence was created.
+- Full model-quality datasets, regression/red-team evaluation, confidence/uncertainty, sensitive-data testing and tool/action safety remain the next bounded package rather than being faked inside Prompt Control.
+
+**Fresh continuation cursor:** `SECTION BUSINESS_INTELLIGENCE_AI -> AI-QUALITY-SAFETY`.
+
+Before mutation, fresh-audit the existing Agent tests/evidence checker, sales-behavior scenarios, Prompt Control deterministic evaluation, Agent Runtime provenance, Knowledge/Memory trust boundaries, PII/sensitive-data handling and Tool Registry/action gates. AI-QUALITY-SAFETY must extend those canonical authorities and test surfaces rather than create a second Agent framework, policy engine, evaluation runtime, Tool Registry, safety gateway or business-truth store.
 
 ---
 
