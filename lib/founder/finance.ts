@@ -5,6 +5,31 @@ export type FounderCurrencyAmount = {
   amount: number;
 };
 
+export type FounderFinanceEvidenceClass =
+  | 'VERIFIED_PRODUCTION'
+  | 'USER_PROVIDED'
+  | 'DERIVED'
+  | 'ASSUMPTION'
+  | 'SCENARIO'
+  | 'MISSING';
+
+export type FounderFinanceCustomerProjection = {
+  customerCount: number;
+  monthlyRevenue: number;
+  annualRevenueRunRate: number;
+  monthlyGrossProfit: number;
+};
+
+export type FounderMissingFinancialEvidence = {
+  metric:
+    | 'RECOGNIZED_REVENUE'
+    | 'OBSERVED_CAC'
+    | 'OBSERVED_GROSS_MARGIN'
+    | 'FULL_COMPANY_LIABILITIES';
+  evidenceClass: 'MISSING';
+  detail: string;
+};
+
 export type CompanyFinancialSnapshotV1 = {
   id: string;
   asOfDate: string;
@@ -30,6 +55,7 @@ export type FounderFinanceScenarioV1 = {
   monthlyNetBurnAssumption: number;
   monthlySalesMarketingSpendAssumption: number;
   newCustomersPerMonthAssumption: number;
+  targetCustomerCountAssumption: number;
   monthlyArpaAssumption: number;
   grossMarginBpsAssumption: number;
   monthlyChurnBpsAssumption: number;
@@ -49,8 +75,14 @@ export type FounderFinanceScenarioMetrics = {
 };
 
 export type FounderFinanceEvidence = {
-  authority: 'COMPANY_FINANCE' | 'SUBSCRIPTION_BILLING' | 'PAYMENT_LEDGER' | 'INVOICE_LEDGER';
+  authority:
+    | 'COMPANY_FINANCE'
+    | 'SUBSCRIPTION_BILLING'
+    | 'PAYMENT_LEDGER'
+    | 'INVOICE_LEDGER'
+    | 'CRM_DEALS';
   quality: FounderEvidenceQuality;
+  evidenceClass: FounderFinanceEvidenceClass;
   count?: number;
   detail: string;
 };
@@ -65,11 +97,14 @@ export type FounderFinanceV1 = {
     subscriptionArr: FounderCurrencyAmount[];
     netCaptured30d: FounderCurrencyAmount[];
     outstandingInvoices: FounderCurrencyAmount[];
+    averageWonDealValue: FounderCurrencyAmount[];
   };
   scenarios: Array<{
     scenario: FounderFinanceScenarioV1;
     metrics: FounderFinanceScenarioMetrics;
+    customerCountProjections: FounderFinanceCustomerProjection[];
   }>;
+  missingEvidence: FounderMissingFinancialEvidence[];
   evidence: FounderFinanceEvidence[];
 };
 
@@ -118,6 +153,26 @@ export function calculateFounderFinanceScenario(
   };
 }
 
+export function calculateFounderCustomerCountProjections(
+  scenario: FounderFinanceScenarioV1,
+): FounderFinanceCustomerProjection[] {
+  const arpa = finite(scenario.monthlyArpaAssumption);
+  const grossMargin = Math.min(1, finite(scenario.grossMarginBpsAssumption) / 10_000);
+  const custom = finite(scenario.targetCustomerCountAssumption);
+  const counts = [...new Set([10, 25, 50, 100, custom].filter((value) => value > 0))]
+    .sort((a, b) => a - b);
+
+  return counts.map((customerCount) => {
+    const monthlyRevenue = customerCount * arpa;
+    return {
+      customerCount,
+      monthlyRevenue: rounded(monthlyRevenue) ?? 0,
+      annualRevenueRunRate: rounded(monthlyRevenue * 12) ?? 0,
+      monthlyGrossProfit: rounded(monthlyRevenue * grossMargin) ?? 0,
+    };
+  });
+}
+
 export function founderFinanceModelPayload(finance: FounderFinanceV1 | null | undefined) {
   if (!finance) return null;
   return {
@@ -126,7 +181,7 @@ export function founderFinanceModelPayload(finance: FounderFinanceV1 | null | un
     companySnapshot: finance.companySnapshot,
     companyRunwayMonths: finance.companyRunwayMonths,
     observed: finance.observed,
-    scenarios: finance.scenarios.map(({ scenario, metrics }) => ({
+    scenarios: finance.scenarios.map(({ scenario, metrics, customerCountProjections }) => ({
       name: scenario.name,
       status: scenario.status,
       currency: scenario.currency,
@@ -135,12 +190,15 @@ export function founderFinanceModelPayload(finance: FounderFinanceV1 | null | un
         monthlyNetBurn: scenario.monthlyNetBurnAssumption,
         monthlySalesMarketingSpend: scenario.monthlySalesMarketingSpendAssumption,
         newCustomersPerMonth: scenario.newCustomersPerMonthAssumption,
+        targetCustomerCount: scenario.targetCustomerCountAssumption,
         monthlyArpa: scenario.monthlyArpaAssumption,
         grossMarginBps: scenario.grossMarginBpsAssumption,
         monthlyChurnBps: scenario.monthlyChurnBpsAssumption,
       },
       derivedScenarioMetrics: metrics,
+      customerCountProjections,
     })),
+    missingEvidence: finance.missingEvidence,
     evidence: finance.evidence,
   };
 }

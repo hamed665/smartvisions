@@ -3,6 +3,7 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import {
+  calculateFounderCustomerCountProjections,
   calculateFounderFinanceScenario,
   type CompanyFinancialSnapshotV1,
   type FounderCurrencyAmount,
@@ -13,6 +14,24 @@ import {
 function number(value: unknown) {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+}
+
+function averageCurrency(rows: Array<{ currency?: unknown; amount?: unknown }>) {
+  const totals = new Map<string, { total: number; count: number }>();
+  for (const row of rows) {
+    const currency = String(row.currency ?? '').trim().toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) continue;
+    const current = totals.get(currency) ?? { total: 0, count: 0 };
+    current.total += number(row.amount);
+    current.count += 1;
+    totals.set(currency, current);
+  }
+  return [...totals.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([currency, value]): FounderCurrencyAmount => ({
+      currency,
+      amount: Number((value.total / value.count).toFixed(2)),
+    }));
 }
 
 function aggregateCurrency(rows: Array<{ currency?: unknown; amount?: unknown }>) {
@@ -40,7 +59,7 @@ export async function loadFounderFinanceV1(input: {
   const now = input.now ?? new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [snapshotResult, scenariosResult, subscriptionsResult, paymentsResult, invoicesResult] =
+  const [snapshotResult, scenariosResult, subscriptionsResult, paymentsResult, invoicesResult, wonDealsResult] =
     await Promise.all([
       db.from('company_financial_snapshots')
         .select('*')
@@ -68,6 +87,11 @@ export async function loadFounderFinanceV1(input: {
         .select('balance_due,currency,status')
         .eq('organization_id', org)
         .gt('balance_due', 0),
+      db.from('crm_deals')
+        .select('amount,currency,state')
+        .eq('organization_id', org)
+        .eq('state', 'WON')
+        .not('amount', 'is', null),
     ]);
 
   const firstError = [
@@ -76,6 +100,7 @@ export async function loadFounderFinanceV1(input: {
     subscriptionsResult.error,
     paymentsResult.error,
     invoicesResult.error,
+    wonDealsResult.error,
   ].find(Boolean);
   if (firstError) throw new Error(`Founder Finance read failed: ${firstError.message}`);
 
@@ -163,6 +188,7 @@ export async function loadFounderFinanceV1(input: {
       monthlyNetBurnAssumption: number(row.monthly_net_burn_assumption),
       monthlySalesMarketingSpendAssumption: number(row.monthly_sales_marketing_spend_assumption),
       newCustomersPerMonthAssumption: number(row.new_customers_per_month_assumption),
+      targetCustomerCountAssumption: number(row.target_customer_count_assumption),
       monthlyArpaAssumption: number(row.monthly_arpa_assumption),
       grossMarginBpsAssumption: number(row.gross_margin_bps_assumption),
       monthlyChurnBpsAssumption: number(row.monthly_churn_bps_assumption),
@@ -170,7 +196,11 @@ export async function loadFounderFinanceV1(input: {
       version: Math.max(1, Number(row.version ?? 1)),
       updatedAt: String(row.updated_at),
     };
-    return { scenario, metrics: calculateFounderFinanceScenario(scenario) };
+    return {
+      scenario,
+      metrics: calculateFounderFinanceScenario(scenario),
+      customerCountProjections: calculateFounderCustomerCountProjections(scenario),
+    };
   });
 
   const companyRunwayMonths = companySnapshot?.monthlyNetBurn
@@ -187,12 +217,36 @@ export async function loadFounderFinanceV1(input: {
       subscriptionArr,
       netCaptured30d,
       outstandingInvoices,
+      averageWonDealValue: averageCurrency(wonDealsResult.data ?? []),
     },
     scenarios,
+    missingEvidence: [
+      {
+        metric: 'RECOGNIZED_REVENUE',
+        evidenceClass: 'MISSING',
+        detail: 'No canonical revenue-recognition schedule or accounting authority exists. Invoice issuance and cash collection are not silently relabeled as recognized revenue.',
+      },
+      {
+        metric: 'OBSERVED_CAC',
+        evidenceClass: 'MISSING',
+        detail: 'No canonical acquisition-spend authority aligned to attributed acquired customers exists. CAC remains a scenario assumption only.',
+      },
+      {
+        metric: 'OBSERVED_GROSS_MARGIN',
+        evidenceClass: 'MISSING',
+        detail: 'No canonical company COGS authority exists. Gross margin remains a scenario assumption only.',
+      },
+      {
+        metric: 'FULL_COMPANY_LIABILITIES',
+        evidenceClass: 'MISSING',
+        detail: 'The confirmed company snapshot captures accounts payable, not a complete liabilities/debt ledger.',
+      },
+    ],
     evidence: [
       {
         authority: 'COMPANY_FINANCE',
         quality: companySnapshot ? 'VERIFIED' : 'MISSING',
+        evidenceClass: companySnapshot ? 'USER_PROVIDED' : 'MISSING',
         count: companySnapshot ? 1 : 0,
         detail: companySnapshot
           ? 'Latest immutable OWNER-confirmed company cash/burn/opex snapshot.'
@@ -201,20 +255,30 @@ export async function loadFounderFinanceV1(input: {
       {
         authority: 'SUBSCRIPTION_BILLING',
         quality: 'VERIFIED',
+        evidenceClass: 'VERIFIED_PRODUCTION',
         count: subscriptionsResult.data?.length ?? 0,
         detail: 'Observed recurring billing from canonical subscriptions and pricing versions; grouped by currency without FX conversion.',
       },
       {
         authority: 'PAYMENT_LEDGER',
         quality: 'VERIFIED',
+        evidenceClass: 'VERIFIED_PRODUCTION',
         count: paymentsResult.data?.length ?? 0,
         detail: 'Observed CAPTURED minus REFUNDED payment transactions in the trailing 30 days; grouped by currency without FX conversion.',
       },
       {
         authority: 'INVOICE_LEDGER',
         quality: 'VERIFIED',
+        evidenceClass: 'VERIFIED_PRODUCTION',
         count: invoicesResult.data?.length ?? 0,
         detail: 'Observed outstanding invoice balances from the canonical Invoice authority; grouped by currency without FX conversion.',
+      },
+      {
+        authority: 'CRM_DEALS',
+        quality: 'VERIFIED',
+        evidenceClass: 'VERIFIED_PRODUCTION',
+        count: wonDealsResult.data?.length ?? 0,
+        detail: 'Observed average value of canonical WON Deals with recorded amount/currency; grouped by currency without FX conversion.',
       },
     ],
   };

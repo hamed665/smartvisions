@@ -49,6 +49,8 @@ create table if not exists public.founder_finance_scenarios (
     check (monthly_sales_marketing_spend_assumption >= 0),
   new_customers_per_month_assumption numeric not null default 0
     check (new_customers_per_month_assumption >= 0),
+  target_customer_count_assumption numeric not null default 0
+    check (target_customer_count_assumption >= 0),
   monthly_arpa_assumption numeric not null default 0
     check (monthly_arpa_assumption >= 0),
   gross_margin_bps_assumption integer not null default 0
@@ -135,7 +137,7 @@ begin
       'version',new.version,
       'assumption_keys',jsonb_build_array(
         'cash_balance','monthly_net_burn','monthly_sales_marketing_spend',
-        'new_customers_per_month','monthly_arpa','gross_margin_bps','monthly_churn_bps'
+        'new_customers_per_month','target_customer_count','monthly_arpa','gross_margin_bps','monthly_churn_bps'
       )
     );
   end if;

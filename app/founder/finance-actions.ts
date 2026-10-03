@@ -79,6 +79,7 @@ export async function saveFounderFinanceScenario(form: FormData) {
     monthly_net_burn_assumption: nonNegative(form, 'monthly_net_burn_assumption'),
     monthly_sales_marketing_spend_assumption: nonNegative(form, 'monthly_sales_marketing_spend_assumption'),
     new_customers_per_month_assumption: nonNegative(form, 'new_customers_per_month_assumption'),
+    target_customer_count_assumption: nonNegative(form, 'target_customer_count_assumption'),
     monthly_arpa_assumption: nonNegative(form, 'monthly_arpa_assumption'),
     gross_margin_bps_assumption: bpsFromPercent(form, 'gross_margin_pct_assumption'),
     monthly_churn_bps_assumption: bpsFromPercent(form, 'monthly_churn_pct_assumption'),
