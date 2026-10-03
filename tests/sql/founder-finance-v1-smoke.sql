@@ -32,12 +32,12 @@ insert into public.company_financial_snapshots(
 
 insert into public.founder_finance_scenarios(
   id,organization_id,name,currency,cash_balance_assumption,monthly_net_burn_assumption,
-  monthly_sales_marketing_spend_assumption,new_customers_per_month_assumption,
+  monthly_sales_marketing_spend_assumption,starting_customer_count_assumption,new_customers_per_month_assumption,
   target_customer_count_assumption,monthly_arpa_assumption,gross_margin_bps_assumption,monthly_churn_bps_assumption,
   created_by_user_id,updated_by_user_id
 ) values (
   '00000000-0000-4000-8000-000000018821',
-  '00000000-0000-4000-8000-000000018801','Base','OMR',12000,2000,1000,5,75,300,8000,500,
+  '00000000-0000-4000-8000-000000018801','Base','OMR',12000,2000,1000,10,5,75,300,8000,500,
   '00000000-0000-4000-8000-000000018811','00000000-0000-4000-8000-000000018811'
 );
 
@@ -52,6 +52,9 @@ begin
 
   if (select version from public.founder_finance_scenarios where id='00000000-0000-4000-8000-000000018821') <> 2
   then raise exception 'Scenario optimistic version did not advance'; end if;
+
+  if (select starting_customer_count_assumption from public.founder_finance_scenarios where id='00000000-0000-4000-8000-000000018821') <> 10
+  then raise exception 'Starting-customer scenario assumption missing'; end if;
 
   if (select target_customer_count_assumption from public.founder_finance_scenarios where id='00000000-0000-4000-8000-000000018821') <> 75
   then raise exception 'Custom target-customer scenario assumption missing'; end if;

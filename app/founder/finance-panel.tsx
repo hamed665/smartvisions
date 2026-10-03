@@ -96,7 +96,7 @@ export function FounderFinancePanel({ finance }: { finance: FounderFinanceV1 }) 
     </details>
 
     <div className="settingsList">
-      {finance.scenarios.map(({ scenario, metrics, customerCountProjections }) => <div className="settingsRow" key={scenario.id}>
+      {finance.scenarios.map(({ scenario, metrics, customerCountProjections, revenueForecast }) => <div className="settingsRow" key={scenario.id}>
         <div>
           <strong>{scenario.name} · ASSUMPTION</strong>
           <span className="muted smallText">
@@ -113,6 +113,11 @@ export function FounderFinancePanel({ finance }: { finance: FounderFinanceV1 }) 
               `${projection.customerCount} customers = ${money(scenario.currency, projection.monthlyRevenue)}/mo · ${money(scenario.currency, projection.annualRevenueRunRate)} ARR`
             ).join(' | ')}
           </span>
+          <span className="muted smallText">
+            12-month SCENARIO forecast: month 1 {money(scenario.currency, revenueForecast[0]?.monthlyRevenue ?? null)}
+            {' · '}month 6 {money(scenario.currency, revenueForecast[5]?.monthlyRevenue ?? null)}
+            {' · '}month 12 {money(scenario.currency, revenueForecast[11]?.monthlyRevenue ?? null)}
+          </span>
         </div>
         <details>
           <summary>Edit</summary>
@@ -124,6 +129,7 @@ export function FounderFinancePanel({ finance }: { finance: FounderFinanceV1 }) 
             <label>Cash assumption<input type="number" min="0" step="0.01" name="cash_balance_assumption" defaultValue={scenario.cashBalanceAssumption} required /></label>
             <label>Monthly net burn assumption<input type="number" min="0" step="0.01" name="monthly_net_burn_assumption" defaultValue={scenario.monthlyNetBurnAssumption} required /></label>
             <label>Sales/marketing/mo<input type="number" min="0" step="0.01" name="monthly_sales_marketing_spend_assumption" defaultValue={scenario.monthlySalesMarketingSpendAssumption} required /></label>
+            <label>Starting customers<input type="number" min="0" step="1" name="starting_customer_count_assumption" defaultValue={scenario.startingCustomerCountAssumption} required /></label>
             <label>New customers/mo<input type="number" min="0" step="0.01" name="new_customers_per_month_assumption" defaultValue={scenario.newCustomersPerMonthAssumption} required /></label>
             <label>Custom target customers<input type="number" min="0" step="1" name="target_customer_count_assumption" defaultValue={scenario.targetCustomerCountAssumption} required /></label>
             <label>ARPA/mo<input type="number" min="0" step="0.01" name="monthly_arpa_assumption" defaultValue={scenario.monthlyArpaAssumption} required /></label>
@@ -149,6 +155,7 @@ export function FounderFinancePanel({ finance }: { finance: FounderFinanceV1 }) 
         <label>Cash assumption<input type="number" min="0" step="0.01" name="cash_balance_assumption" defaultValue={snapshot?.cashBalance ?? 0} required /></label>
         <label>Monthly net burn assumption<input type="number" min="0" step="0.01" name="monthly_net_burn_assumption" defaultValue={snapshot?.monthlyNetBurn ?? 0} required /></label>
         <label>Sales/marketing/mo<input type="number" min="0" step="0.01" name="monthly_sales_marketing_spend_assumption" defaultValue={snapshot?.monthlySalesMarketingSpend ?? 0} required /></label>
+        <label>Starting customers<input type="number" min="0" step="1" name="starting_customer_count_assumption" defaultValue="0" required /></label>
         <label>New customers/mo<input type="number" min="0" step="0.01" name="new_customers_per_month_assumption" defaultValue="0" required /></label>
         <label>Custom target customers<input type="number" min="0" step="1" name="target_customer_count_assumption" defaultValue="0" required /></label>
         <label>ARPA/mo<input type="number" min="0" step="0.01" name="monthly_arpa_assumption" defaultValue="0" required /></label>

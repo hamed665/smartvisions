@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   calculateFounderCustomerCountProjections,
   calculateFounderFinanceScenario,
+  calculateFounderRevenueForecast,
   founderFinanceModelPayload,
   founderFinanceVerifiedAuthorities,
   type FounderFinanceScenarioV1,
@@ -17,6 +18,7 @@ const scenario: FounderFinanceScenarioV1 = {
   cashBalanceAssumption: 12000,
   monthlyNetBurnAssumption: 2000,
   monthlySalesMarketingSpendAssumption: 1000,
+  startingCustomerCountAssumption: 10,
   newCustomersPerMonthAssumption: 5,
   targetCustomerCountAssumption: 75,
   monthlyArpaAssumption: 300,
@@ -47,6 +49,23 @@ describe('Founder finance V1', () => {
       { customerCount: 75, monthlyRevenue: 22500, annualRevenueRunRate: 270000, monthlyGrossProfit: 18000 },
       { customerCount: 100, monthlyRevenue: 30000, annualRevenueRunRate: 360000, monthlyGrossProfit: 24000 },
     ]);
+  });
+
+  it('builds a deterministic 12-month revenue forecast from explicit assumptions', () => {
+    const forecast = calculateFounderRevenueForecast(scenario);
+    expect(forecast).toHaveLength(12);
+    expect(forecast[0]).toEqual({
+      month: 1,
+      activeCustomers: 14.5,
+      monthlyRevenue: 4350,
+      monthlyGrossProfit: 3480,
+    });
+    expect(forecast[11]).toEqual({
+      month: 12,
+      activeCustomers: 51.37,
+      monthlyRevenue: 15410.28,
+      monthlyGrossProfit: 12328.22,
+    });
   });
 
   it('fails undefined denominators closed instead of manufacturing CAC/LTV/runway', () => {
@@ -80,6 +99,7 @@ describe('Founder finance V1', () => {
         scenario,
         metrics: calculateFounderFinanceScenario(scenario),
         customerCountProjections: calculateFounderCustomerCountProjections(scenario),
+        revenueForecast: calculateFounderRevenueForecast(scenario),
       }],
       missingEvidence: [{
         metric: 'RECOGNIZED_REVENUE',
@@ -102,8 +122,11 @@ describe('Founder finance V1', () => {
     ]);
     const payload = founderFinanceModelPayload(finance)!;
     expect(payload.scenarios[0]?.assumptions.monthlyArpa).toBe(300);
+    expect(payload.scenarios[0]?.assumptions.startingCustomerCount).toBe(10);
     expect(payload.scenarios[0]?.assumptions.targetCustomerCount).toBe(75);
     expect(payload.scenarios[0]?.customerCountProjections).toHaveLength(5);
+    expect(payload.scenarios[0]?.revenueForecast.evidenceClass).toBe('SCENARIO');
+    expect(payload.scenarios[0]?.revenueForecast.points).toHaveLength(12);
     expect(payload.scenarios[0]?.derivedScenarioMetrics.ltv).toBe(4800);
     expect(payload.missingEvidence[0]?.metric).toBe('RECOGNIZED_REVENUE');
     expect(payload.companySnapshot).toBeNull();
