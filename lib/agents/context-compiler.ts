@@ -4,6 +4,7 @@ import type {
   ContextEvidenceSource,
   CustomerContextSnapshot,
   MemoryContextSnapshot,
+  PermissionContextSnapshot,
   ToolAvailabilitySnapshot,
 } from './contracts';
 
@@ -188,6 +189,47 @@ export function projectToolAvailability(rows: Array<Record<string, unknown>>): T
     .filter((item) => item.actionKey && item.toolKey && item.contractVersion > 0)
     .sort((a, b) => a.actionKey.localeCompare(b.actionKey))
     .slice(0, 32);
+}
+
+export function projectPermissionContext(input: {
+  actorUserId?: string;
+  membership?: Record<string, unknown> | null;
+  scopeAssignments?: Array<Record<string, unknown>>;
+}): PermissionContextSnapshot {
+  const userId = clip(input.actorUserId, 80);
+  const organizationRole = clip(input.membership?.role, 40).toUpperCase();
+  const scopeAssignments = (input.scopeAssignments ?? [])
+    .map((row) => ({
+      id: clip(row.id, 80),
+      scopeType: clip(row.scope_type, 40).toUpperCase(),
+      role: clip(row.role, 40).toUpperCase(),
+      brandId: clip(row.brand_id, 80) || undefined,
+      tenantBusinessId: clip(row.tenant_business_id, 80) || undefined,
+      branchId: clip(row.branch_id, 80) || undefined,
+      departmentId: clip(row.department_id, 80) || undefined,
+      teamId: clip(row.team_id, 80) || undefined,
+    }))
+    .filter((item) => item.id && item.scopeType && item.role)
+    .sort((a, b) => a.scopeType.localeCompare(b.scopeType) || a.id.localeCompare(b.id))
+    .slice(0, 16);
+
+  if (!userId) {
+    return {
+      actorType: 'SYSTEM',
+      scopeAssignments: [],
+      source: 'IAM_CANONICAL',
+      runtimeAuthorizationRequired: true,
+    };
+  }
+
+  return {
+    actorType: 'USER',
+    userId,
+    ...(organizationRole ? { organizationRole } : {}),
+    scopeAssignments,
+    source: 'IAM_CANONICAL',
+    runtimeAuthorizationRequired: true,
+  };
 }
 
 export function buildContextEvidenceManifest(sources: ContextEvidenceSource[]): ContextEvidenceManifest {
