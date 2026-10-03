@@ -118,8 +118,54 @@ begin
   if (select record_state from public.founder_investor_research_candidates
       where id='00000000-0000-4000-8000-000000019041') <> 'DISCOVERED_EXTERNAL'
   then raise exception 'External research state mismatch'; end if;
+
+  begin
+    update public.crm_pipelines
+    set pipeline_purpose='SALES'
+    where id=v_pipeline;
+    raise exception 'Fundraising pipeline purpose was mutable';
+  exception when others then
+    if sqlerrm='Fundraising pipeline purpose was mutable' then raise; end if;
+  end;
+
+  begin
+    update public.crm_deals
+    set deal_purpose='SALES', fundraising_round_id=null
+    where organization_id='00000000-0000-4000-8000-000000019001'
+      and deal_purpose='FUNDRAISING';
+    raise exception 'Fundraising deal purpose/round was mutable';
+  exception when others then
+    if sqlerrm='Fundraising deal purpose/round was mutable' then raise; end if;
+  end;
 end;
 $owner_checks$;
+
+update public.founder_investor_research_candidates
+set record_state='CRM_CONFIRMED',
+    business_id='00000000-0000-4000-8000-000000019021',
+    confirmation_method='MANUAL_CONFIRMED',
+    confirmed_by_user_id='00000000-0000-4000-8000-000000019012',
+    confirmed_at='2020-01-01T00:00:00Z',
+    updated_by_user_id='00000000-0000-4000-8000-000000019011'
+where id='00000000-0000-4000-8000-000000019041';
+
+do $confirmation_checks$
+begin
+  if (select record_state from public.founder_investor_research_candidates
+      where id='00000000-0000-4000-8000-000000019041') <> 'CRM_CONFIRMED'
+  then raise exception 'Investor CRM confirmation transition missing'; end if;
+
+  if (select confirmed_by_user_id from public.founder_investor_research_candidates
+      where id='00000000-0000-4000-8000-000000019041')
+     <> '00000000-0000-4000-8000-000000019011'::uuid
+  then raise exception 'Investor confirmer was not normalized to auth.uid()'; end if;
+
+  if (select confirmed_at from public.founder_investor_research_candidates
+      where id='00000000-0000-4000-8000-000000019041')
+     = '2020-01-01T00:00:00Z'::timestamptz
+  then raise exception 'Investor confirmation timestamp was not normalized'; end if;
+end;
+$confirmation_checks$;
 
 reset role;
 select set_config('request.jwt.claim.sub','',false);
