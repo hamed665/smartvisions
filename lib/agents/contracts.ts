@@ -264,6 +264,24 @@ export type ToolAvailabilitySnapshot = {
   runtimeAuthorizationRequired: true;
 };
 
+export type PermissionContextSnapshot = {
+  actorType: 'SYSTEM' | 'USER';
+  userId?: string;
+  organizationRole?: string;
+  scopeAssignments: Array<{
+    id: string;
+    scopeType: string;
+    role: string;
+    brandId?: string;
+    tenantBusinessId?: string;
+    branchId?: string;
+    departmentId?: string;
+    teamId?: string;
+  }>;
+  source: 'IAM_CANONICAL';
+  runtimeAuthorizationRequired: true;
+};
+
 export type ContextEvidenceSource = {
   authority: string;
   count?: number;
@@ -305,6 +323,7 @@ export type AgentContext = {
   memoryContext?: MemoryContextSnapshot[];
   businessTwinContext?: BusinessTwinContextSnapshot;
   toolAvailability?: ToolAvailabilitySnapshot[];
+  permissionContext?: PermissionContextSnapshot;
   contextEvidence?: ContextEvidenceManifest;
   activePrompts?: Partial<Record<AgentName, ActivePromptSnapshot>>;
   agentSettings?: Partial<Record<AgentName, AgentSettingSnapshot>>;
