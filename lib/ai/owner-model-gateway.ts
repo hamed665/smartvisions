@@ -10,8 +10,12 @@ import {
   reserveCostGuardUsage,
 } from '@/lib/reliability/cost-guard';
 import { assertRuntimeOperationAllowed } from '@/lib/reliability/runtime-safety';
+import { extractOwnerWebResearchMeta, type OwnerWebSource } from './owner-web-research-core';
 
 type JsonSchema = Record<string, unknown>;
+
+const OPENAI_WEB_SEARCH_CALL_USD = 0.01;
+const WEB_SEARCH_RESERVATION_CALLS = 10;
 
 function extractOutputText(response: unknown) {
   const body = response as { output?: Array<{ content?: Array<{ type?: string; text?: string }> }> };
@@ -46,7 +50,14 @@ export async function runOwnerJsonModel<T>(input: {
   maxOutputTokens?: number;
   signal?: AbortSignal;
   timeoutMs?: number;
-}): Promise<{ data: T; model: string; tier: 'LOW_COST' | 'HIGH_REASONING' }> {
+  webSearch?: boolean;
+}): Promise<{
+  data: T;
+  model: string;
+  tier: 'LOW_COST' | 'HIGH_REASONING';
+  webSources: OwnerWebSource[];
+  webSearchCalls: number;
+}> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OpenAI is not configured for owner intelligence');
 
@@ -77,6 +88,7 @@ export async function runOwnerJsonModel<T>(input: {
     max_output_tokens: maxOutputTokens,
     instructions: input.instructions,
     input: JSON.stringify(input.payload),
+    ...(input.webSearch ? { tools: [{ type: 'web_search' }] } : {}),
     text: {
       format: {
         type: 'json_schema',
@@ -87,11 +99,13 @@ export async function runOwnerJsonModel<T>(input: {
     },
   });
 
-  const reserved = estimateOpenAiReservationUsd(
-    model,
-    new TextEncoder().encode(requestBody).byteLength,
-    maxOutputTokens,
-  );
+  const reserved =
+    estimateOpenAiReservationUsd(
+      model,
+      new TextEncoder().encode(requestBody).byteLength,
+      maxOutputTokens,
+    )
+    + (input.webSearch ? OPENAI_WEB_SEARCH_CALL_USD * WEB_SEARCH_RESERVATION_CALLS : 0);
   const reservation = await reserveCostGuardUsage({
     organizationId: input.organizationId,
     provider: 'OPENAI',
@@ -102,6 +116,8 @@ export async function runOwnerJsonModel<T>(input: {
       model,
       tier: route.tier,
       ownerIntelligenceGateway: true,
+      webSearch: input.webSearch === true,
+      webSearchReservationCalls: input.webSearch ? WEB_SEARCH_RESERVATION_CALLS : 0,
       automaticRetry: false,
     },
   });
@@ -148,11 +164,15 @@ export async function runOwnerJsonModel<T>(input: {
 
   const raw = await response.json();
   const usage = extractUsage(raw);
+  const webResearch = extractOwnerWebResearchMeta(raw);
+  const webSearchCostUsd = input.webSearch
+    ? webResearch.webSearchCalls * OPENAI_WEB_SEARCH_CALL_USD
+    : 0;
   await finalizeCostGuardUsage({
     organizationId: input.organizationId,
     reservationKey: reservation.key,
     state: 'SETTLED',
-    actualCostUsd: estimateOpenAiCostUsd(model, usage),
+    actualCostUsd: estimateOpenAiCostUsd(model, usage) + webSearchCostUsd,
     inputTokens: usage.inputTokens,
     outputTokens: usage.outputTokens,
     metadata: {
@@ -161,6 +181,9 @@ export async function runOwnerJsonModel<T>(input: {
       tier: route.tier,
       cachedInputTokens: usage.cachedInputTokens,
       ownerIntelligenceGateway: true,
+      webSearch: input.webSearch === true,
+      webSearchCalls: webResearch.webSearchCalls,
+      webSearchCostUsd,
     },
   });
 
@@ -171,5 +194,7 @@ export async function runOwnerJsonModel<T>(input: {
     data: JSON.parse(output) as T,
     model,
     tier: route.tier,
+    webSources: webResearch.sources,
+    webSearchCalls: webResearch.webSearchCalls,
   };
 }

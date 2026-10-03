@@ -1,7 +1,7 @@
 import type { FounderIntelligenceResult } from '@/lib/founder/intelligence-core';
 import type { TelegramOwnerCommand } from './contracts';
 
-const STRATEGIC_FOUNDER_INTENT = /(?:\bfounder\b|بنیان(?:‌| )?گذار|مهم(?:‌| )?ترین\s+(?:کار|اولویت)|اولویت\s+(?:امروز|شرکت|پروژه)|سرمایه(?:‌| )?گذار|جذب\s+سرمایه|ارزش(?:‌| )?گذاری|valuation|fundrais|investor|cap\s*table|dilution|roadmap|استراتژی|strategy|unit\s*economics|runway|burn\s*rate|آمادگی\s+سرمایه|ریسک\s+(?:کسب|شرکت|پروژه)|تصمیم\s+(?:مدیریتی|بیزنسی|تجاری))/i;
+const STRATEGIC_FOUNDER_INTENT = /(?:\bfounder\b|بنیان(?:‌| )?گذار|مهم(?:‌| )?ترین\s+(?:کار|اولویت)|اولویت\s+(?:امروز|شرکت|پروژه)|سرمایه(?:‌| )?گذار|جذب\s+سرمایه|ارزش(?:‌| )?گذاری|valuation|fundrais|investor|cap\s*table|dilution|roadmap|استراتژی|strategy|unit\s*economics|runway|burn\s*rate|آمادگی\s+سرمایه|ریسک\s+(?:کسب|شرکت|پروژه)|تصمیم\s+(?:مدیریتی|بیزنسی|تجاری)|بازار|market|رقیب|رقبا|competitor|benchmark|قیمت\s+بازار|market\s+pricing)/i;
 const EXPLICIT_HELP = /^\/(?:help|start)(?:@[A-Za-z0-9_]+)?(?:\s|$)/i;
 
 function clip(value: unknown, max: number) {
@@ -39,6 +39,13 @@ export function formatTelegramFounderResult(result: FounderIntelligenceResult) {
     }
   }
 
+  if (result.externalFacts.length) {
+    lines.push('', 'شواهد زنده بازار:');
+    for (const fact of result.externalFacts.slice(0, 4)) {
+      lines.push(`• ${clip(fact.text, 260)}\n  ${clip(fact.sourceUrl, 420)}`);
+    }
+  }
+
   if (result.gaps.length) {
     lines.push('', 'شواهد ناقص:');
     for (const gap of result.gaps.slice(0, 4)) lines.push(`• ${clip(gap, 280)}`);
@@ -52,8 +59,11 @@ export function formatTelegramFounderResult(result: FounderIntelligenceResult) {
     for (const risk of result.risks.slice(0, 4)) lines.push(`• ${clip(risk, 280)}`);
   }
 
-  if (result.evidenceAuthorities.length) {
-    lines.push('', `Evidence: ${result.evidenceAuthorities.slice(0, 8).join(', ')}`);
+  if (result.evidenceAuthorities.length || result.externalSources.length) {
+    const parts = [];
+    if (result.evidenceAuthorities.length) parts.push(result.evidenceAuthorities.slice(0, 8).join(', '));
+    if (result.externalSources.length) parts.push(`${result.externalSources.length} web source(s)`);
+    lines.push('', `Evidence: ${parts.join(' · ')}`);
   }
 
   lines.push('', 'READ ONLY · هیچ تغییری اجرا نشد.');

@@ -1,5 +1,6 @@
 import type { FounderStatusSnapshotV1 } from './contracts';
 import { buildFounderInvestorReadinessV1 } from './investor-readiness';
+import { normalizeOwnerWebUrl, type OwnerWebSource } from '@/lib/ai/owner-web-research-core';
 
 export type FounderQuestionKind =
   | 'STATUS'
@@ -16,11 +17,24 @@ export type FounderGroundedFact = {
   authority: string;
 };
 
+export type FounderExternalFact = {
+  text: string;
+  sourceUrl: string;
+};
+
+export type FounderExternalSource = {
+  url: string;
+  title?: string;
+};
+
 export type FounderIntelligenceResult = {
   mode: 'READ_ONLY_ANALYSIS';
   questionKind: FounderQuestionKind;
   answer: string;
   facts: FounderGroundedFact[];
+  externalFacts: FounderExternalFact[];
+  externalSources: FounderExternalSource[];
+  researchMode: 'INTERNAL_ONLY' | 'LIVE_WEB';
   gaps: string[];
   nextAction: string;
   kpi: string;
@@ -39,6 +53,7 @@ export type RawFounderIntelligence = {
   question_kind?: unknown;
   answer?: unknown;
   facts?: unknown;
+  external_facts?: unknown;
   gaps?: unknown;
   next_action?: unknown;
   kpi?: unknown;
@@ -79,6 +94,49 @@ function verifiedAuthorities(status: FounderStatusSnapshotV1) {
   );
 }
 
+
+function externalFacts(
+  value: unknown,
+  webSources: OwnerWebSource[],
+  maxItems = 8,
+): FounderExternalFact[] {
+  if (!Array.isArray(value) || !webSources.length) return [];
+  const allowed = new Set(
+    webSources
+      .map((source) => normalizeOwnerWebUrl(source.url))
+      .filter((url): url is string => Boolean(url)),
+  );
+  const seen = new Set<string>();
+  const facts: FounderExternalFact[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const row = item as Record<string, unknown>;
+    const factText = text(row.text, 500);
+    const sourceUrl = normalizeOwnerWebUrl(row.source_url);
+    if (!factText || !sourceUrl || !allowed.has(sourceUrl)) continue;
+    const key = `${sourceUrl}\u0000${factText}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    facts.push({ text: factText, sourceUrl });
+    if (facts.length >= maxItems) break;
+  }
+  return facts;
+}
+
+function normalizedWebSources(webSources: OwnerWebSource[]): FounderExternalSource[] {
+  const seen = new Set<string>();
+  const output: FounderExternalSource[] = [];
+  for (const source of webSources) {
+    const url = normalizeOwnerWebUrl(source.url);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    const title = text(source.title, 240);
+    output.push(title ? { url, title } : { url });
+    if (output.length >= 16) break;
+  }
+  return output;
+}
+
 function groundedFacts(
   value: unknown,
   status: FounderStatusSnapshotV1,
@@ -101,6 +159,10 @@ function groundedFacts(
     if (facts.length >= maxItems) break;
   }
   return facts;
+}
+
+export function needsLiveFounderResearch(question: string) {
+  return /(بازار|market|competitor|رقیب|رقبا|benchmark|بنچمارک|tams?|sams?|soms?|market\s*size|اندازه\s*بازار|current\s*pricing|قیمت\s*(?:رقبا|بازار)|pricing\s*(?:competitor|market)|regulation|قانون|مقررات|investor\s*(?:list|search|fund)|سرمایه(?:‌| )?گذار(?:ان)?\s*(?:مناسب|پیدا|لیست)|trend|ترند|اخبار|news)/i.test(question);
 }
 
 export function normalizeFounderHistory(value: unknown): FounderConversationTurn[] {
@@ -134,11 +196,14 @@ export function founderStatusModelPayload(status: FounderStatusSnapshotV1) {
 export function parseFounderIntelligence(input: {
   raw: RawFounderIntelligence;
   status: FounderStatusSnapshotV1;
+  webSources?: OwnerWebSource[];
   nowIso?: string;
 }): FounderIntelligenceResult {
   const rawKind = text(input.raw.question_kind, 20).toUpperCase() as FounderQuestionKind;
   const questionKind = KINDS.has(rawKind) ? rawKind : 'GENERAL';
   const facts = groundedFacts(input.raw.facts, input.status);
+  const webSources = normalizedWebSources(input.webSources ?? []);
+  const acceptedExternalFacts = externalFacts(input.raw.external_facts, webSources);
   const evidenceAuthorities = [...new Set(facts.map((fact) => fact.authority))];
 
   const confidenceRaw = text(input.raw.confidence, 12).toUpperCase();
@@ -146,7 +211,8 @@ export function parseFounderIntelligence(input: {
     confidenceRaw === 'HIGH' || confidenceRaw === 'MEDIUM' ? confidenceRaw : 'LOW';
 
   const gaps = list(input.raw.gaps, 8, 400);
-  if (!facts.length || !evidenceAuthorities.length || gaps.length > facts.length) {
+  const supportedFactCount = facts.length + acceptedExternalFacts.length;
+  if (!supportedFactCount || gaps.length > supportedFactCount) {
     confidence = confidence === 'HIGH' ? 'MEDIUM' : confidence;
   }
 
@@ -155,6 +221,9 @@ export function parseFounderIntelligence(input: {
     questionKind,
     answer: text(input.raw.answer, 2_200) || 'برای این سؤال شواهد کافی در Founder Status فعلی وجود ندارد.',
     facts,
+    externalFacts: acceptedExternalFacts,
+    externalSources: webSources,
+    researchMode: webSources.length ? 'LIVE_WEB' : 'INTERNAL_ONLY',
     gaps,
     nextAction: text(input.raw.next_action, 600) || 'شواهد لازم را کامل کن و تحلیل را دوباره اجرا کن.',
     kpi: text(input.raw.kpi, 400) || 'KPI قابل اتکا از شواهد فعلی تعیین نشد.',
