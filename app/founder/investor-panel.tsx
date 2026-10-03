@@ -242,7 +242,7 @@ export function FounderInvestorPanel({ investor }: { investor: FounderInvestorWo
     </details>
 
     <p className="muted smallText">
-      No investor interest, commitment, valuation or fundraising probability is inferred from research or CRM stage. Cap table and term-sheet comparison remain separate missing authorities until their dedicated slice is implemented.
+      No investor interest, commitment, valuation or fundraising probability is inferred from research or CRM stage. Cap table, dilution, term sheets and diligence live in the governed Capital workspace below.
     </p>
   </section>;
 }

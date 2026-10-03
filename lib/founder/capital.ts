@@ -1,3 +1,5 @@
+import type { FounderEvidenceQuality } from './contracts';
+
 export type FounderCapTableEntryV1 = {
   id: string;
   status: 'ACTIVE' | 'ARCHIVED';
@@ -189,5 +191,126 @@ export function buildFounderDiligenceCoverage(items: FounderDueDiligenceItemV1[]
     outstanding: items
       .filter((item) => item.status === 'MISSING' || item.status === 'REQUESTED')
       .map((item) => ({ id: item.id, category: item.category, title: item.title, status: item.status })),
+  };
+}
+
+
+export type FounderCapTableRecordV1 = FounderCapTableEntryV1 & {
+  personId: string | null;
+  businessId: string | null;
+  sourceType: 'MANUAL_CONFIRMED' | 'IMPORT_VERIFIED';
+  sourceRef: string;
+  notes: string | null;
+  version: number;
+  updatedAt: string;
+};
+
+export type FounderDilutionScenarioRecordV1 = FounderDilutionScenarioV1 & {
+  fundraisingRoundId: string;
+  assumptionSourceRef: string;
+  notes: string | null;
+  version: number;
+  updatedAt: string;
+};
+
+export type FounderTermSheetRecordV1 = FounderTermSheetV1 & {
+  fundraisingRoundId: string;
+  investorCandidateId: string | null;
+  crmDealId: string | null;
+  sourceType: 'MANUAL_CONFIRMED' | 'IMPORT_VERIFIED';
+  sourceRef: string;
+  notes: string | null;
+  version: number;
+  updatedAt: string;
+};
+
+export type FounderDueDiligenceRecordV1 = FounderDueDiligenceItemV1 & {
+  fundraisingRoundId: string | null;
+  notes: string | null;
+  version: number;
+  updatedAt: string;
+};
+
+export type FounderCapitalEvidenceV1 = {
+  authority: 'CAP_TABLE' | 'DILUTION_SCENARIOS' | 'TERM_SHEETS' | 'DUE_DILIGENCE';
+  quality: FounderEvidenceQuality;
+  evidenceClass: 'VERIFIED_PRODUCTION';
+  count: number;
+  detail: string;
+};
+
+export type FounderCapitalWorkspaceV1 = {
+  schemaVersion: 1;
+  generatedAt: string;
+  capEntries: FounderCapTableRecordV1[];
+  capTable: ReturnType<typeof calculateFounderCapTable>;
+  dilutionScenarios: Array<{
+    scenario: FounderDilutionScenarioRecordV1;
+    result: ReturnType<typeof calculateFounderDilutionScenario>;
+  }>;
+  termSheets: FounderTermSheetRecordV1[];
+  termComparison: ReturnType<typeof compareFounderTermSheets>;
+  diligenceItems: FounderDueDiligenceRecordV1[];
+  diligenceCoverage: ReturnType<typeof buildFounderDiligenceCoverage>;
+  evidence: FounderCapitalEvidenceV1[];
+};
+
+export function founderCapitalVerifiedAuthorities(
+  capital: FounderCapitalWorkspaceV1 | null | undefined,
+) {
+  return capital
+    ? capital.evidence
+        .filter((item) => item.quality === 'VERIFIED')
+        .map((item) => item.authority)
+    : [];
+}
+
+export function founderCapitalModelPayload(
+  capital: FounderCapitalWorkspaceV1 | null | undefined,
+) {
+  if (!capital) return null;
+  return {
+    schemaVersion: capital.schemaVersion,
+    generatedAt: capital.generatedAt,
+    capTable: capital.capTable,
+    capEntries: capital.capEntries
+      .filter((entry) => entry.status === 'ACTIVE')
+      .map((entry) => ({
+        id: entry.id,
+        holderType: entry.holderType,
+        holderName: entry.holderName,
+        securityType: entry.securityType,
+        shareClass: entry.shareClass,
+        issuedUnits: entry.issuedUnits,
+        reservedUnits: entry.reservedUnits,
+        sourceType: entry.sourceType,
+      })),
+    dilutionScenarios: capital.dilutionScenarios
+      .filter(({ scenario }) => scenario.status === 'ACTIVE')
+      .map(({ scenario, result }) => ({
+        id: scenario.id,
+        name: scenario.name,
+        currency: scenario.currency,
+        fundraisingRoundId: scenario.fundraisingRoundId,
+        assumptions: {
+          preMoneyValuation: scenario.preMoneyValuationAssumption,
+          newMoneyAmount: scenario.newMoneyAmountAssumption,
+          optionPoolTopUpUnits: scenario.optionPoolTopUpUnitsAssumption,
+        },
+        result,
+      })),
+    termSheets: capital.termComparison,
+    diligence: {
+      coverage: capital.diligenceCoverage,
+      items: capital.diligenceItems.map((item) => ({
+        id: item.id,
+        category: item.category,
+        title: item.title,
+        status: item.status,
+        sensitivity: item.sensitivity,
+        lastVerifiedAt: item.lastVerifiedAt,
+      })),
+    },
+    evidence: capital.evidence,
   };
 }
