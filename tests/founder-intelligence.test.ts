@@ -5,8 +5,8 @@ import {
   founderStatusModelPayload,
   normalizeFounderHistory,
   parseFounderIntelligence,
+  needsLiveFounderResearch,
 } from '@/lib/founder/intelligence-core';
-import { needsLiveFounderResearch } from '@/lib/founder/intelligence';
 
 const status: FounderStatusSnapshotV1 = {
   schemaVersion: 1,
