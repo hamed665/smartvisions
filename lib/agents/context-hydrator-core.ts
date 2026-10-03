@@ -8,10 +8,18 @@ import type {
   BookingContextSnapshot,
   AgentName,
   AgentSettingSnapshot,
+  ContextEvidenceManifest,
   KnowledgeSnapshot,
   ServiceKnowledgeSnapshot,
 } from './contracts';
 import { CONVERSATION_STAGES } from './contracts';
+import {
+  buildContextEvidenceManifest,
+  projectBusinessTwinContext,
+  projectCustomerContext,
+  projectMemoryContext,
+  projectToolAvailability,
+} from './context-compiler';
 
 const AGENT_NAMES: AgentName[] = [
   'intent_discovery',
@@ -61,6 +69,11 @@ export type HydratedRuntimeEvidence = {
   bookableServiceCount: number;
   activeBookingCount: number;
   portfolioCount: number;
+  memoryCount: number;
+  customerRelationshipCount: number;
+  businessTwinSchemaVersion?: number;
+  toolContractVersions: Record<string, number>;
+  contextEvidence: ContextEvidenceManifest;
 };
 
 export async function hydrateAgentContext(input: {
@@ -133,8 +146,24 @@ export async function hydrateAgentContext(input: {
   const recommendedOffer = clip(lead?.recommended_offer, 120) || base.quotedService;
   const conversationId = clip(conversation?.id, 80) || input.trustedConversationId || base.conversationId;
   const conversationChannel = clip(conversation?.channel, 40).toUpperCase();
+  const personId = clip(conversation?.person_id, 80) || clip(lead?.person_id, 80) || undefined;
 
-  const [outreachMessagesResult, conversationMessagesResult, knowledgeResult, promptsResult, settingsResult, servicesResult, bookingProfilesResult, pricesResult, portfolioResult] = await Promise.all([
+  const [
+    outreachMessagesResult,
+    conversationMessagesResult,
+    knowledgeResult,
+    promptsResult,
+    settingsResult,
+    servicesResult,
+    bookingProfilesResult,
+    pricesResult,
+    portfolioResult,
+    businessTwinResult,
+    memoryResult,
+    customerPersonResult,
+    customerRelationshipsResult,
+    toolRegistryResult,
+  ] = await Promise.all([
     authoritativeLeadId && conversationId && conversationChannel
       ? supabase
         .from('outreach_messages')
@@ -200,9 +229,59 @@ export async function hydrateAgentContext(input: {
         .eq('approved', true)
         .limit(50)
       : Promise.resolve({ data: [], error: null }),
+    supabase.rpc('compile_business_twin_v2', {
+      p_organization_id: organizationId,
+    }),
+    supabase.rpc('get_memory_context_v2', {
+      p_organization_id: organizationId,
+      p_person_id: personId ?? null,
+      p_business_id: businessId || null,
+      p_conversation_id: conversationId || null,
+      p_include_stale: false,
+      p_include_expired: false,
+      p_limit: 24,
+    }),
+    personId
+      ? supabase
+        .from('crm_people')
+        .select('id,display_name,status')
+        .eq('organization_id', organizationId)
+        .eq('id', personId)
+        .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    personId
+      ? supabase
+        .from('crm_person_business_relationships')
+        .select('id,business_id,relationship_type,job_title,verification_method,status,last_seen_at')
+        .eq('organization_id', organizationId)
+        .eq('person_id', personId)
+        .eq('status', 'ACTIVE')
+        .order('last_seen_at', { ascending: false })
+        .limit(8)
+      : Promise.resolve({ data: [], error: null }),
+    supabase
+      .from('tool_action_registry')
+      .select('action_key,tool_key,authority_key,contract_version,permission_key,scope_type,cost_class,side_effect_class,approval_requirement,approval_policy_key,verifier_key,availability,required_work_packages')
+      .order('action_key', { ascending: true })
+      .limit(32),
   ]);
 
-  const firstError = [outreachMessagesResult, conversationMessagesResult, knowledgeResult, promptsResult, settingsResult, servicesResult, bookingProfilesResult, pricesResult, portfolioResult]
+  const firstError = [
+    outreachMessagesResult,
+    conversationMessagesResult,
+    knowledgeResult,
+    promptsResult,
+    settingsResult,
+    servicesResult,
+    bookingProfilesResult,
+    pricesResult,
+    portfolioResult,
+    businessTwinResult,
+    memoryResult,
+    customerPersonResult,
+    customerRelationshipsResult,
+    toolRegistryResult,
+  ]
     .map((result) => result.error)
     .find(Boolean);
   if (firstError) throw new Error(`Agent context hydration failed: ${firstError.message}`);
@@ -233,6 +312,18 @@ export async function hydrateAgentContext(input: {
       reviewState: clip(row.review_state, 40) || undefined,
     }))
     .filter((item) => item.key && item.version > 0);
+
+  const customerContext = projectCustomerContext({
+    person: customerPersonResult.data as Record<string, unknown> | null,
+    relationships: (customerRelationshipsResult.data ?? []) as Array<Record<string, unknown>>,
+  });
+  const memoryContext = projectMemoryContext(
+    (memoryResult.data ?? []) as Array<Record<string, unknown>>,
+  );
+  const businessTwinContext = projectBusinessTwinContext(businessTwinResult.data);
+  const toolAvailability = projectToolAvailability(
+    (toolRegistryResult.data ?? []) as Array<Record<string, unknown>>,
+  );
 
   const activePrompts: Partial<Record<AgentName, ActivePromptSnapshot>> = {};
   for (const row of (promptsResult.data ?? []) as Array<Record<string, unknown>>) {
@@ -282,7 +373,6 @@ export async function hydrateAgentContext(input: {
     })
     .filter((service) => service.id && service.name);
 
-  const personId = clip(conversation?.person_id, 80) || clip(lead?.person_id, 80) || undefined;
   const bookingProfileByService = new Map<string, Record<string, unknown>>();
   for (const row of (bookingProfilesResult.data ?? []) as Array<Record<string, unknown>>) {
     bookingProfileByService.set(clip(row.service_id, 120), row);
@@ -367,6 +457,58 @@ export async function hydrateAgentContext(input: {
     .join('\n')
     .slice(0, 3600) || undefined;
 
+  const toolContractVersions = Object.fromEntries(
+    toolAvailability.map((item) => [item.actionKey, item.contractVersion]),
+  );
+  const contextEvidence = buildContextEvidenceManifest([
+    {
+      authority: 'CONVERSATION',
+      count: conversationHistory.length,
+      refs: conversationId ? [conversationId] : [],
+    },
+    {
+      authority: 'CRM_CUSTOMER',
+      count: customerContext?.relationships.length ?? 0,
+      refs: customerContext?.person?.id ? [customerContext.person.id] : [],
+    },
+    {
+      authority: 'SALES_STATE',
+      version: salesState.version,
+      refs: conversationId ? [conversationId] : [],
+    },
+    {
+      authority: 'BUSINESS_TWIN',
+      version: businessTwinContext?.schemaVersion,
+      count: businessTwinContext?.policyConfiguration.length ?? 0,
+      refs: businessTwinContext?.authority ? [businessTwinContext.authority] : [],
+    },
+    {
+      authority: 'KNOWLEDGE',
+      count: knowledgeContext.length,
+      refs: knowledgeContext.map((item) => `${item.key}@${item.version}`),
+    },
+    {
+      authority: 'MEMORY',
+      count: memoryContext.length,
+      refs: memoryContext.map((item) => `${item.type}:${item.key}@${item.version}`),
+    },
+    {
+      authority: 'SERVICE_PRICING',
+      count: serviceKnowledge.filter((item) => item.marketPrice).length,
+      refs: serviceKnowledge.filter((item) => item.marketPrice).map((item) => item.id),
+    },
+    {
+      authority: 'TOOL_ACTION_REGISTRY',
+      count: toolAvailability.length,
+      refs: toolAvailability.map((item) => `${item.actionKey}@${item.contractVersion}`),
+    },
+    {
+      authority: 'TOOL_PERMISSION_METADATA',
+      count: toolAvailability.length,
+      refs: toolAvailability.map((item) => item.permissionKey),
+    },
+  ]);
+
   return {
     context: {
       ...base,
@@ -381,6 +523,11 @@ export async function hydrateAgentContext(input: {
       knowledgeContext,
       serviceKnowledge,
       bookingContext,
+      customerContext,
+      memoryContext,
+      businessTwinContext,
+      toolAvailability,
+      contextEvidence,
       activePrompts,
       agentSettings,
       approvedPortfolio,
@@ -403,6 +550,11 @@ export async function hydrateAgentContext(input: {
       bookableServiceCount: bookableServices.length,
       activeBookingCount: activeBookings.length,
       portfolioCount: approvedPortfolio.length,
+      memoryCount: memoryContext.length,
+      customerRelationshipCount: customerContext?.relationships.length ?? 0,
+      businessTwinSchemaVersion: businessTwinContext?.schemaVersion,
+      toolContractVersions,
+      contextEvidence,
     },
   };
 }
