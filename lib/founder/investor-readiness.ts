@@ -129,7 +129,7 @@ export function buildFounderInvestorReadinessV1(
       key: 'MARKET_RESEARCH',
       title: 'External market, TAM/SAM/SOM and competitor evidence',
       state: 'MISSING',
-      detail: 'No governed current external research authority is connected to Founder OS V1. Model memory is not accepted as investor evidence.',
+      detail: 'Live web research can answer current questions per request, but no persistent governed market-research evidence set is stored for investor diligence. Model memory and transient web results are not promoted into this deterministic readiness pillar.',
       authorities: [],
     },
     {

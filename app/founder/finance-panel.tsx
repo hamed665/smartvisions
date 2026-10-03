@@ -47,6 +47,10 @@ export function FounderFinancePanel({ finance }: { finance: FounderFinanceV1 }) 
         <div className="muted">Outstanding invoices</div>
         <div className="value smallText">{currencyList(finance.observed.outstandingInvoices)}</div>
       </div>
+      <div className="card">
+        <div className="muted">Average WON deal value</div>
+        <div className="value smallText">{currencyList(finance.observed.averageWonDealValue)}</div>
+      </div>
     </div>
 
     {snapshot ? <div className="settingsList">
@@ -66,7 +70,7 @@ export function FounderFinancePanel({ finance }: { finance: FounderFinanceV1 }) 
             · Source: {snapshot.sourceRef}
           </span>
         </div>
-        <span className="status">MANUAL CONFIRMED</span>
+        <span className="status">USER PROVIDED · MANUAL CONFIRMED</span>
       </div>
     </div> : <p className="muted smallText">
       Cash, company burn and runway remain unknown until an OWNER-confirmed snapshot is recorded.
@@ -92,7 +96,7 @@ export function FounderFinancePanel({ finance }: { finance: FounderFinanceV1 }) 
     </details>
 
     <div className="settingsList">
-      {finance.scenarios.map(({ scenario, metrics }) => <div className="settingsRow" key={scenario.id}>
+      {finance.scenarios.map(({ scenario, metrics, customerCountProjections }) => <div className="settingsRow" key={scenario.id}>
         <div>
           <strong>{scenario.name} · ASSUMPTION</strong>
           <span className="muted smallText">
@@ -102,7 +106,12 @@ export function FounderFinancePanel({ finance }: { finance: FounderFinanceV1 }) 
           </span>
           <span className="muted smallText">
             Gross profit/customer/mo {money(scenario.currency, metrics.grossProfitPerCustomerMonthly)}
-            · incremental customers to offset net burn {metrics.incrementalCustomersToOffsetNetBurn ?? '—'}
+            · break-even customer count {metrics.incrementalCustomersToOffsetNetBurn ?? '—'}
+          </span>
+          <span className="muted smallText">
+            Revenue scenarios: {customerCountProjections.map((projection) =>
+              `${projection.customerCount} customers = ${money(scenario.currency, projection.monthlyRevenue)}/mo · ${money(scenario.currency, projection.annualRevenueRunRate)} ARR`
+            ).join(' | ')}
           </span>
         </div>
         <details>
@@ -116,6 +125,7 @@ export function FounderFinancePanel({ finance }: { finance: FounderFinanceV1 }) 
             <label>Monthly net burn assumption<input type="number" min="0" step="0.01" name="monthly_net_burn_assumption" defaultValue={scenario.monthlyNetBurnAssumption} required /></label>
             <label>Sales/marketing/mo<input type="number" min="0" step="0.01" name="monthly_sales_marketing_spend_assumption" defaultValue={scenario.monthlySalesMarketingSpendAssumption} required /></label>
             <label>New customers/mo<input type="number" min="0" step="0.01" name="new_customers_per_month_assumption" defaultValue={scenario.newCustomersPerMonthAssumption} required /></label>
+            <label>Custom target customers<input type="number" min="0" step="1" name="target_customer_count_assumption" defaultValue={scenario.targetCustomerCountAssumption} required /></label>
             <label>ARPA/mo<input type="number" min="0" step="0.01" name="monthly_arpa_assumption" defaultValue={scenario.monthlyArpaAssumption} required /></label>
             <label>Gross margin %<input type="number" min="0" max="100" step="0.01" name="gross_margin_pct_assumption" defaultValue={scenario.grossMarginBpsAssumption / 100} required /></label>
             <label>Monthly churn %<input type="number" min="0" max="100" step="0.01" name="monthly_churn_pct_assumption" defaultValue={scenario.monthlyChurnBpsAssumption / 100} required /></label>
@@ -140,6 +150,7 @@ export function FounderFinancePanel({ finance }: { finance: FounderFinanceV1 }) 
         <label>Monthly net burn assumption<input type="number" min="0" step="0.01" name="monthly_net_burn_assumption" defaultValue={snapshot?.monthlyNetBurn ?? 0} required /></label>
         <label>Sales/marketing/mo<input type="number" min="0" step="0.01" name="monthly_sales_marketing_spend_assumption" defaultValue={snapshot?.monthlySalesMarketingSpend ?? 0} required /></label>
         <label>New customers/mo<input type="number" min="0" step="0.01" name="new_customers_per_month_assumption" defaultValue="0" required /></label>
+        <label>Custom target customers<input type="number" min="0" step="1" name="target_customer_count_assumption" defaultValue="0" required /></label>
         <label>ARPA/mo<input type="number" min="0" step="0.01" name="monthly_arpa_assumption" defaultValue="0" required /></label>
         <label>Gross margin %<input type="number" min="0" max="100" step="0.01" name="gross_margin_pct_assumption" defaultValue="0" required /></label>
         <label>Monthly churn %<input type="number" min="0" max="100" step="0.01" name="monthly_churn_pct_assumption" defaultValue="0" required /></label>
@@ -148,8 +159,18 @@ export function FounderFinancePanel({ finance }: { finance: FounderFinanceV1 }) 
       </form>
     </details>
 
+    <div className="settingsList">
+      {finance.missingEvidence.map((item) => <div className="settingsRow" key={item.metric}>
+        <div>
+          <strong>{item.metric}</strong>
+          <span className="muted smallText">{item.detail}</span>
+        </div>
+        <span className="status dangerStatus">MISSING EVIDENCE</span>
+      </div>)}
+    </div>
+
     <p className="muted smallText">
-      Scenario metrics are derived assumptions, not accounting facts. Observed billing/payment values are grouped by currency and never converted using guessed FX.
+      Scenario metrics are derived assumptions, not accounting facts. Observed billing/payment/CRM values are grouped by currency and never converted using guessed FX.
     </p>
   </section>;
 }
