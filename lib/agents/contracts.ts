@@ -119,6 +119,11 @@ export type SalesStateSnapshot = {
 export type ActivePromptSnapshot = {
   version: number;
   text: string;
+  rolloutMode?: 'BASELINE' | 'SHADOW' | 'CANARY';
+  baselineVersion?: number;
+  candidateVersion?: number;
+  canaryPct?: number;
+  canaryBucket?: number;
 };
 
 export type AgentSettingSnapshot = {
