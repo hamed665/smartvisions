@@ -74,10 +74,18 @@ export function FounderAskPanel() {
             <div>
               <strong>Founder Copilot · {message.result.confidence}</strong>
               <span className="smallText">{message.text}</span>
+              {message.result.facts.length
+                ? <span className="muted smallText">
+                    Facts: {message.result.facts.map((fact) => `${fact.text} [${fact.authority}]`).join(' · ')}
+                  </span>
+                : null}
               <span className="muted smallText">Next: {message.result.nextAction}</span>
               <span className="muted smallText">KPI: {message.result.kpi}</span>
               {message.result.gaps.length
                 ? <span className="muted smallText">Gaps: {message.result.gaps.join(' · ')}</span>
+                : null}
+              {message.result.risks.length
+                ? <span className="muted smallText">Risks: {message.result.risks.join(' · ')}</span>
                 : null}
               <span className="muted smallText">
                 Evidence: {message.result.evidenceAuthorities.join(', ') || 'No verified authority cited'}
