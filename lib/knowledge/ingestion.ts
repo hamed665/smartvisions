@@ -1,5 +1,8 @@
 import 'server-only';
 
+import {Crawl4AiAuditor} from '@/lib/audit/crawl4ai';
+import type {WebsiteAuditResult} from '@/lib/audit/types';
+
 const MAX_SOURCE_BYTES=5*1024*1024;
 const MAX_TEXT_CHARS=220_000;
 
@@ -11,6 +14,7 @@ export type ExtractedKnowledgeContent={
   etag?:string;
   lastModified?:string;
   extraction:string;
+  websiteAudit?:WebsiteAuditResult;
 };
 
 function cleanText(value:string){
@@ -68,58 +72,50 @@ function assertPublicHttpUrl(raw:string){
   return url;
 }
 
-async function boundedResponseBytes(response:Response){
-  const announced=Number(response.headers.get('content-length')??0);
-  if(Number.isFinite(announced)&&announced>MAX_SOURCE_BYTES)throw new Error('Knowledge source exceeds the 5 MB ingestion limit');
-  const bytes=new Uint8Array(await response.arrayBuffer());
-  if(bytes.byteLength>MAX_SOURCE_BYTES)throw new Error('Knowledge source exceeds the 5 MB ingestion limit');
-  return bytes;
+function websiteAuditText(audit:WebsiteAuditResult){
+  const parts=[
+    audit.title?'Title: '+audit.title:'',
+    audit.detectedLanguages.length?'Languages: '+audit.detectedLanguages.join(', '):'',
+    audit.services.length?'Services: '+audit.services.join(', '):'',
+    audit.contactEmails.length?'Emails: '+audit.contactEmails.join(', '):'',
+    audit.contactPhones.length?'Phones: '+audit.contactPhones.join(', '):'',
+    Object.keys(audit.socialLinks).length?'Social: '+Object.entries(audit.socialLinks).map(([key,value])=>key+': '+value).join(', '):'',
+    'Booking: '+(audit.hasBooking?'yes':'no'),
+    'WhatsApp: '+(audit.hasWhatsapp?'yes':'no'),
+    'Mobile quality: '+audit.mobileQuality,
+    'SEO quality: '+audit.seoQuality,
+    'CTA quality: '+audit.ctaQuality,
+    'Broken links: '+audit.brokenLinks,
+  ].filter(Boolean);
+  return cleanText(parts.join('\n'));
 }
 
-export async function fetchWebsiteKnowledge(rawUrl:string):Promise<ExtractedKnowledgeContent>{
-  let url=assertPublicHttpUrl(rawUrl);
-  let response:Response|null=null;
-  for(let i=0;i<5;i+=1){
-    response=await fetch(url,{
-      method:'GET',
-      redirect:'manual',
-      headers:{
-        accept:'text/html,text/plain;q=0.9,application/xhtml+xml;q=0.8',
-        'user-agent':'SmartVisionsKnowledge/2.0',
-      },
-      signal:AbortSignal.timeout(20_000),
-    });
-    if(response.status>=300&&response.status<400){
-      const location=response.headers.get('location');
-      if(!location)throw new Error('Knowledge website redirect has no location');
-      url=assertPublicHttpUrl(new URL(location,url).toString());
-      continue;
-    }
-    break;
-  }
-  if(!response)throw new Error('Knowledge website fetch did not return a response');
-  if(response.status>=300&&response.status<400)throw new Error('Knowledge website exceeded redirect limit');
-  if(!response.ok)throw new Error(`Knowledge website returned HTTP ${response.status}`);
+function crawl4AiBaseUrl(){
+  const raw=String(process.env.CRAWL4AI_URL??'').trim();
+  if(!raw)throw new Error('KNOWLEDGE_CRAWL4AI_NOT_CONFIGURED');
+  let url:URL;
+  try{url=new URL(raw);}catch{throw new Error('KNOWLEDGE_CRAWL4AI_CONFIG_INVALID');}
+  if(!['http:','https:'].includes(url.protocol))throw new Error('KNOWLEDGE_CRAWL4AI_CONFIG_INVALID');
+  return url.toString();
+}
 
-  const type=(response.headers.get('content-type')??'').toLowerCase();
-  if(!type.includes('text/html')&&!type.includes('text/plain')&&!type.includes('application/xhtml+xml')){
-    throw new Error('Knowledge website returned an unsupported content type');
-  }
-  const bytes=await boundedResponseBytes(response);
-  const raw=new TextDecoder('utf-8',{fatal:false}).decode(bytes);
-  const parsed=type.includes('html')||type.includes('xhtml')?htmlToText(raw):{text:cleanText(raw),title:undefined};
-  if(parsed.text.length<20)throw new Error('Knowledge website did not contain enough extractable text');
+export async function crawlWebsiteKnowledge(rawUrl:string):Promise<ExtractedKnowledgeContent>{
+  const target=assertPublicHttpUrl(rawUrl);
+  const auditor=new Crawl4AiAuditor(crawl4AiBaseUrl());
+  const audit=await auditor.audit(target.toString());
+  const sourceLocator=assertPublicHttpUrl(audit.sourceUrl||target.toString()).toString();
+  const normalizedAudit={...audit,sourceUrl:sourceLocator};
+  const text=websiteAuditText(normalizedAudit);
+  if(text.length<20)throw new Error('KNOWLEDGE_CRAWL4AI_EMPTY_EVIDENCE');
   return {
-    text:parsed.text,
-    title:parsed.title,
-    sourceLocator:url.toString(),
-    contentType:type||'text/plain',
-    etag:response.headers.get('etag')??undefined,
-    lastModified:response.headers.get('last-modified')??undefined,
-    extraction:'HTTP_TEXT',
+    text,
+    title:normalizedAudit.title,
+    sourceLocator,
+    contentType:'application/vnd.smartvisions.crawl4ai-audit+json',
+    extraction:'CRAWL4AI_AUDIT',
+    websiteAudit:normalizedAudit,
   };
 }
-
 function latin1(bytes:Uint8Array){
   let out='';
   for(let i=0;i<bytes.length;i+=8192){
