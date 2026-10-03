@@ -2,6 +2,7 @@ import {readFileSync} from 'node:fs';
 import {describe,expect,it} from 'vitest';
 
 const migration=readFileSync('supabase/migrations/0184_memory_v2.sql','utf8');
+const agentSourceHardening=readFileSync('supabase/migrations/0185_memory_v2_agent_source_hardening.sql','utf8');
 const page=readFileSync('app/memory/page.tsx','utf8');
 const actions=readFileSync('app/memory/actions.ts','utf8');
 const shell=readFileSync('app/app-shell.tsx','utf8');
@@ -58,6 +59,10 @@ describe('MEMORY-V2 architecture',()=>{
     expect(migration).toContain('Memory source conflicts with Person target');
     expect(migration).toContain('Memory source conflicts with Business target');
     expect(migration).toContain('Memory source conflicts with Conversation target');
+    expect(agentSourceHardening).toContain('Memory Agent Runtime source not found');
+    expect(agentSourceHardening).toContain('from public.agent_runs a');
+    expect(agentSourceHardening).toContain('same Organization');
+    expect(agentSourceHardening).not.toContain('create table public.agent_learning');
   });
 
   it('uses canonical source references and does not introduce a learning/vector/audit side authority',()=>{
