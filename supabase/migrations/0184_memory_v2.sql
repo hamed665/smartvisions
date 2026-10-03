@@ -368,48 +368,12 @@ begin
     if upper(btrim(coalesce(p_actor_type,'')))<>'USER' or p_actor_user_id is null
        or v_ref<>p_actor_user_id::text
     then raise exception 'Operator Memory source must identify the acting manager'; end if;
-  elsif v_type='AGENT_RUNTIME' then
-    if upper(btrim(coalesce(p_actor_type,'')))<>'SYSTEM' or p_actor_user_id is not null then
-      raise exception 'Agent Runtime Memory source requires SYSTEM actor';
-    end if;
-    if p_source_evidence='{}'::jsonb then
-      raise exception 'Agent Runtime Memory source requires evidence';
-    end if;
-    begin v_uuid:=v_ref::uuid;
-    exception when invalid_text_representation then
-      raise exception 'Memory Agent Runtime source reference must be a UUID';
-    end;
-
-    select a.conversation_id,
-           coalesce(c.person_id,l.person_id),
-           l.business_id
-      into v_source_conversation_id,v_source_person_id,v_source_business_id
-    from public.agent_runs a
-    left join public.sales_conversations c
-      on c.organization_id=a.organization_id and c.id=a.conversation_id
-    left join public.leads l
-      on l.organization_id=a.organization_id
-     and l.id=coalesce(a.lead_id,c.lead_id)
-    where a.organization_id=p_organization_id and a.id=v_uuid;
-
-    if not found then raise exception 'Memory Agent Runtime source not found'; end if;
-    if p_conversation_id is not null
-       and v_source_conversation_id is distinct from p_conversation_id
-    then raise exception 'Memory Agent Runtime source conflicts with Conversation target'; end if;
-    if p_person_id is not null
-       and v_source_person_id is not null
-       and v_source_person_id<>p_person_id
-    then raise exception 'Memory Agent Runtime source conflicts with Person target'; end if;
-    if p_business_id is not null
-       and v_source_business_id is not null
-       and v_source_business_id<>p_business_id
-    then raise exception 'Memory Agent Runtime source conflicts with Business target'; end if;
-  elsif v_type='SYSTEM_DERIVED' then
+  elsif v_type in ('AGENT_RUNTIME','SYSTEM_DERIVED') then
     if upper(btrim(coalesce(p_actor_type,'')))<>'SYSTEM' or p_actor_user_id is not null then
       raise exception 'System Memory source requires SYSTEM actor';
     end if;
     if p_source_evidence='{}'::jsonb then
-      raise exception 'System Memory source requires evidence';
+      raise exception 'System/Agent Memory source requires evidence';
     end if;
   else
     raise exception 'Memory source type is invalid';
