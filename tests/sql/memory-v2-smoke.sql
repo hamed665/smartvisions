@@ -78,6 +78,19 @@ insert into public.crm_person_business_relationships(
   id,organization_id,person_id,business_id,relationship_type,job_title,
   verification_method,source_ref,evidence,status
 ) values (
+  '00000000-0000-0000-0000-00000000f852',
+  '00000000-0000-0000-0000-00000000f801',
+  '00000000-0000-0000-0000-00000000f842',
+  '00000000-0000-0000-0000-00000000f822',
+  'CONTACT',null,'MANUAL_CONFIRMED','memory-ci-relationship-2',
+  '{"fixture":true}'::jsonb,'ACTIVE'
+)
+on conflict (id) do nothing;
+
+insert into public.crm_person_business_relationships(
+  id,organization_id,person_id,business_id,relationship_type,job_title,
+  verification_method,source_ref,evidence,status
+) values (
   '00000000-0000-0000-0000-00000000f851',
   '00000000-0000-0000-0000-00000000f801',
   '00000000-0000-0000-0000-00000000f841',
