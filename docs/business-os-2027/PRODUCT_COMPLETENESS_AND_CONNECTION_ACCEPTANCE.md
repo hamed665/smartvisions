@@ -1,3 +1,27 @@
+## AI-AGENT-RUNTIME Production closeout — 2026-10-03
+
+- Work Package: `SECTION BUSINESS_INTELLIGENCE_AI -> AI-AGENT-RUNTIME`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**.
+- PR #431 final head `d487c8f4155091eaa6eeda487ea9c90e0f549963` passed exact-head CI `37116073028` across lint, typecheck, full tests, the complete PostgreSQL 17 migration chain plus AI Agent Runtime smoke, Next build, Vinext and Cloudflare scheduled verification.
+- PR #431 squash-merged to canonical `main@506e6d8176c7aebdd87889aeacd137d29728146e`. Exact-main CI `37116637759` and Cloudflare Production Deploy `37116816918` both succeeded on that exact SHA.
+- Production migration `0186_ai_agent_runtime` is applied exactly once as version `20261003102633`; the final migration blob is `391349a211baaeb9e9790df9b0ebb6784f4ec3da`.
+- The implementation extends the existing canonical Agent pipeline, Context Compiler, `agent_runs`, Tool Action Registry, IAM, Booking runtime, Cost Guard, approval/policy boundaries and audit authority. It did not introduce a second Agent framework, Context Compiler, Tool Registry, policy engine, approval engine, action gateway, provider-send path, payment truth, CRM, Memory, Knowledge, queue/outbox or audit authority.
+- Configured provider execution is bounded to one attempt with zero automatic retries and a maximum 60-second timeout. Provider failure/timeout may fall back once to the deterministic local runtime; specialist failures remain isolated and fail closed.
+- HUMAN takeover, PAUSED Agent mode and global Agents pause stop before Agent execution. Tool proposals remain proposals: only actions explicitly registered for the AI execution surface are considered, unavailable/provider-send/financial/approval-missing/Shadow-Mode mutation proposals fail closed, and even eligible proposals keep `executionAuthorized=false` until the canonical domain gateway authorizes and verifies them.
+- Booking proposals reuse the existing Booking AI/domain runtime rather than creating a second Booking mutation path.
+- Migration 0186 adds tenant-safe composite Agent output/reply provenance, replay-safe persistence and service-role-only SECURITY INVOKER completion/failure RPCs. `authenticated` and `anon` cannot execute trusted persistence; `service_role` has only the table privileges required by the invoker path.
+- PostgreSQL 17 CI now reconstructs the canonical legacy `agent_outputs` / `reply_decisions` authority through a test-only bootstrap before modern migrations. That bootstrap is not a Production migration and does not create a second runtime authority.
+- Production remained side-effect clean through verification: `agent_runs=37`, `agent_outputs=0`, `reply_decisions=0`. No synthetic tenant, customer, conversation, Agent output, reply decision, Booking mutation, provider send or payment evidence was created.
+- Runtime verification confirms the real Production OWNER resolves correctly under the trusted actor-role evaluator. Shadow Mode remains ON, global Kill Switch OFF and Agents pause OFF.
+- Routed Production smoke after the exact-main deploy resolves both `/agents` and `/founder` through the deployed Cloudflare Worker to the authenticated login boundary when unauthenticated.
+- Fresh post-0186 advisor comparison shows no tracked regression: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`. Generic `unused_index=447` remains INFO and includes zero-workload indexes.
+
+**Fresh continuation cursor:** `SECTION BUSINESS_INTELLIGENCE_AI -> AI-MODEL-PROMPT-CONTROL`.
+
+Before mutation, fresh-audit the existing Prompt Registry/versioning, `agent_settings`, current model router, Cost Guard, runtime fallback behavior, active prompt publishing/rollback, Shadow/canary controls and evaluation evidence. AI-MODEL-PROMPT-CONTROL must govern those existing authorities rather than create a second Prompt Registry, model router, Cost Guard, Agent framework or rollout authority.
+
+---
+
 ## AI-CONTEXT-COMPILER Production closeout — 2026-10-03
 
 - Work Package: `SECTION BUSINESS_INTELLIGENCE_AI -> AI-CONTEXT-COMPILER`.
