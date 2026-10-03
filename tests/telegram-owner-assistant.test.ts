@@ -101,7 +101,7 @@ describe('Telegram owner assistant safety boundaries', () => {
   it('treats canonical HOT conversation state as a first-class owner alert', () => {
     const context: AgentContext = { message: 'Sounds good', stage: 'HOT' };
     const trace: PipelineTrace = {
-      routedAgents: [], agentResults: [],
+      routedAgents: [], disabledAgents: [], agentResults: [], agentExecutions: [], toolProposals: [],
       decision: { action: 'ANSWER', useDiscount: false, explainValue: true, askLowPressureCta: false, requiresHuman: false, reasons: [] },
       guardrails: [], handoffReasons: [], relevancePassed: true, delivery: 'REVIEW', catalogRecommendation: null,
     };
@@ -131,6 +131,9 @@ describe('Telegram owner assistant safety boundaries', () => {
     };
     const trace: PipelineTrace = {
       routedAgents: ['intent_discovery','secretary'],
+      disabledAgents: [],
+      agentExecutions: [],
+      toolProposals: [],
       agentResults: [
         { agent: 'intent_discovery', confidence: 0.95, summary: '', data: { requested_price: 150 }, evidence: [], blockers: [] },
         { agent: 'secretary', confidence: 0.95, summary: '', data: { operator_persian_summary: 'مشتری قیمت پایین‌تر می‌خواهد.', operator_persian_intent: 'تخفیف' }, evidence: [], blockers: [] },

@@ -160,6 +160,7 @@ describe('AI-CONTEXT-COMPILER', () => {
     const system = projectPermissionContext({});
     expect(system).toEqual({
       actorType: 'SYSTEM',
+      targetScope: {},
       scopeAssignments: [],
       source: 'IAM_CANONICAL',
       runtimeAuthorizationRequired: true,
@@ -225,6 +226,7 @@ describe('AI-CONTEXT-COMPILER', () => {
       },
       permissionContext: {
         actorType: 'SYSTEM',
+        targetScope: {},
         scopeAssignments: [],
         source: 'IAM_CANONICAL',
         runtimeAuthorizationRequired: true,
@@ -243,6 +245,9 @@ describe('AI-CONTEXT-COMPILER', () => {
         verifierKey: 'BOOKING_STATE',
         availability: 'AVAILABLE',
         requiredWorkPackages: [],
+        providerSend: false,
+        paymentExecution: false,
+        shadowMutationBlocked: true,
         runtimeAuthorizationRequired: true,
       }],
       contextEvidence: buildContextEvidenceManifest([{ authority: 'MEMORY', count: 20 }]),

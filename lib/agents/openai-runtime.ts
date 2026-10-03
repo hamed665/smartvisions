@@ -19,8 +19,12 @@ function withOwnerMarketStyle(context: AgentContext): AgentContext {
 }
 
 export class OpenAIResponsesAgentRuntime extends CoreOpenAIResponsesAgentRuntime {
-  override async run(agent: AgentName, context: AgentContext): Promise<AgentResult> {
-    return super.run(agent, withOwnerMarketStyle(context));
+  override async run(
+    agent: AgentName,
+    context: AgentContext,
+    options?: { signal?: AbortSignal },
+  ): Promise<AgentResult> {
+    return super.run(agent, withOwnerMarketStyle(context), options);
   }
 }
 

@@ -262,13 +262,26 @@ export type ToolAvailabilitySnapshot = {
   verifierKey: string;
   availability: string;
   requiredWorkPackages: string[];
+  providerSend: boolean;
+  paymentExecution: boolean;
+  shadowMutationBlocked: boolean;
   runtimeAuthorizationRequired: true;
+};
+
+export type PermissionTargetScope = {
+  brandId?: string;
+  tenantBusinessId?: string;
+  branchId?: string;
+  departmentId?: string;
+  teamId?: string;
 };
 
 export type PermissionContextSnapshot = {
   actorType: 'SYSTEM' | 'USER';
   userId?: string;
   organizationRole?: string;
+  effectiveRole?: string;
+  targetScope: PermissionTargetScope;
   scopeAssignments: Array<{
     id: string;
     scopeType: string;
@@ -281,6 +294,50 @@ export type PermissionContextSnapshot = {
   }>;
   source: 'IAM_CANONICAL';
   runtimeAuthorizationRequired: true;
+};
+
+export type AgentExecutionAttempt = {
+  runtime: 'configured_provider' | 'deterministic_local';
+  outcome: 'SUCCEEDED' | 'FAILED' | 'TIMED_OUT';
+  automaticRetries: 0;
+  error?: string;
+};
+
+export type AgentExecutionTrace = {
+  agent: AgentName;
+  attempts: AgentExecutionAttempt[];
+  finalRuntime?: AgentExecutionAttempt['runtime'];
+  fallbackUsed: boolean;
+  failedClosed: boolean;
+};
+
+export type AgentToolProposal = {
+  actionKey: string;
+  proposedBy: AgentName;
+  input: Record<string, unknown>;
+  mutation: boolean;
+  approvalEvidence?: {
+    approved: boolean;
+    approvalId?: string;
+  };
+};
+
+export type ToolProposalDecision = {
+  status:
+    | 'ELIGIBLE_FOR_DOMAIN_GATE'
+    | 'REJECTED_NOT_REGISTERED'
+    | 'REJECTED_UNAVAILABLE'
+    | 'REJECTED_PROVIDER_SEND'
+    | 'REJECTED_FINANCIAL_EXECUTION'
+    | 'REJECTED_APPROVAL_REQUIRED'
+    | 'REJECTED_SHADOW_MODE';
+  reasons: string[];
+  executionAuthorized: false;
+};
+
+export type ToolProposalTrace = {
+  proposal: AgentToolProposal;
+  decision: ToolProposalDecision;
 };
 
 export type ContextEvidenceSource = {
@@ -365,7 +422,10 @@ export type PipelineTrace = {
   estimatedLlmCalls?: number;
   paidAgentCallsPlanned?: number;
   routedAgents: AgentName[];
+  disabledAgents: AgentName[];
   agentResults: AgentResult[];
+  agentExecutions: AgentExecutionTrace[];
+  toolProposals: ToolProposalTrace[];
   decision: CommercialDecision;
   guardrails: string[];
   handoffReasons: string[];

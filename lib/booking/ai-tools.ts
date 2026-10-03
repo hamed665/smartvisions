@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AgentResult } from '@/lib/agents/contracts';
+import type { AgentResult, AgentToolProposal } from '@/lib/agents/contracts';
 
 export type BookingAiProposalAction =
   | 'NONE'
@@ -46,7 +46,10 @@ const ACTION_KEY: Record<Exclude<BookingAiProposalAction,'NONE'>, string> = {
   DEPOSIT_REQUIREMENT: 'BOOKING_DEPOSIT_REQUIREMENT',
 };
 
-const MUTATIONS = new Set<BookingAiProposalAction>(['CREATE','RESCHEDULE','CANCEL','SCHEDULE_REMINDER']);
+const MUTATIONS = new Set<BookingAiProposalAction>(['CREATE','RESCHEDULE','CANCEL','SCHEDULE_REMINDER','ESCALATE']);
+const ACTION_BY_KEY = Object.fromEntries(
+  Object.entries(ACTION_KEY).map(([action, actionKey]) => [actionKey, action]),
+) as Record<string, Exclude<BookingAiProposalAction, 'NONE'>>;
 const EXPLICIT_REQUEST_ACTIONS = new Set<BookingAiProposalAction>(['CREATE','RESCHEDULE','CANCEL','SCHEDULE_REMINDER']);
 
 function record(value: unknown): Record<string, unknown> {
@@ -89,6 +92,52 @@ export function extractBookingAiProposal(results: AgentResult[]): BookingAiPropo
     to: optional(input.to,80),
     reminderAt: optional(input.reminderAt,80),
     reason: optional(input.reason,500),
+    explicitCustomerRequest: input.explicitCustomerRequest === true,
+  };
+}
+
+export function bookingProposalToAgentToolProposal(
+  proposal: BookingAiProposal | null,
+): AgentToolProposal | null {
+  if (!proposal || proposal.action === 'NONE') return null;
+  const actionKey = ACTION_KEY[proposal.action];
+  return {
+    actionKey,
+    proposedBy: 'decision_orchestrator',
+    mutation: MUTATIONS.has(proposal.action),
+    input: {
+      action: proposal.action,
+      ...(proposal.serviceId ? { serviceId: proposal.serviceId } : {}),
+      ...(proposal.bookingId ? { bookingId: proposal.bookingId } : {}),
+      ...(proposal.branchId ? { branchId: proposal.branchId } : {}),
+      ...(proposal.startsAt ? { startsAt: proposal.startsAt } : {}),
+      ...(proposal.from ? { from: proposal.from } : {}),
+      ...(proposal.to ? { to: proposal.to } : {}),
+      ...(proposal.reminderAt ? { reminderAt: proposal.reminderAt } : {}),
+      ...(proposal.reason ? { reason: proposal.reason } : {}),
+      explicitCustomerRequest: proposal.explicitCustomerRequest,
+    },
+  };
+}
+
+export function agentToolProposalToBookingProposal(
+  proposal: AgentToolProposal,
+): BookingAiProposal | null {
+  const action = ACTION_BY_KEY[proposal.actionKey];
+  if (!action || proposal.proposedBy !== 'decision_orchestrator') return null;
+  const input = record(proposal.input);
+  const declaredAction = String(input.action ?? action).trim().toUpperCase();
+  if (declaredAction !== action) return null;
+  return {
+    action,
+    serviceId: optional(input.serviceId, 120),
+    bookingId: optional(input.bookingId, 80),
+    branchId: optional(input.branchId, 80),
+    startsAt: optional(input.startsAt, 80),
+    from: optional(input.from, 80),
+    to: optional(input.to, 80),
+    reminderAt: optional(input.reminderAt, 80),
+    reason: optional(input.reason, 500),
     explicitCustomerRequest: input.explicitCustomerRequest === true,
   };
 }
