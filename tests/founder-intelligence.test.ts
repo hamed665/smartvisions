@@ -156,6 +156,8 @@ describe('Founder intelligence evidence boundary', () => {
     expect(payload.operatingMode).toBe('SHADOW');
     expect(payload.sales.qualifiedLeads).toBe(4);
     expect(payload.evidence.map((item) => item.authority)).toContain('CRM_PIPELINE');
+    expect(payload.investorReadiness.mode).toBe('READ_ONLY_EVIDENCE');
+    expect(payload.investorReadiness.items.find((item) => item.key === 'COMPANY_FINANCIALS')?.state).toBe('MISSING');
     expect(payload).not.toHaveProperty('rawRows');
   });
 });
