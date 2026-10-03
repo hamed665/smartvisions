@@ -60,7 +60,11 @@ describe('Founder intelligence evidence boundary', () => {
       raw: {
         question_kind: 'NEXT',
         answer: 'Focus on converting the qualified pipeline.',
-        facts: ['4 qualified leads', '0 won leads'],
+        facts: [
+          { text: '4 qualified leads', authority: 'CRM_PIPELINE' },
+          { text: '0 won leads', authority: 'CRM_PIPELINE' },
+          { text: 'Market size is huge', authority: 'INVENTED_WEB_SOURCE' },
+        ],
         gaps: [],
         next_action: 'Review qualified leads.',
         kpi: 'Observed won lead count.',
@@ -72,6 +76,10 @@ describe('Founder intelligence evidence boundary', () => {
     });
 
     expect(result.mode).toBe('READ_ONLY_ANALYSIS');
+    expect(result.facts).toEqual([
+      { text: '4 qualified leads', authority: 'CRM_PIPELINE' },
+      { text: '0 won leads', authority: 'CRM_PIPELINE' },
+    ]);
     expect(result.evidenceAuthorities).toEqual(['CRM_PIPELINE']);
     expect(result.evidenceAuthorities).not.toContain('INVENTED_WEB_SOURCE');
     expect(result.generatedAt).toBe('2026-10-03T10:01:00.000Z');
@@ -83,7 +91,7 @@ describe('Founder intelligence evidence boundary', () => {
       raw: {
         question_kind: 'INVESTOR',
         answer: 'External investor evidence is missing.',
-        facts: ['No payment transactions are recorded in this snapshot.'],
+        facts: [{ text: 'The snapshot has canonical pipeline evidence.', authority: 'CRM_PIPELINE' }],
         gaps: ['Investor pipeline', 'Runway', 'External market benchmark'],
         next_action: 'Collect the missing evidence.',
         kpi: 'Investor readiness evidence coverage.',
@@ -95,6 +103,37 @@ describe('Founder intelligence evidence boundary', () => {
 
     expect(result.confidence).toBe('MEDIUM');
     expect(result.gaps).toHaveLength(3);
+  });
+
+  it('drops facts that cite missing or unverified evidence authorities', () => {
+    const result = parseFounderIntelligence({
+      status: {
+        ...status,
+        evidence: [
+          ...status.evidence,
+          { authority: 'EXTERNAL_MARKET', quality: 'MISSING' },
+        ],
+      },
+      raw: {
+        question_kind: 'MARKET',
+        answer: 'External market evidence is missing.',
+        facts: [
+          { text: '12 leads are present in the canonical pipeline.', authority: 'CRM_PIPELINE' },
+          { text: 'The market is worth 10B.', authority: 'EXTERNAL_MARKET' },
+        ],
+        gaps: ['Governed external market research'],
+        next_action: 'Collect external market evidence.',
+        kpi: 'Verified market sources.',
+        risks: [],
+        evidence_authorities: ['CRM_PIPELINE', 'EXTERNAL_MARKET'],
+        confidence: 'HIGH',
+      },
+    });
+
+    expect(result.facts).toEqual([
+      { text: '12 leads are present in the canonical pipeline.', authority: 'CRM_PIPELINE' },
+    ]);
+    expect(result.evidenceAuthorities).toEqual(['CRM_PIPELINE']);
   });
 
   it('bounds conversational history and drops malformed turns', () => {
