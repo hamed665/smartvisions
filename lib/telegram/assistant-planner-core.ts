@@ -52,12 +52,12 @@ export function hasExplicitMutationIntent(input: string) {
   return explicitMutation.test(input);
 }
 
-export function redactOwnerAssistantContext(input: string) {
+export function redactOwnerAssistantContext(input: string, maxChars = 4_000) {
   return input
     .replace(/\b\d{6,}:[A-Za-z0-9_-]{20,}\b/g, '[REDACTED_BOT_TOKEN]')
     .replace(/\beyJ[A-Za-z0-9_-]{20,}(?:\.[A-Za-z0-9_-]{10,}){1,2}\b/g, '[REDACTED_JWT]')
     .replace(/((?:api[_ -]?key|secret|token|password|authorization|رمز|توکن|کلید)\s*[:=]?\s*)\S+/gi, '$1[REDACTED]')
-    .slice(0, 4_000);
+    .slice(0, Math.min(Math.max(maxChars, 500), 16_000));
 }
 
 export function parseOwnerAssistantPlan(raw: RawOwnerAssistantPlan, originalInput: string): OwnerAssistantPlan {
