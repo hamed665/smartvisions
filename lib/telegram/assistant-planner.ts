@@ -7,7 +7,7 @@ import {
   type OwnerAssistantPlan,
   type RawOwnerAssistantPlan,
 } from './assistant-planner-core';
-import { runOwnerJsonModel } from '@/lib/founder/model-gateway';
+import { runOwnerJsonModel } from '@/lib/ai/owner-model-gateway';
 
 const schema = {
   type: 'object',
