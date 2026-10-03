@@ -62,6 +62,11 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
     markNotificationRead:'SPECIALIZED:AUTOMATION_NOTIFICATIONS',
     acknowledgeNotification:'SPECIALIZED:AUTOMATION_NOTIFICATIONS',
   },
+  'app/owner-copilot-actions.ts': {
+    createOwnerCopilotTask:'SPECIALIZED:OWNER_COPILOT_ACTION_AUTHORITY',
+    updateOwnerCopilotTask:'SPECIALIZED:OWNER_COPILOT_ACTION_AUTHORITY',
+    updateOwnerCopilotDeal:'SPECIALIZED:OWNER_COPILOT_ACTION_AUTHORITY',
+  },
   'app/management-actions.ts': {
     updateSystemControls:'SPECIALIZED:SAFE_CONTROLS',
     createCampaign:'campaign.create', updateCampaign:'campaign.update', updateOutreachPolicy:'outreach.update',
