@@ -18,6 +18,7 @@ import {
   projectBusinessTwinContext,
   projectCustomerContext,
   projectMemoryContext,
+  projectPermissionContext,
   projectToolAvailability,
 } from './context-compiler';
 
@@ -73,6 +74,8 @@ export type HydratedRuntimeEvidence = {
   customerRelationshipCount: number;
   businessTwinSchemaVersion?: number;
   toolContractVersions: Record<string, number>;
+  permissionActorType: 'SYSTEM' | 'USER';
+  permissionScopeCount: number;
   contextEvidence: ContextEvidenceManifest;
 };
 
@@ -80,6 +83,7 @@ export async function hydrateAgentContext(input: {
   supabase: SupabaseClient;
   context: AgentContext;
   trustedConversationId?: string;
+  actorUserId?: string;
 }): Promise<{ context: AgentContext; evidence: HydratedRuntimeEvidence }> {
   const { supabase } = input;
   const base = input.context;
@@ -163,6 +167,8 @@ export async function hydrateAgentContext(input: {
     customerPersonResult,
     customerRelationshipsResult,
     toolRegistryResult,
+    membershipResult,
+    scopeAssignmentsResult,
   ] = await Promise.all([
     authoritativeLeadId && conversationId && conversationChannel
       ? supabase
@@ -264,6 +270,23 @@ export async function hydrateAgentContext(input: {
       .select('action_key,tool_key,authority_key,contract_version,permission_key,scope_type,cost_class,side_effect_class,approval_requirement,approval_policy_key,verifier_key,availability,required_work_packages')
       .order('action_key', { ascending: true })
       .limit(32),
+    input.actorUserId
+      ? supabase
+        .from('organization_members')
+        .select('organization_id,user_id,role')
+        .eq('organization_id', organizationId)
+        .eq('user_id', input.actorUserId)
+        .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    input.actorUserId
+      ? supabase
+        .from('member_scope_assignments')
+        .select('id,scope_type,role,brand_id,tenant_business_id,branch_id,department_id,team_id')
+        .eq('organization_id', organizationId)
+        .eq('user_id', input.actorUserId)
+        .order('scope_type', { ascending: true })
+        .limit(16)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   const firstError = [
@@ -281,6 +304,8 @@ export async function hydrateAgentContext(input: {
     customerPersonResult,
     customerRelationshipsResult,
     toolRegistryResult,
+    membershipResult,
+    scopeAssignmentsResult,
   ]
     .map((result) => result.error)
     .find(Boolean);
@@ -324,6 +349,11 @@ export async function hydrateAgentContext(input: {
   const toolAvailability = projectToolAvailability(
     (toolRegistryResult.data ?? []) as Array<Record<string, unknown>>,
   );
+  const permissionContext = projectPermissionContext({
+    actorUserId: input.actorUserId,
+    membership: membershipResult.data as Record<string, unknown> | null,
+    scopeAssignments: (scopeAssignmentsResult.data ?? []) as Array<Record<string, unknown>>,
+  });
 
   const activePrompts: Partial<Record<AgentName, ActivePromptSnapshot>> = {};
   for (const row of (promptsResult.data ?? []) as Array<Record<string, unknown>>) {
@@ -507,6 +537,15 @@ export async function hydrateAgentContext(input: {
       count: toolAvailability.length,
       refs: toolAvailability.map((item) => item.permissionKey),
     },
+    {
+      authority: 'IAM_PERMISSION_CONTEXT',
+      count: permissionContext.scopeAssignments.length,
+      refs: [
+        permissionContext.actorType,
+        permissionContext.organizationRole ?? '',
+        ...(permissionContext.userId ? [permissionContext.userId] : []),
+      ],
+    },
   ]);
 
   return {
@@ -527,6 +566,7 @@ export async function hydrateAgentContext(input: {
       memoryContext,
       businessTwinContext,
       toolAvailability,
+      permissionContext,
       contextEvidence,
       activePrompts,
       agentSettings,
@@ -554,6 +594,8 @@ export async function hydrateAgentContext(input: {
       customerRelationshipCount: customerContext?.relationships.length ?? 0,
       businessTwinSchemaVersion: businessTwinContext?.schemaVersion,
       toolContractVersions,
+      permissionActorType: permissionContext.actorType,
+      permissionScopeCount: permissionContext.scopeAssignments.length,
       contextEvidence,
     },
   };
