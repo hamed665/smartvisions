@@ -107,6 +107,12 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
     createFounderInvestorPipelineEntry:'SPECIALIZED:FOUNDER_INVESTOR',
     moveFounderInvestorDealStage:'SPECIALIZED:FOUNDER_INVESTOR',
   },
+  'app/founder/strategy-actions.ts': {
+    saveFounderStrategicGoal:'SPECIALIZED:FOUNDER_STRATEGY',
+    saveFounderKeyResult:'SPECIALIZED:FOUNDER_STRATEGY',
+    saveFounderMarketResearchItem:'SPECIALIZED:FOUNDER_STRATEGY',
+    saveFounderBoardReport:'SPECIALIZED:FOUNDER_STRATEGY',
+  },
   'app/growth-opportunity-actions.ts': {
     routeCachedGrowthOpportunities:'growth.rescore', recordGrowthSocialAssessment:'growth.social_review', promoteHighPrecisionGrowthCandidates:'growth.promote',
   },
@@ -229,6 +235,10 @@ describe('Control Center ↔ Telegram action coverage', () => {
     expect(CLASSIFICATION['app/founder/investor-actions.ts'].confirmFounderInvestorCandidateToCrm).toBe('SPECIALIZED:FOUNDER_INVESTOR');
     expect(CLASSIFICATION['app/founder/investor-actions.ts'].createFounderInvestorPipelineEntry).toBe('SPECIALIZED:FOUNDER_INVESTOR');
     expect(CLASSIFICATION['app/founder/investor-actions.ts'].moveFounderInvestorDealStage).toBe('SPECIALIZED:FOUNDER_INVESTOR');
+    expect(CLASSIFICATION['app/founder/strategy-actions.ts'].saveFounderStrategicGoal).toBe('SPECIALIZED:FOUNDER_STRATEGY');
+    expect(CLASSIFICATION['app/founder/strategy-actions.ts'].saveFounderKeyResult).toBe('SPECIALIZED:FOUNDER_STRATEGY');
+    expect(CLASSIFICATION['app/founder/strategy-actions.ts'].saveFounderMarketResearchItem).toBe('SPECIALIZED:FOUNDER_STRATEGY');
+    expect(CLASSIFICATION['app/founder/strategy-actions.ts'].saveFounderBoardReport).toBe('SPECIALIZED:FOUNDER_STRATEGY');
     expect(CLASSIFICATION['app/booking/availability-actions.ts'].configureBookingAvailabilityCalendar).toBe('SPECIALIZED:BOOKING_AVAILABILITY');
     expect(CLASSIFICATION['app/booking/availability-actions.ts'].createBookingAvailabilityHold).toBe('SPECIALIZED:BOOKING_AVAILABILITY');
     expect(CLASSIFICATION['app/booking/availability-actions.ts'].releaseBookingAvailabilityHold).toBe('SPECIALIZED:BOOKING_AVAILABILITY');
