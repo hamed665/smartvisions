@@ -195,6 +195,29 @@ begin
     raise exception 'Memory Business target is invalid';
   end if;
 
+  if p_person_id is not null and p_business_id is not null
+     and not exists(
+       select 1
+       from public.crm_person_business_relationships r
+       where r.organization_id=p_organization_id
+         and r.person_id=p_person_id
+         and r.business_id=p_business_id
+         and r.status='ACTIVE'
+     )
+     and not exists(
+       select 1
+       from public.sales_conversations c
+       join public.leads l
+         on l.organization_id=c.organization_id and l.id=c.lead_id
+       where c.organization_id=p_organization_id
+         and c.person_id=p_person_id
+         and l.business_id=p_business_id
+         and (p_conversation_id is null or c.id=p_conversation_id)
+     )
+  then
+    raise exception 'Memory Person/Business target requires canonical relationship evidence';
+  end if;
+
   if p_conversation_id is not null then
     select c.person_id,l.business_id
       into v_conversation_person_id,v_conversation_business_id
