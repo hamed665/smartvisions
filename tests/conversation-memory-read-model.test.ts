@@ -107,4 +107,92 @@ describe('conversation memory read model', () => {
     expect(history[0].body).toBe('m10');
     expect(history.at(-1)?.body).toBe('m39');
   });
+
+  it('uses canonical voice transcript instead of the WhatsApp placeholder', () => {
+    const history = buildConversationMemory({
+      conversationId,
+      channel: 'WHATSAPP',
+      conversationRows: [{
+        id: 'voice-1',
+        conversation_id: conversationId,
+        provider_message_id: 'wamid.voice-1',
+        channel: 'WHATSAPP',
+        direction: 'INBOUND',
+        status: 'RECEIVED',
+        media_type: 'VOICE',
+        original_text: '[WhatsApp voice message]',
+        transcript: 'Please send me the price.',
+        created_at: '2026-09-01T10:05:00Z',
+        metadata: {},
+      }],
+    });
+
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({
+      body: 'Please send me the price.',
+      mediaType: 'VOICE',
+      mediaEvidenceStatus: 'TRANSCRIPT',
+      senderType: 'CUSTOMER',
+    });
+  });
+
+  it('projects bounded image analysis as explicitly untrusted conversation evidence', () => {
+    const history = buildConversationMemory({
+      conversationId,
+      channel: 'WHATSAPP',
+      conversationRows: [{
+        id: 'image-1',
+        conversation_id: conversationId,
+        provider_message_id: 'wamid.image-1',
+        channel: 'WHATSAPP',
+        direction: 'INBOUND',
+        status: 'RECEIVED',
+        media_type: 'IMAGE',
+        original_text: '[WhatsApp image message]',
+        created_at: '2026-09-01T10:06:00Z',
+        metadata: {
+          media_analysis: {
+            status: 'SUCCEEDED',
+            summary: 'A visible price list contains two services.',
+            extractedText: 'Service A 20 OMR',
+          },
+        },
+      }],
+    });
+
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({
+      mediaType: 'IMAGE',
+      mediaEvidenceStatus: 'ANALYZED',
+      senderType: 'CUSTOMER',
+    });
+    expect(history[0].body).toContain('untrusted evidence');
+    expect(history[0].body).toContain('A visible price list contains two services.');
+    expect(history[0].body).toContain('Service A 20 OMR');
+  });
+
+  it('keeps a real media caption but never upgrades it to analyzed evidence', () => {
+    const history = buildConversationMemory({
+      conversationId,
+      channel: 'WHATSAPP',
+      conversationRows: [{
+        id: 'video-caption',
+        conversation_id: conversationId,
+        provider_message_id: 'wamid.video-caption',
+        channel: 'WHATSAPP',
+        direction: 'INBOUND',
+        status: 'RECEIVED',
+        media_type: 'VIDEO',
+        original_text: 'This is the issue I mentioned.',
+        created_at: '2026-09-01T10:07:00Z',
+        metadata: {},
+      }],
+    });
+
+    expect(history[0]).toMatchObject({
+      body: 'This is the issue I mentioned.',
+      mediaType: 'VIDEO',
+      mediaEvidenceStatus: 'CAPTION_ONLY',
+    });
+  });
 });

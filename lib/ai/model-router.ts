@@ -1,6 +1,6 @@
 import type { BudgetMode, CostGuardSettings } from '@/lib/reliability/cost-guard';
 
-export type AiTaskClass = 'CLASSIFY' | 'TRANSLATE' | 'SUMMARIZE' | 'TRANSCRIBE' | 'REPLY' | 'NEGOTIATE' | 'PROPOSAL' | 'CLOSING' | 'OWNER_ASSISTANT' | 'OWNER_ANALYSIS';
+export type AiTaskClass = 'CLASSIFY' | 'TRANSLATE' | 'SUMMARIZE' | 'TRANSCRIBE' | 'MEDIA_UNDERSTANDING' | 'REPLY' | 'NEGOTIATE' | 'PROPOSAL' | 'CLOSING' | 'OWNER_ASSISTANT' | 'OWNER_ANALYSIS';
 
 export type ModelRoute = {
   tier: 'LOW_COST' | 'HIGH_REASONING';

@@ -12,6 +12,7 @@ import { humanHandoffReasons, persistHumanHandoff, shouldPersistHumanHandoff } f
 import { evaluateAiRunQuota, getCostGuardState } from '@/lib/reliability/cost-guard';
 import { assertRuntimeControlsAllow, getRuntimeSafetyControls } from '@/lib/reliability/runtime-safety';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
+import { prepareLatestInboundMediaForAi } from '@/lib/media/preprocess';
 import { notifyTelegramOwner } from '@/lib/telegram/notifications';
 import { buildSalesTelegramAlert } from '@/lib/telegram/sales-alerts';
 import {
@@ -170,6 +171,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'WhatsApp delivery evidence lookup failed' }, { status: 409 });
   }
 
+  let preparedConversationId = deliveryContext?.conversationId
+    ?? requestedDeliveryContext?.conversationId
+    ?? canonicalUuid(trustedContext.conversationId);
+  try {
+    const mediaPreparation = await prepareLatestInboundMediaForAi({
+      organizationId,
+      conversationId: preparedConversationId ?? undefined,
+      leadId: trustedContext.leadId,
+      signal: request.signal,
+    });
+    preparedConversationId = mediaPreparation.conversationId ?? preparedConversationId;
+  } catch (error) {
+    return NextResponse.json({
+      error: error instanceof Error ? error.message : 'Inbound media evidence is not ready for AI processing',
+      automaticRetry: false,
+    }, { status: 409 });
+  }
+
   const reconcileApproval = async (result: unknown) => {
     if (!deliveryContext) return undefined;
     if (!isAgentShadowResult(result)) {
@@ -277,7 +296,7 @@ export async function POST(request: Request) {
     const hydrated = await hydrateAgentContext({
       supabase,
       context: trustedContext,
-      trustedConversationId: deliveryContext?.conversationId ?? requestedDeliveryContext?.conversationId,
+      trustedConversationId: preparedConversationId ?? undefined,
       actorUserId,
     });
     effectiveContext = { ...hydrated.context, shadowMode: controls.shadow_mode };

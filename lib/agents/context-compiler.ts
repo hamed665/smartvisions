@@ -3,6 +3,7 @@ import type {
   ContextEvidenceManifest,
   ContextEvidenceSource,
   CustomerContextSnapshot,
+  MediaContextSnapshot,
   MemoryContextSnapshot,
   PermissionContextSnapshot,
   ToolAvailabilitySnapshot,
@@ -34,6 +35,74 @@ export function boundedContextValue(value: unknown, depth = 0): unknown {
       .slice(0, 20)
       .map((key) => [key, boundedContextValue(source[key], depth + 1)]),
   );
+}
+
+export function projectMediaContext(rows: Array<Record<string, unknown>>): MediaContextSnapshot[] {
+  const items = rows.flatMap((row): MediaContextSnapshot[] => {
+    if (clip(row.direction, 20).toUpperCase() !== 'INBOUND') return [];
+    const mediaType = clip(row.media_type, 40).toUpperCase();
+    if (!['VOICE','AUDIO','IMAGE','VIDEO','DOCUMENT','OTHER'].includes(mediaType)) return [];
+
+    const metadata = record(row.metadata) ?? {};
+    const analysis = record(metadata.media_analysis) ?? {};
+    const analysisStatus = clip(analysis.status, 40).toUpperCase();
+    const originalText = clip(row.original_text, 600);
+    const isPlaceholder = /^\[WhatsApp (?:voice|audio|image|video|document|other) message\]$/i.test(originalText);
+    const caption = originalText && !isPlaceholder ? originalText : '';
+    const transcript = clip(row.transcript, 3600);
+    const mimeType = clip(metadata.mime_type, 120);
+    const detectedLanguage = clip(analysis.detectedLanguage, 40);
+    const confidence = finiteNumber(analysis.confidence);
+    const analysisVersion = finiteNumber(analysis.schemaVersion);
+
+    if ((mediaType === 'VOICE' || mediaType === 'AUDIO') && transcript) {
+      return [{
+        mediaType: mediaType as MediaContextSnapshot['mediaType'],
+        ...(mimeType ? { mimeType } : {}),
+        ...(caption ? { caption } : {}),
+        transcript,
+        ...(detectedLanguage ? { detectedLanguage } : {}),
+        status: 'TRANSCRIPT',
+        source: 'CANONICAL_CONVERSATION_MESSAGE',
+        trust: 'UNTRUSTED_CUSTOMER_EVIDENCE',
+        ...(analysisVersion == null ? {} : { analysisVersion }),
+      }];
+    }
+
+    if (analysisStatus === 'SUCCEEDED') {
+      const summary = clip(analysis.summary, 1400);
+      const extractedText = clip(analysis.extractedText, 1800);
+      if (!summary && !extractedText && !caption) return [];
+      return [{
+        mediaType: mediaType as MediaContextSnapshot['mediaType'],
+        ...(mimeType ? { mimeType } : {}),
+        ...(caption ? { caption } : {}),
+        ...(summary ? { summary } : {}),
+        ...(extractedText ? { extractedText } : {}),
+        ...(detectedLanguage ? { detectedLanguage } : {}),
+        ...(confidence == null ? {} : { confidence: Math.max(0, Math.min(1, confidence)) }),
+        status: 'ANALYZED',
+        source: 'CANONICAL_CONVERSATION_MESSAGE',
+        trust: 'UNTRUSTED_CUSTOMER_EVIDENCE',
+        ...(analysisVersion == null ? {} : { analysisVersion }),
+      }];
+    }
+
+    if (caption) {
+      return [{
+        mediaType: mediaType as MediaContextSnapshot['mediaType'],
+        ...(mimeType ? { mimeType } : {}),
+        caption,
+        status: 'CAPTION_ONLY',
+        source: 'CANONICAL_CONVERSATION_MESSAGE',
+        trust: 'UNTRUSTED_CUSTOMER_EVIDENCE',
+      }];
+    }
+
+    return [];
+  });
+
+  return items.slice(0, 8).reverse();
 }
 
 export function projectCustomerContext(input: {

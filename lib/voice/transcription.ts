@@ -111,6 +111,41 @@ function cachedResult(row: VoiceTranscriptionRow): VoiceTranscriptionResult {
   };
 }
 
+async function projectCanonicalVoiceTranscript(input: {
+  organizationId: string;
+  providerMessageId: string;
+  conversationId?: string | null;
+  transcriptionId: string;
+  transcript: string;
+  detectedLanguage?: string | null;
+}) {
+  const supabase = serviceClient();
+  const { error } = await supabase.rpc('persist_conversation_voice_transcript', {
+    p_organization_id: input.organizationId,
+    p_provider_message_id: input.providerMessageId,
+    p_conversation_id: input.conversationId ?? null,
+    p_transcription_id: input.transcriptionId,
+    p_transcript: input.transcript,
+    p_detected_language: input.detectedLanguage ?? null,
+    p_model: TRANSCRIPTION_MODEL,
+  });
+  if (error) throw new Error(`Canonical voice transcript projection failed: ${error.message}`);
+}
+
+async function cachedResultWithProjection(row: VoiceTranscriptionRow) {
+  if (row.status === 'SUCCEEDED' && row.transcript) {
+    await projectCanonicalVoiceTranscript({
+      organizationId: row.organization_id,
+      providerMessageId: row.provider_message_id,
+      conversationId: row.conversation_id,
+      transcriptionId: row.id,
+      transcript: row.transcript,
+      detectedLanguage: row.detected_language,
+    });
+  }
+  return cachedResult(row);
+}
+
 async function reclaimCached(row: VoiceTranscriptionRow) {
   const supabase = serviceClient();
   const now = new Date().toISOString();
@@ -189,12 +224,12 @@ export async function transcribeWhatsAppVoiceOnce(input: {
   let row: VoiceTranscriptionRow | null = null;
   if (cached) {
     if (voiceCacheAction(cached.status, cached.updated_at, Date.now(), cached.error_message) === 'RETURN') {
-      return cachedResult(cached);
+      return await cachedResultWithProjection(cached);
     }
     row = await reclaimCached(cached);
     if (!row) {
       const raced = await findCached(input.organizationId, input.providerMessageId, input.mediaId);
-      if (raced) return cachedResult(raced);
+      if (raced) return await cachedResultWithProjection(raced);
       throw new Error('Voice cache retry reservation was lost');
     }
   }
@@ -228,7 +263,7 @@ export async function transcribeWhatsAppVoiceOnce(input: {
     if (insert.error) {
       if (insert.error.code === '23505') {
         const raced = await findCached(input.organizationId, input.providerMessageId, input.mediaId);
-        if (raced) return cachedResult(raced);
+        if (raced) return await cachedResultWithProjection(raced);
       }
       throw new Error(`Voice cache reservation failed: ${insert.error.message}`);
     }
@@ -269,6 +304,15 @@ export async function transcribeWhatsAppVoiceOnce(input: {
         pricing_status: 'CONSERVATIVE_MAX_DURATION_ESTIMATE',
         max_voice_seconds: costState.settings.max_voice_seconds,
       },
+    });
+
+    await projectCanonicalVoiceTranscript({
+      organizationId: input.organizationId,
+      providerMessageId: input.providerMessageId,
+      conversationId: input.conversationId,
+      transcriptionId: row.id,
+      transcript: transcription.text,
+      detectedLanguage: transcription.language,
     });
 
     return {

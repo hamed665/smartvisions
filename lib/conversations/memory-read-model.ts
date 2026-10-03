@@ -22,6 +22,7 @@ export type ConversationMemoryRow = {
   channel?: string | null;
   direction?: string | null;
   status?: string | null;
+  media_type?: string | null;
   original_text?: string | null;
   transcript?: string | null;
   sent_at?: string | null;
@@ -76,6 +77,71 @@ function itemKey(item: ConversationMemoryItem) {
   return provider ? `provider:${provider}` : `${item.source ?? 'UNKNOWN'}:${item.sourceId ?? ''}`;
 }
 
+function mediaType(value: unknown): ConversationMemoryItem['mediaType'] | undefined {
+  const normalized = text(value, 40).toUpperCase();
+  return ['TEXT','VOICE','AUDIO','IMAGE','VIDEO','DOCUMENT','OTHER'].includes(normalized)
+    ? normalized as ConversationMemoryItem['mediaType']
+    : undefined;
+}
+
+function mediaPlaceholder(value: string) {
+  return /^\[WhatsApp (?:voice|audio|image|video|document|other) message\]$/i.test(value.trim());
+}
+
+function conversationRowBody(row: ConversationMemoryRow) {
+  const kind = mediaType(row.media_type);
+  const original = text(row.original_text, 1800);
+  const transcript = text(row.transcript, 12000);
+
+  if ((kind === 'VOICE' || kind === 'AUDIO') && transcript) {
+    return {
+      body: transcript.slice(0, 3600),
+      mediaType: kind,
+      mediaEvidenceStatus: 'TRANSCRIPT' as const,
+    };
+  }
+
+  const analysis = record(record(row.metadata).media_analysis);
+  if (text(analysis.status, 40).toUpperCase() === 'SUCCEEDED') {
+    const summary = text(analysis.summary, 1400);
+    const extracted = text(analysis.extractedText, 1800);
+    const caption = original && !mediaPlaceholder(original) ? original : '';
+    const parts = [
+      caption,
+      summary ? `Customer ${String(kind ?? 'MEDIA').toLowerCase()} analysis (untrusted evidence): ${summary}` : '',
+      extracted ? `Extracted text (untrusted evidence): ${extracted}` : '',
+    ].filter(Boolean);
+    if (parts.length) {
+      return {
+        body: parts.join('\n').slice(0, 3600),
+        mediaType: kind,
+        mediaEvidenceStatus: 'ANALYZED' as const,
+      };
+    }
+  }
+
+  if (kind && kind !== 'TEXT') {
+    if (original && !mediaPlaceholder(original)) {
+      return {
+        body: original,
+        mediaType: kind,
+        mediaEvidenceStatus: 'CAPTION_ONLY' as const,
+      };
+    }
+    return {
+      body: original || transcript,
+      mediaType: kind,
+      mediaEvidenceStatus: 'UNAVAILABLE' as const,
+    };
+  }
+
+  return {
+    body: original || transcript,
+    mediaType: kind,
+    mediaEvidenceStatus: undefined,
+  };
+}
+
 export function buildConversationMemory(input: {
   conversationId: string;
   channel?: string;
@@ -114,8 +180,8 @@ export function buildConversationMemory(input: {
     if (text(row.conversation_id, 80) !== conversationId) continue;
     const rowChannel = text(row.channel, 40).toUpperCase();
     if (channel && rowChannel !== channel) continue;
-    const body = text(row.original_text ?? row.transcript);
-    if (!body) continue;
+    const projected = conversationRowBody(row);
+    if (!projected.body) continue;
     const direction = String(row.direction).toUpperCase() === 'INBOUND' ? 'INBOUND' : 'OUTBOUND';
     candidates.push({
       sourceId: text(row.id, 80) || undefined,
@@ -126,7 +192,9 @@ export function buildConversationMemory(input: {
       direction,
       channel: rowChannel || undefined,
       status: direction === 'INBOUND' ? 'RECEIVED' : 'SENT',
-      body,
+      mediaType: projected.mediaType,
+      mediaEvidenceStatus: projected.mediaEvidenceStatus,
+      body: projected.body,
       at: text(row.sent_at ?? row.created_at, 80) || undefined,
     });
   }
