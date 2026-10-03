@@ -20,6 +20,7 @@ type MemoryRow={
   state:string;
   source_type:string;
   source_ref:string;
+  source_evidence:Record<string,unknown>;
   confidence:number;
   observed_at:string;
   fresh_until:string|null;
@@ -63,7 +64,7 @@ export default async function MemoryPage(){
 
   const [memoryResult,peopleResult,businessResult,conversationResult]=await Promise.all([
     supabase.from('memory_items')
-      .select('id,memory_key,memory_type,version,payload,state,source_type,source_ref,confidence,observed_at,fresh_until,sensitivity,valid_from,valid_until,expires_at,person_id,business_id,conversation_id,supersedes_memory_id,correction_reason,retrieval_enabled,created_at')
+      .select('id,memory_key,memory_type,version,payload,state,source_type,source_ref,source_evidence,confidence,observed_at,fresh_until,sensitivity,valid_from,valid_until,expires_at,person_id,business_id,conversation_id,supersedes_memory_id,correction_reason,retrieval_enabled,created_at')
       .eq('organization_id',organizationId)
       .order('created_at',{ascending:false})
       .limit(200),
@@ -146,6 +147,8 @@ export default async function MemoryPage(){
             <strong>{row.memory_key}</strong>
             <span className="muted smallText">{row.memory_type} · v{row.version} · confidence {Number(row.confidence).toFixed(2)} · {row.source_type} · target {row.conversation_id?'conversation':row.person_id?'person':row.business_id?'business':'organization'}</span>
             <pre className="knowledgeText">{textPayload(row.payload)}</pre>
+            <span className="muted smallText">Source ref: {row.source_ref}</span>
+            <details><summary>Source evidence</summary><pre className="knowledgeText">{JSON.stringify(row.source_evidence??{},null,2)}</pre></details>
           </div>
           <div>
             <form action={approveMemoryItemV2}><input type="hidden" name="memory_id" value={row.id}/><button>Approve</button></form>
@@ -168,7 +171,8 @@ export default async function MemoryPage(){
               {row.memory_type} · v{row.version} · {freshness(row)} · {effectiveState(row)} · {row.sensitivity} · confidence {Number(row.confidence).toFixed(2)} · target {row.conversation_id?'conversation':row.person_id?'person':row.business_id?'business':'organization'}
             </span>
             <pre className="knowledgeText">{textPayload(row.payload)}</pre>
-            <span className="muted smallText">Source: {row.source_type} · observed {row.observed_at}</span>
+            <span className="muted smallText">Source: {row.source_type} · {row.source_ref} · observed {row.observed_at}</span>
+            <details><summary>Source evidence</summary><pre className="knowledgeText">{JSON.stringify(row.source_evidence??{},null,2)}</pre></details>
           </div>
           <div>
             <details>
