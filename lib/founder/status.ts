@@ -132,7 +132,15 @@ function evidence(input: FounderStatusInput): FounderEvidenceSource[] {
 
 function attention(input: FounderStatusInput, unhealthyEnabledIntegrations: number): FounderAttentionItem[] {
   const items: FounderAttentionItem[] = [];
-  if (input.controls?.globalKillSwitch) {
+  if (!input.controls) {
+    items.push({
+      key: 'runtime-controls-missing',
+      level: 'BLOCKED',
+      title: 'Runtime control evidence is missing',
+      detail: 'Founder Status cannot infer autonomous runtime state without canonical system_controls evidence. The status therefore fails closed.',
+      evidence: ['SYSTEM_CONTROLS'],
+    });
+  } else if (input.controls.globalKillSwitch) {
     items.push({
       key: 'kill-switch',
       level: 'BLOCKED',
@@ -234,13 +242,15 @@ export function buildFounderStatusV1(input: FounderStatusInput): FounderStatusSn
     ? Number(((monthSpendUsd / normalizedBudget) * 100).toFixed(2))
     : null;
 
-  const operatingMode = input.controls?.globalKillSwitch
-    ? 'KILL_SWITCH'
-    : input.controls?.agentsPaused
-      ? 'AGENTS_PAUSED'
-      : input.controls?.shadowMode
-        ? 'SHADOW'
-        : 'LIVE';
+  const operatingMode = !input.controls
+    ? 'UNKNOWN'
+    : input.controls.globalKillSwitch
+      ? 'KILL_SWITCH'
+      : input.controls.agentsPaused
+        ? 'AGENTS_PAUSED'
+        : input.controls.shadowMode
+          ? 'SHADOW'
+          : 'LIVE';
 
   return {
     schemaVersion: 1,
