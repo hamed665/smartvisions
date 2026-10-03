@@ -43,7 +43,11 @@ describe('KNOWLEDGE-V2 architecture',()=>{
   });
 
   it('supports bounded website, PDF, DOCX and canonical Catalog ingestion without copying execution authorities',()=>{
-    expect(ingestion).toContain('fetchWebsiteKnowledge');
+    expect(ingestion).toContain('crawlWebsiteKnowledge');
+    expect(ingestion).toContain('new Crawl4AiAuditor');
+    expect(ingestion).toContain('KNOWLEDGE_CRAWL4AI_NOT_CONFIGURED');
+    expect(ingestion).not.toContain('export async function fetchWebsiteKnowledge');
+    expect(actions).toContain("provider:'CRAWL4AI'");
     expect(ingestion).toContain('PDF_TEXT_EXTRACTION_EMPTY_OR_SCANNED');
     expect(ingestion).toContain('extractDocx');
     expect(ingestion).toContain('MAX_SOURCE_BYTES=5*1024*1024');
