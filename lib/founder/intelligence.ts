@@ -9,7 +9,7 @@ import {
   type RawFounderIntelligence,
 } from './intelligence-core';
 import type { FounderStatusSnapshotV1 } from './contracts';
-import { runOwnerJsonModel } from './model-gateway';
+import { runOwnerJsonModel } from '@/lib/ai/owner-model-gateway';
 
 const schema = {
   type: 'object',
