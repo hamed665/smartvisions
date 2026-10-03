@@ -114,8 +114,7 @@ export default async function FounderPage() {
       </div>
       <p className="muted smallText">
         Missing company financials, external market research, fundraising structure or investor-pipeline
-        evidence stays explicitly missing until a governed authority is connected. Humanity has produced
-        enough pitch decks with imaginary traction already.
+        evidence stays explicitly missing until a governed authority is connected.
       </p>
     </section>
 
