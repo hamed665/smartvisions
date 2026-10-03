@@ -10,11 +10,16 @@ export type FounderQuestionKind =
   | 'RISK'
   | 'GENERAL';
 
+export type FounderGroundedFact = {
+  text: string;
+  authority: string;
+};
+
 export type FounderIntelligenceResult = {
   mode: 'READ_ONLY_ANALYSIS';
   questionKind: FounderQuestionKind;
   answer: string;
-  facts: string[];
+  facts: FounderGroundedFact[];
   gaps: string[];
   nextAction: string;
   kpi: string;
@@ -66,6 +71,38 @@ function list(value: unknown, maxItems: number, maxChars: number) {
   )].slice(0, maxItems);
 }
 
+function verifiedAuthorities(status: FounderStatusSnapshotV1) {
+  return new Set(
+    status.evidence
+      .filter((source) => source.quality === 'VERIFIED')
+      .map((source) => source.authority),
+  );
+}
+
+function groundedFacts(
+  value: unknown,
+  status: FounderStatusSnapshotV1,
+  maxItems = 8,
+): FounderGroundedFact[] {
+  if (!Array.isArray(value)) return [];
+  const allowed = verifiedAuthorities(status);
+  const seen = new Set<string>();
+  const facts: FounderGroundedFact[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const row = item as Record<string, unknown>;
+    const factText = text(row.text, 400);
+    const authority = text(row.authority, 80);
+    if (!factText || !allowed.has(authority)) continue;
+    const key = `${authority}\u0000${factText}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    facts.push({ text: factText, authority });
+    if (facts.length >= maxItems) break;
+  }
+  return facts;
+}
+
 export function normalizeFounderHistory(value: unknown): FounderConversationTurn[] {
   if (!Array.isArray(value)) return [];
   const turns: FounderConversationTurn[] = [];
@@ -100,17 +137,23 @@ export function parseFounderIntelligence(input: {
 }): FounderIntelligenceResult {
   const rawKind = text(input.raw.question_kind, 20).toUpperCase() as FounderQuestionKind;
   const questionKind = KINDS.has(rawKind) ? rawKind : 'GENERAL';
-  const allowedAuthorities = new Set(input.status.evidence.map((source) => source.authority));
-  const requestedAuthorities = list(input.raw.evidence_authorities, 12, 80);
-  const evidenceAuthorities = requestedAuthorities.filter((authority) => allowedAuthorities.has(authority));
+  const allowedAuthorities = verifiedAuthorities(input.status);
+  const requestedAuthorities = list(input.raw.evidence_authorities, 12, 80)
+    .filter((authority) => allowedAuthorities.has(authority));
+  const facts = groundedFacts(input.raw.facts, input.status);
+  const evidenceAuthorities = [...new Set([
+    ...facts.map((fact) => fact.authority),
+    ...requestedAuthorities,
+  ])];
 
   const confidenceRaw = text(input.raw.confidence, 12).toUpperCase();
   let confidence: FounderIntelligenceResult['confidence'] =
     confidenceRaw === 'HIGH' || confidenceRaw === 'MEDIUM' ? confidenceRaw : 'LOW';
 
   const gaps = list(input.raw.gaps, 8, 400);
-  const facts = list(input.raw.facts, 8, 400);
-  if (!evidenceAuthorities.length || gaps.length > facts.length) confidence = confidence === 'HIGH' ? 'MEDIUM' : confidence;
+  if (!facts.length || !evidenceAuthorities.length || gaps.length > facts.length) {
+    confidence = confidence === 'HIGH' ? 'MEDIUM' : confidence;
+  }
 
   return {
     mode: 'READ_ONLY_ANALYSIS',
