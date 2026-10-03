@@ -6,6 +6,7 @@ import {
   normalizeFounderHistory,
   parseFounderIntelligence,
 } from '@/lib/founder/intelligence-core';
+import { needsLiveFounderResearch } from '@/lib/founder/intelligence';
 
 const status: FounderStatusSnapshotV1 = {
   schemaVersion: 1,
@@ -65,6 +66,7 @@ describe('Founder intelligence evidence boundary', () => {
           { text: '0 won leads', authority: 'CRM_PIPELINE' },
           { text: 'Market size is huge', authority: 'INVENTED_WEB_SOURCE' },
         ],
+        external_facts: [],
         gaps: [],
         next_action: 'Review qualified leads.',
         kpi: 'Observed won lead count.',
@@ -91,6 +93,7 @@ describe('Founder intelligence evidence boundary', () => {
         question_kind: 'INVESTOR',
         answer: 'External investor evidence is missing.',
         facts: [{ text: 'The snapshot has canonical pipeline evidence.', authority: 'CRM_PIPELINE' }],
+        external_facts: [],
         gaps: ['Investor pipeline', 'Runway', 'External market benchmark'],
         next_action: 'Collect the missing evidence.',
         kpi: 'Investor readiness evidence coverage.',
@@ -119,6 +122,7 @@ describe('Founder intelligence evidence boundary', () => {
           { text: '12 leads are present in the canonical pipeline.', authority: 'CRM_PIPELINE' },
           { text: 'The market is worth 10B.', authority: 'EXTERNAL_MARKET' },
         ],
+        external_facts: [],
         gaps: ['Governed external market research'],
         next_action: 'Collect external market evidence.',
         kpi: 'Verified market sources.',
@@ -131,6 +135,47 @@ describe('Founder intelligence evidence boundary', () => {
       { text: '12 leads are present in the canonical pipeline.', authority: 'CRM_PIPELINE' },
     ]);
     expect(result.evidenceAuthorities).toEqual(['CRM_PIPELINE']);
+  });
+
+  it('accepts only web facts whose URL was actually returned by live research', () => {
+    const result = parseFounderIntelligence({
+      status,
+      webSources: [
+        { url: 'https://example.com/market-report', title: 'Market report' },
+        { url: 'https://competitor.example/pricing', title: 'Competitor pricing' },
+      ],
+      raw: {
+        question_kind: 'MARKET',
+        answer: 'The retrieved sources support two current market observations.',
+        facts: [],
+        external_facts: [
+          { text: 'A current market report exists.', source_url: 'https://example.com/market-report#section' },
+          { text: 'Competitor pricing is published.', source_url: 'https://competitor.example/pricing/' },
+          { text: 'Invented market claim.', source_url: 'https://invented.example/fake' },
+        ],
+        gaps: [],
+        next_action: 'Compare the cited market evidence with Smart Visions positioning.',
+        kpi: 'Verified external sources used.',
+        risks: ['External sources can change.'],
+        confidence: 'HIGH',
+      },
+    });
+
+    expect(result.researchMode).toBe('LIVE_WEB');
+    expect(result.externalFacts).toEqual([
+      { text: 'A current market report exists.', sourceUrl: 'https://example.com/market-report' },
+      { text: 'Competitor pricing is published.', sourceUrl: 'https://competitor.example/pricing' },
+    ]);
+    expect(result.externalSources).toHaveLength(2);
+    expect(result.confidence).toBe('HIGH');
+  });
+
+  it('routes only current external-research questions to live web mode', () => {
+    expect(needsLiveFounderResearch('بازار AI customer service عمان الان چه وضعیه؟')).toBe(true);
+    expect(needsLiveFounderResearch('قیمت رقبا در عمان چنده؟')).toBe(true);
+    expect(needsLiveFounderResearch('latest competitor pricing in Oman')).toBe(true);
+    expect(needsLiveFounderResearch('الان چند lead داریم؟')).toBe(false);
+    expect(needsLiveFounderResearch('مهم‌ترین اقدام بعدی چیست؟')).toBe(false);
   });
 
   it('bounds conversational history and drops malformed turns', () => {
