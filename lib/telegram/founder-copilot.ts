@@ -15,7 +15,7 @@ function record(value: unknown): Record<string, unknown> {
 
 function historicalQuestion(value: unknown) {
   return String(value ?? '')
-    .replace(/^\/founder(?:@[A-Za-z0-9_]+)?\s*/i, '')
+    .replace(/^\/(?:founder|investor)(?:@[A-Za-z0-9_]+)?\s*/i, '')
     .trim()
     .slice(0, 1_200);
 }

@@ -75,6 +75,7 @@ export async function analyzeFounderQuestion(input: {
     'Every FACT must be returned as {text, authority}. authority must name one VERIFIED FOUNDER_STATUS.evidence.authority that directly supports that fact. Unsupported statements belong in GAPS, not FACTS.',
     'Every factual numeric claim must be directly supported by FOUNDER_STATUS. Never invent revenue, MRR, ARR, customers, traction, conversion, runway, valuation, market size, competitor pricing, investor interest, or external events.',
     'Distinguish FACTS from GAPS. A zero database count is an observed record count, not proof that a business activity never happened elsewhere.',
+    'FOUNDER_STATUS.investorReadiness is a deterministic evidence checklist derived only from canonical Founder Status. Treat PRESENT/PARTIAL/MISSING as evidence coverage, not a valuation, fundraising recommendation, or probability of raising capital.',
     'For current market, competitor, investor, regulation, benchmark, TAM/SAM/SOM or external pricing questions, explicitly mark the missing external research evidence. Do not substitute model memory.',
     'For a recommendation, explain what is supported, what is missing, the next bounded action, one measurable KPI, and material risks.',
     'If runtime controls are UNKNOWN, KILL_SWITCH, or AGENTS_PAUSED, say so when operational execution is relevant.',

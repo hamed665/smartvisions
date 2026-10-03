@@ -76,6 +76,13 @@ describe('Telegram owner assistant safety boundaries', () => {
     expect(strategic.type).toBe('HELP');
     expect(shouldRouteToFounderIntelligence('برای جذب سرمایه الان چه شواهدی کم داریم؟', strategic)).toBe(true);
 
+    const investor = parseTelegramOwnerCommand('/investor');
+    expect(investor).toMatchObject({ type: 'FOUNDER_ASK' });
+    if (investor.type === 'FOUNDER_ASK') {
+      expect(investor.question).toContain('آمادگی جذب سرمایه');
+    }
+    expect(shouldRouteToFounderIntelligence('/investor', investor)).toBe(true);
+
     const ordinaryHelp = parseTelegramOwnerCommand('/help');
     expect(shouldRouteToFounderIntelligence('/help', ordinaryHelp)).toBe(false);
     const directPrice = parseTelegramOwnerCommand('/price OM business_website 189');

@@ -1,4 +1,5 @@
 import type { FounderStatusSnapshotV1 } from './contracts';
+import { buildFounderInvestorReadinessV1 } from './investor-readiness';
 
 export type FounderQuestionKind =
   | 'STATUS'
@@ -126,6 +127,7 @@ export function founderStatusModelPayload(status: FounderStatusSnapshotV1) {
     finance: status.finance,
     attention: status.attention,
     evidence: status.evidence,
+    investorReadiness: buildFounderInvestorReadinessV1(status),
   };
 }
 
