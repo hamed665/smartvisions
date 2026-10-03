@@ -992,7 +992,7 @@ as $memory_context$
       'BUSINESS',1,
       jsonb_build_object(
         'name',b.name,'countryCode',b.country_code,
-        'category',b.category,'accountLifecycle',b.account_lifecycle
+        'accountLifecycle',b.account_lifecycle
       ),
       'CRM_BUSINESS',b.id::text,
       jsonb_build_object('canonicalTable','businesses','sourceManaged',true),
