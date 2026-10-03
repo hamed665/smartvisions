@@ -85,6 +85,7 @@ on conflict (id) do nothing;
 -- the exact minimum Production privileges required by SECURITY INVOKER RPCs.
 grant select, update on table public.conversation_messages to service_role;
 grant insert on table public.audit_logs to service_role;
+grant select, update on table public.conversation_messages to authenticated;
 
 set role service_role;
 
