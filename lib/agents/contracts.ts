@@ -190,6 +190,110 @@ export type MarketLocaleStyleSnapshot = {
   maxReplyWords?: number;
 };
 
+export type CustomerContextSnapshot = {
+  person?: {
+    id: string;
+    displayName?: string;
+    status?: string;
+  };
+  relationships: Array<{
+    id: string;
+    businessId: string;
+    relationshipType?: string;
+    jobTitle?: string;
+    verificationMethod?: string;
+    status?: string;
+  }>;
+};
+
+export type MemoryContextSnapshot = {
+  key: string;
+  type: string;
+  version: number;
+  payload: unknown;
+  sourceType: string;
+  sourceRef: string;
+  sourceEvidence?: Record<string, unknown>;
+  confidence?: number;
+  observedAt?: string;
+  freshUntil?: string;
+  freshnessState?: string;
+  sensitivity?: string;
+  validFrom?: string;
+  validUntil?: string;
+  expiresAt?: string;
+  validityState?: string;
+  correctionSemantics?: string;
+  memoryId?: string;
+  personId?: string;
+  businessId?: string;
+  conversationId?: string;
+};
+
+export type BusinessTwinContextSnapshot = {
+  schemaVersion?: number;
+  authority?: string;
+  organization?: {
+    id?: string;
+    name?: string;
+    brandName?: string;
+  };
+  policyConfiguration: Array<{
+    scopeType: string;
+    key: string;
+    value: unknown;
+    version?: number;
+  }>;
+  sourceSummary: Record<string, number>;
+};
+
+export type ToolAvailabilitySnapshot = {
+  actionKey: string;
+  toolKey: string;
+  authorityKey: string;
+  contractVersion: number;
+  permissionKey: string;
+  scopeType: string;
+  costClass: string;
+  sideEffectClass: string;
+  approvalRequirement: string;
+  approvalPolicyKey?: string;
+  verifierKey: string;
+  availability: string;
+  requiredWorkPackages: string[];
+  runtimeAuthorizationRequired: true;
+};
+
+export type PermissionContextSnapshot = {
+  actorType: 'SYSTEM' | 'USER';
+  userId?: string;
+  organizationRole?: string;
+  scopeAssignments: Array<{
+    id: string;
+    scopeType: string;
+    role: string;
+    brandId?: string;
+    tenantBusinessId?: string;
+    branchId?: string;
+    departmentId?: string;
+    teamId?: string;
+  }>;
+  source: 'IAM_CANONICAL';
+  runtimeAuthorizationRequired: true;
+};
+
+export type ContextEvidenceSource = {
+  authority: string;
+  count?: number;
+  version?: number | string;
+  refs?: string[];
+};
+
+export type ContextEvidenceManifest = {
+  schemaVersion: 1;
+  sources: ContextEvidenceSource[];
+};
+
 export type AgentCollaboration = {
   specialistResults?: AgentResult[];
   orchestratorResult?: AgentResult | null;
@@ -215,6 +319,12 @@ export type AgentContext = {
   knowledgeContext?: KnowledgeSnapshot[];
   serviceKnowledge?: ServiceKnowledgeSnapshot[];
   bookingContext?: BookingContextSnapshot;
+  customerContext?: CustomerContextSnapshot;
+  memoryContext?: MemoryContextSnapshot[];
+  businessTwinContext?: BusinessTwinContextSnapshot;
+  toolAvailability?: ToolAvailabilitySnapshot[];
+  permissionContext?: PermissionContextSnapshot;
+  contextEvidence?: ContextEvidenceManifest;
   activePrompts?: Partial<Record<AgentName, ActivePromptSnapshot>>;
   agentSettings?: Partial<Record<AgentName, AgentSettingSnapshot>>;
   collaboration?: AgentCollaboration;

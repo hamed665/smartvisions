@@ -5,6 +5,7 @@ import { hydrateAgentContext as hydrateCore, type HydratedRuntimeEvidence } from
 import { isRejectedCanonicalService } from '@/lib/conversations/service-key';
 import { persistConversationSalesState } from '@/lib/conversations/sales-state-store';
 import { resolveReplyLanguage } from '@/lib/outreach/locale';
+import { buildContextEvidenceManifest } from './context-compiler';
 
 export type { HydratedRuntimeEvidence } from './context-hydrator-core';
 
@@ -97,6 +98,7 @@ export async function hydrateAgentContext(input: {
   supabase: SupabaseClient;
   context: AgentContext;
   trustedConversationId?: string;
+  actorUserId?: string;
 }) {
   const coreHydrated = await hydrateCore(input);
   if (coreHydrated.context.organizationId && coreHydrated.context.conversationId && coreHydrated.context.salesState) {
@@ -150,6 +152,14 @@ export async function hydrateAgentContext(input: {
       language: replyLanguage,
       dialect: replyDialect,
       marketLocaleStyle,
+      contextEvidence: buildContextEvidenceManifest([
+        ...(hydrated.context.contextEvidence?.sources ?? []),
+        {
+          authority: 'LOCALE_PROFILE',
+          count: 1,
+          refs: [marketLocaleStyle.countryCode, marketLocaleStyle.primaryLocale],
+        },
+      ]),
       knowledgeContext: [
         ...(hydrated.context.knowledgeContext ?? []),
         { key: '_owner_market_style', version: 1, payload: marketLocaleStyle },
