@@ -49,11 +49,25 @@
 - Candidate prompts are staged inactive; governed rollout supports deterministic `OFF / SHADOW / CANARY` selection, bounded canary percentages, explicit promotion/rollback and built-in-baseline reset. Hard runtime policy remains non-overridable.
 - Production RPCs `stage_prompt_version`, `configure_prompt_rollout` and `set_active_prompt_version` are SECURITY INVOKER. `authenticated` can execute them subject to their OWNER checks; `anon` and `service_role` cannot execute them.
 - Production remained synthetic-data clean at closeout verification: `prompt_versions=0`, `agent_settings=10`, `promptControl configs=0`. No fake prompt, rollout, canary traffic or provider evidence was created.
-- Full model-quality datasets, regression/red-team evaluation, confidence/uncertainty, sensitive-data testing and tool/action safety remain the next bounded package rather than being faked inside Prompt Control.
+- Model-quality datasets, regression/red-team evaluation, confidence/uncertainty, sensitive-data testing and tool/action safety were intentionally left outside Prompt Control and are now closed by the canonical `AI-QUALITY-SAFETY` package below.
 
-**Fresh continuation cursor:** `SECTION BUSINESS_INTELLIGENCE_AI -> AI-QUALITY-SAFETY`.
+## AI-QUALITY-SAFETY Production closeout — 2026-10-03
 
-Before mutation, fresh-audit the existing Agent tests/evidence checker, sales-behavior scenarios, Prompt Control deterministic evaluation, Agent Runtime provenance, Knowledge/Memory trust boundaries, PII/sensitive-data handling and Tool Registry/action gates. AI-QUALITY-SAFETY must extend those canonical authorities and test surfaces rather than create a second Agent framework, policy engine, evaluation runtime, Tool Registry, safety gateway or business-truth store.
+- Work Package: `SECTION BUSINESS_INTELLIGENCE_AI -> AI-QUALITY-SAFETY`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**.
+- PR #449 final head `34676c3bf81bd171728365a4a6ed7a9c7c3c99d9` passed exact-head CI `37151742701`, including lint, typecheck, full tests, the complete PostgreSQL 17 migration chain, Next build, Vinext and scheduled-runtime verification.
+- PR #449 squash-merged to canonical `main@d09017f7e629e149d8a9a024f0554d0d63bab988`. Exact-main CI `37151998948` and Cloudflare Production Deploy `37152212083` both succeeded on that exact SHA.
+- The package extends the existing canonical Agent Runtime, Evidence Checker, Prompt Control, sales-policy checks, Context Compiler projections and Tool Registry/action gates. It did not create a second Agent framework, policy engine, evaluation runtime, safety gateway, Tool Registry, provider path, Memory, Knowledge or business-truth store.
+- `AI_QUALITY_SAFETY_V1` adds deterministic PASS / REVIEW / BLOCK trace evidence before customer delivery. Confidential Knowledge/Memory leakage, known internal identifiers, system/owner prompt leakage, provider-secret material, unverified provider commitments, unsupported monetary claims, sensitive-trait inference and critical evidence failures block delivery. Unsupported absolute guarantees, confidence gaps and rejected tool proposals force review rather than silently auto-send.
+- Provider-bound Agent context is minimized before paid model calls: internal IDs are removed from customer/permission projections and secret-like keys/values are redacted. Prompt Control also blocks candidate prompts containing provider-secret-like material.
+- A versioned controlled red-team/evaluation dataset covers prompt injection, confidentiality, internal identifiers, system-prompt leakage, overclaiming, confidence/evidence gaps and tool/action safety across English, Arabic and Persian cases. Local verification passed 34/34 targeted tests and the full suite passed 250 files / 1656 tests with 0 lint errors and the existing 13 warnings.
+- Quality/Safety evaluation remains non-authoritative for business mutation. It can only block or require review; it never turns a model proposal into execution permission. Canonical permission -> policy -> approval -> domain runtime -> verification -> audit remains unchanged.
+- No schema migration, Production fixture, synthetic customer/conversation/Agent result, provider send, payment execution or Booking mutation was required or created for this package.
+- Cloudflare Production deployment verified the exact merged bundle through release-candidate smoke, controlled SSR load, Worker promotion, route attachment, routed Production smoke and safe API/webhook rejection smoke.
+
+**Fresh continuation cursor:** `SECTION BUSINESS_INTELLIGENCE_AI -> AI-VOICE-VISION`.
+
+Before mutation, fresh-audit the existing OMNI-VOICE foundation, transcription/voice-reply paths, media normalization and download evidence, current image/document handling, consent/recording boundaries, Agent Context Compiler media inputs and provider capabilities. AI-VOICE-VISION must extend those canonical authorities rather than create a second media store, transcription authority, voice-send path, conversation store, Agent framework, Tool Registry or consent model.
 
 ---
 
@@ -1278,8 +1292,8 @@ The following baseline inventory preserves every existing semantic Work Package,
 - `AI-CONTEXT-COMPILER` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**
 - `AI-AGENT-RUNTIME` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** (`0186_ai_agent_runtime@20261003102633`)
 - `AI-MODEL-PROMPT-CONTROL` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** (`0187_ai_model_prompt_control@20261003120749`)
-- `AI-QUALITY-SAFETY` — **NEXT**
-- `AI-VOICE-VISION`
+- `AI-QUALITY-SAFETY` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**
+- `AI-VOICE-VISION` — **NEXT**
 - `AI-OWNER-COPILOT`
 
 ### ANALYTICS_REPORTING — Metrics, attribution and decision support
