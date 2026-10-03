@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { founderOsV1Enabled, loadFounderStatusV1 } from '@/lib/founder/server';
+import { buildFounderInvestorReadinessV1 } from '@/lib/founder/investor-readiness';
 import { FounderAskPanel } from './founder-ask';
 
 export const dynamic = 'force-dynamic';
@@ -25,6 +26,8 @@ export default async function FounderPage() {
     supabase: service,
     organizationId: current.organizationId,
   });
+
+  const investorReadiness = buildFounderInvestorReadinessV1(status);
 
   const productMetrics = [
     ['Operating mode', status.operatingMode],
@@ -83,6 +86,38 @@ export default async function FounderPage() {
     </section>
 
     <FounderAskPanel />
+
+    <section className="panel">
+      <div className="headerRow">
+        <div>
+          <h2>Investor readiness evidence</h2>
+          <p className="muted">
+            Deterministic evidence coverage only. No valuation, raise probability, investor interest,
+            TAM or runway is invented from incomplete records.
+          </p>
+        </div>
+        <span className="status">READ ONLY</span>
+      </div>
+      <div className="settingsList">
+        {investorReadiness.items.map((item) => <div className="settingsRow" key={item.key}>
+          <div>
+            <strong>{item.title}</strong>
+            <span className="muted smallText">{item.detail}</span>
+            {item.authorities.length
+              ? <span className="muted smallText">Evidence: {item.authorities.join(', ')}</span>
+              : null}
+          </div>
+          <span className={item.state === 'MISSING' ? 'status dangerStatus' : 'status'}>
+            {item.state}
+          </span>
+        </div>)}
+      </div>
+      <p className="muted smallText">
+        Missing company financials, external market research, fundraising structure or investor-pipeline
+        evidence stays explicitly missing until a governed authority is connected. Humanity has produced
+        enough pitch decks with imaginary traction already.
+      </p>
+    </section>
 
     <section className="panel">
       <h2>Product & AI</h2>
