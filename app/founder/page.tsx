@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { founderOsV1Enabled, loadFounderStatusV1 } from '@/lib/founder/server';
+import { FounderAskPanel } from './founder-ask';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,6 +81,8 @@ export default async function FounderPage() {
         </div>)}
       </div>
     </section>
+
+    <FounderAskPanel />
 
     <section className="panel">
       <h2>Product & AI</h2>
