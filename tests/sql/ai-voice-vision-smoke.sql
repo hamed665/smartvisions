@@ -81,6 +81,11 @@ insert into public.conversation_messages(
 )
 on conflict (id) do nothing;
 
+-- CI starts after the legacy 0038/0039 service-role grant lineage. Reconstruct
+-- the exact minimum Production privileges required by SECURITY INVOKER RPCs.
+grant select, update on table public.conversation_messages to service_role;
+grant insert on table public.audit_logs to service_role;
+
 set role service_role;
 
 do $claim_and_finalize$
