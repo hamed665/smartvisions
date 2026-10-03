@@ -49,7 +49,7 @@
 - Candidate prompts are staged inactive; governed rollout supports deterministic `OFF / SHADOW / CANARY` selection, bounded canary percentages, explicit promotion/rollback and built-in-baseline reset. Hard runtime policy remains non-overridable.
 - Production RPCs `stage_prompt_version`, `configure_prompt_rollout` and `set_active_prompt_version` are SECURITY INVOKER. `authenticated` can execute them subject to their OWNER checks; `anon` and `service_role` cannot execute them.
 - Production remained synthetic-data clean at closeout verification: `prompt_versions=0`, `agent_settings=10`, `promptControl configs=0`. No fake prompt, rollout, canary traffic or provider evidence was created.
-- Full model-quality datasets, regression/red-team evaluation, confidence/uncertainty, sensitive-data testing and tool/action safety remain the next bounded package rather than being faked inside Prompt Control.
+- Model-quality datasets, regression/red-team evaluation, confidence/uncertainty, sensitive-data testing and tool/action safety were intentionally left outside Prompt Control and are now closed by the canonical `AI-QUALITY-SAFETY` package below.
 
 ## AI-QUALITY-SAFETY Production closeout — 2026-10-03
 
