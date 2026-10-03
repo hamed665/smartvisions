@@ -205,7 +205,6 @@ begin
     raise exception 'Memory approval did not activate retrieval';
   end if;
 
-  declare_scope:
   begin
     select * into stale_candidate from public.stage_memory_item_v2(
       '00000000-0000-0000-0000-00000000f801','USER',
@@ -231,7 +230,7 @@ begin
     if derived_count<>2 then
       raise exception 'Scoped and Organization Memory with same key/type cannot coexist: %',derived_count;
     end if;
-  end declare_scope;
+  end;
 
   begin
     perform public.stage_memory_item_v2(
