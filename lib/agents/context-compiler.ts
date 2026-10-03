@@ -67,13 +67,29 @@ export function projectCustomerContext(input: {
 
 export function projectMemoryContext(rows: Array<Record<string, unknown>>): MemoryContextSnapshot[] {
   return rows
-    .map((row) => {
+    .flatMap((row): MemoryContextSnapshot[] => {
       const key = clip(row.memory_key, 180);
       const type = clip(row.memory_type, 80).toUpperCase();
       const version = finiteNumber(row.version) ?? 0;
-      if (!key || !type || version < 1) return null;
+      if (!key || !type || version < 1) return [];
+
       const sourceEvidence = record(boundedContextValue(row.source_evidence));
-      return {
+      const confidence = finiteNumber(row.confidence);
+      const observedAt = clip(row.observed_at, 80);
+      const freshUntil = clip(row.fresh_until, 80);
+      const freshnessState = clip(row.freshness_state, 40);
+      const sensitivity = clip(row.sensitivity, 40);
+      const validFrom = clip(row.valid_from, 80);
+      const validUntil = clip(row.valid_until, 80);
+      const expiresAt = clip(row.expires_at, 80);
+      const validityState = clip(row.validity_state, 40);
+      const correctionSemantics = clip(row.correction_semantics, 80);
+      const memoryId = clip(row.memory_id, 80);
+      const personId = clip(row.person_id, 80);
+      const businessId = clip(row.business_id, 80);
+      const conversationId = clip(row.conversation_id, 80);
+
+      const item: MemoryContextSnapshot = {
         key,
         type,
         version,
@@ -81,23 +97,23 @@ export function projectMemoryContext(rows: Array<Record<string, unknown>>): Memo
         sourceType: clip(row.source_type, 80),
         sourceRef: clip(row.source_ref, 300),
         ...(sourceEvidence ? { sourceEvidence } : {}),
-        ...(finiteNumber(row.confidence) == null ? {} : { confidence: finiteNumber(row.confidence) }),
-        observedAt: clip(row.observed_at, 80) || undefined,
-        freshUntil: clip(row.fresh_until, 80) || undefined,
-        freshnessState: clip(row.freshness_state, 40) || undefined,
-        sensitivity: clip(row.sensitivity, 40) || undefined,
-        validFrom: clip(row.valid_from, 80) || undefined,
-        validUntil: clip(row.valid_until, 80) || undefined,
-        expiresAt: clip(row.expires_at, 80) || undefined,
-        validityState: clip(row.validity_state, 40) || undefined,
-        correctionSemantics: clip(row.correction_semantics, 80) || undefined,
-        memoryId: clip(row.memory_id, 80) || undefined,
-        personId: clip(row.person_id, 80) || undefined,
-        businessId: clip(row.business_id, 80) || undefined,
-        conversationId: clip(row.conversation_id, 80) || undefined,
-      } satisfies MemoryContextSnapshot;
+        ...(confidence == null ? {} : { confidence }),
+        ...(observedAt ? { observedAt } : {}),
+        ...(freshUntil ? { freshUntil } : {}),
+        ...(freshnessState ? { freshnessState } : {}),
+        ...(sensitivity ? { sensitivity } : {}),
+        ...(validFrom ? { validFrom } : {}),
+        ...(validUntil ? { validUntil } : {}),
+        ...(expiresAt ? { expiresAt } : {}),
+        ...(validityState ? { validityState } : {}),
+        ...(correctionSemantics ? { correctionSemantics } : {}),
+        ...(memoryId ? { memoryId } : {}),
+        ...(personId ? { personId } : {}),
+        ...(businessId ? { businessId } : {}),
+        ...(conversationId ? { conversationId } : {}),
+      };
+      return [item];
     })
-    .filter((item): item is MemoryContextSnapshot => Boolean(item))
     .slice(0, 24);
 }
 
