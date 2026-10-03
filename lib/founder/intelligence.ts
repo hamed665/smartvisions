@@ -4,6 +4,7 @@ import {
   founderStatusModelPayload,
   normalizeFounderHistory,
   parseFounderIntelligence,
+  needsLiveFounderResearch,
   type FounderConversationTurn,
   type FounderIntelligenceResult,
   type RawFounderIntelligence,
@@ -69,9 +70,6 @@ function needsDeepReasoning(question: string) {
   return /(تصمیم|مقایسه|ریسک|سرمایه|invest|valuation|fundrais|pricing|قیمت|استراتژی|strategy|roadmap|چرا|تحلیل|scenario|سناریو)/i.test(question);
 }
 
-export function needsLiveFounderResearch(question: string) {
-  return /(بازار|market|competitor|رقیب|رقبا|benchmark|بنچمارک|tams?|sams?|soms?|market\s*size|اندازه\s*بازار|current\s*pricing|قیمت\s*(?:رقبا|بازار)|pricing\s*(?:competitor|market)|regulation|قانون|مقررات|investor\s*(?:list|search|fund)|سرمایه(?:‌| )?گذار(?:ان)?\s*(?:مناسب|پیدا|لیست)|trend|ترند|اخبار|news)/i.test(question);
-}
 
 export async function analyzeFounderQuestion(input: {
   organizationId: string;
