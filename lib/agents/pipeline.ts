@@ -14,6 +14,7 @@ import { checkRelevance, decideCommercialAction, secretaryCompose } from './exec
 import { draftOffersUnrequestedCustomPreview } from './preview-policy';
 import { deterministicAgentRuntime, executeBoundedAgent, type AgentRuntime } from './runtime';
 import { proposalTrace } from './tool-proposals';
+import { evaluateAgentQualitySafety } from './quality-safety';
 import { canAutoSend, evaluateHandoff } from '@/lib/handoff/policy';
 import { evaluateSalesReplyPolicy, inferSalesHandoffSignals } from '@/lib/conversations/sales-behavior';
 import { resolveSmartVisionsCatalogRecommendation } from '@/lib/whatsapp/catalog';
@@ -261,6 +262,13 @@ export async function processInboundMessage(
   const relevancePassed = deterministicRelevance
     && (!relevanceResult || relevanceResult.blockers.length === 0);
   const humanStyle = checkHumanReplyQuality(draft);
+  const qualitySafety = evaluateAgentQualitySafety({
+    context,
+    draft,
+    agentResults,
+    toolProposals,
+    salesPolicyReasons: salesBehavior.reasons,
+  });
 
   const sendGate = canAutoSend({
     agentMode: handoff.handoff ? 'HUMAN' : context.agentMode,
@@ -283,11 +291,21 @@ export async function processInboundMessage(
   for (const item of toolProposals) {
     if (item.decision.status !== 'ELIGIBLE_FOR_DOMAIN_GATE') guardrails.push(item.decision.status);
   }
+  guardrails.push(...qualitySafety.blockReasons, ...qualitySafety.reviewReasons);
+
   let delivery: PipelineTrace['delivery'];
-  if (!relevancePassed || !routedAgents.includes('secretary')) {
+  if (
+    !relevancePassed
+    || !routedAgents.includes('secretary')
+    || qualitySafety.disposition === 'BLOCK'
+  ) {
     delivery = 'BLOCK';
   } else if (
-    (!humanStyle.passed || bookingToolResult?.requiresReview === true)
+    (
+      !humanStyle.passed
+      || bookingToolResult?.requiresReview === true
+      || qualitySafety.disposition === 'REVIEW'
+    )
     && sendGate.delivery === 'SEND'
   ) {
     delivery = 'REVIEW';
@@ -320,6 +338,7 @@ export async function processInboundMessage(
     delivery,
     catalogRecommendation,
     salesEfficiency: salesBehavior.metrics,
+    qualitySafety,
     ...(bookingToolResult ? { bookingToolResult } : {}),
   };
 

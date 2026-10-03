@@ -421,6 +421,22 @@ export type SalesEfficiencyTrace = {
   qualificationQuestions: string[];
 };
 
+export type QualitySafetyDisposition = 'PASS' | 'REVIEW' | 'BLOCK';
+
+export type QualitySafetyCheck = {
+  key: string;
+  disposition: QualitySafetyDisposition;
+  reasons: string[];
+};
+
+export type QualitySafetyTrace = {
+  version: 'AI_QUALITY_SAFETY_V1';
+  disposition: QualitySafetyDisposition;
+  checks: QualitySafetyCheck[];
+  blockReasons: string[];
+  reviewReasons: string[];
+};
+
 export type PipelineTrace = {
   reasoningTier?: 'ZERO_COST' | 'LIGHT' | 'FULL';
   routeReasons?: string[];
@@ -439,5 +455,6 @@ export type PipelineTrace = {
   delivery: 'SEND' | 'REVIEW' | 'BLOCK';
   catalogRecommendation: CatalogRecommendation | null;
   salesEfficiency?: SalesEfficiencyTrace;
+  qualitySafety?: QualitySafetyTrace;
   bookingToolResult?: Record<string, unknown>;
 };
