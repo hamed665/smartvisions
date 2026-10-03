@@ -107,6 +107,7 @@ jobs:
           if(!['META_WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_PHONE_NUMBER_ID'].some(k=>names.has(k)))missing.push('WhatsApp phone-number ID alias');
           if(missing.length)throw new Error(`${worker} is missing required secret binding name(s): ${missing.join(', ')}`);
           console.log(`${worker}: required provider secret binding names are present; values were not read.`);
+          console.log(`${worker}: Crawl4AI URL binding=${names.has('CRAWL4AI_URL')?'present':'missing (Knowledge website ingestion remains externally blocked)'}.`);
           NODE
           done
           rm -f .*.secret-names.json
