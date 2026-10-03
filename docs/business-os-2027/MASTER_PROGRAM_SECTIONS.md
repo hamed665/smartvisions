@@ -1745,9 +1745,9 @@ Agents never own provider or financial side effects directly.
 
 ## AI-OWNER-COPILOT
 
-**Next Work Package.**
+**Completed: IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED.**
 
-Owner/Admin can ask and, when authorized, act on:
+Owner/Admin can ask across bounded canonical operational evidence and, when explicitly authorized, act on:
 
 - leads;
 - customers;
@@ -1757,14 +1757,14 @@ Owner/Admin can ask and, when authorized, act on:
 - quotes;
 - orders;
 - invoices;
-- payments;
+- internal Payment Intent / refund-request state;
 - team performance;
 - follow-ups;
-- reports;
+- operational reports;
 - campaigns;
 - automations.
 
-Copilot actions still cross Tool Registry -> Policy -> Approval -> Action Gateway -> Verify -> Audit.
+The Production surface is `/copilot` plus `/api/owner-copilot`. Model proposals are never execution authority. Mutations cross the existing Tool Registry -> signed Preview/Confirm -> runtime policy -> canonical domain Action Gateway -> Verify -> Audit path. Direct provider sends and provider charge/refund execution remain outside the Copilot surface. Current Production Shadow Mode remains ON, so confirmed mutations are still policy-gated.
 
 ---
 
