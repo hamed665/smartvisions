@@ -1,3 +1,25 @@
+## FOUNDER-OS V1 Production closeout — 2026-10-03
+
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the OWNER-only Founder evidence/intelligence, Telegram Founder transport and deterministic Investor Readiness V1 scope.
+- PR #433 final head `78db0db4812843f8085855766c83b6d72cf799d4` passed exact-head CI `37117998285`; it squash-merged to `main@aed978717f7c747b7da6a613914ab41951d36413`. Exact-main CI `37118272156` and Cloudflare Production Deploy `37118499395` both succeeded.
+- PR #433 added the feature-flagged OWNER-only `/founder` surface plus read-only `POST /api/founder/ask`. Founder Intelligence uses only the deterministic Founder Status snapshot and bounded conversation history. Model-returned facts must carry one VERIFIED canonical evidence authority; invented, missing or unverified authorities are discarded before presentation.
+- The shared paid owner-model path lives in `lib/ai/owner-model-gateway.ts` and is reused by both Founder and Telegram Owner Copilot. It reuses Runtime Safety, Cost Guard, model routing, OpenAI reservation/settlement accounting and the no-blind-retry rule; paid calls are bounded to a maximum 60-second provider window.
+- After #433 Production verification, Organization-scoped feature flag `FOUNDER_OS_V1=true` was enabled for the real Smart Visions Organization through the existing `feature_flag_overrides` control plane. The mutation was audit-logged as `CONTROL_PLANE_INSERT`; no tenant/customer/provider fixture was created.
+- PR #434 final head `bb4ee8530ab4cbb8588a46f5a3d50f02d9f13bbc` passed exact-head CI `37118919880`; it squash-merged to `main@73f737928469e1a8a4f659c020a9421c509805a2`. Exact-main CI `37119148894` and Cloudflare Production Deploy `37119337901` both succeeded.
+- PR #434 added first-class Telegram Founder transport without a Telegram-specific brain or second memory authority. Explicit `/founder <question>` plus bounded strategic/fundraising/valuation/roadmap natural-language intent reuse canonical Founder Status/Founder Intelligence, the existing Telegram OWNER identity gate and `telegram_command_runs` journal. Founder Telegram history is bounded to three prior completed Founder turns / six conversation messages.
+- `FOUNDER_ASK` is read-only and is not in `MUTATING_COMMANDS`. Existing Telegram safety parsing still wins before Founder routing; all existing Preview/Confirm and canonical mutation authority remains unchanged.
+- PR #435 final head `f1438802344f190a0a6458d8de309402f633e180` passed exact-head CI `37119693841`; it squash-merged to current canonical `main@4378f49e8c347cd6c4aa626a4589db095831b30d`. Exact-main CI `37119906663` and Cloudflare Production Deploy `37120101052` both succeeded.
+- PR #435 added deterministic `FounderInvestorReadinessV1` evidence coverage with `PRESENT / PARTIAL / MISSING` states and no readiness score, valuation score or probability-of-raising claim. Product evidence, sales pipeline, commerce trail and operating controls can be grounded in current canonical authorities; company P&L/burn/runway, external market/TAM/SAM/SOM, fundraising structure/cap table/terms and investor pipeline stay explicitly MISSING until governed authorities exist.
+- Telegram `/investor` is only an alias into the same read-only `FOUNDER_ASK` path; it does not create a second investor agent, investor CRM, valuation engine or execution path.
+- No database migration was required for #433-#435. No synthetic revenue, customer traction, valuation, market size, investor interest, cap table, fundraising terms or investor contact evidence was created.
+- Routed Production verification on current main resolves `/founder` through the Cloudflare Worker to the authenticated login boundary when unauthenticated, and an unauthorized Telegram webhook request fails closed with HTTP 401. `FOUNDER_OS_V1` remains enabled for the Smart Visions Organization.
+
+**Canonical continuation cursor remains:** `SECTION BUSINESS_INTELLIGENCE_AI -> AI-MODEL-PROMPT-CONTROL`.
+
+Before mutation, fresh-audit the existing Prompt Registry/versioning, `agent_settings`, current model router, Cost Guard, runtime fallback behavior, active prompt publishing/rollback, Shadow/canary controls and evaluation evidence. AI-MODEL-PROMPT-CONTROL must govern those existing authorities rather than create a second Prompt Registry, model router, Cost Guard, Agent framework or rollout authority.
+
+---
+
 ## AI-AGENT-RUNTIME Production closeout — 2026-10-03
 
 - Work Package: `SECTION BUSINESS_INTELLIGENCE_AI -> AI-AGENT-RUNTIME`.
