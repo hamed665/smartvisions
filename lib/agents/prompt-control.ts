@@ -1,4 +1,5 @@
 import type { ActivePromptSnapshot } from './contracts';
+import { containsProviderSecretMaterial } from './quality-safety';
 
 export type PromptRolloutMode = 'OFF' | 'SHADOW' | 'CANARY';
 export type PromptEvaluationVerdict = 'PASS' | 'WARN' | 'BLOCK';
@@ -57,6 +58,13 @@ export function evaluatePromptCandidate(rawText: string): PromptEvaluation {
       key: 'CONTROL_CONFLICT',
       level: 'BLOCK',
       detail: 'Candidate contains an instruction that conflicts with higher-priority runtime controls.',
+    });
+  }
+  if (containsProviderSecretMaterial(text)) {
+    checks.push({
+      key: 'SECRET_MATERIAL',
+      level: 'BLOCK',
+      detail: 'Prompt candidate contains provider-secret-like material and cannot be staged for runtime use.',
     });
   }
   if (/\b(guarantee|guaranteed|100%|always works|zero risk)\b/i.test(text)) {
