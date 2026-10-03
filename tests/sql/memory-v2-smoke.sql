@@ -322,6 +322,10 @@ begin
     second_target_candidate.memory_id,'memory-second-target-approve-ci'
   );
 
+  if second_target_active.version<>1 then
+    raise exception 'Second Memory target should start at v1, got %',second_target_active.version;
+  end if;
+
   select count(*) into same_key_active_count
   from public.memory_items
   where organization_id='00000000-0000-0000-0000-00000000f801'
