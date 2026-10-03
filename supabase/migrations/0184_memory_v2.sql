@@ -991,7 +991,7 @@ as $memory_context$
       '_canonical_business:'||b.id::text,
       'BUSINESS',1,
       jsonb_build_object(
-        'name',b.name,'countryCode',b.country_code,'city',b.city,
+        'name',b.name,'countryCode',b.country_code,
         'category',b.category,'accountLifecycle',b.account_lifecycle
       ),
       'CRM_BUSINESS',b.id::text,
