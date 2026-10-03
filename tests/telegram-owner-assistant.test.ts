@@ -83,6 +83,10 @@ describe('Telegram owner assistant safety boundaries', () => {
     }
     expect(shouldRouteToFounderIntelligence('/investor', investor)).toBe(true);
 
+    const marketResearch = parseTelegramOwnerCommand('بازار AI customer service عمان الان چه وضعیه؟');
+    expect(marketResearch.type).toBe('HELP');
+    expect(shouldRouteToFounderIntelligence('بازار AI customer service عمان الان چه وضعیه؟', marketResearch)).toBe(true);
+
     const ordinaryHelp = parseTelegramOwnerCommand('/help');
     expect(shouldRouteToFounderIntelligence('/help', ordinaryHelp)).toBe(false);
     const directPrice = parseTelegramOwnerCommand('/price OM business_website 189');
@@ -104,6 +108,13 @@ describe('Telegram owner assistant safety boundaries', () => {
       facts: [
         { text: '4 qualified leads are recorded.', authority: 'CRM_PIPELINE' },
       ],
+      externalFacts: [
+        { text: 'A current competitor pricing page was retrieved.', sourceUrl: 'https://competitor.example/pricing' },
+      ],
+      externalSources: [
+        { url: 'https://competitor.example/pricing', title: 'Pricing' },
+      ],
+      researchMode: 'LIVE_WEB',
       gaps: ['External market evidence'],
       nextAction: 'Qualified leads را مرور کن.',
       kpi: 'Observed won lead count',
@@ -114,6 +125,8 @@ describe('Telegram owner assistant safety boundaries', () => {
     });
     expect(text).toContain('Founder Copilot · HIGH');
     expect(text).toContain('[CRM_PIPELINE]');
+    expect(text).toContain('شواهد زنده بازار:');
+    expect(text).toContain('https://competitor.example/pricing');
     expect(text).toContain('اقدام بعدی:');
     expect(text).toContain('READ ONLY');
     expect(text).toContain('هیچ تغییری اجرا نشد');
