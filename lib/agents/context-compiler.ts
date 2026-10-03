@@ -168,24 +168,35 @@ export function projectBusinessTwinContext(raw: unknown): BusinessTwinContextSna
 
 export function projectToolAvailability(rows: Array<Record<string, unknown>>): ToolAvailabilitySnapshot[] {
   return rows
-    .map((row) => ({
-      actionKey: clip(row.action_key, 128),
-      toolKey: clip(row.tool_key, 128),
-      authorityKey: clip(row.authority_key, 128),
-      contractVersion: finiteNumber(row.contract_version) ?? 0,
-      permissionKey: clip(row.permission_key, 128),
-      scopeType: clip(row.scope_type, 80),
-      costClass: clip(row.cost_class, 80),
-      sideEffectClass: clip(row.side_effect_class, 80),
-      approvalRequirement: clip(row.approval_requirement, 80),
-      approvalPolicyKey: clip(row.approval_policy_key, 128) || undefined,
-      verifierKey: clip(row.verifier_key, 128),
-      availability: clip(row.availability, 80),
-      requiredWorkPackages: Array.isArray(row.required_work_packages)
-        ? row.required_work_packages.filter((item): item is string => typeof item === 'string').slice(0, 12)
-        : [],
-      runtimeAuthorizationRequired: true as const,
-    }))
+    .flatMap((row): ToolAvailabilitySnapshot[] => {
+      const metadata = record(row.metadata) ?? {};
+      const executionSurfaces = Array.isArray(metadata.executionSurfaces)
+        ? metadata.executionSurfaces
+          .filter((item): item is string => typeof item === 'string')
+          .map((item) => item.trim().toUpperCase())
+        : [];
+      if (!executionSurfaces.includes('AI')) return [];
+
+      return [{
+        actionKey: clip(row.action_key, 128),
+        executionSurface: 'AI',
+        toolKey: clip(row.tool_key, 128),
+        authorityKey: clip(row.authority_key, 128),
+        contractVersion: finiteNumber(row.contract_version) ?? 0,
+        permissionKey: clip(row.permission_key, 128),
+        scopeType: clip(row.scope_type, 80),
+        costClass: clip(row.cost_class, 80),
+        sideEffectClass: clip(row.side_effect_class, 80),
+        approvalRequirement: clip(row.approval_requirement, 80),
+        approvalPolicyKey: clip(row.approval_policy_key, 128) || undefined,
+        verifierKey: clip(row.verifier_key, 128),
+        availability: clip(row.availability, 80),
+        requiredWorkPackages: Array.isArray(row.required_work_packages)
+          ? row.required_work_packages.filter((item): item is string => typeof item === 'string').slice(0, 12)
+          : [],
+        runtimeAuthorizationRequired: true,
+      }];
+    })
     .filter((item) => item.actionKey && item.toolKey && item.contractVersion > 0)
     .sort((a, b) => a.actionKey.localeCompare(b.actionKey))
     .slice(0, 32);
