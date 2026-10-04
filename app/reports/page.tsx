@@ -1,5 +1,3 @@
-[Reading 270 lines from start (total: 270 lines, 0 remaining)]
-
 import Link from 'next/link';
 
 import { loadDataDashboard, type DashboardHistoricalMetric, type DashboardLiveGauge } from '@/lib/analytics/dashboard';
@@ -270,5 +268,3 @@ export default async function ReportsPage({
     </section>
   </section>;
 }
-
-[executed on device: vps-eae2ade9 (4241b720-b387-477b-bb4f-5ea2a25fa2a6)]
