@@ -40,14 +40,15 @@ insert into public.tool_action_registry(
   'EXTERNAL_PROVIDER','NONE',null,
   'PROVIDER_ACCEPTED_INTERNAL_REPORT_ATTACHMENT',
   '{"event":"AUTOMATION_DATA_EXPORT_DELIVERED","entityType":"automation_run","correlationRequired":true}'::jsonb,
-  'AVAILABLE','{}'::text[],
-  'Generate a governed Organization-scoped analytics export and deliver it to the canonical Organization notification email through the existing email provider.',
+  'DEPENDENCY_PENDING',array['DATA-REPORTING']::text[],
+  'Generate a governed Organization-scoped analytics export and deliver it to the canonical Organization notification email through the existing email provider. Publication remains blocked until DATA-REPORTING supplies the canonical recurring schedule producer.',
   '{
     "evidence":["metric_registry_current_v1","analytics_warehouse_facts","automation_runs","provider message receipt"],
     "providerSend":true,
     "recipientAuthority":"organization_settings.notification_email",
     "mailboxAuthority":"organization_settings.config.notificationMailboxId",
     "scheduleAuthority":"SCHEDULE_DUE",
+    "scheduleProducer":"DEPENDENCY_PENDING_DATA_REPORTING",
     "lowerScopeScheduledDelivery":false,
     "googleSheetsPublishing":false
   }'::jsonb
