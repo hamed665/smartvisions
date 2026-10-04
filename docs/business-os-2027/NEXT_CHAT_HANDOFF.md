@@ -187,9 +187,26 @@
 - Controlled tests cover bounded windows, metric allowlisting, arbitrary-SQL prohibition, existing authenticated scope reuse, unavailable evidence, causal-claim prohibition and reports integration. No synthetic Production customer, metric, warehouse fact or query result was created.
 - Direct public HTTP reprobe from the current tool network failed at DNS resolution, so no additional unauthenticated response-code claim is invented beyond the successful exact Production deploy/routed smoke evidence.
 
-**Fresh continuation cursor:** `SECTION ANALYTICS_REPORTING -> DATA-EXPORTS`.
+## DATA-EXPORTS Production closeout — 2026-10-04
 
-Before DATA-EXPORTS mutation, fresh-audit existing CSV/XLSX/PDF/JSON/Google Sheets/export/download/scheduled-delivery primitives plus current dashboard/warehouse role and scope boundaries. Reuse canonical Metrics Registry + Analytics Warehouse and existing IAM; do not create a second reporting warehouse, arbitrary SQL/export query engine, copied analytics truth, cross-tenant export path or unsafe provider credential store.
+- Work Package: `SECTION ANALYTICS_REPORTING -> DATA-EXPORTS`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled governed interactive export boundary and deployed `/reports` + `/api/data/export` surfaces. Google Sheets direct publishing is **BLOCKED_EXTERNAL** because no canonical Google Sheets connection exists. Scheduled delivery executor is implemented but activation remains **DEPENDENCY_PENDING -> DATA-REPORTING** until the canonical recurring schedule producer exists and is verified.
+- Implementation PR #467 final head `add10bd62e17253f79d0f6d1742f36734e9dd00a` passed exact-head CI `37202082363` and merged to canonical `main@11c5ffeb763f799dd335a32fedfa130d119a5e50`.
+- Exact-main CI `37202301397` succeeded on the merge SHA. Cloudflare Production Deploy `37202512872` succeeded on that exact SHA; the deploy built `λ /api/data/export` and `ƒ /reports`, preserved the Production Worker route and passed the routed Production smoke.
+- Production migration `data_exports@20261004123515` is applied. Exact migration blob on the merge commit: `1da700e72e50599549945d71e9ba4a15214f8e5e`.
+- Interactive exports support governed `CSV`, `JSON`, `XLSX` and `PDF` downloads. They reuse the authenticated dashboard scope validator plus the existing Metrics Registry + Analytics Warehouse path; no arbitrary SQL, raw provider-payload export, wider-scope fallback or copied analytics truth is introduced.
+- Cross-currency values remain separated. XLSX/PDF generation is internal and does not add a third-party export authority.
+- Production registry contract is present as `DELIVER_DATA_EXPORT` / `ANALYTICS_EXPORT_COMPOSER`, with `availability=DEPENDENCY_PENDING`, `required_work_packages=[DATA-REPORTING]`, `scheduleAuthority=SCHEDULE_DUE`, and `scheduleProducer=DEPENDENCY_PENDING_DATA_REPORTING`.
+- Scheduled delivery reuses the existing Tool/Action Registry, Automation Runtime, Cloudflare Cron and EMAIL_PROVIDER. It does **not** add a second scheduler, queue, export-fact store, recipient store or provider credential authority.
+- Production has one connected `EMAIL_PROVIDER`, but Organization notification email destinations = `0` and notification mailbox bindings = `0`; therefore no real scheduled provider delivery is claimed and no synthetic destination/mailbox was created.
+- Production Google Sheets connections = `0`. The existing connected `GOOGLE_PLACES` discovery integration is unrelated and was not misused as Sheets credentials. CSV/XLSX remain the safe Sheets-compatible fallbacks.
+- No forbidden parallel export relation exists: `data_exports`, `analytics_exports`, `report_exports`, `export_queue`, `export_jobs` and `export_facts` are absent.
+- Post-migration advisors show no DATA-EXPORTS-specific security/performance regression. Existing advisor counts remain unrelated legacy findings.
+- A direct unauthenticated HTTP reprobe of `/api/data/export` was not available from the current web tool, so no separate response-code claim is invented beyond the exact Production deploy/routed-smoke evidence. No fake authenticated session was created.
+
+**Fresh continuation cursor:** `SECTION ANALYTICS_REPORTING -> DATA-REPORTING`.
+
+DATA-REPORTING must reuse DATA-EXPORTS, Metrics Registry, Analytics Warehouse, existing notification/email provider boundaries and the canonical Cloudflare/Automation scheduling path. It must supply the governed recurring schedule producer for daily/weekly/monthly/custom reports, then may activate `DELIVER_DATA_EXPORT` only with verified cadence semantics. Do not create a second scheduler, notification stack, reporting warehouse, metric authority or recipient/credential store.
 
 ---
 

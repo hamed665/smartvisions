@@ -1372,8 +1372,8 @@ The following baseline inventory preserves every existing semantic Work Package,
 - `DATA-DASHBOARDS` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**
 - `DATA-ATTRIBUTION` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled observational attribution contract and deployed surface; real Production outcome-credit E2E **UNAVAILABLE_NO_ELIGIBLE_REAL_EVIDENCE** (no synthetic verification data created)
 - `DATA-ASK` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled governed semantic-query/deployed surface; authenticated live semantic-answer request **NOT_REPROBED** (no fake session created)
-- `DATA-EXPORTS` — **NEXT**
-- `DATA-REPORTING`
+- `DATA-EXPORTS` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for internally controlled governed CSV/JSON/XLSX/PDF export and deployed surface; Google Sheets direct publishing **BLOCKED_EXTERNAL**; scheduled-delivery executor implemented but activation **DEPENDENCY_PENDING -> DATA-REPORTING**; real provider delivery unavailable because no Organization notification email/mailbox is configured
+- `DATA-REPORTING` — **NEXT**
 
 ### SAAS_PLATFORM — Monetization, admin, agency and marketplace
 
