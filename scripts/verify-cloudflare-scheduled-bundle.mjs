@@ -67,6 +67,7 @@ const graphSource = chunks.join('\n');
 const requiredMarkers = [
   '/api/operations/heartbeat',
   '/api/operations/tick',
+  '/api/operations/data-reporting-schedules',
   '/api/ai/process-inbound',
   '/api/operations/pilot-acquisition',
 ];
