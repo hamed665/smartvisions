@@ -4,9 +4,14 @@ import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
 
+const SAFE_AUTH_DESTINATIONS = new Set([
+  '/invite/accept',
+  '/auth/update-password',
+  '/login',
+]);
+
 function safeNext(value: string | null) {
-  if (!value || !value.startsWith('/') || value.startsWith('//')) return '/login';
-  return value;
+  return value && SAFE_AUTH_DESTINATIONS.has(value) ? value : '/login';
 }
 
 export async function GET(request: Request) {
