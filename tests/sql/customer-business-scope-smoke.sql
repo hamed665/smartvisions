@@ -298,35 +298,31 @@ $owner_authority_preserved$;
 reset role;
 select set_config('request.jwt.claim.sub','',false);
 
--- Create Chatwoot mappings as trusted setup evidence. Customer read remains Business-bounded.
-insert into public.chatwoot_account_mappings(
-  id,organization_id,tenant_business_id,status,version,last_request_key,
-  created_by_user_id,updated_by_user_id
-) values
-  (
-    '30000000-0000-4000-8000-00000000f601',
-    '00000000-0000-0000-0000-00000000f601',
-    '20000000-0000-4000-8000-00000000f601',
-    'PENDING',1,'scope-map-a',
-    '00000000-0000-0000-0000-00000000e601',
-    '00000000-0000-0000-0000-00000000e601'
-  ),
-  (
-    '30000000-0000-4000-8000-00000000f602',
-    '00000000-0000-0000-0000-00000000f601',
-    '20000000-0000-4000-8000-00000000f602',
-    'PENDING',1,'scope-map-b',
-    '00000000-0000-0000-0000-00000000e601',
-    '00000000-0000-0000-0000-00000000e601'
-  ),
-  (
-    '30000000-0000-4000-8000-00000000f603',
-    '00000000-0000-0000-0000-00000000f602',
-    '20000000-0000-4000-8000-00000000f603',
-    'PENDING',1,'scope-map-foreign',
-    '00000000-0000-0000-0000-00000000e606',
-    '00000000-0000-0000-0000-00000000e606'
-  );
+-- Create Chatwoot mappings through the existing governed OWNER command path.
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000e601',false);
+select (public.create_chatwoot_account_mapping(
+  '00000000-0000-0000-0000-00000000f601',
+  '20000000-0000-4000-8000-00000000f601',
+  'scope-map-a'
+)).id;
+select (public.create_chatwoot_account_mapping(
+  '00000000-0000-0000-0000-00000000f601',
+  '20000000-0000-4000-8000-00000000f602',
+  'scope-map-b'
+)).id;
+reset role;
+select set_config('request.jwt.claim.sub','',false);
+
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000e606',false);
+select (public.create_chatwoot_account_mapping(
+  '00000000-0000-0000-0000-00000000f602',
+  '20000000-0000-4000-8000-00000000f603',
+  'scope-map-foreign'
+)).id;
+reset role;
+select set_config('request.jwt.claim.sub','',false);
 
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000e602',false);
