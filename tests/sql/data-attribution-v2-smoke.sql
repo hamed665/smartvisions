@@ -108,13 +108,39 @@ begin
   where organization_id='00000000-0000-0000-0000-000000000c01'
     and id='20000000-0000-0000-0000-000000000c92';
 
-  if v_person is null or not exists (
+  if v_person is null then
+    select id into v_person
+    from public.crm_people
+    where organization_id='00000000-0000-0000-0000-000000000c01'
+      and status='ACTIVE'
+    order by created_at,id
+    limit 1;
+
+    if v_person is null then
+      raise exception 'DATA-ATTRIBUTION V2 active CRM Person fixture missing';
+    end if;
+
+    update public.leads
+    set person_id=v_person,
+        person_link_method='IMPORT_VERIFIED',
+        person_link_source_ref='data-attribution-v2-smoke:disposable-ci-fixture',
+        person_link_evidence='{"source":"DATA_ATTRIBUTION_V2_SMOKE","disposable":true}'::jsonb,
+        person_linked_by_user_id=null,
+        person_linked_at=now(),
+        updated_at=now()
+    where organization_id='00000000-0000-0000-0000-000000000c01'
+      and id='20000000-0000-0000-0000-000000000c92';
+
+    if not found then
+      raise exception 'DATA-ATTRIBUTION V2 controlled Marketing Lead fixture missing';
+    end if;
+  elsif not exists (
     select 1 from public.crm_people
     where organization_id='00000000-0000-0000-0000-000000000c01'
       and id=v_person
       and status='ACTIVE'
   ) then
-    raise exception 'Marketing Lead must resolve to an active CRM Person for Booking attribution smoke';
+    raise exception 'Marketing Lead resolves to an inactive/missing CRM Person';
   end if;
 
   perform set_config('app.booking_lifecycle_mutation','allowed',true);
