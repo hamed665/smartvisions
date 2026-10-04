@@ -158,7 +158,7 @@ select public.put_saas_billing_profile_v1(
   'CI_TAX_EVIDENCE',
   0.4,
   'CI_COMMERCIAL_RATE',
-  now()-interval '2 days',
+  now()-interval '40 days',
   '00000000-0000-0000-0000-00000000e001',
   'saas-billing-profile-smoke'
 );
