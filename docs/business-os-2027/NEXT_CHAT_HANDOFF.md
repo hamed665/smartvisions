@@ -96,9 +96,28 @@
 - Production verification remained side-effect clean: no synthetic tenant, customer, Lead, Deal, Task, Booking, Quote, Order, Invoice, Payment Intent, refund, Campaign, Automation or Owner Copilot action was created.
 - Post-migration advisor categories remain on the existing baseline: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`. No AI-OWNER-COPILOT-specific advisor regression was introduced.
 
-**Fresh continuation cursor:** `SECTION ANALYTICS_REPORTING -> DATA-EVENT-METRICS`.
+## DATA-EVENT-METRICS Production closeout — 2026-10-04
 
-Before mutation, fresh-audit the existing OLTP event/evidence authorities, Audit Log, Conversation/CRM/Booking/Commerce/Payment lifecycle events, usage/cost events, Marketing Attribution evidence and current report/dashboard code. DATA-EVENT-METRICS must define one canonical, versioned Metrics Registry and tenant/business/branch-scoped metric/event semantics without creating a second business-truth store, inventing attribution, or turning arbitrary Production SQL into analytics authority.
+- Work Package: `SECTION ANALYTICS_REPORTING -> DATA-EVENT-METRICS`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**.
+- Implementation PR #455 final head `1e6e0061b0757bb8f37552b2f2ef3428c8cd0fe5` passed exact-head CI `37165627723`, including lint, typecheck, the full test suite, the complete PostgreSQL 17 migration chain plus DATA-EVENT-METRICS smoke, Next build, Vinext and Cloudflare scheduled-runtime verification.
+- PR #455 squash-merged to canonical `main@a4d6f3a93a25912a819df37c0c1c66b5bdc03d4b`. Exact-main CI `37165996727` and Cloudflare Production Deploy `37166123590` both succeeded on that exact SHA; the deploy passed exact-green checkout, release-candidate smoke, controlled SSR load, Production promotion, Worker Route verification, routed Production smoke and safe API/webhook rejection smoke.
+- Migration source `supabase/migrations/20261004001135_data_event_metrics.sql` (merged blob `b40aee1cb41147fac19b718c4202c704f2eead9b`) is applied in Supabase Production as `data_event_metrics@20261004005145`.
+- DATA-EVENT-METRICS deliberately does **not** create a second business-event ledger, event bus, warehouse or analytics truth store. `analytics_event_feed_v1` is a read-only `security_invoker` projection over existing canonical OLTP evidence authorities such as Audit, Booking, Quote, Order, Invoice, Payment, Usage, WhatsApp, Email, Reply, Handoff and Preview evidence.
+- The only new analytics-like table is `metric_definitions`, a versioned release-controlled Metrics Registry. Production currently has `18` ACTIVE metric definitions, `0` malformed definitions and `0` unsafe MONEY definitions.
+- `metric_registry_current_v1` and `analytics_event_feed_v1` are both `security_invoker=true`. Authenticated users may read metric metadata but cannot mutate it. `anon` cannot read the Registry. Browser roles cannot directly read the tenant event feed or execute the bounded reader; `service_role` has read/execute access through the trusted path.
+- `read_analytics_event_feed_v1` is SECURITY INVOKER, service-only, requires Organization plus a bounded time window, rejects windows over 31 days, caps event-name filters at 64 and caps each read at 5,000 rows.
+- The feed exposes normalized identifiers, proven Organization/Business/Branch scope, event semantics, evidence class, bounded dimensions and optional numeric evidence. It excludes raw provider payloads, lifecycle evidence blobs, request hashes and Audit before/after bodies. Production verification found `0` raw-evidence columns.
+- Business/Branch scope is projected only where canonical parent evidence proves it. Sources without proven lower-level scope remain Organization-scoped rather than receiving invented hierarchy.
+- Financial SUM metrics require `currency` as a dimension and set `crossCurrencyAggregation=false`; provider-captured/refunded metrics require provider-verified evidence. No OMR/USD/AED cross-currency total is manufactured.
+- Every seeded metric definition explicitly records `causal=false`. Existing Marketing Attribution remains a separate governed observational evidence authority; DATA-EVENT-METRICS does not silently turn association into causal attribution.
+- Production read-only verification observed `9,398` projected real events at closeout: `audit_logs=9,132`, `whatsapp_events=136`, `usage_events=115`, `email_events=9`, `preview_events=6`; currently-empty lifecycle authorities remain valid feed sources without synthetic rows being added to make charts look busier.
+- Production verification remained side-effect clean: no synthetic customer, conversation, Booking, Quote, Order, Invoice, Payment, usage, channel event or metric fact was created.
+- Post-migration advisor categories remain on the existing baseline: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`. No DATA-EVENT-METRICS-specific advisor regression was introduced.
+
+**Fresh continuation cursor:** `SECTION ANALYTICS_REPORTING -> DATA-WAREHOUSE`.
+
+Before mutation, fresh-audit the canonical event feed, OLTP query/report load, existing queues/outbox/scheduled jobs, Production Postgres scale, Cloudflare/VPS runtime boundaries, backfill needs and retention/freshness requirements. DATA-WAREHOUSE must establish a bounded analytics-store/CDC boundary only where operational evidence justifies it; it must not create a second event truth, duplicate the Metrics Registry, invent history/attribution, or move ordinary transactional authority out of canonical OLTP tables.
 
 ---
 

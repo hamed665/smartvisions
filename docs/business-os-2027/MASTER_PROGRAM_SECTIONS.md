@@ -1772,12 +1772,20 @@ The Production surface is `/copilot` plus `/api/owner-copilot`. Model proposals 
 
 ## DATA-EVENT-METRICS
 
-- canonical event feed;
-- Metrics Registry;
-- metric definitions;
-- dimensions;
-- tenant/business/branch scope;
-- versioned definitions.
+**Completed: IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED.**
+
+The package now provides:
+
+- one versioned canonical Metrics Registry in `metric_definitions`;
+- `metric_registry_current_v1` as the current read-only semantic projection;
+- `analytics_event_feed_v1` as a read-only normalized projection over existing OLTP event/evidence authorities, not a second event store;
+- bounded Organization / Business / Branch scope only when canonical evidence proves it;
+- service-only bounded event reads with explicit time/filter/row limits;
+- currency-safe MONEY semantics with cross-currency aggregation disabled;
+- observational metric definitions with `causal=false`;
+- no raw provider payload, lifecycle evidence blob or Audit before/after exposure.
+
+The event feed and Metrics Registry are inputs to later Analytics/Reporting work. They do not themselves constitute a warehouse or causal-attribution authority.
 
 ## DATA-WAREHOUSE
 
