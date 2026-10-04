@@ -173,12 +173,20 @@ returns trigger
 language plpgsql
 security invoker
 set search_path = public, pg_catalog
-as $$
+as $
 begin
-  perform public.validate_automation_reporting_schedule(new.trigger_key,new.config);
+  if new.trigger_key='SCHEDULE_DUE'
+     and exists(
+       select 1
+       from jsonb_array_elements(new.actions) a(item)
+       where a.item->>'key'='DELIVER_DATA_EXPORT'
+     )
+  then
+    perform public.validate_automation_reporting_schedule(new.trigger_key,new.config);
+  end if;
   return new;
 end;
-$$;
+$;
 
 drop trigger if exists automation_rule_versions_reporting_schedule_guard
   on public.automation_rule_versions;
