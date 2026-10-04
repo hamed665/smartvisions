@@ -207,7 +207,7 @@ export async function loadCustomerConnections(input: {
     .eq('channel', 'WHATSAPP')
     .eq('status', 'ACTIVE')
     .order('updated_at', { ascending: false })
-    .limit(2);
+    .limit(25);
 
   if (bindingResult.error) {
     throw new CustomerBusinessAccessError(
@@ -217,30 +217,17 @@ export async function loadCustomerConnections(input: {
   }
 
   const bindings = (bindingResult.data ?? []) as WhatsAppBindingRow[];
-  if (bindings.length > 1) {
-    return {
-      ...access,
-      whatsapp: {
-        ...deriveCustomerWhatsAppConnection({ binding: bindings[0] }),
-        status: 'Action required' as const,
-        canConnect: false,
-        canReconnect: false,
-        canDisconnect: false,
-        reason: 'Multiple active WhatsApp bindings require reconciliation before customer actions are enabled.',
-      },
-    };
-  }
+  const integrationIds = [...new Set(
+    bindings.map((binding) => binding.integration_connection_id).filter(Boolean),
+  )];
 
-  const binding = bindings[0] ?? null;
-  let integration: IntegrationRow | null = null;
-
-  if (binding?.integration_connection_id) {
+  let integrations: IntegrationRow[] = [];
+  if (integrationIds.length) {
     const integrationResult = await supabase
       .from('integration_connections')
       .select('id,provider,channel,enabled,status,last_checked_at,last_error')
       .eq('organization_id', business.organizationId)
-      .eq('id', binding.integration_connection_id)
-      .maybeSingle();
+      .in('id', integrationIds);
 
     if (integrationResult.error) {
       throw new CustomerBusinessAccessError(
@@ -248,11 +235,67 @@ export async function loadCustomerConnections(input: {
         'Unable to load customer provider state',
       );
     }
-    integration = integrationResult.data as IntegrationRow | null;
+    integrations = (integrationResult.data ?? []) as IntegrationRow[];
   }
+
+  const integrationById = new Map(integrations.map((row) => [row.id, row]));
+  const whatsappBindings = bindings.map((binding) =>
+    deriveCustomerWhatsAppConnection({
+      binding,
+      integration: integrationById.get(binding.integration_connection_id) ?? null,
+    }),
+  );
+
+  if (!whatsappBindings.length) {
+    return {
+      ...access,
+      whatsappBindings,
+      whatsapp: deriveCustomerWhatsAppConnection({}),
+    };
+  }
+
+  if (whatsappBindings.length === 1) {
+    return {
+      ...access,
+      whatsappBindings,
+      whatsapp: whatsappBindings[0],
+    };
+  }
+
+  const statuses = whatsappBindings.map((row) => row.status);
+  const status: CustomerConnectionStatus = statuses.every((value) => value === 'Connected')
+    ? 'Connected'
+    : statuses.includes('Action required')
+      ? 'Action required'
+      : statuses.includes('Degraded-needs verification')
+        ? 'Degraded-needs verification'
+        : statuses.every((value) => value === 'Not connected')
+          ? 'Not connected'
+          : 'Action required';
 
   return {
     ...access,
-    whatsapp: deriveCustomerWhatsAppConnection({ binding, integration }),
+    whatsappBindings,
+    whatsapp: {
+      status,
+      bindingId: null,
+      bindingVersion: null,
+      destinationLabel: `${whatsappBindings.length} WhatsApp connections`,
+      lastVerifiedAt: whatsappBindings
+        .map((row) => row.lastVerifiedAt)
+        .filter((value): value is string => Boolean(value))
+        .sort()
+        .at(-1) ?? null,
+      lastCheckedAt: whatsappBindings
+        .map((row) => row.lastCheckedAt)
+        .filter((value): value is string => Boolean(value))
+        .sort()
+        .at(-1) ?? null,
+      incidentCode: whatsappBindings.find((row) => row.incidentCode)?.incidentCode ?? null,
+      canConnect: statuses.every((value) => value === 'Not connected'),
+      canReconnect: whatsappBindings.some((row) => row.canReconnect),
+      canDisconnect: whatsappBindings.some((row) => row.canDisconnect),
+      reason: `${whatsappBindings.length} canonical WhatsApp bindings exist for this Business. Status is aggregated conservatively across them.`,
+    },
   };
 }
