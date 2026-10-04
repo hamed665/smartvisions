@@ -193,6 +193,34 @@ select public.activate_saas_coupon_v1(
 );
 
 select public.create_saas_coupon_v1(
+  '83000000-0000-0000-0000-000000000f45',
+  '00000000-0000-0000-0000-000000000f01',
+  'BADTRIAL','Invalid partial trial','TRIAL',null,null,null,1,
+  now()-interval '1 day',now()+interval '30 days',
+  null,null,null,
+  '[{"type":"COMPONENT","value":"PLATFORM"}]'::jsonb,
+  '[{"type":"ORGANIZATION","id":"00000000-0000-0000-0000-000000000f04"}]'::jsonb,
+  '00000000-0000-0000-0000-00000000f101',
+  'saas-coupon-create-bad-trial'
+);
+
+do $trial_scope_guard$
+begin
+  begin
+    perform public.activate_saas_coupon_v1(
+      '83000000-0000-0000-0000-000000000f45',
+      'saas-coupon-activate-bad-trial'
+    );
+    raise exception 'partial-scope TRIAL unexpectedly activated';
+  exception when others then
+    if sqlerrm not like 'SAAS-COUPONS TRIAL must target the full billing statement%' then
+      raise;
+    end if;
+  end;
+end;
+$trial_scope_guard$;
+
+select public.create_saas_coupon_v1(
   '83000000-0000-0000-0000-000000000f44',
   '00000000-0000-0000-0000-000000000f01',
   'TRIAL1','One billing period trial','TRIAL',null,null,null,1,
@@ -358,6 +386,41 @@ end;
 $finalized_coupon_statement$;
 
 select set_config('app.saas_coupon_mutation','allowed',true);
+select set_config('app.saas_billing_mutation','allowed',true);
+
+do $discount_authority_guard$
+begin
+  begin
+    insert into public.saas_billing_line_items(
+      organization_id,statement_id,line_no,component,direction,meter_key,
+      quantity,included_quantity,billable_quantity,unit_price,amount,
+      source_type,source_id,evidence
+    ) values (
+      '00000000-0000-0000-0000-000000000f02',
+      '82000000-0000-0000-0000-000000000f32',
+      99,'DISCOUNT','CREDIT','ROGUE.DISCOUNT',
+      1,0,1,1,1,'MANUAL','rogue','{}'::jsonb
+    );
+    raise exception 'non-coupon DISCOUNT line unexpectedly succeeded';
+  exception when others then
+    if sqlerrm not like 'SAAS-COUPONS is the only DISCOUNT line authority%' then
+      raise;
+    end if;
+  end;
+
+  begin
+    update public.saas_billing_line_items
+    set amount=1
+    where statement_id='82000000-0000-0000-0000-000000000f32'
+      and component='DISCOUNT';
+    raise exception 'coupon DISCOUNT line mutation unexpectedly succeeded';
+  exception when others then
+    if sqlerrm not like 'SAAS-COUPONS discount line evidence is immutable%' then
+      raise;
+    end if;
+  end;
+end;
+$discount_authority_guard$;
 
 do $immutable_coupon_evidence$
 begin
@@ -385,6 +448,7 @@ begin
 end;
 $immutable_coupon_evidence$;
 
+select set_config('app.saas_billing_mutation','0',true);
 select set_config('app.saas_coupon_mutation','0',true);
 
 reset role;
