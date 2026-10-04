@@ -50,12 +50,18 @@ export async function POST(request: Request) {
     }, { status: 409 });
   }
 
-  const { error: scheduleError } = await service.rpc(
-    'validate_automation_reporting_schedule',
-    { p_trigger_key: triggerKey, p_config: config },
+  const hasReportingAction = actions.some((item) =>
+    item && typeof item === 'object' && !Array.isArray(item)
+      && (item as Record<string, unknown>).key === 'DELIVER_DATA_EXPORT'
   );
-  if (scheduleError) {
-    return NextResponse.json({ ok: false, error: scheduleError.message }, { status: 409 });
+  if (triggerKey === 'SCHEDULE_DUE' && hasReportingAction) {
+    const { error: scheduleError } = await service.rpc(
+      'validate_automation_reporting_schedule',
+      { p_trigger_key: triggerKey, p_config: config },
+    );
+    if (scheduleError) {
+      return NextResponse.json({ ok: false, error: scheduleError.message }, { status: 409 });
+    }
   }
 
   const { data: conditionLeaves, error: conditionError } = await service.rpc(
