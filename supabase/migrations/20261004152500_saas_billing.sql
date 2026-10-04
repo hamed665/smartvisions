@@ -322,8 +322,45 @@ begin
     if tg_op='DELETE' then
       raise exception 'SAAS-BILLING statement cannot be deleted';
     end if;
+
+    if not exists(
+      select 1
+      from public.subscriptions s
+      where s.id=new.subscription_id
+        and s.organization_id=new.organization_id
+        and s.pricing_version_id=new.pricing_version_id
+    ) then
+      raise exception 'SAAS-BILLING statement subscription/pricing tenant evidence is inconsistent';
+    end if;
+
+    if not exists(
+      select 1
+      from public.saas_billing_profiles bp
+      where bp.id=new.billing_profile_id
+        and bp.organization_id=new.organization_id
+        and bp.currency=new.currency
+    ) then
+      raise exception 'SAAS-BILLING statement billing-profile currency evidence is inconsistent';
+    end if;
+
     if tg_op='UPDATE' and old.status='FINALIZED' then
       raise exception 'SAAS-BILLING finalized statement is immutable';
+    end if;
+
+    if tg_op='UPDATE' and (
+      new.organization_id is distinct from old.organization_id
+      or new.subscription_id is distinct from old.subscription_id
+      or new.pricing_version_id is distinct from old.pricing_version_id
+      or new.billing_profile_id is distinct from old.billing_profile_id
+      or new.period_start is distinct from old.period_start
+      or new.period_end is distinct from old.period_end
+      or new.currency is distinct from old.currency
+      or new.source_snapshot is distinct from old.source_snapshot
+      or new.request_key is distinct from old.request_key
+      or new.request_hash is distinct from old.request_hash
+      or new.created_at is distinct from old.created_at
+    ) then
+      raise exception 'SAAS-BILLING statement source evidence is immutable';
     end if;
   end if;
 
