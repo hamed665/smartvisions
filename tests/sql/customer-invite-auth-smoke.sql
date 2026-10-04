@@ -2,13 +2,13 @@
 
 begin;
 
-insert into auth.users(id,email) values
-  ('00000000-0000-0000-0000-00000000e501','owner-a@example.com'),
-  ('00000000-0000-0000-0000-00000000e502','admin-a@example.com'),
-  ('00000000-0000-0000-0000-00000000e503','customer@example.com'),
-  ('00000000-0000-0000-0000-00000000e504','wrong@example.com'),
-  ('00000000-0000-0000-0000-00000000e505','existing@example.com'),
-  ('00000000-0000-0000-0000-00000000e506','owner-b@example.com');
+insert into auth.users(id,email,email_confirmed_at) values
+  ('00000000-0000-0000-0000-00000000e501','owner-a@example.com',statement_timestamp()),
+  ('00000000-0000-0000-0000-00000000e502','admin-a@example.com',statement_timestamp()),
+  ('00000000-0000-0000-0000-00000000e503','customer@example.com',statement_timestamp()),
+  ('00000000-0000-0000-0000-00000000e504','wrong@example.com',statement_timestamp()),
+  ('00000000-0000-0000-0000-00000000e505','existing@example.com',statement_timestamp()),
+  ('00000000-0000-0000-0000-00000000e506','owner-b@example.com',statement_timestamp());
 
 insert into public.organizations(id,name) values
   ('00000000-0000-0000-0000-00000000f501','Customer Invite Org A'),
@@ -147,6 +147,52 @@ begin
 end;
 $used_token_rejected$;
 reset role;
+
+-- Unconfirmed Auth email cannot accept even when the email string matches.
+insert into auth.users(id,email,email_confirmed_at) values
+  ('00000000-0000-0000-0000-00000000e507','unconfirmed@example.com',null);
+
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000e501',false);
+select *
+from public.issue_organization_member_invitation(
+  '00000000-0000-0000-0000-00000000f501',
+  'unconfirmed@example.com',
+  'VIEWER',
+  repeat('9',64),
+  'invite-unconfirmed'
+);
+reset role;
+select set_config('request.jwt.claim.sub','',false);
+
+set role service_role;
+select *
+from public.redeem_organization_member_invitation(
+  repeat('9',64),
+  repeat('8',64),
+  'redeem-unconfirmed'
+);
+reset role;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000e507',false);
+do $unconfirmed_email_rejected$
+begin
+  begin
+    perform public.accept_organization_member_invitation(
+      repeat('8',64),
+      'accept-unconfirmed'
+    );
+    raise exception 'unconfirmed Auth email unexpectedly accepted invite';
+  exception when others then
+    if sqlerrm not like 'confirmed Auth email required to accept customer invitation%' then
+      raise;
+    end if;
+  end;
+end;
+$unconfirmed_email_rejected$;
+reset role;
+select set_config('request.jwt.claim.sub','',false);
 
 -- Wrong authenticated email cannot accept an otherwise valid invitation session.
 set role authenticated;
