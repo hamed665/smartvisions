@@ -26,11 +26,23 @@ const SESSION_BYPASS_PATHS = new Set([
   '/api/web-chat/upload',
 ]);
 
+const PUBLIC_AUTH_PATHS = new Set([
+  '/api/access/invites/redeem',
+  '/api/access/invites/session',
+  '/invite/accept',
+]);
+
 export function shouldBypassSession(pathname: string) {
   return SESSION_BYPASS_PATHS.has(pathname)
     || /^\/api\/web-chat\/attachments\/[1-9][0-9]*$/.test(pathname)
     || /^\/api\/telegram\/customer\/webhook\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(pathname)
     || pathname.startsWith('/p/');
+}
+
+function isPublicAuthPath(pathname: string) {
+  return pathname.startsWith('/login')
+    || pathname.startsWith('/auth')
+    || PUBLIC_AUTH_PATHS.has(pathname);
 }
 
 export async function updateSession(request: NextRequest) {
@@ -57,18 +69,26 @@ export async function updateSession(request: NextRequest) {
 
   const { data } = await supabase.auth.getClaims();
   const authenticated = Boolean(data?.claims);
-  const publicPath = request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/auth');
+  const publicPath = isPublicAuthPath(request.nextUrl.pathname);
 
   if (!authenticated && !publicPath) {
     const redirect = request.nextUrl.clone();
     redirect.pathname = '/login';
-    return NextResponse.redirect(redirect);
+    const redirectResponse = NextResponse.redirect(redirect);
+    redirectResponse.headers.set('Cache-Control', 'private, no-store');
+    return redirectResponse;
   }
 
   if (authenticated && request.nextUrl.pathname === '/login') {
     const redirect = request.nextUrl.clone();
     redirect.pathname = '/';
-    return NextResponse.redirect(redirect);
+    const redirectResponse = NextResponse.redirect(redirect);
+    redirectResponse.headers.set('Cache-Control', 'private, no-store');
+    return redirectResponse;
+  }
+
+  if (publicPath || authenticated) {
+    response.headers.set('Cache-Control', 'private, no-store');
   }
 
   return response;
