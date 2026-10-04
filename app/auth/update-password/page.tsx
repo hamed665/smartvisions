@@ -1,11 +1,10 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 
 export default function UpdatePasswordPage() {
-  const supabase = useMemo(() => createClient(), []);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -24,6 +23,7 @@ export default function UpdatePasswordPage() {
     }
 
     try {
+      const supabase = createClient();
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) {
         setError('This recovery session is invalid or expired.');
