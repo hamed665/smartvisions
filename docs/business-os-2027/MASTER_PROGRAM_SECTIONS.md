@@ -1911,15 +1911,24 @@ SAAS-PLANS-ENTITLEMENTS extends the existing Business OS Control Plane rather th
 
 PR #471 merged to `main@d63c979b07f9063d40d8da485d8ed39c9d16bb9d`; exact-main CI `37211391288` and Cloudflare Production Deploy `37211637822` succeeded. Production migration `saas_plans_entitlements@20261004150621` is live from blob `46edf603a8196a51d63a4ef0bfd6259764c44a4c`. Current Production commercial rows remain `pricing_versions=0`, `subscriptions=0`, `plan_entitlements=0`, `organization_entitlement_overrides=0`; pricing activation is therefore intentionally deferred to SAAS-BILLING rather than simulated.
 
-## SAAS-BILLING — NEXT
+## SAAS-BILLING — COMPLETED
 
-Customer-facing formula supports:
+SAAS-BILLING is the canonical Smart Visions platform-subscription billing ledger and remains separate from tenant-facing INVOICE-ENGINE / PAYMENT-CORE.
 
-`Setup + Platform + Features + Channels + Seats + AI Usage + Third-party Usage + Overage - Discounts + Tax`
+- deterministic formula: `Setup + Platform + Features + Channels + Seats + AI Usage + Third-party Usage + Overage - Discounts + Tax`;
+- canonical plan/pricing/subscription/entitlement and BILLABLE usage evidence is reused rather than duplicated;
+- AI billing uses canonical `pricing_versions.ai_cost_multiplier` and eligible BILLABLE OPENAI raw cost only;
+- generic metered usage excludes OPENAI and third-party raw-cost billing excludes usage carrying `billingUnitKey`, avoiding the audited double-count paths;
+- tax and non-USD provider-cost conversion require explicit evidence sources; no tax or FX value is invented;
+- finalized statements are immutable and line mutation is limited to DRAFT statements behind the governed service command boundary;
+- OWNER/ADMIN receive tenant-scoped read-only `/billing` and `GET /api/saas/billing` surfaces; browser mutation commands are denied;
+- discount authority remains pending SAAS-COUPONS and payment collection remains separate / not activated.
 
-Current commercial AI usage policy starts at 4x eligible raw AI cost, with billing from governed usage evidence only.
+PR #473 merged to `main@bb6e7fb23f0acaf1ed99d6e983aa782c52910fa9`; its exact-head CI `37216200460` succeeded. PR #474 hardened the two Production advisor FK paths and merged to functional `main@433e9fb83a4862d95b0b759d95c209413d91618d`; exact-main CI `37217209249` and Cloudflare Production Deploy `37217441810` succeeded. Production migrations `saas_billing@20261004162558` and `saas_billing_fk_index_hardening@20261004163801` are live.
 
-## SAAS-COUPONS
+Production remains commercially honest: 6 canonical plans / 0 active plans, 0 pricing versions, 0 subscriptions, 0 billing profiles, 0 statements and 0 line items. Therefore the deployed billing implementation is Production-verified, while a real tenant billing-cycle E2E is **DEPENDENCY_PENDING** on legitimate commercial configuration and is not simulated.
+
+## SAAS-COUPONS — NEXT
 
 - fixed;
 - percentage;
