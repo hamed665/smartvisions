@@ -22,7 +22,9 @@ $$;
 create schema if not exists auth;
 
 create table auth.users (
-  id uuid primary key
+  id uuid primary key,
+  email text,
+  email_confirmed_at timestamptz
 );
 
 create or replace function auth.uid()
