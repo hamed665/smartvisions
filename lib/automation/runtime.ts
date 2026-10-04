@@ -1,6 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { generateProductionAsset } from '@/lib/preview/production-service';
 import { persistHumanHandoff } from '@/lib/conversations/sales-lifecycle';
+import { buildGovernedDataExport, normalizeDataExportFormat } from '@/lib/analytics/export';
+import { ResendEmailProvider } from '@/lib/outreach/resend-provider';
+import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -434,6 +437,136 @@ async function executeSendFollowup(
   });
 }
 
+
+function bytesToBase64(bytes: Uint8Array) {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunk, bytes.length)));
+  }
+  return btoa(binary);
+}
+
+async function executeDeliverDataExport(
+  supabase: SupabaseClient,
+  action: RuntimeAction,
+  run: RuntimeRun,
+  workerId: string,
+) {
+  const config = record(action.action_config);
+  const format = normalizeDataExportFormat(config.format);
+  if (!format) {
+    return complete(supabase, action, workerId, 'FAILED', { error: 'DATA_EXPORT_FORMAT_INVALID' });
+  }
+  const requestedDays = Number(config.days ?? 30);
+  const days = [7, 30, 90].includes(requestedDays) ? requestedDays : 30;
+
+  const [{ data: settings, error: settingsError }, { data: connection, error: connectionError }] = await Promise.all([
+    supabase.from('organization_settings')
+      .select('notification_email,config')
+      .eq('organization_id', run.organization_id)
+      .maybeSingle(),
+    supabase.from('integration_connections')
+      .select('enabled,status')
+      .eq('organization_id', run.organization_id)
+      .eq('provider', 'EMAIL_PROVIDER')
+      .eq('channel', 'EMAIL')
+      .maybeSingle(),
+  ]);
+  if (settingsError || connectionError) {
+    throw new Error(settingsError?.message ?? connectionError?.message ?? 'Scheduled export email readiness failed');
+  }
+
+  const settingsConfig = record(settings?.config);
+  const recipient = optionalString(settings?.notification_email);
+  const mailboxId = optionalString(settingsConfig.notificationMailboxId);
+  if (!recipient || !mailboxId || !connection?.enabled || connection.status !== 'CONNECTED') {
+    return complete(supabase, action, workerId, 'FAILED', {
+      error: 'DATA_EXPORT_DELIVERY_NOT_CONFIGURED',
+      output: { blocker: 'NOTIFICATION_EMAIL_MAILBOX_OR_PROVIDER_NOT_READY' },
+    });
+  }
+
+  const { data: mailbox, error: mailboxError } = await supabase.from('mailboxes')
+    .select('id,enabled,health_status')
+    .eq('organization_id', run.organization_id)
+    .eq('id', mailboxId)
+    .maybeSingle();
+  if (mailboxError) throw new Error(`Scheduled export mailbox lookup failed: ${mailboxError.message}`);
+  if (!mailbox?.enabled || String(mailbox.health_status).toUpperCase() !== 'HEALTHY') {
+    return complete(supabase, action, workerId, 'FAILED', {
+      error: 'DATA_EXPORT_MAILBOX_NOT_HEALTHY',
+      output: { blocker: 'NOTIFICATION_MAILBOX_NOT_HEALTHY' },
+    });
+  }
+
+  assertPaidOperationAllowed(await getCostGuardState(run.organization_id), 'NORMAL');
+
+  const provider = new ResendEmailProvider();
+  const health = await provider.health();
+  if (!health.ok) {
+    return complete(supabase, action, workerId, 'FAILED', {
+      error: 'DATA_EXPORT_EMAIL_PROVIDER_NOT_READY',
+      output: { blocker: health.detail ?? 'EMAIL_PROVIDER_NOT_READY' },
+    });
+  }
+
+  const artifact = await buildGovernedDataExport({
+    supabase,
+    organizationId: run.organization_id,
+    format,
+    days,
+  });
+  const result = await provider.sendEmail({
+    mailboxId,
+    to: recipient,
+    subject: `Smart Visions analytics export · ${artifact.snapshot.window.days}d`,
+    text: [
+      'Your governed Smart Visions analytics export is attached.',
+      `Scope: ${artifact.snapshot.scope.label}`,
+      `Window: ${artifact.snapshot.window.days} days`,
+      'The attachment is generated from the Metrics Registry + Analytics Warehouse and does not use arbitrary SQL.',
+    ].join('\n'),
+    idempotencyKey: action.idempotency_key,
+    attachments: [{
+      filename: artifact.filename,
+      contentBase64: bytesToBase64(artifact.bytes),
+      contentType: artifact.mimeType.split(';')[0],
+    }],
+  });
+
+  try {
+    await recordUsage({
+      organizationId: run.organization_id,
+      provider: 'EMAIL_PROVIDER',
+      operation: 'SCHEDULED_DATA_EXPORT',
+      costUsd: 0,
+      units: 1,
+      metadata: {
+        automationRunId: run.id,
+        automationActionId: action.id,
+        format,
+        days: artifact.snapshot.window.days,
+        providerMessageId: result.providerMessageId,
+      },
+    });
+  } catch (usageError) {
+    console.error('Scheduled data export usage persistence failed', usageError);
+  }
+
+  return complete(supabase, action, workerId, 'SUCCEEDED', {
+    output: {
+      providerMessageId: result.providerMessageId,
+      filename: artifact.filename,
+      format,
+      days: artifact.snapshot.window.days,
+      scope: artifact.snapshot.scope.level,
+    },
+    verification: { verified: true, providerAccepted: true, attachmentGenerated: true },
+    providerAccepted: true,
+  });
+}
+
 export async function executeAutomationRuntimeAction(input: {
   supabase: SupabaseClient;
   action: RuntimeAction;
@@ -454,6 +587,8 @@ export async function executeAutomationRuntimeAction(input: {
       return executePause(input.supabase, input.action, run, input.workerId);
     case 'SEND_FOLLOWUP':
       return executeSendFollowup(input.supabase, input.action, run, input.workerId, input.approvedSend);
+    case 'DELIVER_DATA_EXPORT':
+      return executeDeliverDataExport(input.supabase, input.action, run, input.workerId);
     default:
       return complete(input.supabase, input.action, input.workerId, 'FAILED', {
         error: `UNSUPPORTED_AUTOMATION_ACTION:${input.action.action_key}`,
