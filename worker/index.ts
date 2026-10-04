@@ -69,6 +69,11 @@ type ScheduledMetrics = {
   automationNotificationFailed?: number;
   bookingHoldExpiryStatus?: number;
   bookingHoldsExpired?: number;
+  analyticsWarehouseStatus?: number;
+  analyticsWarehouseOrganizations?: number;
+  analyticsWarehouseInserted?: number;
+  analyticsWarehouseCaughtUp?: number;
+  analyticsWarehouseFailed?: number;
 };
 
 function organizationIdFromTask(task: AgentTask) {
@@ -239,6 +244,27 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
     if (!holdResponse.ok) metrics.failed += 1;
   } catch {
     metrics.bookingHoldExpiryStatus = 503;
+    metrics.failed += 1;
+  }
+
+  try {
+    const warehouseResponse = await internalPost(env, '/api/operations/analytics-warehouse', { limit: 5000 });
+    metrics.analyticsWarehouseStatus = warehouseResponse.status;
+    const warehouse = await warehouseResponse.json().catch(() => null) as {
+      organizations?: number;
+      inserted?: number;
+      caughtUp?: number;
+      failed?: number;
+    } | null;
+    metrics.analyticsWarehouseOrganizations = Number(warehouse?.organizations ?? 0);
+    metrics.analyticsWarehouseInserted = Number(warehouse?.inserted ?? 0);
+    metrics.analyticsWarehouseCaughtUp = Number(warehouse?.caughtUp ?? 0);
+    metrics.analyticsWarehouseFailed = Number(warehouse?.failed ?? 0);
+    if (!warehouseResponse.ok) metrics.failed += 1;
+    else metrics.failed += metrics.analyticsWarehouseFailed;
+  } catch {
+    metrics.analyticsWarehouseStatus = 503;
+    metrics.analyticsWarehouseFailed = 1;
     metrics.failed += 1;
   }
 
