@@ -123,9 +123,20 @@
 - A separate external warehouse/WAL CDC stack is **DEFERRED_WITH_REASON** at the current verified scale (~49 MB database / ~9.4k events) until load evidence warrants it.
 - Tracked Supabase advisor categories remain on the prior baseline; no DATA-WAREHOUSE-specific regression was introduced.
 
-**Fresh continuation cursor:** `SECTION ANALYTICS_REPORTING -> DATA-DASHBOARDS`.
+## DATA-DASHBOARDS Production closeout — 2026-10-04
 
-Before mutation, fresh-audit the existing `/reports` surface, Founder/Owner operational reports, current chart/query helpers, Metrics Registry and warehouse reader. DATA-DASHBOARDS must consume governed metrics/warehouse evidence, preserve Organization/Business/Branch scope and freshness semantics, and must not reintroduce arbitrary OLTP BI queries, duplicate metric definitions, invent attribution or create a second dashboard truth store.
+- PR #461 head `72ce8f46ad7b66a11ba1e982fae96c2e336fe235` passed exact-head CI `37186870968` and merged to `main@741e0decdd761769d5053ac15af0b7aa98dbe7a0`.
+- Exact-main CI `37187060713` and Cloudflare Production Deploy `37187253345` succeeded.
+- Historical dashboard metrics use the versioned Metrics Registry + Analytics Warehouse; LIVE current-state gauges remain explicitly separated.
+- Organization / Business / Branch scope does not silently widen, windows are bounded to 7/30/90 days, warehouse reads are capped at 10,000 rows, and currencies remain separate.
+- Response Time and Retention are explicitly unavailable until governed definitions exist; no fake zero or ad hoc message-scan metric is presented.
+- Production evidence showed 18 valid Registry definitions, 9,482 warehouse facts with ~37s freshness lag, zero Business/Branch rows, and no synthetic dashboard/business/payment data.
+- Unauthenticated `/reports` resolves to the login shell without exposing dashboard content or Organization evidence.
+- No dashboard truth table or schema migration was added.
+
+**Fresh continuation cursor:** `SECTION ANALYTICS_REPORTING -> DATA-ATTRIBUTION`.
+
+Before mutation, fresh-audit existing Marketing Attribution and the canonical campaign/source/lead/conversation/deal/order/payment evidence. Attribution must remain observational unless explicit causal evidence exists and must never retroactively invent touchpoints or conversions.
 
 ---
 
@@ -1358,8 +1369,8 @@ The following baseline inventory preserves every existing semantic Work Package,
 
 - `DATA-EVENT-METRICS` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**
 - `DATA-WAREHOUSE` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the current-scale logical warehouse boundary; scheduled internal route hardened by PR #459; physical external warehouse/WAL CDC **DEFERRED_WITH_REASON**
-- `DATA-DASHBOARDS` — **NEXT**
-- `DATA-ATTRIBUTION`
+- `DATA-DASHBOARDS` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**
+- `DATA-ATTRIBUTION` — **NEXT**
 - `DATA-ASK`
 - `DATA-EXPORTS`
 - `DATA-REPORTING`

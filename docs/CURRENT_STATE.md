@@ -136,9 +136,29 @@
 - PR #459 head `e31cee0ce90df71252843786805dc1c8f90b1a14` passed full CI `37183186684` and merged to `main@5126f54aedd42cfb665b4b33222c60074f362c74`. Exact-main CI `37183333053` and Cloudflare Production Deploy `37183506208` succeeded. Production verification returns HTTP `401 {"error":"Unauthorized"}` for an unauthenticated warehouse POST with no redirect, proving the request reaches the route-level internal-key gate. The subsequent natural scheduled heartbeat returned warehouse status `200`, caught up the single Organization and reported zero warehouse failures, closing the end-to-end Cron path.
 - Post-migration advisor categories remain on the prior baseline: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`. No DATA-WAREHOUSE-specific advisor regression was introduced.
 
-**Fresh continuation cursor:** `SECTION ANALYTICS_REPORTING -> DATA-DASHBOARDS`.
+## DATA-DASHBOARDS Production closeout — 2026-10-04
 
-Before mutation, fresh-audit the existing `/reports` surface, Founder/Owner operational reports, current chart/query helpers, Metrics Registry and warehouse reader. DATA-DASHBOARDS must consume governed metrics/warehouse evidence, preserve Organization/Business/Branch scope and freshness semantics, and must not reintroduce arbitrary OLTP BI queries, duplicate metric definitions, invent attribution or create a second dashboard truth store.
+- Work Package: `SECTION ANALYTICS_REPORTING -> DATA-DASHBOARDS`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the governed dashboard/data-source boundary.
+- The pre-change `/reports` surface was still an OLTP-heavy reporting path: it issued multiple direct table scans and read raw WhatsApp `payload` evidence for report construction. DATA-DASHBOARDS replaced that historical-reporting path with a server-only governed dashboard composer.
+- Historical metrics now resolve only through the versioned Metrics Registry plus the rebuildable Analytics Warehouse. The dashboard does not introduce a new dashboard fact/event/snapshot table, arbitrary Production SQL surface or second analytics truth.
+- Live current-state gauges are explicitly marked `LIVE` and use bounded count-only reads from canonical business authorities. Historical and current-state semantics are not mixed.
+- Organization / Business / Branch filters are validated from the authenticated user's RLS-visible hierarchy. Unsupported lower-level metrics do not silently widen to Organization scope.
+- Historical windows are bounded to 7 / 30 / 90 days and the warehouse read remains capped at 10,000 rows. Warehouse freshness, last complete watermark and truncation state are surfaced to the UI.
+- MONEY metrics remain grouped by currency; no OMR/USD/AED cross-currency total is fabricated.
+- Response Time and Retention remain explicitly `Unavailable` because the current Metrics Registry does not yet define governed response-time or retention/churn semantics. The dashboard does not derive them from ad hoc message scans or present zero as if it were evidence.
+- Dashboard coverage includes Leads, Customers/People, Conversations, Sales/Pipeline, Bookings, Quotes, Orders, Invoices, Revenue/Payments, Staff/Tasks, Channels, AI, Workflows, Campaigns and recent warehouse activity. Attribution remains outside this package.
+- Implementation PR #461 final head `72ce8f46ad7b66a11ba1e982fae96c2e336fe235` passed exact-head CI `37186870968`, including lint, typecheck, full tests, PostgreSQL 17 migration-chain verification, Next build, Vinext and Cloudflare scheduled-runtime verification.
+- PR #461 squash-merged to `main@741e0decdd761769d5053ac15af0b7aa98dbe7a0`. Exact-main CI `37187060713` and Cloudflare Production Deploy `37187253345` both succeeded on that exact SHA.
+- Local controlled verification recorded DATA-DASHBOARDS targeted `8/8` PASS and full suite `255 files / 1,698 tests` PASS; lint had `0` errors with the existing `13` baseline warnings; typecheck and Production Next build passed.
+- Production backing evidence after deploy: Metrics Registry `18` ACTIVE definitions, `0` malformed; Analytics Warehouse `9,482` facts, freshness lag approximately `37s`, successful checkpoint and `last_inserted_count=0`; canonical hierarchy currently has `tenant_businesses=0`, `branches=0`.
+- Production live authorities remained real, not synthesized: Leads `19`, Sales Conversations `12`, Campaigns `7`, Agent Runs `37`; CRM People/Deals/Tasks, Bookings, Quotes, Orders, Invoices, Payment Intents and Automation Rules were currently `0`.
+- Unauthenticated Production `/reports` returns the login shell and does not expose dashboard markers, KPI content or the Organization identifier. No synthetic customer, business, branch, conversation, commerce, payment, metric or dashboard row was created for verification.
+- DATA-DASHBOARDS required **no schema migration**.
+
+**Fresh continuation cursor:** `SECTION ANALYTICS_REPORTING -> DATA-ATTRIBUTION`.
+
+Before mutation, fresh-audit the existing Marketing Attribution implementation, campaign/source evidence, Lead/Conversation/Deal/Order/Payment lifecycle timestamps, catalog/product-send evidence, UTM/referrer/click identifiers and current reports. DATA-ATTRIBUTION must remain observational and evidence-based unless explicit causal evidence exists; it must not manufacture touchpoints, retroactively assign conversions without timestamps, conflate current state with historical conversion, or create a second campaign/customer/revenue truth store.
 
 ---
 
