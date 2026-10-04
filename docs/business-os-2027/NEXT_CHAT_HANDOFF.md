@@ -156,9 +156,25 @@
 - Unauthenticated Production `/reports` returns the login shell and does not expose dashboard markers, KPI content or the Organization identifier. No synthetic customer, business, branch, conversation, commerce, payment, metric or dashboard row was created for verification.
 - DATA-DASHBOARDS required **no schema migration**.
 
-**Fresh continuation cursor:** `SECTION ANALYTICS_REPORTING -> DATA-ATTRIBUTION`.
+## DATA-ATTRIBUTION Production closeout — 2026-10-04
 
-Before mutation, fresh-audit the existing Marketing Attribution implementation, campaign/source evidence, Lead/Conversation/Deal/Order/Payment lifecycle timestamps, catalog/product-send evidence, UTM/referrer/click identifiers and current reports. DATA-ATTRIBUTION must remain observational and evidence-based unless explicit causal evidence exists; it must not manufacture touchpoints, retroactively assign conversions without timestamps, conflate current state with historical conversion, or create a second campaign/customer/revenue truth store.
+- Work Package: `SECTION ANALYTICS_REPORTING -> DATA-ATTRIBUTION`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled observational attribution contract, Production schema/runtime and deployed `/marketing-attribution` surface. **Real Production outcome-credit E2E is not claimed** because there is currently no eligible real Production outcome evidence.
+- Implementation PR #463 final head `31cb6e3413d965f0ec2c42c75716db43b1a1efba` passed exact-head CI `37193975571` and merged to canonical `main@ec6be08f33a5087c982002ac090994e16c5135ec`.
+- Exact-main CI `37194222409` was freshly re-read and its `validate` job is `success`. Cloudflare Production Deploy `37194373534` was freshly re-read and its `deploy` job is `success`; the deploy log contains the built `ƒ /marketing-attribution` route and the production Worker-route/routed-smoke steps completed successfully.
+- Production migration `data_attribution_v2` is live as version `20261004103053`, applied from the exact current-main migration blob `f9c3ded8f453b05be0d2825174d6adc3266715ec` (`supabase/migrations/20261004094009_data_attribution_v2.sql`).
+- `public.get_observational_attribution_v2(uuid,text,text,integer,integer)` exists as **SECURITY INVOKER**. `anon` has no EXECUTE; `authenticated` and `service_role` do. V1 `public.get_marketing_attribution(...)` remains present.
+- The V2 output contract includes `outcome_type`, `outcome_value_class`, `collected_money_evidence`, `causal_claim` and `evidence_basis`. The runtime contract continues to return `causal_claim=false`.
+- All five bounded indexes are present: Deal WON, Booking COMPLETED, Quote ACCEPTED, Order FULFILLED and Payment CAPTURED. No public attribution table or materialized view exists, so the package did not create a second attribution truth store.
+- Fresh Production counts are Campaigns `7`, Outreach Messages `43`, CRM Deals `0`, Bookings `0`, Quotes `0`, Orders `0`, Payment Intents `0`, Payment Transactions `0`. The eligible Organization intersection is empty, so no real V2 outcome-credit row can currently be verified end-to-end without fabricating Production data.
+- No synthetic tenant, credential, customer, commerce/payment object, attribution row or provider message was created for verification.
+- Post-migration Security Advisor has **no DATA-ATTRIBUTION-specific finding**. Performance Advisor reports only the five newly created bounded indexes as `unused_index` INFO, which is expected with zero eligible Production outcomes and is not treated as a schema regression.
+- Attribution remains observational only: Sales/Quote/Order value is not revenue; only CAPTURED payment carries collected-money evidence; exact canonical Lead linkage is mandatory; fuzzy identity, guessed campaign revenue, invented UTM history and arbitrary cross-channel matching remain prohibited.
+- A direct unauthenticated GET to the route was not re-probed from the current tool network, so no separate redirect-status claim is added. No fake authenticated browser session was created.
+
+**Fresh continuation cursor:** `SECTION ANALYTICS_REPORTING -> DATA-ASK`.
+
+Before DATA-ASK mutation, fresh-audit the current Metrics Registry, Analytics Warehouse, dashboard composer, semantic definitions and any existing natural-language/query surfaces. DATA-ASK must resolve only governed metric/semantic contracts and bounded canonical projections; it must not expose arbitrary Production SQL, create a second metrics/warehouse truth, bypass RLS/IAM, or let model-generated text become execution authority.
 
 ---
 
