@@ -19,6 +19,7 @@ describe('session proxy bypass paths', () => {
   it('bypasses session auth only for exact internal-key-protected server endpoints', () => {
     expect(shouldBypassSession('/api/ai/process-inbound')).toBe(true);
     expect(shouldBypassSession('/api/outreach/approved-send')).toBe(true);
+    expect(shouldBypassSession('/api/operations/analytics-warehouse')).toBe(true);
     expect(shouldBypassSession('/api/operations/channel-guard')).toBe(true);
     expect(shouldBypassSession('/api/operations/email-shadow')).toBe(true);
     expect(shouldBypassSession('/api/operations/heartbeat')).toBe(true);
@@ -32,6 +33,7 @@ describe('session proxy bypass paths', () => {
     expect(shouldBypassSession('/approvals')).toBe(false);
     expect(shouldBypassSession('/api/outreach/approved-send/extra')).toBe(false);
     expect(shouldBypassSession('/api/ai/process-inbound/extra')).toBe(false);
+    expect(shouldBypassSession('/api/operations/analytics-warehouse/extra')).toBe(false);
     expect(shouldBypassSession('/api/operations/tick/extra')).toBe(false);
     expect(shouldBypassSession('/api/operations/report/extra')).toBe(false);
     expect(shouldBypassSession('/api/operations/telegram-daily-digest/extra')).toBe(false);

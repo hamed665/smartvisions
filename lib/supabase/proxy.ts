@@ -9,6 +9,7 @@ const SESSION_BYPASS_PATHS = new Set([
   '/api/payments/oman/thawani/reconcile',
   '/api/ai/process-inbound',
   '/api/outreach/approved-send',
+  '/api/operations/analytics-warehouse',
   '/api/operations/channel-guard',
   '/api/operations/email-shadow',
   '/api/operations/heartbeat',
