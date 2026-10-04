@@ -115,9 +115,29 @@
 - Production verification remained side-effect clean: no synthetic customer, conversation, Booking, Quote, Order, Invoice, Payment, usage, channel event or metric fact was created.
 - Post-migration advisor categories remain on the existing baseline: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`. No DATA-EVENT-METRICS-specific advisor regression was introduced.
 
-**Fresh continuation cursor:** `SECTION ANALYTICS_REPORTING -> DATA-WAREHOUSE`.
+## DATA-WAREHOUSE Production closeout — 2026-10-04
 
-Before mutation, fresh-audit the canonical event feed, OLTP query/report load, existing queues/outbox/scheduled jobs, Production Postgres scale, Cloudflare/VPS runtime boundaries, backfill needs and retention/freshness requirements. DATA-WAREHOUSE must establish a bounded analytics-store/CDC boundary only where operational evidence justifies it; it must not create a second event truth, duplicate the Metrics Registry, invent history/attribution, or move ordinary transactional authority out of canonical OLTP tables.
+- Work Package: `SECTION ANALYTICS_REPORTING -> DATA-WAREHOUSE`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the current-scale logical warehouse boundary.
+- Fresh Production evidence before implementation showed a database of approximately `49 MB`, about `9.4k` canonical analytics events, one Organization, no Business/Branch rows and no active query older than 10 seconds. On that evidence, a separate BigQuery/ClickHouse/WAL-CDC stack was intentionally **DEFERRED_WITH_REASON** rather than creating a second operational system without load justification.
+- Implementation PR #457 final head `8e7e37b68fa043ebd2d496fd01b2ca8e0bfa83d1` passed exact-head CI `37182035797`, including lint, typecheck, full tests, the complete PostgreSQL 17 migration chain plus DATA-WAREHOUSE smoke, Next build, Vinext and Cloudflare scheduled-runtime verification.
+- PR #457 squash-merged to canonical `main@32d32de820a083264af1232ce4f6ffbafda62cc5`. Exact-main CI `37182273103` and Cloudflare Production Deploy `37182452304` both succeeded on that exact SHA.
+- Migration source `supabase/migrations/20261004055417_data_warehouse.sql` (merged blob `26af8d2479e5b20e4634664d05e20d59c4e19fcc`) is applied in Supabase Production as `data_warehouse@20261004062128`.
+- `analytics_warehouse_facts` is a **rebuildable, non-authoritative projection** over `analytics_event_feed_v1`; canonical OLTP/event authorities remain business truth.
+- `analytics_warehouse_checkpoints` stores only projection watermark/freshness/backfill metadata. It is not a second queue, scheduler, event ledger or business-fact authority.
+- `sync_analytics_warehouse_v1` is SECURITY INVOKER and trusted-only. Incremental windows advance at most 7 days, apply a 2-day late-event lookback, cap new facts at 5,000 per sync, use per-Organization advisory locking and support explicit backfills capped at 31 days.
+- `read_analytics_warehouse_v1` is SECURITY INVOKER and service-only; reads are bounded to 366 days, 10,000 rows and 64 event names. It does not expose arbitrary Production SQL.
+- `analytics_warehouse_health_v1` is `security_invoker=true` and service-only.
+- Warehouse facts exclude raw provider payloads, lifecycle evidence blobs, Audit before/after bodies and request hashes. Production verification found no raw-evidence columns.
+- Both warehouse tables have RLS enabled. Browser roles cannot read facts/checkpoints or execute sync/read functions; `service_role` has the trusted access path.
+- Existing Cloudflare Cron drives warehouse projection through `/api/operations/analytics-warehouse` and the existing internal operations boundary. No `pg_cron`, `pgmq`, second scheduler or second CDC/event authority was introduced.
+- Controlled Production initialization used only real canonical events. After catch-up, `analytics_event_feed_v1=9,464` and `analytics_warehouse_facts=9,464`, with one checkpoint, freshness lag `0s`, and a final idempotent replay reporting `last_inserted_count=0`. No synthetic business/channel/payment/customer fact was created.
+- The deployed operations endpoint is present behind the Production application boundary; an unauthenticated POST receives HTTP `307` to login rather than executing warehouse work.
+- Post-migration advisor categories remain on the prior baseline: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`. No DATA-WAREHOUSE-specific advisor regression was introduced.
+
+**Fresh continuation cursor:** `SECTION ANALYTICS_REPORTING -> DATA-DASHBOARDS`.
+
+Before mutation, fresh-audit the existing `/reports` surface, Founder/Owner operational reports, current chart/query helpers, Metrics Registry and warehouse reader. DATA-DASHBOARDS must consume governed metrics/warehouse evidence, preserve Organization/Business/Branch scope and freshness semantics, and must not reintroduce arbitrary OLTP BI queries, duplicate metric definitions, invent attribution or create a second dashboard truth store.
 
 ---
 

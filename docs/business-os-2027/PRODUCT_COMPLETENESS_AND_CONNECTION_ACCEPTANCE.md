@@ -109,9 +109,22 @@
 - Production verification observed `9,398` projected canonical events without creating synthetic facts.
 - Tracked Supabase advisor categories remain on the prior baseline; no DATA-EVENT-METRICS-specific regression was introduced.
 
-**Fresh continuation cursor:** `SECTION ANALYTICS_REPORTING -> DATA-WAREHOUSE`.
+## DATA-WAREHOUSE Production closeout — 2026-10-04
 
-Before mutation, fresh-audit the canonical event feed, OLTP query/report load, existing queues/outbox/scheduled jobs, Production Postgres scale, Cloudflare/VPS runtime boundaries, backfill needs and retention/freshness requirements. DATA-WAREHOUSE must establish a bounded analytics-store/CDC boundary only where operational evidence justifies it; it must not create a second event truth, duplicate the Metrics Registry, invent history/attribution, or move ordinary transactional authority out of canonical OLTP tables.
+- Work Package: `SECTION ANALYTICS_REPORTING -> DATA-WAREHOUSE`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the current-scale logical warehouse boundary.
+- Implementation PR #457 head `8e7e37b68fa043ebd2d496fd01b2ca8e0bfa83d1` passed exact-head CI `37182035797` and merged to `main@32d32de820a083264af1232ce4f6ffbafda62cc5`.
+- Exact-main CI `37182273103` and Cloudflare Production Deploy `37182452304` succeeded on that exact SHA.
+- Migration `data_warehouse@20261004062128` is live from source blob `26af8d2479e5b20e4634664d05e20d59c4e19fcc`.
+- Production catch-up projected `9,464` real canonical feed events into exactly `9,464` rebuildable warehouse facts with one checkpoint, freshness lag `0s` and an idempotent final replay inserting `0` rows.
+- RLS, service-only ACLs, SECURITY INVOKER functions/views and raw-evidence exclusions are verified in Production.
+- Existing Cloudflare Cron is reused. No second event truth, queue, scheduler, `pg_cron`, `pgmq` or causal-attribution authority was added.
+- A separate external warehouse/WAL CDC stack is **DEFERRED_WITH_REASON** at the current verified scale (~49 MB database / ~9.4k events) until load evidence warrants it.
+- Tracked Supabase advisor categories remain on the prior baseline; no DATA-WAREHOUSE-specific regression was introduced.
+
+**Fresh continuation cursor:** `SECTION ANALYTICS_REPORTING -> DATA-DASHBOARDS`.
+
+Before mutation, fresh-audit the existing `/reports` surface, Founder/Owner operational reports, current chart/query helpers, Metrics Registry and warehouse reader. DATA-DASHBOARDS must consume governed metrics/warehouse evidence, preserve Organization/Business/Branch scope and freshness semantics, and must not reintroduce arbitrary OLTP BI queries, duplicate metric definitions, invent attribution or create a second dashboard truth store.
 
 ---
 
@@ -1343,8 +1356,8 @@ The following baseline inventory preserves every existing semantic Work Package,
 ### ANALYTICS_REPORTING — Metrics, attribution and decision support
 
 - `DATA-EVENT-METRICS` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**
-- `DATA-WAREHOUSE` — **NEXT**
-- `DATA-DASHBOARDS`
+- `DATA-WAREHOUSE` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the current-scale logical warehouse boundary; physical external warehouse/WAL CDC **DEFERRED_WITH_REASON**
+- `DATA-DASHBOARDS` — **NEXT**
 - `DATA-ATTRIBUTION`
 - `DATA-ASK`
 - `DATA-EXPORTS`
