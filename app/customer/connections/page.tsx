@@ -74,6 +74,23 @@ export default async function CustomerConnectionsPage({
 
         <p className="muted">{whatsapp.reason}</p>
 
+        {context.whatsappBindings.length > 1 ? (
+          <div className="settingsList">
+            {context.whatsappBindings.map((row) => (
+              <div className="settingsRow" key={row.bindingId ?? row.destinationLabel ?? row.status}>
+                <div>
+                  <strong>{row.destinationLabel ?? 'WhatsApp binding'}</strong>
+                  <span className="muted smallText">{row.status}</span>
+                </div>
+                <div>
+                  <span className="muted smallText">Last verified: {row.lastVerifiedAt ? new Date(row.lastVerifiedAt).toLocaleString() : 'No recent evidence'}</span>
+                  {row.incidentCode ? <span className="muted smallText">Incident: {row.incidentCode}</span> : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         <div className="quickActions">
           {whatsapp.canConnect ? <span aria-disabled="true">Connect WhatsApp</span> : null}
           {whatsapp.canReconnect ? <span aria-disabled="true">Reconnect WhatsApp</span> : null}
