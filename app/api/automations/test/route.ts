@@ -6,6 +6,7 @@ type TestBody = {
   triggerKey?: string;
   conditions?: unknown;
   actions?: unknown;
+  config?: unknown;
   subjectId?: string | null;
 };
 
@@ -18,6 +19,9 @@ export async function POST(request: Request) {
   const triggerKey = String(body?.triggerKey ?? '').trim().toUpperCase();
   const conditions = body?.conditions;
   const actions = body?.actions;
+  const config = body?.config && typeof body.config === 'object' && !Array.isArray(body.config)
+    ? body.config as Record<string, unknown>
+    : {};
   const subjectId = String(body?.subjectId ?? '').trim() || null;
 
   if (!triggerKey || !isArray(conditions) || !isArray(actions) || actions.length === 0) {
@@ -44,6 +48,14 @@ export async function POST(request: Request) {
       ok: false,
       error: trigger ? `Trigger is not publishable: ${trigger.availability}` : 'Trigger is not cataloged',
     }, { status: 409 });
+  }
+
+  const { error: scheduleError } = await service.rpc(
+    'validate_automation_reporting_schedule',
+    { p_trigger_key: triggerKey, p_config: config },
+  );
+  if (scheduleError) {
+    return NextResponse.json({ ok: false, error: scheduleError.message }, { status: 409 });
   }
 
   const { data: conditionLeaves, error: conditionError } = await service.rpc(
