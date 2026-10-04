@@ -1132,6 +1132,26 @@ Each row is REQUIRED for the applicable complete-product scope; partial foundati
 | Locale/accessibility | UX-LOCALIZATION; UX-ACCESSIBILITY | English core UI, Arabic/RTL and planned Persian/Hindi/Urdu needs, correct dates/currency/timezone, keyboard/screen reader, mobile forms and errors |
 | Operations/security | ENT-IAM; ENT-DATA-GOVERNANCE; ENT-SECURITY; ENT-INCIDENT; ENT-OBSERVABILITY; ENT-PERFORMANCE; ENT-BACKUP-DR; ENT-RELEASE; ENT-CONTRACTS; COMM-OPERATIONS | Auth/session/MFA, governance/deletion/export/residency, audit, alerts/SLOs, capacity, upgrades, restore drills/rollback and documented support terms |
 
+### COMMERCIAL-CUSTOMER-ACCESS / WHATSAPP READINESS OVERLAY — registered 2026-10-05
+
+This overlay preserves the canonical Phase 0–12 scope and Work Package order. It is **not a new Work Package** and does not move the execution cursor away from `SAAS-AGENCY`.
+
+Required acceptance mapping:
+
+- `SAAS-AGENCY`: a legitimate client user can be granted explicit scoped access to the intended Organization/Business through the canonical membership model; delegated access never implies cross-tenant visibility.
+- `ENT-IAM`: invitation acceptance, sign-in, session/recovery and role resolution reuse the canonical Supabase Auth/IAM path. No parallel customer-user directory is permitted.
+- `UX-BUSINESS-WEB`: customer-facing Login/Invite/First Login/Getting Started/Connections surfaces must replace operator-only wording for customer contexts and show only role-eligible product areas.
+- `UX-MOBILE` / `UX-PWA`: the current visual reference is `https://designs.magicpath.ai/v1/fancily-dawn-8200`; it is a design reference only. Canonical architecture, permissions, evidence states and accessibility/localization requirements override the mockup.
+- Customer navigation should preserve the intended `Home / Inbox / CRM / AI / More` mobile model unless later UX evidence justifies a versioned change. Founder, Super Admin and other operator-only controls are not customer navigation.
+- WhatsApp setup must reuse the existing canonical `communication_channel_bindings`, setup-attempt/session, Meta Embedded Signup, Vault, provisioning, Chatwoot projection, message/provenance/reconciliation, channel-health and reconnect/disconnect authorities.
+- A customer or delegated Meta administrator may receive only the bounded WhatsApp setup capability; possessing a setup link must not grant CRM, billing or unrelated Business OS access.
+- Smart Visions must never collect the customer's Meta/Facebook password or copied long-lived access token in the browser.
+- Existing WhatsApp Business mobile use remains non-destructive; same-number use is allowed only through verified official coexistence eligibility.
+- First-real-customer acceptance is recorded separately as real evidence: invitation/authentication -> scoped Organization/Business -> WhatsApp authorization -> provider/subscription readiness -> Chatwoot projection -> inbound evidence -> governed human/AI handling -> audit/health. Missing provider/customer evidence stays `BLOCKED_EXTERNAL`, `DEPENDENCY_PENDING` or otherwise honestly dispositioned.
+- No synthetic Production Organization, Business, membership, WhatsApp credential, provider message or commercial record may be created merely to turn this overlay green.
+
+The overlay exists to make the product commercially usable earlier **without** pretending that `UX-MOBILE`, Enterprise or FINAL acceptance has been completed before its canonical turn.
+
 ### IDENTITY_CRM evidence checkpoint — 2026-09-28
 
 - `CRM-PERSON-CONTACT` and the internally controlled `CRM-IDENTITY-GRAPH` paths are Production-verified without fabricating People.
