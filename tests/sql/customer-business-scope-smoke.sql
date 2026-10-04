@@ -298,6 +298,47 @@ $owner_authority_preserved$;
 reset role;
 select set_config('request.jwt.claim.sub','',false);
 
+-- Seed connected integration authority only so Chatwoot mapping preconditions are real.
+insert into public.integration_connections(
+  id,organization_id,provider,channel,enabled,status,account_label,config
+) values
+  ('30000000-0000-4000-8000-00000000f601','00000000-0000-0000-0000-00000000f601','CHATWOOT','WEB_CHAT',true,'CONNECTED','Scope Org A','{}'::jsonb),
+  ('30000000-0000-4000-8000-00000000f602','00000000-0000-0000-0000-00000000f602','CHATWOOT','WEB_CHAT',true,'CONNECTED','Scope Org B','{}'::jsonb);
+
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000e601',false);
+select (public.create_communication_channel_binding(
+  '00000000-0000-0000-0000-00000000f601',
+  '20000000-0000-4000-8000-00000000f601',
+  null,
+  '30000000-0000-4000-8000-00000000f601',
+  'WEB_CHAT',
+  'scope-binding-a'
+)).id;
+select (public.create_communication_channel_binding(
+  '00000000-0000-0000-0000-00000000f601',
+  '20000000-0000-4000-8000-00000000f602',
+  null,
+  '30000000-0000-4000-8000-00000000f601',
+  'WEB_CHAT',
+  'scope-binding-b'
+)).id;
+reset role;
+select set_config('request.jwt.claim.sub','',false);
+
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000e606',false);
+select (public.create_communication_channel_binding(
+  '00000000-0000-0000-0000-00000000f602',
+  '20000000-0000-4000-8000-00000000f603',
+  null,
+  '30000000-0000-4000-8000-00000000f602',
+  'WEB_CHAT',
+  'scope-binding-foreign'
+)).id;
+reset role;
+select set_config('request.jwt.claim.sub','',false);
+
 -- Create Chatwoot mappings through the existing governed OWNER command path.
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000e601',false);
