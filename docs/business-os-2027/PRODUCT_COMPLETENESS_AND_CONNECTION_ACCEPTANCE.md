@@ -116,9 +116,10 @@
 - Implementation PR #457 head `8e7e37b68fa043ebd2d496fd01b2ca8e0bfa83d1` passed exact-head CI `37182035797` and merged to `main@32d32de820a083264af1232ce4f6ffbafda62cc5`.
 - Exact-main CI `37182273103` and Cloudflare Production Deploy `37182452304` succeeded on that exact SHA.
 - Migration `data_warehouse@20261004062128` is live from source blob `26af8d2479e5b20e4634664d05e20d59c4e19fcc`.
-- Production catch-up projected `9,464` real canonical feed events into exactly `9,464` rebuildable warehouse facts with one checkpoint, freshness lag `0s` and an idempotent final replay inserting `0` rows.
+- Controlled Production initialization projected `9,464` real canonical feed events into exactly `9,464` rebuildable warehouse facts with `0` duplicate key groups. After runtime hardening PR #459, the independently verified scheduled RESULT heartbeat at `2026-10-04T06:51:07Z` recorded warehouse status `200`, `organizations=1`, `inserted=1`, `caughtUp=1`, `failed=0`. Immediately after that heartbeat persisted its own Audit event, Production read `9,470` feed rows and `9,469` warehouse facts with `0` duplicate key groups; the one-row difference is expected one-tick observer lag.
 - RLS, service-only ACLs, SECURITY INVOKER functions/views and raw-evidence exclusions are verified in Production.
 - Existing Cloudflare Cron is reused. No second event truth, queue, scheduler, `pg_cron`, `pgmq` or causal-attribution authority was added.
+- Runtime hardening PR #459 (`e31cee0ce90df71252843786805dc1c8f90b1a14`) fixed the exact warehouse internal-route session bypass after Production exposed an initial `307`; exact-main CI `37183333053` and deploy `37183506208` passed, an unauthenticated Production POST now returns route-level `401`, and the subsequent natural scheduled heartbeat proved end-to-end Cron execution with status `200` and zero warehouse failures.
 - A separate external warehouse/WAL CDC stack is **DEFERRED_WITH_REASON** at the current verified scale (~49 MB database / ~9.4k events) until load evidence warrants it.
 - Tracked Supabase advisor categories remain on the prior baseline; no DATA-WAREHOUSE-specific regression was introduced.
 
@@ -1356,7 +1357,7 @@ The following baseline inventory preserves every existing semantic Work Package,
 ### ANALYTICS_REPORTING — Metrics, attribution and decision support
 
 - `DATA-EVENT-METRICS` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**
-- `DATA-WAREHOUSE` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the current-scale logical warehouse boundary; physical external warehouse/WAL CDC **DEFERRED_WITH_REASON**
+- `DATA-WAREHOUSE` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the current-scale logical warehouse boundary; scheduled internal route hardened by PR #459; physical external warehouse/WAL CDC **DEFERRED_WITH_REASON**
 - `DATA-DASHBOARDS` — **NEXT**
 - `DATA-ATTRIBUTION`
 - `DATA-ASK`
