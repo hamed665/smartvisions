@@ -302,7 +302,8 @@ select set_config('request.jwt.claim.sub','',false);
 insert into public.integration_connections(
   id,organization_id,provider,channel,enabled,status,account_label,config
 ) values
-  ('30000000-0000-4000-8000-00000000f601','00000000-0000-0000-0000-00000000f601','CHATWOOT','WEB_CHAT',true,'CONNECTED','Scope Org A','{}'::jsonb),
+  ('30000000-0000-4000-8000-00000000f601','00000000-0000-0000-0000-00000000f601','CHATWOOT','WEB_CHAT',true,'CONNECTED','Scope Org A Web','{}'::jsonb),
+  ('30000000-0000-4000-8000-00000000f603','00000000-0000-0000-0000-00000000f601','CHATWOOT','EMAIL',true,'CONNECTED','Scope Org A Email','{}'::jsonb),
   ('30000000-0000-4000-8000-00000000f602','00000000-0000-0000-0000-00000000f602','CHATWOOT','WEB_CHAT',true,'CONNECTED','Scope Org B','{}'::jsonb);
 
 set role authenticated;
@@ -319,8 +320,8 @@ select (public.create_communication_channel_binding(
   '00000000-0000-0000-0000-00000000f601',
   '20000000-0000-4000-8000-00000000f602',
   null,
-  '30000000-0000-4000-8000-00000000f601',
-  'WEB_CHAT',
+  '30000000-0000-4000-8000-00000000f603',
+  'EMAIL',
   'scope-binding-b'
 )).id;
 reset role;
