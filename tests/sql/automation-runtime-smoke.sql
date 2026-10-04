@@ -69,8 +69,17 @@ begin
         jsonb_typeof(metadata->'executionSurfaces') is distinct from 'array'
         or metadata->'executionSurfaces' @> '["AUTOMATION"]'::jsonb
       )
-  )<>6 then
-    raise exception 'AUTO-RUNTIME did not close all six AUTOMATION-surface action contracts';
+  )<>7 then
+    raise exception 'AUTO-RUNTIME/REPORTING available Automation-surface action count is unexpected';
+  end if;
+
+  if not exists(
+    select 1 from public.tool_action_registry
+    where action_key='DELIVER_DATA_EXPORT'
+      and availability='AVAILABLE'
+      and metadata->>'scheduleProducer'='DATA_REPORTING_RECONCILER'
+  ) then
+    raise exception 'DATA-REPORTING action is not available to Automation runtime';
   end if;
 
   if not exists(
