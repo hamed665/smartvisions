@@ -77,7 +77,7 @@ export type SaasBillingOverview = {
     hasActivePricing: boolean;
     hasBillingProfile: boolean;
     collectionConfigured: false;
-    couponAuthority: 'PENDING_SAAS_COUPONS';
+    couponAuthority: 'AVAILABLE';
   };
 };
 
@@ -283,7 +283,7 @@ export async function loadSaasBillingOverview(input: {
       hasActivePricing: pricingRow?.status === 'ACTIVE' && planRow?.status === 'ACTIVE',
       hasBillingProfile: Boolean(profile),
       collectionConfigured: false,
-      couponAuthority: 'PENDING_SAAS_COUPONS',
+      couponAuthority: 'AVAILABLE',
     },
   };
 }
