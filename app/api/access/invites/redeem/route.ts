@@ -22,33 +22,60 @@ export async function POST(request: Request) {
     }
 
     const sessionSecret = createCustomerInviteSecret();
+    const sessionHash = hashCustomerInviteSecret(sessionSecret);
     const service = createSupabaseServiceClient();
-    const { data, error } = await service.rpc('redeem_organization_member_invitation', {
-      p_invitation_token_hash: hashCustomerInviteSecret(token),
-      p_session_token_hash: hashCustomerInviteSecret(sessionSecret),
-      p_request_key: `customer-invite-redeem:${crypto.randomUUID()}`,
-    });
+
+    const { data, error } = await service.rpc(
+      'redeem_organization_member_invitation',
+      {
+        p_invitation_token_hash: hashCustomerInviteSecret(token),
+        p_session_token_hash: sessionHash,
+        p_request_key: `customer-invite-redeem:${crypto.randomUUID()}`,
+      },
+    );
     const row = Array.isArray(data) ? data[0] : data;
 
     if (error || !row?.invitation_id || !row?.session_expires_at) {
-      return NextResponse.json({ error: 'Invitation is expired, used, or revoked.' }, {
-        status: 410,
-        headers: { 'Cache-Control': 'private, no-store' },
-      });
+      return NextResponse.json(
+        { error: 'Invitation is expired, used, or revoked.' },
+        {
+          status: 410,
+          headers: { 'Cache-Control': 'private, no-store' },
+        },
+      );
+    }
+
+    const { data: contextData, error: contextError } = await service.rpc(
+      'get_organization_member_business_invitation_context',
+      { p_session_token_hash: sessionHash },
+    );
+    const context = Array.isArray(contextData) ? contextData[0] : contextData;
+    if (contextError || !context?.invitation_id) {
+      return NextResponse.json(
+        { error: 'Invitation context is unavailable.' },
+        {
+          status: 410,
+          headers: { 'Cache-Control': 'private, no-store' },
+        },
+      );
     }
 
     const response = NextResponse.json({
       ok: true,
-      invitationId: row.invitation_id,
-      organizationId: row.organization_id,
-      email: row.email,
-      role: row.role,
-      version: row.version,
-      expiresAt: row.session_expires_at,
-      acceptedAt: row.accepted_at,
+      invitationId: context.invitation_id,
+      organizationId: context.organization_id,
+      organizationName: context.organization_name,
+      tenantBusinessId: context.tenant_business_id ?? null,
+      businessName: context.business_name ?? null,
+      email: context.email,
+      role: context.role,
+      version: context.version,
+      expiresAt: context.session_expires_at,
+      acceptedAt: context.accepted_at,
     }, {
       headers: { 'Cache-Control': 'private, no-store' },
     });
+
     response.cookies.set(
       CUSTOMER_INVITE_COOKIE,
       sessionSecret,
@@ -56,9 +83,12 @@ export async function POST(request: Request) {
     );
     return response;
   } catch {
-    return NextResponse.json({ error: 'Unable to redeem invitation.' }, {
-      status: 500,
-      headers: { 'Cache-Control': 'private, no-store' },
-    });
+    return NextResponse.json(
+      { error: 'Unable to redeem invitation.' },
+      {
+        status: 500,
+        headers: { 'Cache-Control': 'private, no-store' },
+      },
+    );
   }
 }

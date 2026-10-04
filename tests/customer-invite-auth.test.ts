@@ -66,7 +66,7 @@ describe('customer invite + auth capability', () => {
     const acceptRoute = read('app/api/access/invites/accept/route.ts');
     expect(acceptRoute).toContain("import { createClient } from '@/lib/supabase/server'");
     expect(acceptRoute).toContain('supabase.auth.getUser()');
-    expect(acceptRoute).toContain("supabase.rpc('accept_organization_member_invitation'");
+    expect(acceptRoute).toMatch(/supabase\.rpc\(\s*['"]accept_organization_member_(?:business_)?invitation['"]/);
     expect(acceptRoute).not.toContain('createSupabaseServiceClient');
     expect(acceptRoute).not.toContain('p_actor_user_id');
     expect(acceptRoute).not.toContain('p_actor_email');
