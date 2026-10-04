@@ -121,6 +121,18 @@ create table public.email_events (
   created_at timestamptz not null default now()
 );
 
+-- Test-only reconstruction of the legacy Preview lifecycle authority.
+-- The parent previews table is intentionally not recreated in this compact bootstrap;
+-- modern migrations only require the event evidence shape here.
+create table public.preview_events (
+  id uuid primary key,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  preview_id uuid not null,
+  event_type text not null,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
 create table public.followup_jobs (
   id uuid primary key,
   organization_id uuid not null references public.organizations(id) on delete cascade,
