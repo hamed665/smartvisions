@@ -38,7 +38,7 @@ insert into public.pricing_versions(
   20,10,4,
   '{"SEATS":1,"FEATURE.ADVANCED":0,"API.REQUESTS":10,"AI.RAW_COST_USD":0.25,"THIRD_PARTY.RAW_COST_USD":0.5}'::jsonb,
   '{"SEATS":5,"FEATURE.ADVANCED":10,"API.REQUESTS":0.5}'::jsonb,
-  now()-interval '2 days'
+  now()-interval '40 days'
 );
 
 insert into public.plan_entitlements(pricing_version_id,feature_key,entitlement_value)
@@ -87,9 +87,9 @@ insert into public.subscriptions(
   '00000000-0000-0000-0000-000000000e01',
   '70000000-0000-0000-0000-000000000e01',
   'ACTIVE',
+  now()-interval '32 days',
+  now()-interval '31 days',
   now()-interval '1 day',
-  now()-interval '1 day',
-  now()+interval '29 days',
   '{"testOnly":true}'::jsonb
 );
 
@@ -101,18 +101,18 @@ insert into public.usage_events(
   (
     '90000000-0000-0000-0000-000000000e01',
     '00000000-0000-0000-0000-000000000e01',
-    'OPENAI','SAAS_BILLING_AI_SMOKE',1,1,'{}'::jsonb,now()
+    'OPENAI','SAAS_BILLING_AI_SMOKE',1,1,'{}'::jsonb,now()-interval '2 days'
   ),
   (
     '90000000-0000-0000-0000-000000000e02',
     '00000000-0000-0000-0000-000000000e01',
-    'GOOGLE_PLACES','SAAS_BILLING_THIRD_PARTY_SMOKE',2,1,'{}'::jsonb,now()
+    'GOOGLE_PLACES','SAAS_BILLING_THIRD_PARTY_SMOKE',2,1,'{}'::jsonb,now()-interval '2 days'
   ),
   (
     '90000000-0000-0000-0000-000000000e03',
     '00000000-0000-0000-0000-000000000e01',
     'EMAIL','SAAS_BILLING_API_SMOKE',0,15,
-    '{"billingUnitKey":"API.REQUESTS"}'::jsonb,now()
+    '{"billingUnitKey":"API.REQUESTS"}'::jsonb,now()-interval '2 days'
   );
 
 set role service_role;
