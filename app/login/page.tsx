@@ -5,12 +5,33 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
+type BusinessContextResponse = {
+  selectedBusiness?: { id?: string } | null;
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  async function destinationAfterSignIn() {
+    try {
+      const response = await fetch('/api/access/business-context', {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-store' },
+      });
+      if (!response.ok) return '/';
+      const body = await response.json() as BusinessContextResponse;
+      const businessId = body.selectedBusiness?.id?.trim();
+      return businessId
+        ? `/customer?businessId=${encodeURIComponent(businessId)}`
+        : '/';
+    } catch {
+      return '/';
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -23,7 +44,7 @@ export default function LoginPage() {
         setError('Invalid email or password.');
         return;
       }
-      router.replace('/');
+      router.replace(await destinationAfterSignIn());
       router.refresh();
     } finally {
       setLoading(false);
@@ -34,8 +55,8 @@ export default function LoginPage() {
     <main className="login-shell">
       <form className="login-card" onSubmit={submit}>
         <p className="eyebrow">SMART VISIONS</p>
-        <h1>Control Center</h1>
-        <p>Private operator access</p>
+        <h1>Sign in</h1>
+        <p>Access your Smart Visions workspace.</p>
         <label>Email<input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
         <label>Password<input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
         {error ? <p role="alert">{error}</p> : null}

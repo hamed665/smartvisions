@@ -6,18 +6,30 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { isPublicShellPath } from '@/lib/public-paths';
 
-const groups = [
+const operatorGroups = [
   ['Sales', [['Dashboard', '/'], ['Hunters', '/hunters'], ['Leads', '/leads'], ['Customers', '/customers'], ['Accounts', '/accounts'], ['Quotes', '/quotes'], ['Orders', '/orders'], ['Invoices', '/invoices'], ['Payments', '/payments'], ['Segments', '/segments'], ['Tasks', '/tasks'], ['Next Actions', '/next-actions'], ['Support Cases', '/support-cases'], ['Customer Success', '/customer-success'], ['Data Quality', '/data-quality'], ['Identity Review', '/identity-review'], ['Intent Leads', '/intent-leads'], ['Campaigns', '/campaigns'], ['Conversations', '/conversations'], ['Hot Leads', '/hot-leads']]],
   ['Growth', [['Outreach', '/outreach'], ['Message Studio', '/messages'], ['Marketing Preferences', '/preferences'], ['Marketing Attribution', '/marketing-attribution'], ['Automations', '/automations'], ['Approvals', '/approvals'], ['Notifications', '/notifications'], ['Portfolio', '/portfolio'], ['Preview Studio', '/preview-studio']]],
   ['Control', [['Command Center', '/command-center'], ['Owner Copilot', '/copilot'], ['Business Twin', '/business-twin'], ['Industry Packs', '/industry-packs'], ['Catalog', '/catalog'], ['Inventory', '/inventory'], ['Services', '/services'], ['Bookings', '/booking/lifecycle'], ['Booking Availability', '/booking/availability'], ['Field Service', '/field-service'], ['Pricing', '/pricing'], ['Markets', '/markets'], ['AI Agents', '/agents'], ['Knowledge Base', '/knowledge'], ['Memory', '/memory'], ['Integrations', '/integrations'], ['Suppression / DNC', '/suppression']]],
   ['Operations', [['Reports', '/reports'], ['Cost & Usage', '/cost-usage'], ['Billing', '/billing'], ['Coupons', '/coupons'], ['Audit Log', '/audit'], ['System', '/system'], ['Settings', '/settings']]],
 ] as const;
 
-const mobilePrimary = [
+const customerGroups = [
+  ['Workspace', [['Home', '/customer'], ['Inbox', '/customer/inbox'], ['CRM', '/customer/crm'], ['AI', '/customer/ai']]],
+  ['Business', [['Connections', '/customer/connections'], ['More', '/customer/more']]],
+] as const;
+
+const operatorMobilePrimary = [
   ['Home', '/', '⌂'],
   ['Inbox', '/conversations', '◫'],
   ['Leads', '/leads', '◎'],
   ['Approvals', '/approvals', '✓'],
+] as const;
+
+const customerMobilePrimary = [
+  ['Home', '/customer', '⌂'],
+  ['Inbox', '/customer/inbox', '◫'],
+  ['CRM', '/customer/crm', '◎'],
+  ['AI', '/customer/ai', '✦'],
 ] as const;
 
 function isActive(pathname: string, href: string) {
@@ -27,14 +39,17 @@ function isActive(pathname: string, href: string) {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const customerPortal = pathname === '/customer' || pathname.startsWith('/customer/');
+  const groups = customerPortal ? customerGroups : operatorGroups;
+  const mobilePrimary = customerPortal ? customerMobilePrimary : operatorMobilePrimary;
 
   const pageTitle = useMemo(() => {
     for (const [, items] of groups) {
       const current = items.find(([, href]) => isActive(pathname, href));
       if (current) return current[0];
     }
-    return 'Smart Visions';
-  }, [pathname]);
+    return customerPortal ? 'Business workspace' : 'Smart Visions';
+  }, [pathname, groups, customerPortal]);
 
   useEffect(() => {
     if (!mobileMenuOpen) return;
@@ -56,7 +71,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="shell">
       <aside className="sidebar">
         <div className="brand">Smart Visions</div>
-        <div className="badge">Growth OS</div>
+        <div className="badge">{customerPortal ? 'Business OS' : 'Growth OS'}</div>
         <nav>
           {groups.map(([group, items]) => (
             <div className="navGroup" key={group}>
@@ -76,7 +91,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <span className="mobileBrandMark">SV</span>
           <div>
             <strong>{pageTitle}</strong>
-            <span>Growth OS</span>
+            <span>{customerPortal ? 'Business OS' : 'Growth OS'}</span>
           </div>
         </div>
         <button
@@ -130,7 +145,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="mobileSheetHeader">
               <div>
                 <strong>Smart Visions</strong>
-                <span>Control Center</span>
+                <span>{customerPortal ? 'Business workspace' : 'Control Center'}</span>
               </div>
               <button type="button" onClick={() => setMobileMenuOpen(false)} aria-label="Close navigation">×</button>
             </div>
