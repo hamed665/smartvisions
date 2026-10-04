@@ -447,6 +447,29 @@ select
   '{}'::jsonb
 from public.preview_events p;
 
+-- security_invoker keeps source-table ACLs in force. The trusted analytics reader
+-- therefore needs explicit read-only privileges on every source authority.
+grant select on table
+  public.audit_logs,
+  public.booking_lifecycle_events,
+  public.bookings,
+  public.branches,
+  public.quote_lifecycle_events,
+  public.quotes,
+  public.order_lifecycle_events,
+  public.orders,
+  public.invoice_lifecycle_events,
+  public.invoices,
+  public.payment_provider_events,
+  public.payment_intents,
+  public.usage_events,
+  public.whatsapp_events,
+  public.email_events,
+  public.reply_events,
+  public.handoff_events,
+  public.preview_events
+to service_role;
+
 revoke all on table public.analytics_event_feed_v1 from public, anon, authenticated, service_role;
 grant select on table public.analytics_event_feed_v1 to service_role;
 
