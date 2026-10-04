@@ -96,9 +96,22 @@
 - Production verification remained side-effect clean: no synthetic tenant, customer, Lead, Deal, Task, Booking, Quote, Order, Invoice, Payment Intent, refund, Campaign, Automation or Owner Copilot action was created.
 - Post-migration advisor categories remain on the existing baseline: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`. No AI-OWNER-COPILOT-specific advisor regression was introduced.
 
-**Fresh continuation cursor:** `SECTION ANALYTICS_REPORTING -> DATA-EVENT-METRICS`.
+## DATA-EVENT-METRICS Production closeout — 2026-10-04
 
-Before mutation, fresh-audit the existing OLTP event/evidence authorities, Audit Log, Conversation/CRM/Booking/Commerce/Payment lifecycle events, usage/cost events, Marketing Attribution evidence and current report/dashboard code. DATA-EVENT-METRICS must define one canonical, versioned Metrics Registry and tenant/business/branch-scoped metric/event semantics without creating a second business-truth store, inventing attribution, or turning arbitrary Production SQL into analytics authority.
+- Work Package: `SECTION ANALYTICS_REPORTING -> DATA-EVENT-METRICS`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**.
+- Implementation PR #455 final head `1e6e0061b0757bb8f37552b2f2ef3428c8cd0fe5` passed exact-head CI `37165627723`. It squash-merged to `main@a4d6f3a93a25912a819df37c0c1c66b5bdc03d4b`; exact-main CI `37165996727` and Cloudflare Production Deploy `37166123590` succeeded on that exact SHA.
+- Migration `supabase/migrations/20261004001135_data_event_metrics.sql` blob `b40aee1cb41147fac19b718c4202c704f2eead9b` is applied in Supabase Production as `data_event_metrics@20261004005145`.
+- The package adds one versioned `metric_definitions` Registry, `metric_registry_current_v1`, `analytics_event_feed_v1` and bounded service-only `read_analytics_event_feed_v1`. It does not create a second event ledger, warehouse, attribution authority or business-truth store.
+- Production has `18` ACTIVE definitions, `0` malformed definitions, `0` unsafe MONEY definitions and exactly one analytics-like table: `metric_definitions`.
+- Both views are `security_invoker=true`; browser roles cannot read the tenant event feed or execute its reader. Raw provider/evidence payload columns are absent.
+- MONEY metrics require currency and disable cross-currency aggregation. All seeded definitions set `causal=false`.
+- Production verification observed `9,398` projected canonical events without creating synthetic facts.
+- Tracked Supabase advisor categories remain on the prior baseline; no DATA-EVENT-METRICS-specific regression was introduced.
+
+**Fresh continuation cursor:** `SECTION ANALYTICS_REPORTING -> DATA-WAREHOUSE`.
+
+Before mutation, fresh-audit the canonical event feed, OLTP query/report load, existing queues/outbox/scheduled jobs, Production Postgres scale, Cloudflare/VPS runtime boundaries, backfill needs and retention/freshness requirements. DATA-WAREHOUSE must establish a bounded analytics-store/CDC boundary only where operational evidence justifies it; it must not create a second event truth, duplicate the Metrics Registry, invent history/attribution, or move ordinary transactional authority out of canonical OLTP tables.
 
 ---
 
@@ -1329,8 +1342,8 @@ The following baseline inventory preserves every existing semantic Work Package,
 
 ### ANALYTICS_REPORTING — Metrics, attribution and decision support
 
-- `DATA-EVENT-METRICS` — **NEXT**
-- `DATA-WAREHOUSE`
+- `DATA-EVENT-METRICS` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**
+- `DATA-WAREHOUSE` — **NEXT**
 - `DATA-DASHBOARDS`
 - `DATA-ATTRIBUTION`
 - `DATA-ASK`
