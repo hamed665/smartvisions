@@ -66,7 +66,9 @@ create table public.saas_coupons (
       benefit_type='FIXED'
       and fixed_amount is not null and fixed_amount > 0
       and currency is not null
-      and currency ~ '^[A-Z]{3}
+      and currency ~ '^[A-Z]{3}$'
+      and percent_bps is null
+      and trial_periods is null
     )
     or (
       benefit_type='PERCENTAGE'
@@ -434,7 +436,6 @@ $$;
 create trigger saas_coupon_discount_line_integrity
 before insert or update or delete on public.saas_billing_line_items
 for each row execute function public.enforce_saas_coupon_discount_line();
-
 
 create or replace function public.saas_coupon_statement_snapshot_bridge()
 returns trigger
