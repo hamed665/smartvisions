@@ -1789,10 +1789,20 @@ The event feed and Metrics Registry are inputs to later Analytics/Reporting work
 
 ## DATA-WAREHOUSE
 
-- CDC/event ingestion;
-- analytics store/warehouse boundary;
-- no heavy BI queries against OLTP paths;
-- freshness and backfill contracts.
+**Completed: IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED for the current-scale logical warehouse boundary.**
+
+The package now provides:
+
+- a rebuildable `analytics_warehouse_facts` projection over the canonical `analytics_event_feed_v1`;
+- `analytics_warehouse_checkpoints` for projection freshness/backfill watermarks only;
+- bounded, idempotent incremental sync with late-event overlap and advisory locking;
+- explicit bounded backfill without falsifying the forward watermark;
+- a service-only bounded warehouse reader;
+- a service-only `security_invoker` warehouse-health projection;
+- existing Cloudflare Cron as the scheduler through the internal operations boundary;
+- no second business-event truth, queue, scheduler or attribution authority.
+
+At the verified Production scale (~49 MB database and ~9.4k canonical events), a physically separate BigQuery/ClickHouse/WAL-CDC stack is **DEFERRED_WITH_REASON** until load/scale evidence justifies the operational cost.
 
 ## DATA-DASHBOARDS
 
