@@ -91,7 +91,7 @@ describe('customer Connections authority contract', () => {
     expect(migration).toContain('communication_channel_bindings_customer_scoped_read');
     expect(migration).toContain('integration_connections_customer_scoped_read');
     expect(migration).toContain('public.customer_business_effective_role');
-    expect(migration).not.toContain('communication_channel_bindings_admin_read\n  on');
+    expect(migration).not.toMatch(/create policy communication_channel_bindings_admin_read/i);
     expect(migration).toContain('drop policy if exists org_member_integration_connections_read');
     expect(migration).toContain('drop policy if exists unified_inbox_business_wide_boundary');
   });
