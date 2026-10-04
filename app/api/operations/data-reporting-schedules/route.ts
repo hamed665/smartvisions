@@ -68,7 +68,7 @@ export async function POST(request: Request) {
   const ruleIds = rules.map(rule => String(rule.id));
   const { data: versions, error: versionsError } = await supabase
     .from('automation_rule_versions')
-    .select('automation_rule_id,version,trigger_key,config,actions')
+    .select('automation_rule_id,version,trigger_key,config,actions,published_at')
     .in('automation_rule_id', ruleIds)
     .eq('trigger_key', 'SCHEDULE_DUE');
   if (versionsError) {
@@ -101,6 +101,20 @@ export async function POST(request: Request) {
       const config = record(version.config);
       const schedule = normalizeReportingSchedule(config.reportSchedule);
       const occurrence = latestDueReportingOccurrence(schedule, now);
+      const publishedAt = new Date(String(version.published_at ?? ''));
+      if (!Number.isFinite(publishedAt.getTime())) {
+        throw new Error('Published reporting version is missing a valid published_at boundary');
+      }
+      if (new Date(occurrence.scheduledAt).getTime() < publishedAt.getTime()) {
+        results.push({
+          ruleId,
+          organizationId: String(rule.organization_id),
+          occurrenceKey: occurrence.occurrenceKey,
+          scheduledAt: occurrence.scheduledAt,
+          skipped: 'OCCURRENCE_PRECEDES_PUBLISHED_VERSION',
+        });
+        continue;
+      }
       const sourceEventKey = reportingScheduleSourceEventKey(ruleId, occurrence.occurrenceKey);
       due += 1;
 
