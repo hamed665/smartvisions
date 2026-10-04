@@ -395,6 +395,7 @@ do $customer_connection_boundary$
 declare
   v_integration_count integer;
   v_integration_ids text;
+  v_integration_policies text;
 begin
   if (select count(*) from public.communication_channel_bindings) <> 1 then
     raise exception 'delegated ADMIN leaked cross-Business communication bindings';
@@ -409,8 +410,18 @@ begin
     into v_integration_count, v_integration_ids
     from public.integration_connections;
   if v_integration_count <> 1 then
-    raise exception 'delegated ADMIN integration visibility mismatch count=% ids=%',
-      v_integration_count, coalesce(v_integration_ids, '<none>');
+    select string_agg(
+      policyname || ' [' || cmd || '] ' || coalesce(qual, ''),
+      ' | ' order by policyname
+    )
+      into v_integration_policies
+      from pg_policies
+     where schemaname='public'
+       and tablename='integration_connections';
+    raise exception 'delegated ADMIN integration visibility mismatch count=% ids=% policies=%',
+      v_integration_count,
+      coalesce(v_integration_ids, '<none>'),
+      coalesce(v_integration_policies, '<none>');
   end if;
   if not exists (
     select 1 from public.integration_connections
