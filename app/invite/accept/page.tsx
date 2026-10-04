@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
 type InviteContext = {
@@ -26,7 +26,6 @@ async function readJson(response: Response) {
 }
 
 export default function AcceptInvitePage() {
-  const supabase = useMemo(() => createClient(), []);
   const [invite, setInvite] = useState<InviteContext | null>(null);
   const [access, setAccess] = useState<AccessResult | null>(null);
   const [authenticated, setAuthenticated] = useState(false);
@@ -52,13 +51,14 @@ export default function AcceptInvitePage() {
     if (!response.ok) throw new Error(body.error || 'Invitation session is unavailable.');
     setInvite(body as InviteContext);
 
+    const supabase = createClient();
     const { data } = await supabase.auth.getUser();
     const hasUser = Boolean(data.user);
     setAuthenticated(hasUser);
     if (hasUser) {
       await acceptAccess();
     }
-  }, [acceptAccess, supabase]);
+  }, [acceptAccess]);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,6 +102,7 @@ export default function AcceptInvitePage() {
     const password = String(form.get('password') ?? '');
 
     try {
+      const supabase = createClient();
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: invite.email,
         password,
@@ -132,6 +133,7 @@ export default function AcceptInvitePage() {
     }
 
     try {
+      const supabase = createClient();
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: invite.email,
         password,
@@ -155,6 +157,7 @@ export default function AcceptInvitePage() {
   }
 
   async function signOut() {
+    const supabase = createClient();
     await supabase.auth.signOut();
     setAuthenticated(false);
     setAccess(null);
