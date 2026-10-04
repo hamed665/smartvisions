@@ -93,7 +93,9 @@ describe('customer invite + auth capability', () => {
     expect(page).toContain('supabase.auth.signInWithPassword');
     expect(page).not.toMatch(/fetch\([^)]*password/i);
     expect(callback).toContain('exchangeCodeForSession');
-    expect(callback).toContain("value.startsWith('//')");
+    expect(callback).toContain('SAFE_AUTH_DESTINATIONS');
+    expect(callback).toContain("'/invite/accept'");
+    expect(callback).toContain("'/auth/update-password'");
     expect(recovery).toContain('resetPasswordForEmail');
   });
 
