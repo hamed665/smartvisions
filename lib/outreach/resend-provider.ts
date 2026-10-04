@@ -61,6 +61,13 @@ export class ResendEmailProvider implements EmailProvider {
         subject: input.subject,
         text: input.text,
         ...(input.html ? { html: input.html } : {}),
+        ...(input.attachments?.length ? {
+          attachments: input.attachments.slice(0, 4).map((attachment) => ({
+            filename: attachment.filename.slice(0, 180),
+            content: attachment.contentBase64,
+            ...(attachment.contentType ? { content_type: attachment.contentType } : {}),
+          })),
+        } : {}),
         headers: {
           'X-Smart-Visions-Mailbox-Id': mailbox.id,
           'X-Smart-Visions-Organization-Id': mailbox.organization_id,
