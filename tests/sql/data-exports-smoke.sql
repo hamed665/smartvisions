@@ -25,15 +25,16 @@ begin
   if v.cost_class<>'PROVIDER_METERED'
      or v.side_effect_class<>'EXTERNAL_PROVIDER'
      or v.approval_requirement<>'NONE'
-     or v.availability<>'AVAILABLE'
+     or v.availability<>'DEPENDENCY_PENDING'
   then
     raise exception 'DATA-EXPORTS runtime contract is invalid';
   end if;
-  if cardinality(v.required_work_packages)<>0 then
-    raise exception 'DATA-EXPORTS action unexpectedly has unresolved work-package dependencies';
+  if v.required_work_packages<>array['DATA-REPORTING']::text[] then
+    raise exception 'DATA-EXPORTS scheduled delivery must remain dependency-gated on DATA-REPORTING';
   end if;
   if v.metadata->>'scheduleAuthority'<>'SCHEDULE_DUE'
      or v.metadata->>'recipientAuthority'<>'organization_settings.notification_email'
+     or v.metadata->>'scheduleProducer'<>'DEPENDENCY_PENDING_DATA_REPORTING'
      or coalesce((v.metadata->>'googleSheetsPublishing')::boolean,true)<>false
   then
     raise exception 'DATA-EXPORTS authority metadata is invalid';
