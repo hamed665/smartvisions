@@ -172,9 +172,24 @@
 - Attribution remains observational only: Sales/Quote/Order value is not revenue; only CAPTURED payment carries collected-money evidence; exact canonical Lead linkage is mandatory; fuzzy identity, guessed campaign revenue, invented UTM history and arbitrary cross-channel matching remain prohibited.
 - A direct unauthenticated GET to the route was not re-probed from the current tool network, so no separate redirect-status claim is added. No fake authenticated browser session was created.
 
-**Fresh continuation cursor:** `SECTION ANALYTICS_REPORTING -> DATA-ASK`.
+## DATA-ASK Production closeout — 2026-10-04
 
-Before DATA-ASK mutation, fresh-audit the current Metrics Registry, Analytics Warehouse, dashboard composer, semantic definitions and any existing natural-language/query surfaces. DATA-ASK must resolve only governed metric/semantic contracts and bounded canonical projections; it must not expose arbitrary Production SQL, create a second metrics/warehouse truth, bypass RLS/IAM, or let model-generated text become execution authority.
+- Work Package: `SECTION ANALYTICS_REPORTING -> DATA-ASK`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled governed semantic-query boundary and deployed `/reports` + `/api/data/ask` surfaces. A separately authenticated live semantic-answer request was **NOT_REPROBED** because the current tool network has no safe existing user session; no fake authenticated session was created.
+- Implementation PR #465 final head `fd4b084a33a173957118b543f0a8499efbf2197f` passed exact-head CI `37196822893` and merged to canonical `main@bbe8a2135c49c957ae8e8c7c562f51517e5f87ce`.
+- Exact-main CI `37197046011` succeeded on the merge SHA. Cloudflare Production Deploy `37197235278` also succeeded on that exact SHA; the deploy job built both `λ /api/data/ask` and `ƒ /reports`, preserved the Production Worker route and passed the routed Production smoke.
+- DATA-ASK adds **no migration, table, RPC, metric store, warehouse, query engine or analytics authority**. Production migration history therefore remains unchanged after `data_attribution_v2@20261004103053`.
+- The model is semantic resolution only. It receives governed metric definitions and may select only current allowlisted metric keys plus a bounded 7/30/90-day window. It never receives warehouse values/customer rows/provider payloads and cannot generate SQL, joins, formulas, IDs, arbitrary filters or mutation instructions.
+- Numeric answers are composed deterministically from the existing `metric_registry_current_v1` + Analytics Warehouse path. Unsupported or ambiguous questions fail closed as `UNSUPPORTED` / `CLARIFY`; there is no SQL fallback and no guessed metric.
+- Scope reuse is authenticated and bounded: the route resolves `getCurrentOrganization()`, then reuses the existing dashboard Organization/Business/Branch validation instead of creating a second IAM/scope path.
+- Cross-currency handling and evidence availability inherit the governed dashboard contract. The answer evidence explicitly records `arbitrarySql=false` and `causalClaim=false`; model output never becomes numeric/execution authority.
+- Fresh Production backing evidence: `18` ACTIVE Metric Definitions, `18` current Metrics Registry rows, `9,531` Analytics Warehouse facts, `0` malformed/blank event names, latest source event `2026-10-04T12:00:49.121715Z`, latest projection `2026-10-04T12:01:05.581066Z`.
+- Controlled tests cover bounded windows, metric allowlisting, arbitrary-SQL prohibition, existing authenticated scope reuse, unavailable evidence, causal-claim prohibition and reports integration. No synthetic Production customer, metric, warehouse fact or query result was created.
+- Direct public HTTP reprobe from the current tool network failed at DNS resolution, so no additional unauthenticated response-code claim is invented beyond the successful exact Production deploy/routed smoke evidence.
+
+**Fresh continuation cursor:** `SECTION ANALYTICS_REPORTING -> DATA-EXPORTS`.
+
+Before DATA-EXPORTS mutation, fresh-audit existing CSV/XLSX/PDF/JSON/Google Sheets/export/download/scheduled-delivery primitives plus current dashboard/warehouse role and scope boundaries. Reuse canonical Metrics Registry + Analytics Warehouse and existing IAM; do not create a second reporting warehouse, arbitrary SQL/export query engine, copied analytics truth, cross-tenant export path or unsafe provider credential store.
 
 ---
 
