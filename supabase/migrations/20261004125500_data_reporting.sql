@@ -279,7 +279,7 @@ begin
     elsif v_key='DELIVER_DATA_EXPORT' then
       if (v_config - array['format','days','language','summaryMode','includeAnomalies']::text[])<>'{}'::jsonb
          or upper(trim(coalesce(v_config->>'format',''))) not in ('CSV','JSON','XLSX','PDF')
-         or jsonb_typeof(v_config->'days')<>'number'
+         or coalesce(jsonb_typeof(v_config->'days'),'null')<>'number'
          or (v_config->>'days')::integer not in (7,30,90)
          or upper(trim(coalesce(v_config->>'language','AUTO'))) not in ('AUTO','EN','AR','FA')
          or upper(trim(coalesce(v_config->>'summaryMode','STANDARD'))) not in ('STANDARD','EXECUTIVE')
