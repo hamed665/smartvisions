@@ -1,5 +1,11 @@
 import type { ProviderRateLimitEvidence } from '@/lib/omnichannel/rate-limit-evidence';
 
+export interface OutboundAttachment {
+  filename: string;
+  contentBase64: string;
+  contentType?: string;
+}
+
 export interface OutboundMessage {
   mailboxId: string;
   to: string;
@@ -8,6 +14,7 @@ export interface OutboundMessage {
   html?: string;
   idempotencyKey: string;
   metadata?: Record<string, string | number | boolean>;
+  attachments?: OutboundAttachment[];
 }
 
 export interface DeliveryEvent {
