@@ -2,6 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { generateProductionAsset } from '@/lib/preview/production-service';
 import { persistHumanHandoff } from '@/lib/conversations/sales-lifecycle';
 import { buildGovernedDataExport, normalizeDataExportFormat } from '@/lib/analytics/export';
+import {
+  buildGovernedDataReport,
+  normalizeDataReportSummaryMode,
+  resolveDataReportLanguage,
+} from '@/lib/analytics/reporting';
 import { ResendEmailProvider } from '@/lib/outreach/resend-provider';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
 
@@ -463,7 +468,7 @@ async function executeDeliverDataExport(
 
   const [{ data: settings, error: settingsError }, { data: connection, error: connectionError }] = await Promise.all([
     supabase.from('organization_settings')
-      .select('notification_email,config')
+      .select('notification_email,operator_language,default_customer_language,config')
       .eq('organization_id', run.organization_id)
       .maybeSingle(),
     supabase.from('integration_connections')
@@ -517,16 +522,22 @@ async function executeDeliverDataExport(
     format,
     days,
   });
+  const reportLanguage = resolveDataReportLanguage(
+    config.language,
+    settings?.operator_language ?? settings?.default_customer_language,
+  );
+  const summaryMode = normalizeDataReportSummaryMode(config.summaryMode);
+  const report = buildGovernedDataReport(artifact.snapshot, {
+    language: reportLanguage,
+    summaryMode,
+    includeAnomalies: config.includeAnomalies !== false,
+  });
+
   const result = await provider.sendEmail({
     mailboxId,
     to: recipient,
-    subject: `Smart Visions analytics export · ${artifact.snapshot.window.days}d`,
-    text: [
-      'Your governed Smart Visions analytics export is attached.',
-      `Scope: ${artifact.snapshot.scope.label}`,
-      `Window: ${artifact.snapshot.window.days} days`,
-      'The attachment is generated from the Metrics Registry + Analytics Warehouse and does not use arbitrary SQL.',
-    ].join('\n'),
+    subject: report.subject,
+    text: report.text,
     idempotencyKey: action.idempotency_key,
     attachments: [{
       filename: artifact.filename,
@@ -547,6 +558,9 @@ async function executeDeliverDataExport(
         automationActionId: action.id,
         format,
         days: artifact.snapshot.window.days,
+        reportLanguage,
+        summaryMode,
+        anomalyCount: report.anomalies.length,
         providerMessageId: result.providerMessageId,
       },
     });
@@ -561,8 +575,17 @@ async function executeDeliverDataExport(
       format,
       days: artifact.snapshot.window.days,
       scope: artifact.snapshot.scope.level,
+      reportLanguage,
+      summaryMode,
+      anomalyCount: report.anomalies.length,
     },
-    verification: { verified: true, providerAccepted: true, attachmentGenerated: true },
+    verification: {
+      verified: true,
+      providerAccepted: true,
+      attachmentGenerated: true,
+      governedSummaryGenerated: true,
+      anomalyCount: report.anomalies.length,
+    },
     providerAccepted: true,
   });
 }
