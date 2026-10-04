@@ -90,8 +90,11 @@ describe('DATA-REPORTING schedule contracts', () => {
     }).dayOfMonth).toBe(28);
 
     expect(normalizeReportingSchedule({
-      cadence: 'CUSTOM', timezone: 'America/New_York', time: '18:00', weekdays: [5, 1, 5, 3],
+      cadence: 'CUSTOM', timezone: 'America/New_York', time: '18:00', weekdays: [5, 1, 3],
     }).weekdays).toEqual([1, 3, 5]);
+    expect(() => normalizeReportingSchedule({
+      cadence: 'CUSTOM', timezone: 'America/New_York', time: '18:00', weekdays: [1, 1],
+    })).toThrow(/unique/i);
   });
 
   it('fails closed for invalid timezone, time and bounded day selectors', () => {
