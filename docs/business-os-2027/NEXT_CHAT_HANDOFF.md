@@ -274,6 +274,20 @@
 Before SAAS-AGENCY mutation, fresh-audit the canonical tenant/Organization/Business hierarchy, IAM/role/scoped-access model, subscriptions/entitlements/billing, existing branding/domain primitives and any partner/reseller evidence. Extend those authorities only. Do not create a second tenant model, IAM stack, subscription/billing ledger, entitlement authority, provider credential store or audit stack. Agency/subaccount delegation, reseller economics, white-label/custom-domain behavior and client access must remain tenant-scoped, explicit and evidence-backed.
 
 
+### Registered execution overlay — commercial customer access + WhatsApp readiness
+
+A commercial-readiness overlay is now registered without changing the roadmap. The canonical cursor remains `SECTION SAAS_PLATFORM -> SAAS-AGENCY`.
+
+While implementing `SAAS-AGENCY`, prioritize the bounded client-access foundation needed for a legitimate customer's invite, role-scoped sign-in and Business access. Reuse the canonical Organization/User/Business/membership/IAM authorities only. Do not create a customer-specific auth stack, tenant table or onboarding authority.
+
+After that foundation exists, the customer-facing Login/Invite/Getting Started/Connections surfaces are acceptance work owned by the existing `UX-BUSINESS-WEB` / `ENT-IAM` packages, and WhatsApp connection must expose the already verified secure setup/Embedded Signup/provisioning/Chatwoot/health path rather than rebuild it. This registration does not mark those later UX packages complete and does not reorder `SAAS-SUPER-ADMIN`, `SAAS-MARKETPLACE`, Developer, Experience, Enterprise or FINAL packages.
+
+Current visual reference: `https://designs.magicpath.ai/v1/fancily-dawn-8200` (visual reference only, never architecture/runtime truth). Intended mobile navigation remains `Home / Inbox / CRM / AI / More` unless the canonical UX package later changes it.
+
+First real customer E2E remains a separate `FINAL-E2E` acceptance item and must use legitimate tenant/provider evidence. No synthetic Production tenant, credential or provider message is authorized for this purpose.
+
+
+
 ---
 
 ## AI-CONTEXT-COMPILER Production closeout — 2026-10-03
