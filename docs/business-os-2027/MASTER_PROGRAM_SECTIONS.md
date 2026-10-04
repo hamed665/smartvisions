@@ -1843,7 +1843,22 @@ Production migration `data_attribution_v2@20261004103053` is live. Current real 
 
 ## DATA-ASK
 
-Ask Your Data through governed metrics and semantic definitions, not arbitrary production SQL.
+**Completed: IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled governed semantic-query boundary and deployed surface.
+
+Ask Your Data reuses the current Metrics Registry, Analytics Warehouse, dashboard scope validator and Owner model gateway:
+
+- AI is a semantic metric selector only, not a SQL/query/numeric-answer authority;
+- only current allowlisted governed metric keys and 7 / 30 / 90 day windows may be selected;
+- warehouse values, customer rows and provider payloads are not sent to the semantic planner;
+- arbitrary SQL, joins, formulas, IDs, free-form filters and mutations are prohibited;
+- unsupported/ambiguous questions fail closed rather than guessing;
+- numeric answers come deterministically from the existing governed dashboard/warehouse path;
+- Organization / Business / Branch scope reuses the authenticated dashboard boundary;
+- cross-currency separation and unavailable-evidence behavior remain governed by the dashboard contract;
+- `arbitrarySql=false` and `causalClaim=false` are explicit evidence properties;
+- no new migration, table, RPC, warehouse, metric store or query engine was introduced.
+
+PR #465 merged to `main@bbe8a2135c49c957ae8e8c7c562f51517e5f87ce`; exact-main CI `37197046011` and Cloudflare Production Deploy `37197235278` succeeded. Production currently exposes 18 current governed metric definitions over 9,531 warehouse facts. A live authenticated semantic-answer request was not separately reprobed from the current tool environment, and no fake authenticated session was created.
 
 ## DATA-EXPORTS
 
