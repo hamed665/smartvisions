@@ -9,32 +9,9 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-export default async function CustomerLayout({ children }: { children: ReactNode }) {
+async function loadCustomerLayoutContext() {
   try {
-    const context = await loadCustomerBusinessAccessContext({});
-
-    if (!context.selectedBusiness) {
-      return (
-        <div>
-          <div className="headerRow">
-            <div>
-              <p className="eyebrow">SMART VISIONS BUSINESS OS</p>
-              <h1>Business access required</h1>
-              <p className="muted">Your account is active, but no Business scope is assigned yet.</p>
-            </div>
-          </div>
-          <section className="panel">
-            <h2>No Business workspace is available</h2>
-            <p className="muted">
-              Ask the Business owner to invite this account to a specific Business. Smart Visions will not grant Organization-wide access implicitly.
-            </p>
-            <Link className="textLink" href="/auth/forgot-password">Account help →</Link>
-          </section>
-        </div>
-      );
-    }
-
-    return <>{children}</>;
+    return await loadCustomerBusinessAccessContext({});
   } catch (error) {
     if (
       error instanceof CustomerBusinessAccessError
@@ -44,4 +21,31 @@ export default async function CustomerLayout({ children }: { children: ReactNode
     }
     throw error;
   }
+}
+
+export default async function CustomerLayout({ children }: { children: ReactNode }) {
+  const context = await loadCustomerLayoutContext();
+
+  if (!context.selectedBusiness) {
+    return (
+      <div>
+        <div className="headerRow">
+          <div>
+            <p className="eyebrow">SMART VISIONS BUSINESS OS</p>
+            <h1>Business access required</h1>
+            <p className="muted">Your account is active, but no Business scope is assigned yet.</p>
+          </div>
+        </div>
+        <section className="panel">
+          <h2>No Business workspace is available</h2>
+          <p className="muted">
+            Ask the Business owner to invite this account to a specific Business. Smart Visions will not grant Organization-wide access implicitly.
+          </p>
+          <Link className="textLink" href="/auth/forgot-password">Account help →</Link>
+        </section>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
 }
