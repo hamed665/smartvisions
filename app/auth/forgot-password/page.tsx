@@ -1,11 +1,10 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 
 export default function ForgotPasswordPage() {
-  const supabase = useMemo(() => createClient(), []);
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -15,6 +14,7 @@ export default function ForgotPasswordPage() {
     setBusy(true);
     setMessage('');
     try {
+      const supabase = createClient();
       await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
         redirectTo: `${window.location.origin}/auth/callback?next=/auth/update-password`,
       });
