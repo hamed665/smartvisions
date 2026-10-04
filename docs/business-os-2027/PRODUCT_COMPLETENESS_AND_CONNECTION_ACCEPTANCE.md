@@ -1124,7 +1124,7 @@ Each row is REQUIRED for the applicable complete-product scope; partial foundati
 | Commerce | CATALOG-V2; QUOTE-ENGINE; ORDER-ENGINE; INVENTORY-FULFILLMENT; INVOICE-ENGINE | Products/services/variants, governed prices, quote versions/expiry/approval/PDF, orders/returns, stock reservations and immutable commercial documents |
 | Payments | PAYMENT-CORE; PAYMENT-OMAN; PAYMENT-EXTENSION | Tap/Thawani, links, partial/failure/refund cases as supported, verified webhook, ledger reconciliation; no double charge or assumed success |
 | Reports/BI | DATA-EVENT-METRICS; DATA-WAREHOUSE; DATA-DASHBOARDS; DATA-ATTRIBUTION; DATA-ASK; DATA-EXPORTS; DATA-REPORTING | Defined metrics, sales/revenue/conversion/team/channel/AI/cost dashboards, governed questions, CSV/XLSX/PDF/JSON/Sheets sync, scheduled summaries and freshness |
-| SaaS commerce | SAAS-PLANS-ENTITLEMENTS (Production-verified); SAAS-BILLING (Production-verified); SAAS-COUPONS (NEXT) | Plans/seats/channels/features/setup/add-ons/usage/overage/discount/tax, trials/upgrades/payment failure/cancel; ledger-derived billing |
+| SaaS commerce | SAAS-PLANS-ENTITLEMENTS (Production-verified); SAAS-BILLING (Production-verified); SAAS-COUPONS (Production-verified); SAAS-AGENCY (NEXT) | Plans/seats/channels/features/setup/add-ons/usage/overage/discount/tax, trials/upgrades/payment failure/cancel; ledger-derived billing |
 | Agency and marketplace | SAAS-AGENCY; SAAS-MARKETPLACE; DEV-PARTNER | Subaccounts/delegated access/custom branding/domain, reseller accounting, app/skill/industry-pack permissions/versioning/entitlements |
 | Super Admin | SAAS-SUPER-ADMIN; UX-SUPERADMIN-MOBILE | Tenant onboarding health, subscriptions/revenue/cost, incidents/support/audit, scoped stop controls and time-limited audited support access |
 | Developer ecosystem | DEV-PUBLIC-API; DEV-WEBHOOKS; DEV-SDK; DEV-INTEGRATIONS; DEV-SANDBOX; DEV-MIGRATION | Versioned APIs/scoped keys/rates/idempotency, signed webhooks/replay, documented contracts, migration/import/export and isolated sandbox |
@@ -1379,12 +1379,15 @@ The following baseline inventory preserves every existing semantic Work Package,
 
 - `SAAS-PLANS-ENTITLEMENTS` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**
 - `SAAS-BILLING` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for deployed platform-billing schema/runtime/read surfaces; real tenant billing-cycle E2E **DEPENDENCY_PENDING** on legitimate active pricing + subscription + billing-profile evidence
-- `SAAS-COUPONS` — **NEXT**
-- `SAAS-AGENCY`
+- `SAAS-COUPONS` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for deployed coupon schema/runtime/read surfaces; real tenant coupon-redemption E2E **DEPENDENCY_PENDING** on legitimate active pricing + subscription + billing-statement + coupon evidence
+- `SAAS-AGENCY` — **NEXT**
 - `SAAS-SUPER-ADMIN`
 - `SAAS-MARKETPLACE`
 
-**SAAS-BILLING acceptance evidence — 2026-10-04:** PR #473 merged as `bb6e7fb23f0acaf1ed99d6e983aa782c52910fa9`; PR #474 advisor hardening merged as functional `main@433e9fb83a4862d95b0b759d95c209413d91618d`; exact-main CI `37217209249` and Cloudflare Production Deploy `37217441810` succeeded. Production migrations `saas_billing@20261004162558` and `saas_billing_fk_index_hardening@20261004163801` are live. Production has 0 active pricing versions, 0 subscriptions, 0 billing profiles, 0 statements and 0 line items; no synthetic commercial or payment evidence was created. Discount authority remains pending SAAS-COUPONS and payment collection remains separate.
+**SAAS-BILLING acceptance evidence — 2026-10-04:** PR #473 merged as `bb6e7fb23f0acaf1ed99d6e983aa782c52910fa9`; PR #474 advisor hardening merged as functional `main@433e9fb83a4862d95b0b759d95c209413d91618d`; exact-main CI `37217209249` and Cloudflare Production Deploy `37217441810` succeeded. Production migrations `saas_billing@20261004162558` and `saas_billing_fk_index_hardening@20261004163801` are live. Production has 0 active pricing versions, 0 subscriptions, 0 billing profiles, 0 statements and 0 line items; no synthetic commercial or payment evidence was created. Discount authority is now resolved by the canonical SAAS-COUPONS package; payment collection remains separate.
+
+**SAAS-COUPONS acceptance evidence — 2026-10-04:** PR #476 final head `127b24258cff022a9cb3be389239ad8483bffdae` passed CI `37226278463` and merged as `main@e446dda028d7f1ac36dadcc4e444659631c0032f`; exact-main CI `37226581183` and Cloudflare Production Deploy `37226840182` succeeded. Production migration `saas_coupons@20261004190558` is live. Production has 0 active pricing versions, 0 subscriptions, 0 billing profiles/statements, 0 billing DISCOUNT lines, 0 coupons and 0 redemptions. Coupon lifecycle/redemption commands are service-role governed; OWNER/ADMIN reads are tenant-scoped; payment collection remains false/separate; no synthetic commercial or coupon evidence was created. Real tenant redemption E2E remains **DEPENDENCY_PENDING**.
+
 
 ### DEVELOPER_ECOSYSTEM — APIs, integrations and partners
 

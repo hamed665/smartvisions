@@ -1928,18 +1928,27 @@ PR #473 merged to `main@bb6e7fb23f0acaf1ed99d6e983aa782c52910fa9`; its exact-hea
 
 Production remains commercially honest: 6 canonical plans / 0 active plans, 0 pricing versions, 0 subscriptions, 0 billing profiles, 0 statements and 0 line items. Therefore the deployed billing implementation is Production-verified, while a real tenant billing-cycle E2E is **DEPENDENCY_PENDING** on legitimate commercial configuration and is not simulated.
 
-## SAAS-COUPONS — NEXT
+## SAAS-COUPONS — COMPLETED
 
-- fixed;
-- percentage;
-- setup discount/free setup;
-- trial;
-- channel/add-on discounts;
-- validity;
-- redemption caps;
-- tenant/customer constraints.
+Canonical Smart Visions platform-billing coupon authority:
 
-## SAAS-AGENCY
+- FIXED / PERCENTAGE / FREE_SETUP / TRIAL benefits;
+- ALL / COMPONENT / bounded METER_PREFIX scopes;
+- optional canonical Organization / Plan / Pricing Version / Subscription eligibility;
+- validity windows and deterministic redemption caps;
+- one-coupon-per-statement fail-closed stacking policy;
+- immutable redemption evidence;
+- canonical SAAS-BILLING DISCOUNT/CREDIT integration;
+- discount-aware tax recalculation;
+- service-role-only governed lifecycle/redemption commands;
+- OWNER/ADMIN tenant-scoped evidence reads;
+- no payment collection and no parallel pricing/subscription/invoice/payment authority.
+
+PR #476 final head `127b24258cff022a9cb3be389239ad8483bffdae` passed CI `37226278463` and merged as `main@e446dda028d7f1ac36dadcc4e444659631c0032f`. Exact-main CI `37226581183` and Cloudflare Production Deploy `37226840182` succeeded. Production migration `saas_coupons@20261004190558` is live.
+
+Production contains 0 coupons, 0 redemptions and 0 billing DISCOUNT lines because there is still no active commercial pricing/subscription/billing statement evidence. The internally controlled package is Production-verified; real tenant redemption E2E remains **DEPENDENCY_PENDING** and was not simulated.
+
+## SAAS-AGENCY — NEXT
 
 - multiple subaccounts/businesses;
 - delegated admin;
