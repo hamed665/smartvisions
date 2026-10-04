@@ -206,6 +206,8 @@ describe('DATA-REPORTING architecture', () => {
     expect(scheduleRouteSource).toContain("supabase.rpc('enqueue_automation_runtime_event'");
     expect(scheduleRouteSource).toContain("p_trigger_key: 'SCHEDULE_DUE'");
     expect(scheduleRouteSource).toContain('automationRuleId');
+    expect(scheduleRouteSource).toContain('published_at');
+    expect(scheduleRouteSource).toContain('OCCURRENCE_PRECEDES_PUBLISHED_VERSION');
     expect(scheduleRouteSource).not.toContain(".from('report_schedules')");
     expect(scheduleRouteSource).not.toContain(".from('report_queue')");
     expect(migrationSource).not.toContain('create table public.report_');
