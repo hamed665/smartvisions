@@ -1808,23 +1808,21 @@ Post-closeout runtime hardening PR #459 added only the exact `/api/operations/an
 
 ## DATA-DASHBOARDS
 
-- leads;
-- customers;
-- conversations;
-- response time;
-- sales;
-- pipeline;
-- bookings;
-- quotes;
-- orders;
-- revenue;
-- payments;
-- retention;
-- staff;
-- channel;
-- AI;
-- workflow;
-- campaign.
+**Completed: IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED.**
+
+The governed dashboard surface now provides:
+
+- Historical metrics from the versioned Metrics Registry + rebuildable Analytics Warehouse only;
+- bounded LIVE current-state gauges from canonical business authorities;
+- Organization / Business / Branch scope validation without silent scope widening;
+- 7 / 30 / 90 day governed windows and a 10,000-row warehouse safety cap;
+- warehouse freshness / completeness evidence in the UI;
+- Leads, Customers, Conversations, Sales/Pipeline, Bookings, Quotes, Orders, Invoices, Revenue/Payments, Staff/Tasks, Channels, AI, Workflows and Campaigns coverage;
+- strict multi-currency separation;
+- explicit `Unavailable` state for Response Time and Retention until governed metric/event semantics exist;
+- no second dashboard truth store, no arbitrary Production SQL and no raw provider-payload reporting path.
+
+DATA-ATTRIBUTION remains a separate package; dashboard presentation does not itself create causal attribution.
 
 ## DATA-ATTRIBUTION
 
