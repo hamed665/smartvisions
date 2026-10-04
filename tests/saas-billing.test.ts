@@ -93,6 +93,12 @@ describe('SAAS-BILLING architecture', () => {
     expect(page).toContain('Not activated by billing ledger');
   });
 
+  it('hardens statement tenant/pricing/profile source evidence even inside trusted writes', () => {
+    expect(migration).toContain('statement subscription/pricing tenant evidence is inconsistent');
+    expect(migration).toContain('statement billing-profile currency evidence is inconsistent');
+    expect(migration).toContain('statement source evidence is immutable');
+  });
+
   it('exposes billing only to OWNER/ADMIN and links the dedicated surface', () => {
     expect(route).toContain("['OWNER', 'ADMIN']");
     expect(route).toContain('loadSaasBillingOverview');
