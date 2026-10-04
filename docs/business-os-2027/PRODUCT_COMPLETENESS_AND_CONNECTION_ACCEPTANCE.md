@@ -1356,7 +1356,7 @@ The following baseline inventory preserves every existing semantic Work Package,
 ### ANALYTICS_REPORTING — Metrics, attribution and decision support
 
 - `DATA-EVENT-METRICS` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**
-- `DATA-WAREHOUSE` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the current-scale logical warehouse boundary; physical external warehouse/WAL CDC **DEFERRED_WITH_REASON**
+- `DATA-WAREHOUSE` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the current-scale logical warehouse boundary; scheduled internal route hardened by PR #459; physical external warehouse/WAL CDC **DEFERRED_WITH_REASON**
 - `DATA-DASHBOARDS` — **NEXT**
 - `DATA-ATTRIBUTION`
 - `DATA-ASK`
