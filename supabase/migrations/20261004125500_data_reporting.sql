@@ -14,7 +14,7 @@ begin
     raise exception 'DATA-REPORTING requires DELIVER_DATA_EXPORT from DATA-EXPORTS';
   end if;
 end
-$;
+$$;
 
 update public.tool_action_registry
 set
@@ -186,7 +186,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists automation_rule_versions_reporting_schedule_guard
   on public.automation_rule_versions;
