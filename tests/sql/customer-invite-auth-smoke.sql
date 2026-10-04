@@ -383,15 +383,20 @@ begin
     raise exception 'existing canonical role was overwritten by invitation';
   end if;
 
-  update public.organization_members
-  set role='OWNER'
-  where organization_id='00000000-0000-0000-0000-00000000f501'
-    and user_id='00000000-0000-0000-0000-00000000e505';
-  get diagnostics v_rows = row_count;
+  begin
+    update public.organization_members
+    set role='OWNER'
+    where organization_id='00000000-0000-0000-0000-00000000f501'
+      and user_id='00000000-0000-0000-0000-00000000e505';
+    get diagnostics v_rows = row_count;
 
-  if v_rows <> 0 then
-    raise exception 'authenticated user self-promoted outside governed invitation flow';
-  end if;
+    if v_rows <> 0 then
+      raise exception 'authenticated user self-promoted outside governed invitation flow';
+    end if;
+  exception
+    when insufficient_privilege then
+      v_rows := 0;
+  end;
 
   select role into v_role
   from public.organization_members
