@@ -136,6 +136,7 @@ type Template = {
   triggerKey: string;
   conditions: VisualCondition[];
   actions: VisualAction[];
+  config?: JsonRecord;
 };
 
 const SUBJECT_BY_FAMILY: Record<string, string | null> = {
@@ -190,6 +191,31 @@ const TEMPLATE_DEFINITIONS: Template[] = [
         title: 'Automation review',
         summary: 'Review this inbound conversation.',
         requiresAction: true,
+      },
+    }],
+  },
+  {
+    id: 'daily-executive-report',
+    name: 'Daily executive report',
+    description: 'Deliver a governed multilingual executive report every day through the canonical reporting scheduler.',
+    triggerKey: 'SCHEDULE_DUE',
+    conditions: [],
+    config: {
+      reportSchedule: {
+        cadence: 'DAILY',
+        timezone: 'Asia/Muscat',
+        time: '08:00',
+      },
+    },
+    actions: [{
+      id: 't5-a1',
+      key: 'DELIVER_DATA_EXPORT',
+      config: {
+        format: 'PDF',
+        days: 30,
+        language: 'AUTO',
+        summaryMode: 'EXECUTIVE',
+        includeAnomalies: true,
       },
     }],
   },
@@ -301,6 +327,19 @@ function formatDate(value: string | null) {
 
 function statusClass(status: string) {
   return ['FAILED', 'DEAD_LETTER', 'CANCELLED'].includes(status) ? 'status dangerStatus' : 'status';
+}
+
+function defaultActionConfig(actionKey: string): JsonRecord {
+  if (actionKey === 'DELIVER_DATA_EXPORT') {
+    return {
+      format: 'PDF',
+      days: 30,
+      language: 'AUTO',
+      summaryMode: 'EXECUTIVE',
+      includeAnomalies: true,
+    };
+  }
+  return {};
 }
 
 function actionConfigField(
@@ -443,6 +482,55 @@ function actionConfigField(
     </div>;
   }
 
+  if (action.key === 'DELIVER_DATA_EXPORT') {
+    return <div className="automationActionConfig automationActionConfigWide">
+      <label>Attachment format
+        <select
+          value={String(config.format ?? 'PDF')}
+          onChange={event => updateConfig({ ...config, format: event.target.value })}
+        >
+          {['PDF', 'XLSX', 'CSV', 'JSON'].map(value => <option key={value} value={value}>{value}</option>)}
+        </select>
+      </label>
+      <label>Reporting window
+        <select
+          value={String(config.days ?? 30)}
+          onChange={event => updateConfig({ ...config, days: Number(event.target.value) })}
+        >
+          {[7, 30, 90].map(value => <option key={value} value={value}>{value} days</option>)}
+        </select>
+      </label>
+      <label>Summary language
+        <select
+          value={String(config.language ?? 'AUTO')}
+          onChange={event => updateConfig({ ...config, language: event.target.value })}
+        >
+          <option value="AUTO">Auto · Organization language</option>
+          <option value="EN">English</option>
+          <option value="AR">Arabic</option>
+          <option value="FA">Persian</option>
+        </select>
+      </label>
+      <label>Summary mode
+        <select
+          value={String(config.summaryMode ?? 'EXECUTIVE')}
+          onChange={event => updateConfig({ ...config, summaryMode: event.target.value })}
+        >
+          <option value="EXECUTIVE">Executive briefing</option>
+          <option value="STANDARD">Standard summary</option>
+        </select>
+      </label>
+      <label className="toggleLabel">
+        <input
+          type="checkbox"
+          checked={config.includeAnomalies !== false}
+          onChange={event => updateConfig({ ...config, includeAnomalies: event.target.checked })}
+        />
+        Include governed anomaly alerts
+      </label>
+    </div>;
+  }
+
   return <p className="muted smallText">This action has no business-facing configuration.</p>;
 }
 
@@ -462,11 +550,12 @@ function RuleEditor(props: {
   const [groupOp, setGroupOp] = useState<'AND' | 'OR'>(parsedConditions.groupOp);
   const [conditions, setConditions] = useState<VisualCondition[]>(parsedConditions.conditions);
   const [preserveAdvancedConditions, setPreserveAdvancedConditions] = useState(!parsedConditions.supported);
+  const [ruleConfig, setRuleConfig] = useState<JsonRecord>(() => asRecord(rule?.config ?? {}));
   const [actionRows, setActionRows] = useState<VisualAction[]>(() => {
     const existing = asActions(rule?.actions ?? []);
     if (existing.length) return existing;
     const first = actions.find(item => item.availability === 'AVAILABLE');
-    return first ? [{ id: 'new-action-0', key: first.action_key, config: {} }] : [];
+    return first ? [{ id: 'new-action-0', key: first.action_key, config: defaultActionConfig(first.action_key) }] : [];
   });
   const [testSubjectId, setTestSubjectId] = useState('');
   const [testResult, setTestResult] = useState<TestResult | null>(null);
@@ -487,13 +576,13 @@ function RuleEditor(props: {
     ? (rule?.conditions ?? [])
     : buildConditions(conditions, groupOp, facts);
   const effectiveActions = serializeActions(actionRows);
-  const config = asRecord(rule?.config ?? {});
 
   const applyTemplate = (template: Template) => {
     setName(template.name);
     setTriggerKey(template.triggerKey);
     setConditions(template.conditions.map((row, index) => ({ ...row, id: `${template.id}-condition-${index}` })));
     setActionRows(template.actions.map((row, index) => ({ ...row, id: `${template.id}-action-${index}` })));
+    setRuleConfig(template.config ? { ...template.config } : {});
     setPreserveAdvancedConditions(false);
     setTestResult(null);
   };
@@ -517,7 +606,7 @@ function RuleEditor(props: {
   const addAction = () => {
     const first = compatibleActions[0];
     if (!first || actionRows.length >= 20) return;
-    setActionRows(current => [...current, { id: crypto.randomUUID(), key: first.action_key, config: {} }]);
+    setActionRows(current => [...current, { id: crypto.randomUUID(), key: first.action_key, config: defaultActionConfig(first.action_key) }]);
   };
 
   const updateAction = (id: string, patch: Partial<VisualAction>) => {
@@ -545,6 +634,7 @@ function RuleEditor(props: {
           triggerKey,
           conditions: effectiveConditions,
           actions: effectiveActions,
+          config: ruleConfig,
           subjectId: testSubjectId.trim() || null,
         }),
       });
@@ -583,7 +673,7 @@ function RuleEditor(props: {
       <input type="hidden" name="action_key" value={actionRows[0]?.key ?? ''} />
       <input type="hidden" name="conditions_json" value={JSON.stringify(effectiveConditions)} />
       <input type="hidden" name="actions_json" value={JSON.stringify(effectiveActions)} />
-      <input type="hidden" name="config_json" value={JSON.stringify(config)} />
+      <input type="hidden" name="config_json" value={JSON.stringify(ruleConfig)} />
 
       <div className="automationBuilderGrid">
         <label>Workflow name
@@ -591,9 +681,18 @@ function RuleEditor(props: {
         </label>
         <label>Trigger
           <select name="trigger_key" value={triggerKey} onChange={event => {
-            setTriggerKey(event.target.value);
+            const nextTrigger = event.target.value;
+            setTriggerKey(nextTrigger);
             setConditions([]);
             setPreserveAdvancedConditions(false);
+            if (nextTrigger === 'SCHEDULE_DUE') {
+              setRuleConfig(current => Object.keys(asRecord(current.reportSchedule)).length
+                ? current
+                : {
+                    ...current,
+                    reportSchedule: { cadence: 'DAILY', timezone: 'Asia/Muscat', time: '08:00' },
+                  });
+            }
             setTestResult(null);
           }}>
             {triggers.map(item =>
@@ -606,6 +705,90 @@ function RuleEditor(props: {
           <input type="number" name="priority" min={0} max={100} value={priority} onChange={event => setPriority(Number(event.target.value))} />
         </label>
       </div>
+
+      {triggerKey === 'SCHEDULE_DUE' ? (() => {
+        const schedule = asRecord(ruleConfig.reportSchedule);
+        const cadence = String(schedule.cadence ?? 'DAILY').toUpperCase();
+        const updateSchedule = (patch: JsonRecord) => setRuleConfig(current => ({
+          ...current,
+          reportSchedule: { ...asRecord(current.reportSchedule), ...patch },
+        }));
+        const customWeekdays = Array.isArray(schedule.weekdays)
+          ? schedule.weekdays.map(Number).filter(value => Number.isInteger(value) && value >= 1 && value <= 7)
+          : [1, 2, 3, 4, 5];
+        return <section className="automationActionConfig automationActionConfigWide">
+          <label>Report cadence
+            <select
+              value={cadence}
+              onChange={event => {
+                const next = event.target.value;
+                const base: JsonRecord = { cadence: next, timezone: String(schedule.timezone ?? 'Asia/Muscat'), time: String(schedule.time ?? '08:00') };
+                if (next === 'WEEKLY') base.weekday = Number(schedule.weekday ?? 1);
+                if (next === 'MONTHLY') base.dayOfMonth = Number(schedule.dayOfMonth ?? 1);
+                if (next === 'CUSTOM') base.weekdays = customWeekdays;
+                setRuleConfig(current => ({ ...current, reportSchedule: base }));
+              }}
+            >
+              <option value="DAILY">Daily</option>
+              <option value="WEEKLY">Weekly</option>
+              <option value="MONTHLY">Monthly</option>
+              <option value="CUSTOM">Custom weekdays</option>
+            </select>
+          </label>
+          <label>Timezone
+            <input
+              value={String(schedule.timezone ?? 'Asia/Muscat')}
+              onChange={event => updateSchedule({ timezone: event.target.value })}
+              placeholder="Asia/Muscat"
+            />
+          </label>
+          <label>Delivery time
+            <input
+              type="time"
+              value={String(schedule.time ?? '08:00')}
+              onChange={event => updateSchedule({ time: event.target.value })}
+            />
+          </label>
+          {cadence === 'WEEKLY' ? <label>Weekday
+            <select value={String(schedule.weekday ?? 1)} onChange={event => updateSchedule({ weekday: Number(event.target.value) })}>
+              {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((label, index) =>
+                <option key={label} value={index + 1}>{label}</option>)}
+            </select>
+          </label> : null}
+          {cadence === 'MONTHLY' ? <label>Day of month
+            <input
+              type="number"
+              min={1}
+              max={28}
+              value={String(schedule.dayOfMonth ?? 1)}
+              onChange={event => updateSchedule({ dayOfMonth: Number(event.target.value) })}
+            />
+          </label> : null}
+          {cadence === 'CUSTOM' ? <fieldset className="wideField">
+            <legend>Run on weekdays</legend>
+            <div className="conversationFilters">
+              {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((label, index) => {
+                const value = index + 1;
+                return <label className="toggleLabel" key={label}>
+                  <input
+                    type="checkbox"
+                    checked={customWeekdays.includes(value)}
+                    onChange={event => updateSchedule({
+                      weekdays: event.target.checked
+                        ? [...new Set([...customWeekdays, value])].sort((a, b) => a - b)
+                        : customWeekdays.filter(day => day !== value),
+                    })}
+                  />
+                  {label}
+                </label>;
+              })}
+            </div>
+          </fieldset> : null}
+          <p className="muted smallText wideField">
+            Cloudflare Cron remains the scheduler. This rule only declares the governed local cadence consumed by DATA-REPORTING.
+          </p>
+        </section>;
+      })() : null}
 
       <div className="automationFlow">
         <div className="automationNode automationNodeTrigger">
@@ -708,7 +891,7 @@ function RuleEditor(props: {
                 return <div className="automationActionCard" key={row.id}>
                   <div className="automationActionHeader">
                     <span className="automationActionOrder">{index + 1}</span>
-                    <select value={row.key} onChange={event => updateAction(row.id, { key: event.target.value, config: {} })}>
+                    <select value={row.key} onChange={event => updateAction(row.id, { key: event.target.value, config: defaultActionConfig(event.target.value) })}>
                       {(compatibleActions.some(item => item.action_key === row.key)
                         ? compatibleActions
                         : [

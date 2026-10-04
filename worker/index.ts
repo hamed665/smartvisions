@@ -54,6 +54,12 @@ type ScheduledMetrics = {
   chatwootReconciled?: number;
   chatwootIgnored?: number;
   chatwootReconcileFailed?: number;
+  reportingScheduleStatus?: number;
+  reportingScheduleRules?: number;
+  reportingScheduleDue?: number;
+  reportingScheduleEnqueued?: number;
+  reportingScheduleReplayed?: number;
+  reportingScheduleFailed?: number;
   automationRuntimeStatus?: number;
   automationRuntimeClaimed?: number;
   automationRuntimeSucceeded?: number;
@@ -176,6 +182,29 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
     metrics.failed += 1;
     await recordScheduledHeartbeat(env, controller, 'RESULT', metrics);
     throw new Error(`Operational tick failed with HTTP ${tickResponse.status}`);
+  }
+
+  try {
+    const reportingResponse = await internalPost(env, '/api/operations/data-reporting-schedules', { limit: 200 });
+    metrics.reportingScheduleStatus = reportingResponse.status;
+    const reporting = await reportingResponse.json().catch(() => null) as {
+      reportingRules?: number;
+      due?: number;
+      enqueued?: number;
+      replayed?: number;
+      failed?: number;
+    } | null;
+    metrics.reportingScheduleRules = Number(reporting?.reportingRules ?? 0);
+    metrics.reportingScheduleDue = Number(reporting?.due ?? 0);
+    metrics.reportingScheduleEnqueued = Number(reporting?.enqueued ?? 0);
+    metrics.reportingScheduleReplayed = Number(reporting?.replayed ?? 0);
+    metrics.reportingScheduleFailed = Number(reporting?.failed ?? 0);
+    if (!reportingResponse.ok && reportingResponse.status !== 207) metrics.failed += 1;
+    metrics.failed += metrics.reportingScheduleFailed;
+  } catch {
+    metrics.reportingScheduleStatus = 503;
+    metrics.reportingScheduleFailed = 1;
+    metrics.failed += 1;
   }
 
   try {

@@ -71,31 +71,20 @@ begin
     into v_available,v_pending
   from public.tool_action_registry;
 
-  if v_available<13 or v_pending<>1 then
+  if v_available<14 or v_pending<>0 then
     raise exception 'Unexpected action availability split: available %, pending %',
       v_available,v_pending;
-  end if;
-
-  if exists(
-    select 1
-    from public.tool_action_registry
-    where availability='DEPENDENCY_PENDING'
-      and (
-        action_key<>'DELIVER_DATA_EXPORT'
-        or required_work_packages<>array['DATA-REPORTING']::text[]
-      )
-  ) then
-    raise exception 'Unexpected dependency-pending Tool/Action contract exists';
   end if;
 
   if not exists(
     select 1
     from public.tool_action_registry
     where action_key='DELIVER_DATA_EXPORT'
-      and availability='DEPENDENCY_PENDING'
-      and required_work_packages=array['DATA-REPORTING']::text[]
+      and availability='AVAILABLE'
+      and cardinality(required_work_packages)=0
+      and metadata->>'scheduleProducer'='DATA_REPORTING_RECONCILER'
   ) then
-    raise exception 'DATA-EXPORTS dependency gate is missing';
+    raise exception 'DATA-REPORTING did not activate DELIVER_DATA_EXPORT cleanly';
   end if;
 
   if (
