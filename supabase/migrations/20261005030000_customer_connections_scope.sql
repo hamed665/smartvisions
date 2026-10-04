@@ -47,7 +47,7 @@ language sql
 stable
 security definer
 set search_path = ''
-as $
+as $customer_integration_scope$
   select
     (select auth.uid()) is not null
     and (
@@ -89,7 +89,7 @@ as $
            )
       )
     );
-$;
+$customer_integration_scope$;
 
 revoke all on function public.customer_integration_connection_visible(uuid,uuid)
   from public, anon, authenticated, service_role;
