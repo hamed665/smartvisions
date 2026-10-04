@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { loadDataDashboard, type DashboardHistoricalMetric, type DashboardLiveGauge } from '@/lib/analytics/dashboard';
 import { getCurrentOrganization } from '@/lib/supabase/org';
+import { DataAskPanel } from './data-ask-panel';
 
 export const dynamic='force-dynamic';
 
@@ -150,6 +151,13 @@ export default async function ReportsPage({
         <span>History cap <strong>{dashboard.freshness.historyTruncated?'Reached · narrow the window':'Within bound'}</strong></span>
       </div>
     </div>
+
+    <DataAskPanel
+      defaultDays={dashboard.window.days}
+      businessId={dashboard.scope.tenantBusinessId}
+      branchId={dashboard.scope.branchId}
+      scopeLabel={dashboard.scope.label}
+    />
 
     <div className="grid">
       <MetricCard label="Leads" value={liveDisplay(live.get('leads.total'))} source="LIVE" note={live.get('leads.total')?.reason}/>
