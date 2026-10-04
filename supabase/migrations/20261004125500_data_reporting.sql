@@ -5,6 +5,17 @@
 -- No second scheduler, queue, reporting warehouse, recipient store or
 -- provider credential authority is created.
 
+do $
+begin
+  if not exists(
+    select 1 from public.tool_action_registry
+    where action_key='DELIVER_DATA_EXPORT'
+  ) then
+    raise exception 'DATA-REPORTING requires DELIVER_DATA_EXPORT from DATA-EXPORTS';
+  end if;
+end
+$;
+
 update public.tool_action_registry
 set
   contract_version=2,
@@ -44,13 +55,6 @@ set
   )
 where action_key='DELIVER_DATA_EXPORT';
 
-do $$
-begin
-  if not found then
-    raise exception 'DATA-REPORTING requires DELIVER_DATA_EXPORT from DATA-EXPORTS';
-  end if;
-end
-$$;
 
 create or replace function public.validate_automation_reporting_schedule(
   p_trigger_key text,
@@ -115,7 +119,7 @@ begin
     end if;
 
   elsif v_cadence='WEEKLY' then
-    if jsonb_typeof(v_schedule->'weekday')<>'number'
+    if coalesce(jsonb_typeof(v_schedule->'weekday'),'null')<>'number'
        or v_schedule ? 'dayOfMonth'
        or v_schedule ? 'weekdays'
     then
@@ -127,7 +131,7 @@ begin
     end if;
 
   elsif v_cadence='MONTHLY' then
-    if jsonb_typeof(v_schedule->'dayOfMonth')<>'number'
+    if coalesce(jsonb_typeof(v_schedule->'dayOfMonth'),'null')<>'number'
        or v_schedule ? 'weekday'
        or v_schedule ? 'weekdays'
     then
@@ -139,7 +143,7 @@ begin
     end if;
 
   else
-    if jsonb_typeof(v_schedule->'weekdays')<>'array'
+    if coalesce(jsonb_typeof(v_schedule->'weekdays'),'null')<>'array'
        or v_schedule ? 'weekday'
        or v_schedule ? 'dayOfMonth'
        or jsonb_array_length(v_schedule->'weekdays') not between 1 and 7
