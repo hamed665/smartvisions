@@ -1,5 +1,3 @@
-[Reading 68 lines from start (total: 68 lines, 0 remaining)]
-
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
