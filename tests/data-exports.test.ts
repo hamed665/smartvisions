@@ -121,6 +121,8 @@ describe('DATA-EXPORTS', () => {
   it('reuses Automation Runtime + canonical schedule and email authorities for delivery', () => {
     expect(migrationSource).toContain("'DELIVER_DATA_EXPORT'");
     expect(migrationSource).toContain('"scheduleAuthority":"SCHEDULE_DUE"');
+    expect(migrationSource).toContain("'DEPENDENCY_PENDING'");
+    expect(migrationSource).toContain("array['DATA-REPORTING']::text[]");
     expect(migrationSource).toContain("'AUTOMATION_RULE'");
     expect(runtimeSource).toContain("case 'DELIVER_DATA_EXPORT':");
     expect(runtimeSource).toContain("organization_settings");
