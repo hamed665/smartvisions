@@ -236,7 +236,7 @@ begin
   loop
     v_key:=upper(btrim(v.key));
     if v.key<>v_key
-       or v_key !~ '^(SEATS|FEATURE\.[A-Z0-9_.:-]{1,110}|CHANNEL\.[A-Z0-9_.:-]{1,110}|ADDON\.[A-Z0-9_.:-]{1,110}|API\.[A-Z0-9_.:-]{1,110}|STORAGE\.[A-Z0-9_.:-]{1,110}|OVERAGE\.[A-Z0-9_.:-]{1,110}|AI\.RAW_COST_USD|THIRD_PARTY\.RAW_COST_USD)
+       or v_key !~ '^(SEATS|FEATURE\.[A-Z0-9_.:-]{1,110}|CHANNEL\.[A-Z0-9_.:-]{1,110}|ADDON\.[A-Z0-9_.:-]{1,110}|API\.[A-Z0-9_.:-]{1,110}|STORAGE\.[A-Z0-9_.:-]{1,110}|OVERAGE\.[A-Z0-9_.:-]{1,110}|AI\.RAW_COST_USD|THIRD_PARTY\.RAW_COST_USD)$'
        or jsonb_typeof(v.value)<>'number'
     then
       return false;
