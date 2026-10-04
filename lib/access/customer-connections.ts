@@ -193,6 +193,7 @@ export async function loadCustomerConnections(input: {
   if (!business) {
     return {
       ...access,
+      whatsappBindings: [],
       whatsapp: deriveCustomerWhatsAppConnection({}),
     };
   }
