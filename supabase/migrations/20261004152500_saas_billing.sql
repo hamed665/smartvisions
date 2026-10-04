@@ -665,6 +665,9 @@ begin
   if s.current_period_start is null or s.current_period_end is null then
     raise exception 'SAAS-BILLING subscription period is incomplete';
   end if;
+  if s.current_period_end>statement_timestamp() then
+    raise exception 'SAAS-BILLING subscription period is still open';
+  end if;
 
   select * into pv from public.pricing_versions where id=s.pricing_version_id;
   if not found or pv.status<>'ACTIVE' then
