@@ -1,0 +1,73 @@
+-- PR3 Customer Dashboard + Connections read boundary.
+-- Reuses the PR2 customer Business scope authority and existing communication
+-- binding / integration authorities. No second connection or IAM model is added.
+
+drop policy if exists communication_channel_bindings_admin_read
+  on public.communication_channel_bindings;
+drop policy if exists communication_channel_bindings_customer_scoped_read
+  on public.communication_channel_bindings;
+
+create policy communication_channel_bindings_customer_scoped_read
+  on public.communication_channel_bindings
+  for select
+  to authenticated
+  using (
+    public.is_org_owner(organization_id)
+    or exists (
+      select 1
+        from public.tenant_businesses b
+       where b.organization_id = communication_channel_bindings.organization_id
+         and b.id = communication_channel_bindings.tenant_business_id
+         and public.customer_business_effective_role(
+           communication_channel_bindings.organization_id,
+           communication_channel_bindings.tenant_business_id,
+           b.brand_id
+         ) is not null
+    )
+  );
+
+-- The old Organization-member read and Unified Inbox business-wide ALL policy
+-- predate customer Business scoping. Service-role runtime is unaffected by RLS.
+drop policy if exists org_member_integration_connections_read
+  on public.integration_connections;
+drop policy if exists unified_inbox_business_wide_boundary
+  on public.integration_connections;
+drop policy if exists integration_connections_customer_scoped_read
+  on public.integration_connections;
+
+create policy integration_connections_customer_scoped_read
+  on public.integration_connections
+  for select
+  to authenticated
+  using (
+    public.is_org_owner(organization_id)
+    or exists (
+      select 1
+        from public.communication_channel_bindings cb
+        join public.tenant_businesses b
+          on b.organization_id = cb.organization_id
+         and b.id = cb.tenant_business_id
+       where cb.organization_id = integration_connections.organization_id
+         and cb.integration_connection_id = integration_connections.id
+         and cb.status = 'ACTIVE'
+         and public.customer_business_effective_role(
+           cb.organization_id,
+           cb.tenant_business_id,
+           b.brand_id
+         ) is not null
+    )
+  );
+
+-- DML remains governed by the existing OWNER RLS policies. These privileges
+-- are not required by the Data API and bypass useful row-level intent.
+revoke truncate, references, trigger
+  on table public.integration_connections
+  from authenticated;
+
+comment on policy communication_channel_bindings_customer_scoped_read
+  on public.communication_channel_bindings is
+  'OWNER sees Organization bindings; non-OWNER customers see only bindings for Businesses admitted by canonical customer Business scope.';
+
+comment on policy integration_connections_customer_scoped_read
+  on public.integration_connections is
+  'OWNER sees Organization integration rows; non-OWNER customers see only integrations referenced by an ACTIVE binding in a canonically visible Business.';
