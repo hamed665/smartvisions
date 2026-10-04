@@ -428,5 +428,3 @@ export async function loadDataDashboard(input:{
     ],
   };
 }
-
-[executed on device: vps-eae2ade9 (4241b720-b387-477b-bb4f-5ea2a25fa2a6)]
