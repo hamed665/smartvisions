@@ -66,7 +66,7 @@ create table public.saas_coupons (
       benefit_type='FIXED'
       and fixed_amount is not null and fixed_amount > 0
       and currency is not null
-      and currency ~ '^[A-Z]{3}
+      and currency ~ '^[A-Z]{3}$'
     )
     or (
       benefit_type='PERCENTAGE'
@@ -383,6 +383,58 @@ create trigger saas_coupon_redemptions_guard
 before insert or update or delete on public.saas_coupon_redemptions
 for each row execute function public.guard_saas_coupon_mutation();
 
+create or replace function public.enforce_saas_coupon_discount_line()
+returns trigger
+language plpgsql
+security invoker
+set search_path=public,pg_catalog
+as $
+declare
+  v_redemption_id uuid;
+begin
+  if tg_op in ('UPDATE','DELETE') and old.component='DISCOUNT' then
+    raise exception 'SAAS-COUPONS discount line evidence is immutable';
+  end if;
+
+  if tg_op='DELETE' or new.component<>'DISCOUNT' then
+    return case when tg_op='DELETE' then old else new end;
+  end if;
+
+  if new.source_type<>'SAAS_COUPON_REDEMPTION'
+     or nullif(btrim(coalesce(new.source_id,'')),'') is null
+  then
+    raise exception 'SAAS-COUPONS is the only DISCOUNT line authority';
+  end if;
+
+  begin
+    v_redemption_id:=new.source_id::uuid;
+  exception when others then
+    raise exception 'SAAS-COUPONS discount source id is invalid';
+  end;
+
+  if not exists(
+    select 1
+    from public.saas_coupon_redemptions r
+    join public.saas_billing_statements s
+      on s.organization_id=r.organization_id
+     and s.id=r.statement_id
+    where r.id=v_redemption_id
+      and r.organization_id=new.organization_id
+      and r.statement_id=new.statement_id
+      and r.discount_amount=new.amount
+      and r.currency=s.currency
+  ) then
+    raise exception 'SAAS-COUPONS discount line does not match immutable redemption evidence';
+  end if;
+
+  return new;
+end;
+$;
+
+create trigger saas_coupon_discount_line_integrity
+before insert or update or delete on public.saas_billing_line_items
+for each row execute function public.enforce_saas_coupon_discount_line();
+
 create or replace function public.saas_coupon_statement_snapshot_bridge()
 returns trigger
 language plpgsql
@@ -481,7 +533,7 @@ begin
   if v_type='FIXED' and (
        p_fixed_amount is null or p_fixed_amount<=0
        or v_currency is null
-       or v_currency !~ '^[A-Z]{3}
+       or v_currency !~ '^[A-Z]{3}$'
        or p_percent_bps is not null
        or p_trial_periods is not null
      ) then
@@ -700,6 +752,19 @@ begin
      )
   then
     raise exception 'SAAS-COUPONS FREE_SETUP must target SETUP only';
+  end if;
+
+  if c.benefit_type='TRIAL'
+     and not (
+       v_scope_count=1
+       and exists(
+         select 1 from public.saas_coupon_scopes s
+         where s.coupon_id=c.id
+           and s.scope_type='ALL'
+       )
+     )
+  then
+    raise exception 'SAAS-COUPONS TRIAL must target the full billing statement';
   end if;
 
   perform set_config('app.saas_coupon_mutation','allowed',true);
@@ -1160,6 +1225,8 @@ end;
 $$;
 
 revoke all on function public.guard_saas_coupon_mutation()
+  from public,anon,authenticated,service_role;
+revoke all on function public.enforce_saas_coupon_discount_line()
   from public,anon,authenticated,service_role;
 revoke all on function public.saas_coupon_statement_snapshot_bridge()
   from public,anon,authenticated,service_role;
