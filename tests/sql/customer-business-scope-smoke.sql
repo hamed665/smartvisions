@@ -387,6 +387,87 @@ end;
 $chatwoot_mapping_boundary$;
 reset role;
 
+-- PR3 Connections read boundary: a scoped ADMIN sees only its Business binding
+-- and the exact integration row referenced by that visible binding.
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000e602',false);
+do $customer_connection_boundary$
+begin
+  if (select count(*) from public.communication_channel_bindings) <> 1 then
+    raise exception 'delegated ADMIN leaked cross-Business communication bindings';
+  end if;
+  if not exists (
+    select 1 from public.communication_channel_bindings
+    where tenant_business_id='20000000-0000-4000-8000-00000000f601'
+  ) then
+    raise exception 'delegated ADMIN lost its own Business communication binding';
+  end if;
+  if (select count(*) from public.integration_connections) <> 1 then
+    raise exception 'delegated ADMIN leaked integration connections from another Business';
+  end if;
+  if not exists (
+    select 1 from public.integration_connections
+    where id='30000000-0000-4000-8000-00000000f601'
+  ) then
+    raise exception 'delegated ADMIN lost the integration referenced by its Business binding';
+  end if;
+  begin
+    update public.integration_connections
+       set account_label='illegal customer mutation'
+     where id='30000000-0000-4000-8000-00000000f601';
+    if found then
+      raise exception 'delegated ADMIN unexpectedly mutated integration connection';
+    end if;
+  exception when insufficient_privilege then null;
+  end;
+end;
+$customer_connection_boundary$;
+reset role;
+select set_config('request.jwt.claim.sub','',false);
+
+do $customer_connection_policy_contract$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname='public'
+      and tablename='communication_channel_bindings'
+      and policyname='communication_channel_bindings_customer_scoped_read'
+  ) then
+    raise exception 'customer-scoped communication binding read policy is missing';
+  end if;
+  if exists (
+    select 1 from pg_policies
+    where schemaname='public'
+      and tablename='communication_channel_bindings'
+      and policyname='communication_channel_bindings_admin_read'
+  ) then
+    raise exception 'legacy Organization-wide communication binding read policy still exists';
+  end if;
+  if not exists (
+    select 1 from pg_policies
+    where schemaname='public'
+      and tablename='integration_connections'
+      and policyname='integration_connections_customer_scoped_read'
+  ) then
+    raise exception 'customer-scoped integration read policy is missing';
+  end if;
+  if exists (
+    select 1 from pg_policies
+    where schemaname='public'
+      and tablename='integration_connections'
+      and policyname in ('org_member_integration_connections_read','unified_inbox_business_wide_boundary')
+  ) then
+    raise exception 'legacy Organization-wide integration policy still exists';
+  end if;
+  if has_table_privilege('authenticated','public.integration_connections','TRUNCATE')
+     or has_table_privilege('authenticated','public.integration_connections','REFERENCES')
+     or has_table_privilege('authenticated','public.integration_connections','TRIGGER')
+  then
+    raise exception 'authenticated integration privileges are broader than Data API needs';
+  end if;
+end;
+$customer_connection_policy_contract$;
+
 -- Function/table grant contract: no anonymous customer access and no parallel authority.
 do $security_contract$
 begin
