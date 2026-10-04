@@ -139,4 +139,14 @@ begin
 end;
 $data_event_metrics$;
 
+set role service_role;
+select count(*) from public.analytics_event_feed_v1 where false;
+select count(*) from public.read_analytics_event_feed_v1(
+  '00000000-0000-0000-0000-000000000000'::uuid,
+  now()-interval '1 day',
+  now(),
+  null,null,null,10
+);
+reset role;
+
 rollback;
