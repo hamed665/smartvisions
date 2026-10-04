@@ -379,6 +379,9 @@ jobs:
             -f /work/tests/sql/saas-billing-fk-index-hardening-smoke.sql
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f /work/tests/sql/saas-coupons-smoke.sql
+          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
+            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f /work/tests/sql/booking-ai-smoke.sql
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \

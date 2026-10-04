@@ -62,7 +62,7 @@ export default async function BillingPage() {
         </div>
         <div className="settingsRow">
           <strong>Coupons / discounts</strong>
-          <span>Pending SAAS-COUPONS</span>
+          <span>Available via SAAS-COUPONS</span>
         </div>
         <div className="settingsRow">
           <strong>Payment collection</strong>
