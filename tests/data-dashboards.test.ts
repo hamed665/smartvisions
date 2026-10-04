@@ -66,5 +66,3 @@ describe('DATA-DASHBOARDS',()=>{
     expect(dashboard).not.toMatch(/dashboard_(facts|events|snapshots|metrics)/i);
   });
 });
-
-[executed on device: vps-eae2ade9 (4241b720-b387-477b-bb4f-5ea2a25fa2a6)]
