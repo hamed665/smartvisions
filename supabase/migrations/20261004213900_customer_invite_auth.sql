@@ -381,6 +381,7 @@ as $$
 declare
   v_actor uuid := auth.uid();
   v_actor_email text;
+  v_email_confirmed_at timestamptz;
   v_hash text := lower(btrim(coalesce(p_session_token_hash, '')));
   v_request_key text := btrim(coalesce(p_request_key, ''));
   v_now timestamptz := statement_timestamp();
@@ -398,13 +399,13 @@ begin
     raise exception 'invalid customer invitation acceptance';
   end if;
 
-  select lower(btrim(coalesce(u.email, '')))
-    into v_actor_email
+  select lower(btrim(coalesce(u.email, ''))), u.email_confirmed_at
+    into v_actor_email, v_email_confirmed_at
     from auth.users u
    where u.id = v_actor;
 
-  if not found or v_actor_email = '' then
-    raise exception 'verified Auth email required to accept customer invitation';
+  if not found or v_actor_email = '' or v_email_confirmed_at is null then
+    raise exception 'confirmed Auth email required to accept customer invitation';
   end if;
 
   select i.*
