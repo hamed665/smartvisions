@@ -392,6 +392,9 @@ reset role;
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000e602',false);
 do $customer_connection_boundary$
+declare
+  v_integration_count integer;
+  v_integration_ids text;
 begin
   if (select count(*) from public.communication_channel_bindings) <> 1 then
     raise exception 'delegated ADMIN leaked cross-Business communication bindings';
@@ -402,8 +405,12 @@ begin
   ) then
     raise exception 'delegated ADMIN lost its own Business communication binding';
   end if;
-  if (select count(*) from public.integration_connections) <> 1 then
-    raise exception 'delegated ADMIN leaked integration connections from another Business';
+  select count(*), string_agg(id::text, ',' order by id::text)
+    into v_integration_count, v_integration_ids
+    from public.integration_connections;
+  if v_integration_count <> 1 then
+    raise exception 'delegated ADMIN integration visibility mismatch count=% ids=%',
+      v_integration_count, coalesce(v_integration_ids, '<none>');
   end if;
   if not exists (
     select 1 from public.integration_connections
