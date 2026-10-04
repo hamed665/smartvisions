@@ -1804,7 +1804,7 @@ The package now provides:
 
 At the verified Production scale (~49 MB database and ~9.4k canonical events), a physically separate BigQuery/ClickHouse/WAL-CDC stack is **DEFERRED_WITH_REASON** until load/scale evidence justifies the operational cost.
 
-Post-closeout runtime hardening PR #459 added only the exact `/api/operations/analytics-warehouse` path to the existing session-proxy bypass allowlist so Cloudflare Cron can reach the canonical `INTERNAL_API_KEY` gate. Full CI, exact-main CI and Cloudflare Production deploy passed; an unauthenticated Production POST now returns route-level HTTP `401` instead of session redirect `307`. Production data is currently `9,468` canonical feed rows = `9,468` warehouse facts with `0` duplicate key groups, but end-to-end Cron execution is not claimed until a post-fix scheduled heartbeat records a successful warehouse status.
+Post-closeout runtime hardening PR #459 added only the exact `/api/operations/analytics-warehouse` path to the existing session-proxy bypass allowlist so Cloudflare Cron can reach the canonical `INTERNAL_API_KEY` gate. Full CI, exact-main CI and Cloudflare Production deploy passed; an unauthenticated Production POST now returns route-level HTTP `401` instead of session redirect `307`. Production data is `9,468` canonical feed rows = `9,468` warehouse facts with `0` duplicate key groups, and a natural scheduled heartbeat at `2026-10-04T06:51:07Z` recorded warehouse status `200`, `organizations=1`, `inserted=1`, `caughtUp=1`, `failed=0`, closing the end-to-end Cron path.
 
 ## DATA-DASHBOARDS
 
