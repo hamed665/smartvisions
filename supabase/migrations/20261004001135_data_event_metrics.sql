@@ -365,7 +365,7 @@ select
   e.created_at,
   null::numeric,
   null::text,
-  jsonb_build_object('provider',e.provider)
+  '{}'::jsonb
 from public.email_events e
 
 union all
@@ -569,25 +569,25 @@ values
   (
     'communication.email.sent.count',1,'Email sent','Provider-event count for Email SENT evidence.',
     'COMMUNICATION','COUNT','COUNT','COUNT','EVENT_FEED',
-    array['ORGANIZATION'],array['provider'],300,
+    array['ORGANIZATION'],array[]::text[],300,
     '{"feed":"analytics_event_feed_v1","eventName":"communication.email.sent.v1","causal":false}'::jsonb,'ACTIVE'
   ),
   (
     'communication.email.delivered.count',1,'Email delivered','Provider-event count for Email DELIVERED evidence.',
     'COMMUNICATION','COUNT','COUNT','COUNT','EVENT_FEED',
-    array['ORGANIZATION'],array['provider'],300,
+    array['ORGANIZATION'],array[]::text[],300,
     '{"feed":"analytics_event_feed_v1","eventName":"communication.email.delivered.v1","causal":false}'::jsonb,'ACTIVE'
   ),
   (
     'communication.email.received.count',1,'Email received','Provider-event count for inbound Email RECEIVED evidence.',
     'COMMUNICATION','COUNT','COUNT','COUNT','EVENT_FEED',
-    array['ORGANIZATION'],array['provider'],300,
+    array['ORGANIZATION'],array[]::text[],300,
     '{"feed":"analytics_event_feed_v1","eventName":"communication.email.received.v1","causal":false}'::jsonb,'ACTIVE'
   ),
   (
     'communication.email.bounced.count',1,'Email bounced','Provider-event count for Email BOUNCED evidence.',
     'COMMUNICATION','COUNT','COUNT','COUNT','EVENT_FEED',
-    array['ORGANIZATION'],array['provider'],300,
+    array['ORGANIZATION'],array[]::text[],300,
     '{"feed":"analytics_event_feed_v1","eventName":"communication.email.bounced.v1","causal":false}'::jsonb,'ACTIVE'
   ),
   (
