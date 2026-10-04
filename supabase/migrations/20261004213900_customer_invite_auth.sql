@@ -58,6 +58,12 @@ create table public.organization_member_invitations (
         and invitation_session_expires_at > invitation_redeemed_at
         and invitation_session_expires_at <= invitation_expires_at
       )
+      or
+      (
+        revoked_at is not null
+        and invitation_session_token_hash is null
+        and invitation_session_expires_at is null
+      )
     ),
   constraint organization_member_invitations_acceptance_shape_check
     check (
@@ -380,6 +386,7 @@ declare
   v_now timestamptz := statement_timestamp();
   v_invite public.organization_member_invitations%rowtype;
   v_canonical_role text;
+  v_membership_created boolean := false;
 begin
   if v_actor is null then
     raise exception 'authenticated actor required to accept customer invitation';
@@ -461,6 +468,7 @@ begin
     values (v_invite.organization_id, v_actor, v_invite.role);
 
     v_canonical_role := v_invite.role;
+    v_membership_created := true;
   end if;
 
   update public.organization_member_invitations i
@@ -489,7 +497,7 @@ begin
     pg_catalog.jsonb_build_object(
       'invited_role', v_invite.role,
       'canonical_role', v_canonical_role,
-      'membership_created', v_canonical_role = v_invite.role,
+      'membership_created', v_membership_created,
       'version', v_invite.version
     )
   );
