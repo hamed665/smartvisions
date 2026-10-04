@@ -130,7 +130,6 @@ export async function loadSaasBillingOverview(input: {
     throw new Error(`SaaS billing subscription lookup failed: ${subscriptionError.message}`);
   }
 
-  let pricing: SaasBillingOverview['subscription'] extends null ? never : never;
   let pricingRow: Record<string, unknown> | null = null;
   let planRow: Record<string, unknown> | null = null;
 
