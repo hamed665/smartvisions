@@ -225,6 +225,6 @@ describe('customer Business access routes', () => {
     expect(businessContext).toContain('createClient');
     expect(businessContext).not.toContain('getServerOperatorContext');
     expect(businessContext).not.toContain('getCurrentOrganization');
-    expect(businessContext).not.toMatch(/founder|super.?admin/i);
+    expect(businessContext).not.toContain("@/lib/supabase/operator-context");
   });
 });
