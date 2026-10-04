@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
@@ -39,6 +40,7 @@ export default function LoginPage() {
         <label>Password<input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
         {error ? <p role="alert">{error}</p> : null}
         <button type="submit" disabled={loading}>{loading ? 'Signing in…' : 'Sign in'}</button>
+        <Link href="/auth/forgot-password">Forgot password?</Link>
       </form>
     </main>
   );
