@@ -1370,8 +1370,8 @@ The following baseline inventory preserves every existing semantic Work Package,
 - `DATA-EVENT-METRICS` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**
 - `DATA-WAREHOUSE` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the current-scale logical warehouse boundary; scheduled internal route hardened by PR #459; physical external warehouse/WAL CDC **DEFERRED_WITH_REASON**
 - `DATA-DASHBOARDS` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED**
-- `DATA-ATTRIBUTION` — **NEXT**
-- `DATA-ASK`
+- `DATA-ATTRIBUTION` — **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled observational attribution contract and deployed surface; real Production outcome-credit E2E **UNAVAILABLE_NO_ELIGIBLE_REAL_EVIDENCE** (no synthetic verification data created)
+- `DATA-ASK` — **NEXT**
 - `DATA-EXPORTS`
 - `DATA-REPORTING`
 
