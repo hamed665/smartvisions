@@ -113,6 +113,12 @@ insert into public.usage_events(
     '00000000-0000-0000-0000-000000000e01',
     'EMAIL','SAAS_BILLING_API_SMOKE',0,15,
     '{"billingUnitKey":"API.REQUESTS"}'::jsonb,now()-interval '2 days'
+  ),
+  (
+    '90000000-0000-0000-0000-000000000e04',
+    '00000000-0000-0000-0000-000000000e01',
+    'OPENAI','SAAS_BILLING_INTERNAL_EXCLUSION_SMOKE',100,1,
+    '{}'::jsonb,now()-interval '2 days'
   );
 
 set role service_role;
