@@ -1959,6 +1959,40 @@ Production contains 0 coupons, 0 redemptions and 0 billing DISCOUNT lines becaus
 - client access;
 - permission boundaries.
 
+### Commercial customer access + WhatsApp readiness execution overlay — REGISTERED 2026-10-05
+
+This is an **execution/acceptance overlay only**. It does **not** create a new Phase, Section, Work Package, tenant model, IAM stack, WhatsApp authority or roadmap cursor. The canonical cursor remains `SECTION SAAS_PLATFORM -> SAAS-AGENCY`, and all later Work Packages keep their existing order.
+
+Commercial objective: make the existing Business OS usable by the first legitimate customer without bypassing the Phase 0–12 program or declaring later UX/Enterprise/FINAL packages complete early.
+
+Canonical ownership mapping:
+
+- `SAAS-AGENCY`: client access, delegated customer membership, Business/subaccount scope and permission boundaries;
+- `ENT-IAM`: invitation acceptance, authenticated identity/session/recovery and governed role membership;
+- `UX-BUSINESS-WEB`: customer-facing sign-in, invitation acceptance, first-login/getting-started and Connections experience;
+- `UX-MOBILE` / `UX-PWA`: mobile parity and final app implementation when those canonical packages are reached;
+- `COMM-TENANT-BRIDGE`, `DEV-INTEGRATIONS`, `OMNI-META-SOCIAL`, `OMNI-CHANNEL-HEALTH`: reuse the already verified WhatsApp binding, secure remote setup, Embedded Signup, provisioning, Chatwoot projection, message bridge, coexistence/reconnect and health authorities;
+- `FINAL-E2E`: first real consented customer acceptance from invitation through scoped Business access and WhatsApp runtime evidence.
+
+Bounded execution order while `SAAS-AGENCY` is current:
+
+1. close the existing client-access/delegated-membership gap using canonical Organization/User/Business authorities;
+2. expose customer-facing invite/sign-in/first-login UX on those authorities, without a second user directory or onboarding database;
+3. expose the existing governed WhatsApp setup flow from the customer's own scoped Business surface;
+4. record first real consented tenant E2E separately when legitimate Meta/provider evidence exists.
+
+Current visual reference for mobile/product UX: `https://designs.magicpath.ai/v1/fancily-dawn-8200`. This URL is a **visual reference, not architecture or product truth**. Runtime, canonical backend authorities, role boundaries and roadmap acceptance override the mockup. The current intended mobile navigation remains `Home / Inbox / CRM / AI / More` unless the canonical UX package explicitly changes it.
+
+Acceptance locks:
+
+- no synthetic Production customer/tenant/credential/message merely to prove onboarding;
+- no customer Facebook/Meta password collection;
+- no second Auth/IAM, Organization, tenant Business, membership, WhatsApp binding, Vault, Chatwoot, message, billing or audit authority;
+- customer sessions must fail closed across Organization/Business boundaries;
+- Founder/Super Admin/operator-only surfaces must not become customer-visible merely because the customer can sign in;
+- existing WhatsApp Business mobile accounts must not be destructively migrated;
+- internal implementation verification and first-real-provider/customer E2E remain separate evidence states.
+
 ## SAAS-SUPER-ADMIN
 
 Smart Visions command center:
