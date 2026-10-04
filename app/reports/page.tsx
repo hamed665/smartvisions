@@ -1,147 +1,270 @@
+import Link from 'next/link';
+
+import { loadDataDashboard, type DashboardHistoricalMetric, type DashboardLiveGauge } from '@/lib/analytics/dashboard';
 import { getCurrentOrganization } from '@/lib/supabase/org';
-import { buildCatalogConversionAttribution } from '@/lib/reports/catalog-conversion';
-import { buildIndustryPerformance } from '@/lib/reports/industry-performance';
-import { buildSalesEfficiencySummary } from '@/lib/reports/sales-efficiency';
 
 export const dynamic='force-dynamic';
 
-export default async function ReportsPage(){
-  const {supabase,organizationId}=await getCurrentOrganization();
-  const [
-    {data:leads,error:leadError},
-    {data:businesses,error:businessError},
-    {data:messages,error:messageError},
-    {data:replies,error:replyError},
-    {data:previews},
-    {data:previewEvents},
-    {data:variants},
-    {data:runs},
-    {data:whatsappEvents,error:whatsappEventError},
-    {data:handoffs,error:handoffError},
-  ]=await Promise.all([
-    supabase.from('leads').select('id,business_id,status,recommended_offer').eq('organization_id',organizationId),
-    supabase.from('businesses').select('id,name,category,google_primary_type_display_name').eq('organization_id',organizationId),
-    supabase.from('outreach_messages').select('id,lead_id,status,direction,channel,sent_at,received_at,created_at,metadata').eq('organization_id',organizationId),
-    supabase.from('reply_events').select('lead_id,category,hot,signals').eq('organization_id',organizationId),
-    supabase.from('previews').select('status,quality_score').eq('organization_id',organizationId),
-    supabase.from('preview_events').select('event_type').eq('organization_id',organizationId),
-    supabase.from('message_variants').select('variant_key,sent_count,reply_count,positive_count,hot_count,won_count').eq('organization_id',organizationId),
-    supabase.from('agent_runs').select('status,result_payload').eq('organization_id',organizationId),
-    supabase.from('whatsapp_events').select('provider_message_id,lead_id,conversation_id,direction,event_type,payload,created_at').eq('organization_id',organizationId),
-    supabase.from('handoff_events').select('lead_id,conversation_id,to_mode,created_at').eq('organization_id',organizationId),
-  ]);
-  const firstError=[leadError,businessError,messageError,replyError,whatsappEventError,handoffError].find(Boolean);if(firstError)throw firstError;
-  const l=leads??[],m=messages??[],r=replies??[],p=previews??[],pe=previewEvents??[],v=variants??[],ar=runs??[];
-  const firstOutboundAt=new Map<string,number>();
-  for(const message of m){
-    if(message.direction!=='OUTBOUND'||!message.sent_at||!message.lead_id)continue;
-    const at=Date.parse(String(message.sent_at));if(!Number.isFinite(at))continue;
-    const leadId=String(message.lead_id);const current=firstOutboundAt.get(leadId);
-    if(current==null||at<current)firstOutboundAt.set(leadId,at);
+type SearchParamsInput=Record<string,string|string[]|undefined>;
+
+function one(value:string|string[]|undefined){
+  return Array.isArray(value)?value[0]:value;
+}
+
+function formatNumber(value:number|null){
+  if(value==null)return '—';
+  return new Intl.NumberFormat('en-US',{maximumFractionDigits:2}).format(value);
+}
+
+function historicalDisplay(metric:DashboardHistoricalMetric|undefined){
+  if(!metric||!metric.available)return 'Unavailable';
+  const units=Object.entries(metric.valuesByUnit);
+  if(units.length){
+    return units.map(([unit,value])=>`${formatNumber(value)} ${unit}`).join(' · ');
   }
-  const contactedLeadIds=new Set(firstOutboundAt.keys());
-  const repliedLeadIds=new Set(m.filter(message=>{
-    if(message.direction!=='INBOUND'||!message.received_at||!message.lead_id)return false;
-    const received=Date.parse(String(message.received_at));const firstSent=firstOutboundAt.get(String(message.lead_id));
-    return Number.isFinite(received)&&firstSent!=null&&received>=firstSent;
-  }).map(message=>String(message.lead_id)));
-  const hotLeadIds=new Set(r.filter(x=>x.lead_id&&repliedLeadIds.has(String(x.lead_id))&&x.hot===true).map(x=>String(x.lead_id)));
-  const won=l.filter(x=>x.status==='WON').length;
-  const sent=m.filter(x=>x.direction==='OUTBOUND'&&Boolean(x.sent_at)).length;
-  const industry=buildIndustryPerformance({
-    leads:l.map(x=>({id:String(x.id),business_id:x.business_id?String(x.business_id):null,status:String(x.status),recommended_offer:x.recommended_offer?String(x.recommended_offer):null})),
-    businesses:(businesses??[]).map(x=>({id:String(x.id),name:String(x.name),category:x.category?String(x.category):null,google_primary_type_display_name:x.google_primary_type_display_name?String(x.google_primary_type_display_name):null})),
-    messages:m.map(x=>({lead_id:x.lead_id?String(x.lead_id):null,direction:String(x.direction),status:String(x.status),sent_at:x.sent_at?String(x.sent_at):null,received_at:x.received_at?String(x.received_at):null})),
-    replies:r.map(x=>({lead_id:x.lead_id?String(x.lead_id):null,category:String(x.category),hot:Boolean(x.hot),signals:x.signals})),
+  if(metric.value==null)return '—';
+  if(metric.unit==='PERCENT')return `${formatNumber(metric.value)}%`;
+  return formatNumber(metric.value);
+}
+
+function liveDisplay(metric:DashboardLiveGauge|undefined){
+  return metric?.available?formatNumber(metric.value):'Unavailable';
+}
+
+function sourcePill(source:string){
+  return <span className="pill">{source}</span>;
+}
+
+function MetricCard({
+  label,
+  value,
+  source,
+  note,
+}:{
+  label:string;
+  value:string;
+  source:string;
+  note?:string|null;
+}){
+  return <div className="card">
+    <div className="headerRow">
+      <div className="muted">{label}</div>
+      {sourcePill(source)}
+    </div>
+    <div className="value">{value}</div>
+    {note?<div className="muted">{note}</div>:null}
+  </div>;
+}
+
+export default async function ReportsPage({
+  searchParams,
+}:{
+  searchParams:Promise<SearchParamsInput>;
+}){
+  const params=await searchParams;
+  const {supabase,organizationId}=await getCurrentOrganization();
+  const rawDays=Number(one(params.days)??30);
+  const dashboard=await loadDataDashboard({
+    supabase,
+    organizationId,
+    days:rawDays,
+    requestedTenantBusinessId:one(params.business)??null,
+    requestedBranchId:one(params.branch)??null,
   });
-  const catalog=buildCatalogConversionAttribution({
-    whatsappEvents:(whatsappEvents??[]).map(x=>({
-      provider_message_id:x.provider_message_id?String(x.provider_message_id):null,
-      lead_id:x.lead_id?String(x.lead_id):null,
-      conversation_id:x.conversation_id?String(x.conversation_id):null,
-      direction:x.direction?String(x.direction):null,
-      event_type:x.event_type?String(x.event_type):null,
-      payload:x.payload,
-      created_at:x.created_at?String(x.created_at):null,
-    })),
-    inboundMessages:m.map(x=>({
-      id:x.id?String(x.id):null,
-      lead_id:x.lead_id?String(x.lead_id):null,
-      channel:x.channel?String(x.channel):null,
-      direction:x.direction?String(x.direction):null,
-      status:x.status?String(x.status):null,
-      received_at:x.received_at?String(x.received_at):null,
-      created_at:x.created_at?String(x.created_at):null,
-      metadata:x.metadata,
-    })),
-    handoffEvents:(handoffs??[]).map(x=>({
-      lead_id:x.lead_id?String(x.lead_id):null,
-      conversation_id:x.conversation_id?String(x.conversation_id):null,
-      to_mode:x.to_mode?String(x.to_mode):null,
-      created_at:x.created_at?String(x.created_at):null,
-    })),
-    leads:l.map(x=>({id:String(x.id),status:String(x.status)})),
-  });
-  const salesEfficiency=buildSalesEfficiencySummary(ar.map(run=>({
-    status:run.status?String(run.status):null,
-    result_payload:run.result_payload,
-  })));
-  const actionable=industry.filter(x=>x.sampleStatus==='ACTIONABLE');
-  const best=actionable[0]??null;
-  const metrics:[string,string|number][]=[
-    ['New Leads',l.filter(x=>x.status==='NEW').length],
-    ['Qualified',l.filter(x=>['QUALIFIED','READY_TO_CONTACT'].includes(String(x.status))).length],
-    ['Contacted prospects',contactedLeadIds.size],
-    ['Replied prospects',repliedLeadIds.size],
-    ['HOT prospects',hotLeadIds.size],
-    ['Won',won],
-    ['Sent messages',sent],
-    ['Reply Rate',contactedLeadIds.size?`${Math.round(repliedLeadIds.size/contactedLeadIds.size*100)}%`:'—'],
-    ['HOT / Contacted',contactedLeadIds.size?`${Math.round(hotLeadIds.size/contactedLeadIds.size*100)}%`:'—'],
-    ['Catalog sends',catalog.sent],
-    ['Catalog replies',catalog.replied],
-    ['Measured sales drafts',salesEfficiency.evaluatedDrafts],
-    ['Previews',p.length],
-    ['Preview Views',pe.filter(x=>x.event_type==='VIEWED').length],
-    ['Agent Runs',ar.length],
-    ['Agent Failures',ar.filter(x=>x.status==='FAILED').length],
-  ];
 
-  return <div>
-    <div className="headerRow"><div><h1>Reports</h1><p className="muted">Live funnel plus evidence-based catalog, response-discipline and industry learning. Historical data is never retroactively scored just to make a chart look experienced.</p></div><span className="status">Production data</span></div>
-    <div className="grid">{metrics.map(([label,value])=><div className="card" key={label}><div className="muted">{label}</div><div className="value">{value}</div></div>)}</div>
+  const hist=new Map(dashboard.historical.map((metric)=>[metric.key,metric]));
+  const live=new Map(dashboard.live.map((metric)=>[metric.key,metric]));
+  const missing=new Map(dashboard.unavailable.map((metric)=>[metric.key,metric]));
+  const selectedBusiness=dashboard.scope.tenantBusinessId??'';
+  const selectedBranch=dashboard.scope.branchId??'';
+  const visibleBranches=selectedBusiness
+    ?dashboard.scopeOptions.branches.filter((branch)=>branch.tenantBusinessId===selectedBusiness)
+    :dashboard.scopeOptions.branches;
 
-    <section className="panel">
-      <div className="headerRow"><div><h2>WhatsApp catalog conversion</h2><p className="muted">Provider-confirmed Product Send → Delivered / Read → first customer reply or Human handoff. Replies and handoffs attach only to the latest prior product in the same conversation.</p></div><span className="pill">{catalog.sent?`${catalog.sent} product sends`:'No product sends'}</span></div>
-      <div className="healthList"><span>Sent <strong>{catalog.sent}</strong></span><span>Delivered <strong>{catalog.delivered}</strong></span><span>Read <strong>{catalog.read}</strong></span><span>Replied <strong>{catalog.replied}</strong></span><span>Human handoff <strong>{catalog.handoff}</strong></span><span>Current WON + catalog send <strong>{catalog.won}</strong></span></div>
-      <div className="tableWrap"><table className="dataTable"><thead><tr><th>Catalog product</th><th>Sent</th><th>Delivered</th><th>Read</th><th>Replied</th><th>Reply %</th><th>Human</th><th>Won*</th></tr></thead><tbody>{catalog.rows.map(row=><tr key={row.contentId}><td><strong>{row.contentId}</strong><br/><span className="muted">{row.label}</span></td><td>{row.sent}</td><td>{row.delivered}</td><td>{row.read}</td><td>{row.replied}</td><td>{row.replyRate==null?'—':`${row.replyRate}%`}</td><td>{row.handoff}</td><td>{row.won}</td></tr>)}</tbody></table></div>
-      <p className="muted">No fake click metric is shown because the current Meta webhook evidence does not provide a reliable product-view/click event. *Won means the Lead is currently WON and also has a catalog send. Without a timestamped win ledger, this is deliberately not presented as causal or click-to-win attribution.</p>
-    </section>
+  const paymentCaptured=hist.get('payment.captured.amount');
+  const paymentRefunded=hist.get('payment.refunded.amount');
+  const aiCost=hist.get('ai.usage.cost_usd');
+  const whatsappSent=hist.get('communication.whatsapp.sent.count');
+  const whatsappDelivered=hist.get('communication.whatsapp.delivered.count');
+  const whatsappRead=hist.get('communication.whatsapp.read.count');
+  const emailSent=hist.get('communication.email.sent.count');
+  const emailDelivered=hist.get('communication.email.delivered.count');
 
-    <section className="panel">
-      <div className="headerRow"><div><h2>Sales response efficiency</h2><p className="muted">Measures reply discipline from explicit `salesEfficiency` evidence stored on new Agent runs. Historical runs without this trace are ignored, not guessed. These are quality/efficiency indicators, not proof of higher conversion.</p></div><span className="pill">{salesEfficiency.evaluatedDrafts?`${salesEfficiency.evaluatedDrafts} measured drafts`:'Awaiting measured drafts'}</span></div>
-      <div className="healthList">
-        <span>Policy pass <strong>{salesEfficiency.policyPassRate==null?'—':`${salesEfficiency.policyPassRate}%`} ({salesEfficiency.policyPassedDrafts}/{salesEfficiency.evaluatedDrafts})</strong></span>
-        <span>Average words <strong>{salesEfficiency.averageWords??'—'}</strong></span>
-        <span>Average primary questions <strong>{salesEfficiency.averageQuestions??'—'}</strong></span>
-        <span>Direct price answered <strong>{salesEfficiency.directPriceAnswered}/{salesEfficiency.directPriceRequired}</strong></span>
-        <span>Ready-to-start signals <strong>{salesEfficiency.readyToStartSignals}</strong></span>
-        <span>Avoidable qualification blocked <strong>{salesEfficiency.avoidableQualificationBlocks}</strong></span>
-        <span>Reply word-limit blocked <strong>{salesEfficiency.marketWordLimitBlocks}</strong></span>
-        <span>Canonical price misses blocked <strong>{salesEfficiency.canonicalPriceMissBlocks}</strong></span>
+  return <section>
+    <div className="headerRow">
+      <div>
+        <p className="muted">Governed Analytics · v1</p>
+        <h1>Business dashboards</h1>
+        <p className="muted">
+          Historical metrics come from the versioned Metrics Registry + Analytics Warehouse.
+          Current-state gauges are marked LIVE. Unsupported evidence stays unavailable instead of being guessed.
+        </p>
       </div>
-      <p className="muted">The goal is fewer unnecessary turns: answer known facts directly, ask at most one necessary question, and hand explicit start/payment/contract/meeting intent to a Human instead of extending the sales script.</p>
+      <div className="status">{dashboard.scope.label} · {dashboard.window.days}d</div>
+    </div>
+
+    <div className="panel">
+      <div className="headerRow">
+        <div>
+          <h2>Scope & freshness</h2>
+          <p className="muted">Organization / Business / Branch scope is never silently widened.</p>
+        </div>
+        <span className="pill">
+          Warehouse lag {dashboard.freshness.warehouseLagSeconds==null?'—':`${dashboard.freshness.warehouseLagSeconds}s`}
+        </span>
+      </div>
+      <form method="get" className="conversationFilters">
+        <label>
+          <span className="muted">Window</span>
+          <select name="days" defaultValue={String(dashboard.window.days)}>
+            <option value="7">7 days</option>
+            <option value="30">30 days</option>
+            <option value="90">90 days</option>
+          </select>
+        </label>
+        <label>
+          <span className="muted">Business</span>
+          <select name="business" defaultValue={selectedBusiness}>
+            <option value="">Organization-wide</option>
+            {dashboard.scopeOptions.businesses.map((business)=>
+              <option key={business.id} value={business.id}>{business.label}</option>
+            )}
+          </select>
+        </label>
+        <label>
+          <span className="muted">Branch</span>
+          <select name="branch" defaultValue={selectedBranch}>
+            <option value="">All visible branches</option>
+            {visibleBranches.map((branch)=>
+              <option key={branch.id} value={branch.id}>{branch.label}</option>
+            )}
+          </select>
+        </label>
+        <button type="submit">Apply</button>
+        <Link className="textLink" href="/reports">Reset</Link>
+      </form>
+      <div className="healthList">
+        <span>Organization warehouse facts <strong>{formatNumber(dashboard.freshness.warehouseFactCount)}</strong></span>
+        <span>Last complete <strong>{dashboard.freshness.warehouseLastCompleteThrough??'—'}</strong></span>
+        <span>Last source event <strong>{dashboard.freshness.warehouseLastSourceEventAt??'—'}</strong></span>
+        <span>History cap <strong>{dashboard.freshness.historyTruncated?'Reached · narrow the window':'Within bound'}</strong></span>
+      </div>
+    </div>
+
+    <div className="grid">
+      <MetricCard label="Leads" value={liveDisplay(live.get('leads.total'))} source="LIVE" note={live.get('leads.total')?.reason}/>
+      <MetricCard label="Customers / people" value={liveDisplay(live.get('customers.total'))} source="LIVE" note={live.get('customers.total')?.reason}/>
+      <MetricCard label="Conversations" value={liveDisplay(live.get('conversations.total'))} source="LIVE" note={live.get('conversations.total')?.reason}/>
+      <MetricCard label="Human takeovers" value={historicalDisplay(hist.get('conversation.human_takeover.count'))} source="WAREHOUSE" note={hist.get('conversation.human_takeover.count')?.reason}/>
+      <MetricCard label="Open deals" value={liveDisplay(live.get('pipeline.open'))} source="LIVE" note={live.get('pipeline.open')?.reason}/>
+      <MetricCard label="Won leads" value={liveDisplay(live.get('leads.won'))} source="LIVE" note={live.get('leads.won')?.reason}/>
+      <MetricCard label="Captured revenue" value={historicalDisplay(paymentCaptured)} source="WAREHOUSE" note={paymentCaptured?.reason}/>
+      <MetricCard label="AI/provider cost" value={historicalDisplay(aiCost)} source="WAREHOUSE" note={aiCost?.reason}/>
+    </div>
+
+    <section className="twoCol">
+      <div className="panel">
+        <div className="headerRow"><h2>Sales & pipeline</h2>{sourcePill('LIVE + WAREHOUSE')}</div>
+        <div className="healthList">
+          <span>Qualified leads <strong>{liveDisplay(live.get('leads.qualified'))}</strong></span>
+          <span>Won leads <strong>{liveDisplay(live.get('leads.won'))}</strong></span>
+          <span>Open deals <strong>{liveDisplay(live.get('pipeline.open'))}</strong></span>
+          <span>Won deals <strong>{liveDisplay(live.get('pipeline.won'))}</strong></span>
+          <span>Preview views <strong>{historicalDisplay(hist.get('preview.viewed.count'))}</strong></span>
+        </div>
+      </div>
+      <div className="panel">
+        <div className="headerRow"><h2>Response & retention</h2>{sourcePill('EVIDENCE GATED')}</div>
+        <div className="healthList">
+          <span>Response time <strong>Unavailable</strong></span>
+          <span>Retention <strong>Unavailable</strong></span>
+        </div>
+        <p className="muted">{missing.get('response_time')?.reason}</p>
+        <p className="muted">{missing.get('retention')?.reason}</p>
+      </div>
     </section>
 
     <section className="panel">
-      <div className="headerRow"><div><h2>Industry response efficiency</h2><p className="muted">Contacted and replied use durable provider message timestamps. Positive/HOT classification receives credit only when a real inbound reply exists.</p></div><span className="pill">{best?`Best actionable: ${best.industry}`:'Learning phase'}</span></div>
-      {industry.length?<div className="tableWrap"><table className="dataTable"><thead><tr><th>Industry</th><th>Sample</th><th>Contacted</th><th>Reply %</th><th>Positive %</th><th>Engaged %</th><th>HOT %</th><th>Won %</th><th>Score</th><th>Top offer</th></tr></thead><tbody>{industry.map(row=><tr key={row.industry}><td>{row.industry}</td><td>{row.sampleStatus}</td><td>{row.contacted}</td><td>{row.replyRate}%</td><td>{row.positiveRate}%</td><td>{row.engagedRate}%</td><td>{row.hotRate}%</td><td>{row.winRate}%</td><td>{row.performanceScore}</td><td>{row.topOffer??'—'}</td></tr>)}</tbody></table></div>:<p className="muted">No contacted prospects yet. Industry ranking starts only after real outreach/replies exist.</p>}
-      <div className="healthList"><span>INSUFFICIENT <strong>1–2 contacted prospects; never scale from this.</strong></span><span>LEARNING <strong>3–9; useful direction, still cautious.</strong></span><span>ACTIONABLE <strong>10+; eligible to influence future industry allocation.</strong></span></div>
+      <div className="headerRow"><div><h2>Commerce</h2><p className="muted">Current object counts plus governed lifecycle history.</p></div>{sourcePill('LIVE + WAREHOUSE')}</div>
+      <div className="grid">
+        <MetricCard label="Bookings · live" value={liveDisplay(live.get('bookings.total'))} source="LIVE" note={live.get('bookings.total')?.reason}/>
+        <MetricCard label="Bookings confirmed" value={historicalDisplay(hist.get('booking.confirmed.count'))} source="WAREHOUSE" note={hist.get('booking.confirmed.count')?.reason}/>
+        <MetricCard label="Bookings completed" value={historicalDisplay(hist.get('booking.completed.count'))} source="WAREHOUSE" note={hist.get('booking.completed.count')?.reason}/>
+        <MetricCard label="Quotes · live" value={liveDisplay(live.get('quotes.total'))} source="LIVE" note={live.get('quotes.total')?.reason}/>
+        <MetricCard label="Quotes accepted" value={historicalDisplay(hist.get('quote.accepted.count'))} source="WAREHOUSE" note={hist.get('quote.accepted.count')?.reason}/>
+        <MetricCard label="Orders · live" value={liveDisplay(live.get('orders.total'))} source="LIVE" note={live.get('orders.total')?.reason}/>
+        <MetricCard label="Orders created" value={historicalDisplay(hist.get('order.created.count'))} source="WAREHOUSE" note={hist.get('order.created.count')?.reason}/>
+        <MetricCard label="Invoices issued" value={historicalDisplay(hist.get('invoice.issued.count'))} source="WAREHOUSE" note={hist.get('invoice.issued.count')?.reason}/>
+      </div>
     </section>
 
     <section className="twoCol">
-      <div className="panel"><h2>Message variants</h2>{v.length?<div className="tableWrap"><table className="dataTable"><thead><tr><th>Variant</th><th>Sent</th><th>Replies</th><th>Positive</th><th>HOT</th><th>Won</th></tr></thead><tbody>{v.map(x=><tr key={x.variant_key}><td>{x.variant_key}</td><td>{x.sent_count}</td><td>{x.reply_count}</td><td>{x.positive_count}</td><td>{x.hot_count}</td><td>{x.won_count}</td></tr>)}</tbody></table></div>:<p className="muted">No experiment data yet.</p>}</div>
-      <div className="panel"><h2>Preview quality</h2><div className="healthList"><span>Generated <strong>{p.length}</strong></span><span>Passed 80+ <strong>{p.filter(x=>(x.quality_score??0)>=80).length}</strong></span><span>Blocked / low quality <strong>{p.filter(x=>(x.quality_score??0)<80).length}</strong></span><span>Viewed <strong>{pe.filter(x=>x.event_type==='VIEWED').length}</strong></span></div></div>
+      <div className="panel">
+        <div className="headerRow"><h2>Payments & revenue</h2>{sourcePill('PROVIDER-VERIFIED')}</div>
+        <div className="healthList">
+          <span>Payment intents · live <strong>{liveDisplay(live.get('payments.total'))}</strong></span>
+          <span>Captured payments <strong>{historicalDisplay(hist.get('payment.captured.count'))}</strong></span>
+          <span>Captured amount <strong>{historicalDisplay(paymentCaptured)}</strong></span>
+          <span>Refunded amount <strong>{historicalDisplay(paymentRefunded)}</strong></span>
+        </div>
+        <p className="muted">Currencies remain separate. No OMR/USD/AED total is manufactured.</p>
+      </div>
+      <div className="panel">
+        <div className="headerRow"><h2>Staff, workflow & campaigns</h2>{sourcePill('LIVE')}</div>
+        <div className="healthList">
+          <span>Team members <strong>{liveDisplay(live.get('staff.members'))}</strong></span>
+          <span>Open tasks <strong>{liveDisplay(live.get('tasks.open'))}</strong></span>
+          <span>Enabled workflows <strong>{liveDisplay(live.get('workflows.enabled'))}</strong></span>
+          <span>Marketing campaigns <strong>{liveDisplay(live.get('campaigns.total'))}</strong></span>
+        </div>
+      </div>
     </section>
-  </div>;
+
+    <section className="twoCol">
+      <div className="panel">
+        <div className="headerRow"><h2>Channels</h2>{sourcePill('WAREHOUSE')}</div>
+        <div className="healthList">
+          <span>WhatsApp sent <strong>{historicalDisplay(whatsappSent)}</strong></span>
+          <span>WhatsApp delivered <strong>{historicalDisplay(whatsappDelivered)}</strong></span>
+          <span>WhatsApp read <strong>{historicalDisplay(whatsappRead)}</strong></span>
+          <span>Email sent <strong>{historicalDisplay(emailSent)}</strong></span>
+          <span>Email delivered <strong>{historicalDisplay(emailDelivered)}</strong></span>
+        </div>
+      </div>
+      <div className="panel">
+        <div className="headerRow"><h2>AI</h2>{sourcePill('LIVE + WAREHOUSE')}</div>
+        <div className="healthList">
+          <span>Agent runs · window <strong>{liveDisplay(live.get('ai.runs.30d'))}</strong></span>
+          <span>Agent failures · window <strong>{liveDisplay(live.get('ai.failures.30d'))}</strong></span>
+          <span>Provider usage cost <strong>{historicalDisplay(aiCost)}</strong></span>
+        </div>
+      </div>
+    </section>
+
+    <section className="panel">
+      <div className="headerRow">
+        <div><h2>Recent daily activity</h2><p className="muted">Last 14 days inside the selected analytics window.</p></div>
+        {sourcePill('WAREHOUSE')}
+      </div>
+      <div className="tableWrap">
+        <table className="dataTable">
+          <thead><tr><th>Day</th><th>Communication</th><th>Commerce</th><th>Booking</th><th>AI</th></tr></thead>
+          <tbody>{dashboard.daily.map((row)=>
+            <tr key={row.day}>
+              <td>{row.day}</td>
+              <td>{row.communication}</td>
+              <td>{row.commerce}</td>
+              <td>{row.booking}</td>
+              <td>{row.ai}</td>
+            </tr>
+          )}</tbody>
+        </table>
+      </div>
+    </section>
+
+    <section className="panel">
+      <h2>Evidence contract</h2>
+      <div className="healthList">{dashboard.notes.map((note)=><span key={note}>{note}</span>)}</div>
+    </section>
+  </section>;
 }
