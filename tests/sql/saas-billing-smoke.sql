@@ -36,7 +36,7 @@ insert into public.pricing_versions(
   '60000000-0000-0000-0000-000000000e01',
   1,'DRAFT','OMR','MONTHLY',
   20,10,4,
-  '{"SEATS":1,"FEATURE.ADVANCED":0,"API.REQUESTS":10}'::jsonb,
+  '{"SEATS":1,"FEATURE.ADVANCED":0,"API.REQUESTS":10,"AI.RAW_COST_USD":0.25,"THIRD_PARTY.RAW_COST_USD":0.5}'::jsonb,
   '{"SEATS":5,"FEATURE.ADVANCED":10,"API.REQUESTS":0.5}'::jsonb,
   now()-interval '2 days'
 );
@@ -185,12 +185,12 @@ begin
      or s.feature_total<>10
      or s.seat_total<>5
      or s.overage_total<>2.5
-     or s.ai_usage_total<>1.6
-     or s.third_party_usage_total<>0.8
+     or s.ai_usage_total<>1.2
+     or s.third_party_usage_total<>0.6
      or s.discount_total<>0
-     or s.subtotal<>49.9
-     or s.tax_total<>2.495
-     or s.total<>52.395
+     or s.subtotal<>49.3
+     or s.tax_total<>2.465
+     or s.total<>51.765
   then
     raise exception 'SAAS-BILLING draft totals are incorrect: %',row_to_json(s);
   end if;
@@ -238,7 +238,7 @@ begin
   if s.status<>'FINALIZED'
      or s.finalized_at is null
      or s.finalize_request_key<>'saas-billing-finalize-smoke'
-     or s.total<>52.395
+     or s.total<>51.765
   then
     raise exception 'SAAS-BILLING finalization is incorrect: %',row_to_json(s);
   end if;
