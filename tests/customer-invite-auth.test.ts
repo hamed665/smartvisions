@@ -13,6 +13,7 @@ import {
   normalizeCustomerInviteRole,
   normalizeCustomerInviteSecret,
 } from '@/lib/access/customer-invite';
+import { isPublicShellPath } from '@/lib/public-paths';
 
 const root = process.cwd();
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -36,12 +37,12 @@ describe('customer invite + auth capability', () => {
     expect(normalizeCustomerInviteRole('SUPER_ADMIN')).toBeNull();
   });
 
-  it('keeps the invitation session HttpOnly and bounded', () => {
+  it('keeps the invitation session HttpOnly and scoped to invite APIs', () => {
     const options = customerInviteCookieOptions('2030-01-01T00:00:00.000Z');
     expect(CUSTOMER_INVITE_COOKIE).toBe('sv_customer_invite');
     expect(options.httpOnly).toBe(true);
     expect(options.sameSite).toBe('lax');
-    expect(options.path).toBe('/');
+    expect(options.path).toBe('/api/access/invites');
     expect(options.expires.toISOString()).toBe('2030-01-01T00:00:00.000Z');
   });
 
@@ -99,12 +100,14 @@ describe('customer invite + auth capability', () => {
     expect(recovery).toContain('resetPasswordForEmail');
   });
 
-  it('opens only the bounded unauthenticated invite surfaces in the session proxy', () => {
+  it('opens only the bounded unauthenticated invite surfaces and hides operator navigation', () => {
     const proxy = read('lib/supabase/proxy.ts');
     expect(proxy).toContain("'/api/access/invites/redeem'");
     expect(proxy).toContain("'/api/access/invites/session'");
     expect(proxy).toContain("'/invite/accept'");
     expect(proxy).not.toContain("'/api/access/invites/accept',");
     expect(proxy).toContain("'Cache-Control', 'private, no-store'");
+    expect(isPublicShellPath('/invite/accept')).toBe(true);
+    expect(isPublicShellPath('/api/access/invites/accept')).toBe(false);
   });
 });
