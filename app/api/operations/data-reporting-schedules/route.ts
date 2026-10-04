@@ -116,7 +116,9 @@ export async function POST(request: Request) {
           reportSchedule: schedule,
           producer: 'DATA_REPORTING_RECONCILER',
         },
-        p_scheduled_at: occurrence.scheduledAt,
+        // Runtime deadlines are measured from actual enqueue time. The governed
+        // due occurrence stays in trigger payload/sourceEventKey as evidence.
+        p_scheduled_at: now.toISOString(),
       });
       if (error) throw new Error(error.message);
 
