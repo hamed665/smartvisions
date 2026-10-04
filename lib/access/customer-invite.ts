@@ -23,7 +23,7 @@ export function customerInviteCookieOptions(expiresAt: string | Date) {
     httpOnly: true,
     secure: process.env.NODE_ENV !== 'development',
     sameSite: 'lax' as const,
-    path: '/',
+    path: '/api/access/invites',
     expires,
   };
 }
