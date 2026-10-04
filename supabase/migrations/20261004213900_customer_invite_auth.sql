@@ -76,6 +76,13 @@ create table public.organization_member_invitations (
 create index organization_member_invitations_org_email_idx
   on public.organization_member_invitations(organization_id, email, invitation_created_at desc);
 
+create index organization_member_invitations_created_by_idx
+  on public.organization_member_invitations(organization_id, created_by_user_id);
+
+create index organization_member_invitations_accepted_by_idx
+  on public.organization_member_invitations(accepted_by_user_id)
+  where accepted_by_user_id is not null;
+
 create index organization_member_invitations_active_idx
   on public.organization_member_invitations(organization_id, invitation_expires_at)
   where accepted_at is null and revoked_at is null;
