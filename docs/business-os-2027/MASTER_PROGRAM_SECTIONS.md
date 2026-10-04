@@ -1895,27 +1895,23 @@ PR #469 merged to `main@b10910c56359e57aea85b05ccf60a43b24404252`; exact-main CI
 
 # SECTION SAAS_PLATFORM — Monetization, admin, agency and marketplace
 
-## SAAS-PLANS-ENTITLEMENTS
+## SAAS-PLANS-ENTITLEMENTS — COMPLETED
 
-Plans:
+SAAS-PLANS-ENTITLEMENTS extends the existing Business OS Control Plane rather than introducing another commercial authority:
 
-- Starter;
-- Growth;
-- Pro;
-- Business;
-- Agency;
-- Enterprise.
+- canonical plan identities exist for Starter, Growth, Pro, Business, Agency and Enterprise;
+- all six canonical plan identities remain `DRAFT` until real commercial pricing is published by SAAS-BILLING;
+- typed entitlement contracts govern `FEATURE`, `LIMIT`, `SEATS`, `CHANNELS`, `ADDON`, `API` and `STORAGE`;
+- effective entitlement precedence is Organization override first, then the immutable subscribed pricing-version entitlement;
+- absent subscription/override evidence means no new Business OS entitlement is granted;
+- authenticated Organization members can read only their effective entitlements through the canonical resolver/API; `anon` cannot execute the resolver;
+- existing Growth OS compatibility remains preserved while Production has no backfilled subscription;
+- no second plan, pricing, subscription, entitlement, feature, tenant, usage or billing authority was created;
+- no price, subscription, entitlement, add-on or allowance was invented for Production verification.
 
-Govern:
+PR #471 merged to `main@d63c979b07f9063d40d8da485d8ed39c9d16bb9d`; exact-main CI `37211391288` and Cloudflare Production Deploy `37211637822` succeeded. Production migration `saas_plans_entitlements@20261004150621` is live from blob `46edf603a8196a51d63a4ef0bfd6259764c44a4c`. Current Production commercial rows remain `pricing_versions=0`, `subscriptions=0`, `plan_entitlements=0`, `organization_entitlement_overrides=0`; pricing activation is therefore intentionally deferred to SAAS-BILLING rather than simulated.
 
-- feature entitlements;
-- limits;
-- seats;
-- channels;
-- add-ons;
-- API/storage allowances.
-
-## SAAS-BILLING
+## SAAS-BILLING — NEXT
 
 Customer-facing formula supports:
 
