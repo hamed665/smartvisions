@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 
 type InviteContext = {
@@ -19,6 +20,8 @@ type AccessResult = {
   role: string;
   acceptedAt: string;
   replayed: boolean;
+  tenantBusinessId?: string | null;
+  businessRole?: string | null;
 };
 
 async function readJson(response: Response) {
@@ -181,9 +184,17 @@ export default function AcceptInvitePage() {
         <section className="login-card">
           <p className="eyebrow">SMART VISIONS</p>
           <h1>Access activated</h1>
-          <p>{invite.organizationName || 'Your organization'} · {access.role}</p>
+          <p>{invite.organizationName || 'Your organization'} · {access.businessRole || access.role}</p>
           <p>{notice}</p>
-          <p>Your Business workspace will only appear when its explicit Business scope is assigned. No operator-only access is granted by this invitation.</p>
+          <p>Your Business workspace is limited to the explicit scope assigned by this invitation. No operator-only access is granted.</p>
+          {access.tenantBusinessId ? (
+            <Link
+              className="textLink"
+              href={`/customer?businessId=${encodeURIComponent(access.tenantBusinessId)}`}
+            >
+              Continue to Business workspace →
+            </Link>
+          ) : null}
         </section>
       </main>
     );
