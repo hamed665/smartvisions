@@ -359,7 +359,7 @@ select
   e.event_type,
   'PROVIDER_EVENT',
   'message',
-  coalesce(e.provider_message_id,e.provider_event_id),
+  coalesce(e.provider_message_id,e.id::text),
   null::uuid,
   null::uuid,
   e.created_at,
