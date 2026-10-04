@@ -80,8 +80,18 @@ export function normalizeReportingSchedule(value: unknown): ReportingSchedule {
     if (!Array.isArray(input.weekdays)) {
       throw new Error('Custom reporting schedule requires weekdays[]');
     }
-    const weekdays = [...new Set(input.weekdays.map(integer).filter((v): v is number => v != null))].sort((a, b) => a - b);
-    if (!weekdays.length || weekdays.length > 7 || weekdays.some(day => day < 1 || day > 7)) {
+    const rawWeekdays = input.weekdays.map(integer);
+    if (rawWeekdays.some(value => value == null)) {
+      throw new Error('Custom reporting weekdays must be integers');
+    }
+    const typed = rawWeekdays as number[];
+    const weekdays = [...new Set(typed)].sort((a, b) => a - b);
+    if (
+      !weekdays.length
+      || weekdays.length > 7
+      || weekdays.some(day => day < 1 || day > 7)
+      || weekdays.length !== typed.length
+    ) {
       throw new Error('Custom reporting weekdays must contain 1..7 unique weekday values');
     }
     return { cadence, timezone, time: time.text, weekdays };
