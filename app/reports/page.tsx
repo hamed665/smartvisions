@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { loadDataDashboard, type DashboardHistoricalMetric, type DashboardLiveGauge } from '@/lib/analytics/dashboard';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { DataAskPanel } from './data-ask-panel';
+import { DataExportPanel } from './data-export-panel';
 
 export const dynamic='force-dynamic';
 
@@ -154,6 +155,13 @@ export default async function ReportsPage({
 
     <DataAskPanel
       defaultDays={dashboard.window.days}
+      businessId={dashboard.scope.tenantBusinessId}
+      branchId={dashboard.scope.branchId}
+      scopeLabel={dashboard.scope.label}
+    />
+
+    <DataExportPanel
+      days={dashboard.window.days}
       businessId={dashboard.scope.tenantBusinessId}
       branchId={dashboard.scope.branchId}
       scopeLabel={dashboard.scope.label}
