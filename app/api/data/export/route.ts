@@ -38,7 +38,12 @@ export async function GET(request: Request) {
       requestedBranchId: optionalId(url.searchParams.get('branch')),
     });
 
-    return new Response(artifact.bytes, {
+    const body = artifact.bytes.buffer.slice(
+      artifact.bytes.byteOffset,
+      artifact.bytes.byteOffset + artifact.bytes.byteLength,
+    ) as ArrayBuffer;
+
+    return new Response(body, {
       status: 200,
       headers: {
         'Content-Type': artifact.mimeType,
