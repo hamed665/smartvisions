@@ -5,7 +5,7 @@
 -- No second scheduler, queue, reporting warehouse, recipient store or
 -- provider credential authority is created.
 
-do $
+do $$
 begin
   if not exists(
     select 1 from public.tool_action_registry
@@ -173,7 +173,7 @@ returns trigger
 language plpgsql
 security invoker
 set search_path = public, pg_catalog
-as $
+as $$
 begin
   if new.trigger_key='SCHEDULE_DUE'
      and exists(
@@ -339,12 +339,15 @@ begin
      or p_trigger_payload is null
      or jsonb_typeof(p_trigger_payload)<>'object'
      or octet_length(p_trigger_payload::text)>32768
+     or p_scheduled_at is null
      or (
        p_trigger_payload ? 'automationRuleId'
        and (
          p_trigger_key<>'SCHEDULE_DUE'
          or coalesce(p_trigger_payload->>'automationRuleId','')
-           !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}
+           !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
+       )
+     )
   then
     raise exception 'Automation runtime event payload is invalid';
   end if;
@@ -403,217 +406,6 @@ begin
         not (p_trigger_payload ? 'automationRuleId')
         or r.id::text=p_trigger_payload->>'automationRuleId'
       )
-    order by v.priority desc,r.id
-  loop
-    perform public.validate_automation_actions(
-      p_organization_id,v_rule.actions,true
-    );
-    perform public.validate_automation_runtime_action_scopes(
-      p_trigger_key,v_rule.actions
-    );
-    perform public.validate_automation_runtime_action_configs(v_rule.actions);
-
-    if jsonb_array_length(v_rule.conditions)>0 then
-      if p_subject_type is null or p_subject_id is null then
-        raise exception 'Automation runtime conditions require a resolved subject';
-      end if;
-      select * into v_eval
-      from public.evaluate_automation_conditions(
-        p_organization_id,p_subject_type,p_subject_id,v_rule.conditions
-      );
-      if not coalesce(v_eval.matched,false) then
-        continue;
-      end if;
-    end if;
-
-    -- For source kinds without a fixed condition subject, the event must still
-    -- provide a subject compatible with every non-control-plane action.
-    if exists(
-      select 1
-      from jsonb_array_elements(v_rule.actions) a(item)
-      join public.tool_action_registry t
-        on t.action_key=a.item->>'key'
-      where t.scope_type<>'AUTOMATION_RULE'
-        and (
-          p_subject_type is null
-          or t.scope_type<>p_subject_type
-        )
-    ) then
-      raise exception 'Automation runtime event subject is incompatible with published actions';
-    end if;
-
-    v_matched:=v_matched+1;
-    v_timeout_seconds:=least(
-      86400,
-      greatest(
-        60,
-        case
-          when jsonb_typeof(v_rule.config->'runtimeTimeoutSeconds')='number'
-            then (v_rule.config->>'runtimeTimeoutSeconds')::integer
-          else 900
-        end
-      )
-    );
-
-    v_run_id:=null;
-    insert into public.automation_runs(
-      organization_id,automation_rule_id,automation_rule_version_id,
-      rule_version,owner_user_id,trigger_key,source_event_key,
-      subject_type,subject_id,trigger_payload,priority,status,
-      scheduled_at,deadline_at
-    ) values (
-      p_organization_id,v_rule.rule_id,v_rule.version_id,
-      v_rule.version,v_rule.owner_user_id,p_trigger_key,p_source_event_key,
-      p_subject_type,p_subject_id,p_trigger_payload,v_rule.priority,'QUEUED',
-      p_scheduled_at,p_scheduled_at+make_interval(secs=>v_timeout_seconds)
-    )
-    on conflict(
-      organization_id,automation_rule_id,rule_version,source_event_key
-    ) do nothing
-    returning id into v_run_id;
-
-    if v_run_id is null then
-      v_replayed:=v_replayed+1;
-      continue;
-    end if;
-
-    insert into public.automation_run_actions(
-      organization_id,automation_run_id,action_index,action_key,action_config,
-      scope_type,side_effect_class,cost_class,approval_requirement,
-      approval_policy_key,verifier_key,idempotency_key,retry_policy,
-      max_attempts,timeout_seconds,status,next_attempt_at,input_payload
-    )
-    select
-      p_organization_id,
-      v_run_id,
-      a.ordinality::integer,
-      t.action_key,
-      a.item->'config',
-      t.scope_type,
-      t.side_effect_class,
-      t.cost_class,
-      t.approval_requirement,
-      t.approval_policy_key,
-      t.verifier_key,
-      'automation:'||v_run_id::text||':'||a.ordinality::text||':'||t.action_key,
-      case
-        when t.side_effect_class='EXTERNAL_PROVIDER'
-          then 'NO_AUTOMATIC_RETRY'
-        else 'BOUNDED_IDEMPOTENT'
-      end,
-      case
-        when t.side_effect_class='EXTERNAL_PROVIDER' then 1
-        when t.side_effect_class='CONTROL_PLANE' then 2
-        else 3
-      end,
-      case
-        when t.side_effect_class='EXTERNAL_PROVIDER' then 120
-        when t.cost_class='INTERNAL_METERED' then 180
-        else 60
-      end,
-      'PENDING',
-      p_scheduled_at,
-      jsonb_build_object(
-        'triggerKey',p_trigger_key,
-        'sourceEventKey',p_source_event_key,
-        'subjectType',p_subject_type,
-        'subjectId',p_subject_id,
-        'triggerPayload',p_trigger_payload
-      )
-    from jsonb_array_elements(v_rule.actions) with ordinality a(item,ordinality)
-    join public.tool_action_registry t
-      on t.action_key=a.item->>'key'
-    order by a.ordinality;
-
-    insert into public.audit_logs(
-      organization_id,actor_type,actor_id,action,entity_type,entity_id,
-      after_data,correlation_id
-    ) values (
-      p_organization_id,'SYSTEM','automation_runtime',
-      'AUTOMATION_RUN_ENQUEUED','automation_run',v_run_id::text,
-      jsonb_build_object(
-        'ruleId',v_rule.rule_id,
-        'version',v_rule.version,
-        'triggerKey',p_trigger_key,
-        'subjectType',p_subject_type,
-        'subjectId',p_subject_id
-      ),
-      'automation-run:'||v_run_id::text
-    );
-
-    v_enqueued:=v_enqueued+1;
-  end loop;
-
-  perform set_config('app.automation_runtime_mutation','0',true);
-
-  return jsonb_build_object(
-    'matchedRules',v_matched,
-    'enqueuedRuns',v_enqueued,
-    'replayedRuns',v_replayed
-  );
-exception
-  when others then
-    perform set_config('app.automation_runtime_mutation','0',true);
-    raise;
-end;
-$$;
-       )
-     )
-     or p_scheduled_at is null
-  then
-    raise exception 'Automation runtime event payload is invalid';
-  end if;
-
-  select * into v_trigger
-  from public.automation_trigger_catalog
-  where trigger_key=p_trigger_key;
-
-  if not found then
-    raise exception 'Automation runtime trigger is not cataloged: %',p_trigger_key;
-  end if;
-  if v_trigger.availability<>'AVAILABLE' then
-    raise exception 'Automation runtime trigger is not available: % (%)',
-      p_trigger_key,v_trigger.availability;
-  end if;
-
-  v_expected_subject:=public.automation_trigger_expected_condition_subject(p_trigger_key);
-  if v_expected_subject is not null
-     and (
-       p_subject_type is distinct from v_expected_subject
-       or p_subject_id is null
-     )
-  then
-    raise exception 'Automation runtime trigger subject mismatch: % requires %',
-      p_trigger_key,v_expected_subject;
-  end if;
-  if p_subject_type is null and p_subject_id is not null
-     or p_subject_type is not null and p_subject_id is null
-  then
-    raise exception 'Automation runtime subject type/id must be supplied together';
-  end if;
-
-  perform set_config('app.automation_runtime_mutation','allowed',true);
-
-  for v_rule in
-    select
-      r.id as rule_id,
-      r.latest_published_version as version,
-      v.id as version_id,
-      v.owner_user_id,
-      v.conditions,
-      v.actions,
-      v.priority,
-      v.config
-    from public.automation_rules r
-    join public.automation_rule_versions v
-      on v.automation_rule_id=r.id
-     and v.version=r.latest_published_version
-     and v.organization_id=r.organization_id
-    where r.organization_id=p_organization_id
-      and r.enabled=true
-      and r.execution_state='READY'
-      and r.latest_published_version>0
-      and v.trigger_key=p_trigger_key
     order by v.priority desc,r.id
   loop
     perform public.validate_automation_actions(
