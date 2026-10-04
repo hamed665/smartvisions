@@ -424,13 +424,17 @@ $discount_authority_guard$;
 
 do $immutable_coupon_evidence$
 begin
+  if has_table_privilege('service_role','public.saas_coupon_redemptions','UPDATE') then
+    raise exception 'service_role unexpectedly has UPDATE on immutable coupon redemptions';
+  end if;
+
   begin
     update public.saas_coupon_redemptions
     set discount_amount=1
     where organization_id='00000000-0000-0000-0000-000000000f01';
     raise exception 'coupon redemption mutation unexpectedly succeeded';
   exception when others then
-    if sqlerrm not like 'SAAS-COUPONS redemption evidence is immutable%' then
+    if sqlerrm not like 'permission denied for table saas_coupon_redemptions%' then
       raise;
     end if;
   end;
