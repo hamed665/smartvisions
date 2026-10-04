@@ -42,6 +42,11 @@ type HeartbeatMetrics = {
   automationRuntimeSucceeded?: number;
   automationRuntimeWaiting?: number;
   automationRuntimeFailed?: number;
+  analyticsWarehouseStatus?: number;
+  analyticsWarehouseOrganizations?: number;
+  analyticsWarehouseInserted?: number;
+  analyticsWarehouseCaughtUp?: number;
+  analyticsWarehouseFailed?: number;
 };
 
 type WorkerVersion = {
@@ -72,6 +77,12 @@ function boundedInteger(value: unknown) {
 function boundedText(value: unknown, max = 120) {
   const text = typeof value === 'string' ? value.trim() : '';
   return text ? text.slice(0, max) : undefined;
+}
+
+function boundedLargeInteger(value: unknown) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return undefined;
+  return Math.max(0, Math.min(1_000_000, Math.round(numeric)));
 }
 
 function sanitizeMetrics(value: unknown): HeartbeatMetrics {
@@ -115,6 +126,11 @@ function sanitizeMetrics(value: unknown): HeartbeatMetrics {
     automationRuntimeSucceeded: boundedInteger(raw.automationRuntimeSucceeded),
     automationRuntimeWaiting: boundedInteger(raw.automationRuntimeWaiting),
     automationRuntimeFailed: boundedInteger(raw.automationRuntimeFailed),
+    analyticsWarehouseStatus: boundedInteger(raw.analyticsWarehouseStatus),
+    analyticsWarehouseOrganizations: boundedInteger(raw.analyticsWarehouseOrganizations),
+    analyticsWarehouseInserted: boundedLargeInteger(raw.analyticsWarehouseInserted),
+    analyticsWarehouseCaughtUp: boundedInteger(raw.analyticsWarehouseCaughtUp),
+    analyticsWarehouseFailed: boundedInteger(raw.analyticsWarehouseFailed),
   };
 }
 
