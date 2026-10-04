@@ -15,6 +15,7 @@ const routeSource = readFileSync('app/api/data/export/route.ts', 'utf8');
 const exportSource = readFileSync('lib/analytics/export.ts', 'utf8');
 const runtimeSource = readFileSync('lib/automation/runtime.ts', 'utf8');
 const migrationSource = readFileSync('supabase/migrations/20261004122500_data_exports.sql', 'utf8');
+const reportingMigrationSource = readFileSync('supabase/migrations/20261004125500_data_reporting.sql', 'utf8');
 const resendSource = readFileSync('lib/outreach/resend-provider.ts', 'utf8');
 
 const snapshot: DashboardSnapshot = {
@@ -123,6 +124,8 @@ describe('DATA-EXPORTS', () => {
     expect(migrationSource).toContain('"scheduleAuthority":"SCHEDULE_DUE"');
     expect(migrationSource).toContain("'DEPENDENCY_PENDING'");
     expect(migrationSource).toContain("array['DATA-REPORTING']::text[]");
+    expect(reportingMigrationSource).toContain("availability='AVAILABLE'");
+    expect(reportingMigrationSource).toContain("'scheduleProducer','DATA_REPORTING_RECONCILER'");
     expect(migrationSource).toContain("'AUTOMATION_RULE'");
     expect(runtimeSource).toContain("case 'DELIVER_DATA_EXPORT':");
     expect(runtimeSource).toContain("organization_settings");
