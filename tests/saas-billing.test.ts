@@ -69,7 +69,11 @@ describe('SAAS-BILLING architecture', () => {
   it('bills only governed BILLABLE usage and preserves the fixed AI multiplier', () => {
     expect(migration).toContain("ue.usage_classification='BILLABLE'");
     expect(migration).toContain("ue.provider='OPENAI'");
-    expect(migration).toContain('v_raw_ai_usd*pv.ai_cost_multiplier*v_rate');
+    expect(migration).toContain('v_billable_ai_usd*pv.ai_cost_multiplier*v_rate');
+    expect(migration).toContain("'AI.RAW_COST_USD'");
+    expect(migration).toContain("'THIRD_PARTY.RAW_COST_USD'");
+    expect(migration).toContain('includedAiRawCostUsd');
+    expect(migration).toContain('includedThirdPartyRawCostUsd');
     expect(migration).toContain("'markupApplied',false");
   });
 
