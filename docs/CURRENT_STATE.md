@@ -204,9 +204,27 @@
 - Post-migration advisors show no DATA-EXPORTS-specific security/performance regression. Existing advisor counts remain unrelated legacy findings.
 - A direct unauthenticated HTTP reprobe of `/api/data/export` was not available from the current web tool, so no separate response-code claim is invented beyond the exact Production deploy/routed-smoke evidence. No fake authenticated session was created.
 
-**Fresh continuation cursor:** `SECTION ANALYTICS_REPORTING -> DATA-REPORTING`.
+## DATA-REPORTING Production closeout — 2026-10-04
 
-DATA-REPORTING must reuse DATA-EXPORTS, Metrics Registry, Analytics Warehouse, existing notification/email provider boundaries and the canonical Cloudflare/Automation scheduling path. It must supply the governed recurring schedule producer for daily/weekly/monthly/custom reports, then may activate `DELIVER_DATA_EXPORT` only with verified cadence semantics. Do not create a second scheduler, notification stack, reporting warehouse, metric authority or recipient/credential store.
+- Work Package: `SECTION ANALYTICS_REPORTING -> DATA-REPORTING`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled recurring cadence producer, schedule/runtime contract, deterministic multilingual reporting, governed anomaly evidence, Automation Builder surface and deployed Cloudflare scheduled integration. **Real scheduled provider-delivery E2E is UNAVAILABLE_NO_REAL_RULE_OR_DESTINATION_CONFIG** because Production currently has zero real reporting rules and zero Organization notification email/mailbox bindings; no synthetic rule, recipient, mailbox or provider message was created.
+- Implementation PR #469 final head `141495464191e01929e15d6310b48d7eb71ed815` passed exact-head CI `37209260472` and merged to canonical `main@b10910c56359e57aea85b05ccf60a43b24404252`.
+- Exact-main CI `37209489009` succeeded on the merge SHA. Cloudflare Production Deploy `37209692476` succeeded on that exact SHA; deploy job `111458159386` built `λ /api/operations/data-reporting-schedules` and `ƒ /automations`, preserved the Production Worker route and passed the routed Production smoke.
+- Production migration `data_reporting@20261004143401` is applied from exact merge migration blob `508e95c47b5bc0cbe8c497bbe00003dcdb021162` (`supabase/migrations/20261004125500_data_reporting.sql`).
+- Existing `DELIVER_DATA_EXPORT` is now contract version `2`, `AVAILABLE`, with no unresolved work packages. Its metadata records `scheduleAuthority=SCHEDULE_DUE`, `scheduleProducer=DATA_REPORTING_RECONCILER`, cadences `DAILY/WEEKLY/MONTHLY/CUSTOM`, languages `AUTO/EN/AR/FA`, summary modes `STANDARD/EXECUTIVE`, and governed anomaly evidence enabled.
+- Cloudflare Cron remains the only scheduler. DATA-REPORTING reconciles published `SCHEDULE_DUE` automation rules into the existing `enqueue_automation_runtime_event` + AUTO-RUNTIME path. Deterministic source-event keys preserve idempotency; trusted `automationRuleId` targeting is accepted only for `SCHEDULE_DUE`.
+- Cadence config is bounded by IANA timezone + local HH:MM; Weekly uses weekday 1..7, Monthly uses day 1..28, and Custom uses unique weekdays 1..7. A published-version activation boundary prevents newly published rules from backfilling an occurrence that predates that version.
+- Report summaries are deterministic from the existing governed Dashboard / Metrics Registry / Analytics Warehouse evidence; no model becomes numeric/reporting authority. EN/AR/FA plus AUTO language resolution and STANDARD/EXECUTIVE modes are supported. Multi-currency values stay separated.
+- Governed anomaly sections compare complete current 7-day versus previous 7-day warehouse projections for communication, commerce, booking and AI activity. Incomplete 14-day evidence fails closed; this is report anomaly evidence, **not** a separate real-time anomaly notification engine.
+- `validate_automation_reporting_schedule` and the targeted `enqueue_automation_runtime_event` remain **SECURITY INVOKER**. `anon` and `authenticated` have no EXECUTE; `service_role` does.
+- No parallel reporting authority exists: `report_schedules`, `report_queue`, `report_jobs`, `report_facts`, `reporting_schedules`, `reporting_queue`, `reporting_jobs` and `reporting_facts` are absent. No second scheduler, reporting warehouse, notification stack, recipient store or provider credential store was introduced.
+- Fresh Production state after migration: `SCHEDULE_DUE rules=0`, `reporting rules=0`, Organization notification emails `0`, notification mailbox bindings `0`; the existing EMAIL_PROVIDER connection remains available. Therefore no real provider send is claimed.
+- Post-migration advisors show no DATA-REPORTING-specific security/performance regression. Existing advisor debt remains separate: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`, plus generic unused-index INFO.
+- No synthetic Production tenant, workflow, report schedule, recipient, mailbox, report, anomaly, export or provider message was created for verification.
+
+**Fresh continuation cursor:** `SECTION SAAS_PLATFORM -> SAAS-PLANS-ENTITLEMENTS`.
+
+Before SAAS-PLANS-ENTITLEMENTS mutation, fresh-audit current plan/feature/entitlement/seat/channel/add-on/API/storage-limit/billing-adjacent primitives and existing tenant/IAM/usage authorities. Reuse canonical tenant/business, permission, usage/cost and billing evidence boundaries; do not create a second tenant model, IAM, usage ledger, billing ledger or feature authority.
 
 ---
 

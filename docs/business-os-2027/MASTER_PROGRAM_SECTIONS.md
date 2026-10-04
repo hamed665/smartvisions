@@ -1875,15 +1875,21 @@ DATA-EXPORTS reuses the current authenticated dashboard scope, Metrics Registry,
 
 PR #467 merged to `main@11c5ffeb763f799dd335a32fedfa130d119a5e50`; exact-main CI `37202301397` and Cloudflare Production Deploy `37202512872` succeeded. Production migration `data_exports@20261004123515` is applied. The deployed bundle includes `/api/data/export` and `/reports`. Direct authenticated download E2E was not separately reprobed from the current tool environment; no fake session was created.
 
-## DATA-REPORTING — NEXT
+## DATA-REPORTING — COMPLETED
 
-- daily;
-- weekly;
-- monthly;
-- custom;
-- multilingual summaries;
-- owner executive briefing;
-- anomaly alerts.
+DATA-REPORTING reuses the canonical Analytics Warehouse, Metrics Registry, Dashboard, DATA-EXPORTS, Automation Runtime, notification/email provider and Cloudflare scheduling boundaries:
+
+- DAILY / WEEKLY / MONTHLY / CUSTOM weekday cadences use IANA timezone + bounded local delivery time;
+- Cloudflare Cron remains the scheduler and `SCHEDULE_DUE` remains the canonical scheduled trigger;
+- the reconciler targets exactly one published reporting rule through trusted `automationRuleId` evidence and deterministic source-event keys;
+- immutable publication time is an activation boundary, so a newly published version cannot backfill an older occurrence;
+- reports support deterministic EN / AR / FA plus AUTO language resolution and STANDARD / EXECUTIVE summaries;
+- multi-currency values remain separated and numeric/reporting truth stays in the existing governed analytics path;
+- anomaly evidence is deterministic 7d-over-7d reporting evidence over complete 14-day projections, not a separate real-time alert engine;
+- the existing `DELIVER_DATA_EXPORT` action is contract v2 / AVAILABLE and reuses the canonical email destination/mailbox/provider boundary;
+- no second scheduler, reporting warehouse, queue, report fact store, notification stack, recipient store or credential authority was created.
+
+PR #469 merged to `main@b10910c56359e57aea85b05ccf60a43b24404252`; exact-main CI `37209489009` and Cloudflare Production Deploy `37209692476` succeeded. Production migration `data_reporting@20261004143401` is live from blob `508e95c47b5bc0cbe8c497bbe00003dcdb021162`. Production has zero real reporting rules and zero Organization notification email/mailbox bindings, so real scheduled provider-delivery E2E is currently unavailable without fabricated configuration and is **not claimed**.
 
 ---
 
