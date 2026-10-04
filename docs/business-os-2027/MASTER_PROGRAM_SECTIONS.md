@@ -1860,17 +1860,22 @@ Ask Your Data reuses the current Metrics Registry, Analytics Warehouse, dashboar
 
 PR #465 merged to `main@bbe8a2135c49c957ae8e8c7c562f51517e5f87ce`; exact-main CI `37197046011` and Cloudflare Production Deploy `37197235278` succeeded. Production currently exposes 18 current governed metric definitions over 9,531 warehouse facts. A live authenticated semantic-answer request was not separately reprobed from the current tool environment, and no fake authenticated session was created.
 
-## DATA-EXPORTS
+## DATA-EXPORTS — COMPLETED
 
-- CSV;
-- XLSX;
-- PDF;
-- JSON;
-- Google Sheets;
-- scheduled delivery;
-- branch/role-aware data.
+DATA-EXPORTS reuses the current authenticated dashboard scope, Metrics Registry, Analytics Warehouse, Automation Runtime and email provider authorities:
 
-## DATA-REPORTING
+- governed interactive downloads support CSV, JSON, XLSX and PDF;
+- Organization / Business / Branch scope is inherited from the existing dashboard validator;
+- no arbitrary SQL, raw provider-payload export, broader-scope fallback or copied analytics truth exists;
+- multi-currency evidence remains separated rather than manufacturing a combined total;
+- no second reporting warehouse, export queue, export fact store, scheduler, recipient store or credential authority was created;
+- Google Sheets direct publishing is BLOCKED_EXTERNAL because Production has no canonical Google Sheets connection; the existing GOOGLE_PLACES integration is unrelated and is not reused;
+- scheduled email delivery executor is implemented through the existing Tool/Action Registry + AUTO-RUNTIME + EMAIL_PROVIDER, but the action is fail-closed as DEPENDENCY_PENDING on DATA-REPORTING until a governed recurring schedule producer exists;
+- Production also has no Organization notification email/mailbox binding, so real scheduled delivery is not claimed and no synthetic destination was created.
+
+PR #467 merged to `main@11c5ffeb763f799dd335a32fedfa130d119a5e50`; exact-main CI `37202301397` and Cloudflare Production Deploy `37202512872` succeeded. Production migration `data_exports@20261004123515` is applied. The deployed bundle includes `/api/data/export` and `/reports`. Direct authenticated download E2E was not separately reprobed from the current tool environment; no fake session was created.
+
+## DATA-REPORTING — NEXT
 
 - daily;
 - weekly;
