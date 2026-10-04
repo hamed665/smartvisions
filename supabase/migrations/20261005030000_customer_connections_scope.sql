@@ -30,80 +30,33 @@ create policy communication_channel_bindings_customer_scoped_read
 -- predate customer Business scoping. Service-role runtime is unaffected by RLS.
 drop policy if exists org_member_integration_connections_read
   on public.integration_connections;
+drop policy if exists integration_connections_member_read
+  on public.integration_connections;
 drop policy if exists unified_inbox_business_wide_boundary
   on public.integration_connections;
 drop policy if exists integration_connections_customer_scoped_read
   on public.integration_connections;
-
--- A nested RLS lookup from the integration policy can evaluate under the
--- integration table owner's context and admit sibling-Business bindings.
--- Resolve visibility from the authenticated actor explicitly instead.
-create or replace function public.customer_integration_connection_visible(
-  p_organization_id uuid,
-  p_integration_connection_id uuid
-)
-returns boolean
-language sql
-stable
-security definer
-set search_path = ''
-as $customer_integration_scope$
-  select
-    (select auth.uid()) is not null
-    and (
-      exists (
-        select 1
-          from public.organization_members m
-         where m.organization_id = p_organization_id
-           and m.user_id = (select auth.uid())
-           and m.role = 'OWNER'
-      )
-      or exists (
-        select 1
-          from public.communication_channel_bindings cb
-          join public.tenant_businesses b
-            on b.organization_id = cb.organization_id
-           and b.id = cb.tenant_business_id
-         where cb.organization_id = p_organization_id
-           and cb.integration_connection_id = p_integration_connection_id
-           and cb.status = 'ACTIVE'
-           and exists (
-             select 1
-               from public.organization_members m
-              where m.organization_id = p_organization_id
-                and m.user_id = (select auth.uid())
-           )
-           and exists (
-             select 1
-               from public.member_scope_assignments a
-              where a.organization_id = p_organization_id
-                and a.user_id = (select auth.uid())
-                and a.attributes = '{}'::jsonb
-                and (
-                  (a.scope_type = 'BUSINESS'
-                   and a.tenant_business_id = cb.tenant_business_id)
-                  or
-                  (a.scope_type = 'BRAND'
-                   and a.brand_id = b.brand_id)
-                )
-           )
-      )
-    );
-$customer_integration_scope$;
-
-revoke all on function public.customer_integration_connection_visible(uuid,uuid)
-  from public, anon, authenticated, service_role;
-grant execute on function public.customer_integration_connection_visible(uuid,uuid)
-  to authenticated;
 
 create policy integration_connections_customer_scoped_read
   on public.integration_connections
   for select
   to authenticated
   using (
-    public.customer_integration_connection_visible(
-      organization_id,
-      id
+    public.is_org_owner(organization_id)
+    or exists (
+      select 1
+        from public.communication_channel_bindings cb
+        join public.tenant_businesses b
+          on b.organization_id = cb.organization_id
+         and b.id = cb.tenant_business_id
+       where cb.organization_id = integration_connections.organization_id
+         and cb.integration_connection_id = integration_connections.id
+         and cb.status = 'ACTIVE'
+         and public.customer_business_effective_role(
+           cb.organization_id,
+           cb.tenant_business_id,
+           b.brand_id
+         ) is not null
     )
   );
 
