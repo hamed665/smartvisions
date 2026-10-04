@@ -1826,7 +1826,20 @@ DATA-ATTRIBUTION remains a separate package; dashboard presentation does not its
 
 ## DATA-ATTRIBUTION
 
-Governed marketing/sales attribution connected to real evidence.
+**Completed: IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled observational attribution contract and deployed surface.
+
+The package extends the existing Marketing Attribution authority without creating a second attribution fact store or revenue truth:
+
+- real sent Marketing `outreach_messages` remain touchpoint authority;
+- exact canonical Lead linkage is required and conflicting/ambiguous linkage is excluded rather than guessed;
+- timestamped canonical outcomes are Deal WON, Booking COMPLETED, Quote ACCEPTED, Order FULFILLED and Payment CAPTURED;
+- FIRST_TOUCH, LAST_TOUCH and deterministic LINEAR are supported with a 1–180 day lookback and bounded outcome limit;
+- Sales/Quote/Order values remain sales/commercial evidence, not revenue;
+- only immutable CAPTURED payment evidence is labeled collected money, and `causal_claim` remains false;
+- V1 remains intact while V2 is a SECURITY INVOKER read-only RPC for authenticated/service-role callers;
+- no fuzzy matching, invented UTM/referrer/click history, arbitrary cross-channel identity or copied attribution warehouse truth is allowed.
+
+Production migration `data_attribution_v2@20261004103053` is live. Current real Production has 7 Campaigns and 43 Outreach Messages but zero Deals, Bookings, Quotes, Orders, Payment Intents and Payment Transactions, so real outcome-credit E2E is presently unavailable without synthetic evidence and is **not claimed**.
 
 ## DATA-ASK
 
