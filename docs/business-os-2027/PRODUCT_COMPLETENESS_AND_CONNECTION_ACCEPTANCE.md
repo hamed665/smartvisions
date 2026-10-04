@@ -116,9 +116,10 @@
 - Implementation PR #457 head `8e7e37b68fa043ebd2d496fd01b2ca8e0bfa83d1` passed exact-head CI `37182035797` and merged to `main@32d32de820a083264af1232ce4f6ffbafda62cc5`.
 - Exact-main CI `37182273103` and Cloudflare Production Deploy `37182452304` succeeded on that exact SHA.
 - Migration `data_warehouse@20261004062128` is live from source blob `26af8d2479e5b20e4634664d05e20d59c4e19fcc`.
-- Production catch-up projected `9,464` real canonical feed events into exactly `9,464` rebuildable warehouse facts with one checkpoint, freshness lag `0s` and an idempotent final replay inserting `0` rows.
+- Controlled Production initialization projected `9,464` real canonical feed events into exactly `9,464` rebuildable warehouse facts with `0` duplicate key groups. After runtime hardening PR #459, the existing Cloudflare Cron advanced the checkpoint automatically, inserted `4` newly arrived events, and Production verified `9,468` feed rows = `9,468` warehouse facts with `0` duplicate key groups.
 - RLS, service-only ACLs, SECURITY INVOKER functions/views and raw-evidence exclusions are verified in Production.
 - Existing Cloudflare Cron is reused. No second event truth, queue, scheduler, `pg_cron`, `pgmq` or causal-attribution authority was added.
+- Runtime hardening PR #459 (`e31cee0ce90df71252843786805dc1c8f90b1a14`) fixed the exact warehouse internal-route session bypass after Production exposed an initial `307`; exact-main CI `37183333053` and deploy `37183506208` passed, unauthenticated Production POST now returns route-level `401`, and scheduled checkpoint advancement proves the Cron path executes successfully.
 - A separate external warehouse/WAL CDC stack is **DEFERRED_WITH_REASON** at the current verified scale (~49 MB database / ~9.4k events) until load evidence warrants it.
 - Tracked Supabase advisor categories remain on the prior baseline; no DATA-WAREHOUSE-specific regression was introduced.
 
