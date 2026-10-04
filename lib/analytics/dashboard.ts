@@ -1,5 +1,3 @@
-[Reading 430 lines from start (total: 430 lines, 0 remaining)]
-
 import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
