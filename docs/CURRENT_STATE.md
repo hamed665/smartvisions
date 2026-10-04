@@ -222,9 +222,23 @@
 - Post-migration advisors show no DATA-REPORTING-specific security/performance regression. Existing advisor debt remains separate: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`, plus generic unused-index INFO.
 - No synthetic Production tenant, workflow, report schedule, recipient, mailbox, report, anomaly, export or provider message was created for verification.
 
-**Fresh continuation cursor:** `SECTION SAAS_PLATFORM -> SAAS-PLANS-ENTITLEMENTS`.
+## SAAS-PLANS-ENTITLEMENTS Production closeout — 2026-10-04
 
-Before SAAS-PLANS-ENTITLEMENTS mutation, fresh-audit current plan/feature/entitlement/seat/channel/add-on/API/storage-limit/billing-adjacent primitives and existing tenant/IAM/usage authorities. Reuse canonical tenant/business, permission, usage/cost and billing evidence boundaries; do not create a second tenant model, IAM, usage ledger, billing ledger or feature authority.
+- Work Package: `SECTION SAAS_PLATFORM -> SAAS-PLANS-ENTITLEMENTS`.
+- Disposition: **IMPLEMENTED + CONTROLLED_TEST_VERIFIED + PRODUCTION_VERIFIED** for the internally controlled canonical plan identity, typed entitlement contract, effective entitlement resolution and authenticated read surface. Commercial pricing activation is intentionally **DEPENDENCY_PENDING -> SAAS-BILLING**; no price, subscription or customer entitlement was fabricated.
+- Implementation PR #471 final head `01cb9b1f58e0c36d45526eaaa18ab9838d72a04e` passed exact-head CI `37211125515` and merged to canonical `main@d63c979b07f9063d40d8da485d8ed39c9d16bb9d`.
+- Exact-main CI `37211391288` succeeded on the merge SHA. Cloudflare Production Deploy `37211637822` / job `111463846066` succeeded on that exact SHA and the deployed bundle contains `λ /api/saas/entitlements`; Production Worker routing and routed smoke remained healthy.
+- Production migration `saas_plans_entitlements@20261004150621` is applied from exact merge migration blob `46edf603a8196a51d63a4ef0bfd6259764c44a4c` (`supabase/migrations/20261004145500_saas_plans_entitlements.sql`).
+- The existing canonical Control Plane remains the only authority: `plans`, `pricing_versions`, `plan_entitlements`, `subscriptions`, `organization_entitlement_overrides`. No second plan, entitlement, subscription, feature, usage, billing or tenant authority was introduced.
+- Canonical plan identities now exist for Starter, Growth, Pro, Business, Agency and Enterprise. All six remain `DRAFT` with `commercialActivation=PENDING_SAAS_BILLING`. Production has `0` canonical pricing versions, `0` total pricing versions, `0` subscriptions, `0` plan entitlements and `0` organization entitlement overrides.
+- Entitlement values are now typed and fail closed across `FEATURE`, `LIMIT`, `SEATS`, `CHANNELS`, `ADDON`, `API` and `STORAGE`. Production has both shape constraints and both mutation guards live.
+- `get_effective_saas_entitlements` preserves canonical precedence: active Organization override first, then the subscribed immutable pricing-version entitlement; absent subscription/override returns no grant. The resolver is executable by authenticated Organization members and `service_role`, not `anon`; the validator is not browser-executable.
+- A trusted Production resolver call against an existing real Organization returned `0` effective rows, exactly matching the absence of real subscription/override evidence. No synthetic plan price, pricing version, subscription, tenant entitlement, add-on or allowance was created.
+- No forbidden parallel SaaS/billing relations were found. Post-migration advisor categories remain the existing baseline: security `rls_enabled_no_policy=15`, `auth_leaked_password_protection=1`; performance `unindexed_foreign_keys=14`, `auth_rls_initplan=16`, `multiple_permissive_policies=6`, plus generic unused-index INFO. No SAAS-PLANS-ENTITLEMENTS-specific advisor regression was introduced.
+
+**Fresh continuation cursor:** `SECTION SAAS_PLATFORM -> SAAS-BILLING`.
+
+Before SAAS-BILLING mutation, fresh-audit canonical `pricing_versions`, `subscriptions`, usage classifications, Payment Core/Oman adapters, Invoice/Payment ledger evidence, pricing/service authorities, tax/discount/overage primitives and any existing subscription lifecycle code. Extend those authorities only; do not create a second subscription store, payment ledger, usage ledger, invoice truth, pricing authority or provider credential path.
 
 ---
 
