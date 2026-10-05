@@ -25,6 +25,13 @@ const lifecycleRoute = readFileSync(
   new URL('../app/api/integrations/meta/whatsapp/lifecycle/route.ts', import.meta.url),
   'utf8',
 );
+const truthfulBootstrapMigration = readFileSync(
+  new URL(
+    '../supabase/migrations/20261005040000_customer_whatsapp_truthful_bootstrap.sql',
+    import.meta.url,
+  ),
+  'utf8',
+);
 
 describe('customer WhatsApp self-service authority', () => {
   it('bootstraps only through canonical Business, integration and binding authorities', () => {
@@ -49,6 +56,15 @@ describe('customer WhatsApp self-service authority', () => {
     expect(bootstrapRoute).toContain("eq('status', 'ACTIVE')");
     expect(bootstrapRoute).toContain('This Organization WhatsApp integration is already bound to another Business');
     expect(bootstrapRoute.match(/communication_channel_bindings/g)?.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('keeps pre-authorization integration evidence READY, never fake CONNECTED', () => {
+    expect(bootstrapRoute).toContain("status: 'READY'");
+    expect(bootstrapRoute).not.toMatch(/status:\s*'CONNECTED'\s*,/);
+    expect(truthfulBootstrapMigration).toContain("v_ic.status='CONNECTED'");
+    expect(truthfulBootstrapMigration).toContain("v_channel='WHATSAPP'");
+    expect(truthfulBootstrapMigration).toContain("v_ic.status='READY'");
+    expect(truthfulBootstrapMigration).toContain("coalesce(v_ic.provider,'')");
   });
 });
 
