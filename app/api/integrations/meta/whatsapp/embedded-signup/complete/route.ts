@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
 import {
+  discoverMetaWhatsAppPhoneNumber,
   exchangeMetaAuthorizationCode,
   metaGraphVersion,
   safeMetaWhatsAppCompletionError,
@@ -41,7 +42,6 @@ export async function POST(request: Request) {
       || !bindingId
       || !code
       || !wabaId
-      || !phoneNumberId
       || !Number.isInteger(expectedVersion)
       || expectedVersion < 1
     ) {
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     const service = createSupabaseServiceClient();
     const { data: attempt, error: attemptError } = await service
       .from('communication_channel_setup_attempts')
-      .select('id,organization_id,communication_channel_binding_id,binding_version,status,expires_at,provider_destination_label')
+      .select('id,organization_id,communication_channel_binding_id,binding_version,status,expires_at,provider_destination_label,connection_mode')
       .eq('organization_id', ctx.organizationId)
       .eq('id', attemptId)
       .eq('communication_channel_binding_id', bindingId)
@@ -61,15 +61,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'WhatsApp setup attempt is missing or stale' }, { status: 409 });
     }
 
+    if (
+      attempt.connection_mode === 'BUSINESS_APP_COEXISTENCE'
+      && process.env.META_WHATSAPP_COEXISTENCE_ENABLED?.trim().toLowerCase() !== 'true'
+    ) {
+      return NextResponse.json({
+        error: 'Same-number WhatsApp Business App Coexistence is not enabled for this Meta Embedded Signup configuration.',
+        blockedExternal: true,
+      }, { status: 409 });
+    }
+
     if (attempt.status === 'COMPLETED') {
       const { data: completedBinding } = await service
         .from('communication_channel_bindings')
-        .select('id,version,provider_destination_label')
+        .select('id,version,provider,provider_account_id,provider_destination_id,provider_destination_label')
         .eq('organization_id', ctx.organizationId)
         .eq('id', bindingId)
         .maybeSingle();
 
-      if (completedBinding) {
+      const replayMatches = completedBinding
+        && completedBinding.provider === 'META'
+        && completedBinding.provider_account_id === wabaId
+        && (
+          completedBinding.provider_destination_id === phoneNumberId
+          || (
+            attempt.connection_mode === 'BUSINESS_APP_COEXISTENCE'
+            && !phoneNumberId
+            && Boolean(completedBinding.provider_destination_id)
+          )
+        );
+
+      if (replayMatches) {
         return NextResponse.json({
           ok: true,
           bindingId,
@@ -78,6 +100,8 @@ export async function POST(request: Request) {
           replayed: true,
         });
       }
+
+      return NextResponse.json({ error: 'Completed WhatsApp setup no longer matches the canonical binding.' }, { status: 409 });
     }
 
     if (attempt.status !== 'STARTED' || new Date(attempt.expires_at).getTime() <= Date.now()) {
@@ -132,11 +156,24 @@ export async function POST(request: Request) {
     }
 
     const accessToken = await exchangeMetaAuthorizationCode({ code, appId, appSecret });
+    let resolvedPhoneNumberId = phoneNumberId;
+    if (!resolvedPhoneNumberId) {
+      if (attempt.connection_mode !== 'BUSINESS_APP_COEXISTENCE') {
+        return NextResponse.json({ error: 'Meta completion did not include a WhatsApp phone number.' }, { status: 409 });
+      }
+      const discovered = await discoverMetaWhatsAppPhoneNumber({
+        graphVersion: metaGraphVersion(),
+        accessToken,
+        wabaId,
+      });
+      resolvedPhoneNumberId = discovered.phoneNumberId;
+    }
+
     const assets = await verifyMetaWhatsAppSelectedAssets({
       graphVersion: metaGraphVersion(),
       accessToken,
       wabaId,
-      phoneNumberId,
+      phoneNumberId: resolvedPhoneNumberId,
     });
 
     const requestKey = `meta-whatsapp-setup-complete:${attemptId}`;
@@ -148,7 +185,7 @@ export async function POST(request: Request) {
         p_binding_id: bindingId,
         p_expected_binding_version: expectedVersion,
         p_waba_id: wabaId,
-        p_phone_number_id: phoneNumberId,
+        p_phone_number_id: resolvedPhoneNumberId,
         p_display_phone_number: assets.displayPhoneNumber,
         p_access_token: accessToken,
         p_actor_user_id: ctx.userId,

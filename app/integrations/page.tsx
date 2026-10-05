@@ -350,6 +350,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
     <MetaWhatsAppEmbeddedSignup
       appId={process.env.NEXT_PUBLIC_META_APP_ID?.trim() || null}
       configurationId={process.env.NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID?.trim() || null}
+      coexistenceEnabled={process.env.META_WHATSAPP_COEXISTENCE_ENABLED?.trim().toLowerCase() === 'true'}
       graphVersion={process.env.META_GRAPH_VERSION?.trim() || 'v23.0'}
       bindings={whatsappBindingOptions}
     />

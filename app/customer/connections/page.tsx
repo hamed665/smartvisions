@@ -33,6 +33,8 @@ export default async function CustomerConnectionsPage({
     || null;
   const configurationId = process.env.NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID?.trim()
     || null;
+  const coexistenceEnabled =
+    process.env.META_WHATSAPP_COEXISTENCE_ENABLED?.trim().toLowerCase() === 'true';
 
   return (
     <div>
@@ -107,6 +109,7 @@ export default async function CustomerConnectionsPage({
           <MetaWhatsAppEmbeddedSignup
             appId={appId}
             configurationId={configurationId}
+            coexistenceEnabled={coexistenceEnabled}
             graphVersion={metaGraphVersion()}
             bindings={context.whatsappBindingOptions.map((row) => ({
               id: row.id,

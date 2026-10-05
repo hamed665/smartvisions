@@ -21,6 +21,10 @@ const startRoute = readFileSync(
   new URL('../app/api/integrations/meta/whatsapp/embedded-signup/start/route.ts', import.meta.url),
   'utf8',
 );
+const completeRoute = readFileSync(
+  new URL('../app/api/integrations/meta/whatsapp/embedded-signup/complete/route.ts', import.meta.url),
+  'utf8',
+);
 const provisionRoute = readFileSync(
   new URL('../app/api/integrations/meta/whatsapp/embedded-signup/provision/route.ts', import.meta.url),
   'utf8',
@@ -32,6 +36,13 @@ const lifecycleRoute = readFileSync(
 const truthfulBootstrapMigration = readFileSync(
   new URL(
     '../supabase/migrations/20261005040000_customer_whatsapp_truthful_bootstrap.sql',
+    import.meta.url,
+  ),
+  'utf8',
+);
+const coexistenceActivationMigration = readFileSync(
+  new URL(
+    '../supabase/migrations/20261005045500_customer_whatsapp_coexistence_activation.sql',
     import.meta.url,
   ),
   'utf8',
@@ -92,16 +103,35 @@ describe('customer WhatsApp self-service UI', () => {
     expect(embeddedSignup).not.toMatch(/facebookPassword|accessTokenInput|paste.*token/i);
   });
 
-  it('fails Coexistence closed in both UI and server runtime before provider mutation', () => {
+  it('keeps Coexistence fail-closed until the provider capability is enabled', () => {
     const coexistenceGuard = embeddedSignup.indexOf("connectionMode === 'BUSINESS_APP_COEXISTENCE'");
     const bootstrapCall = embeddedSignup.indexOf('await ensureSelectedBinding()');
     expect(coexistenceGuard).toBeGreaterThan(-1);
     expect(bootstrapCall).toBeGreaterThan(coexistenceGuard);
-    expect(embeddedSignup).toContain('will not be deleted or migrated');
-    expect(embeddedSignup).toContain('will not fall back to Delete Account or destructive migration');
-    expect(startRoute).toContain("connectionMode === 'BUSINESS_APP_COEXISTENCE'");
+    expect(embeddedSignup).toContain('!props.coexistenceEnabled');
+    expect(startRoute).toContain('META_WHATSAPP_COEXISTENCE_ENABLED');
     expect(startRoute).toContain('blockedExternal: true');
-    expect(startRoute).toContain('will not fall back to account deletion or destructive migration');
+    expect(completeRoute).toContain('META_WHATSAPP_COEXISTENCE_ENABLED');
+    expect(completeRoute).toContain('blockedExternal: true');
+    expect(productionDeploy).toContain('META_WHATSAPP_COEXISTENCE_ENABLED');
+    expect(productionDeploy).toContain('remains BLOCKED_EXTERNAL');
+  });
+
+  it('uses the official non-destructive Meta Coexistence launch selector when enabled', () => {
+    expect(embeddedSignup).toContain("featureType: 'whatsapp_business_app_onboarding'");
+    expect(embeddedSignup).toContain('FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING');
+    expect(embeddedSignup).toContain('will not ask you to delete, uninstall, or destructively migrate the app');
+    expect(completeRoute).toContain('discoverMetaWhatsAppPhoneNumber');
+    expect(coexistenceActivationMigration).not.toContain('coexistence completion is not enabled yet');
+    expect(coexistenceActivationMigration).toContain('apply_meta_whatsapp_binding_credential_internal');
+    expect(coexistenceActivationMigration).toContain('to service_role');
+  });
+
+  it('opens Meta signup directly from the customer click before asynchronous bootstrap work', () => {
+    const loginCall = embeddedSignup.indexOf('window.FB.login');
+    const bootstrapAwait = embeddedSignup.indexOf('await ensureSelectedBinding()');
+    expect(loginCall).toBeGreaterThan(-1);
+    expect(bootstrapAwait).toBeGreaterThan(loginCall);
   });
 
   it('can bootstrap a missing Business binding and continue the existing Embedded Signup flow', () => {
