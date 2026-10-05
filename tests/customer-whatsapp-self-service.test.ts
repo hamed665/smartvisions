@@ -36,6 +36,10 @@ const truthfulBootstrapMigration = readFileSync(
   ),
   'utf8',
 );
+const productionDeploy = readFileSync(
+  new URL('../.github/workflows/cloudflare-production-deploy.yml', import.meta.url),
+  'utf8',
+);
 
 describe('customer WhatsApp self-service authority', () => {
   it('bootstraps only through canonical Business, integration and binding authorities', () => {
@@ -56,6 +60,9 @@ describe('customer WhatsApp self-service authority', () => {
     expect(bootstrapRoute).toContain('META_APP_SECRET');
     expect(bootstrapRoute).toContain('NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID');
     expect(bootstrapRoute).toContain('Smart Visions Meta provider configuration is not ready');
+    expect(productionDeploy).toContain('META_APP_ID: ${{ secrets.META_APP_ID }}');
+    expect(productionDeploy).toContain('META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID');
+    expect(productionDeploy).toContain('BLOCKED_EXTERNAL');
   });
 
   it('is replay and race safe instead of manufacturing a second binding', () => {
