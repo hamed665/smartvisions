@@ -12,6 +12,10 @@ type StartBody = {
   connectionMode?: string;
 };
 
+function coexistenceEnabled() {
+  return process.env.META_WHATSAPP_COEXISTENCE_ENABLED?.trim().toLowerCase() === 'true';
+}
+
 function clean(value: unknown, max = 200) {
   const text = typeof value === 'string' ? value.trim() : '';
   return text && text.length <= max ? text : null;
@@ -29,9 +33,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid WhatsApp setup request' }, { status: 400 });
     }
 
-    if (connectionMode === 'BUSINESS_APP_COEXISTENCE') {
+    if (connectionMode === 'BUSINESS_APP_COEXISTENCE' && !coexistenceEnabled()) {
       return NextResponse.json({
-        error: 'Same-number WhatsApp Business App Coexistence is blocked until the official non-destructive activation path is verified. Smart Visions will not fall back to account deletion or destructive migration.',
+        error: 'Same-number WhatsApp Business App Coexistence is not enabled for this Meta Embedded Signup configuration. Smart Visions will not fall back to account deletion or destructive migration.',
         blockedExternal: true,
       }, { status: 409 });
     }
