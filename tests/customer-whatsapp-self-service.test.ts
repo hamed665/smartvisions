@@ -80,6 +80,8 @@ describe('customer WhatsApp self-service authority', () => {
     expect(truthfulBootstrapMigration).toContain("v_channel='WHATSAPP'");
     expect(truthfulBootstrapMigration).toContain("v_ic.status='READY'");
     expect(truthfulBootstrapMigration).toContain("coalesce(v_ic.provider,'')");
+    expect(truthfulBootstrapMigration).toContain('enforce_communication_channel_binding_contract');
+    expect(truthfulBootstrapMigration).toContain("v_connection_status = 'READY'");
   });
 });
 
