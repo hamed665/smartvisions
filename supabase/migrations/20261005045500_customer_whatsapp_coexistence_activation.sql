@@ -160,8 +160,7 @@ begin
 
   return v_updated;
 end;
-$function$
-
+$function$;
 
 revoke all on function public.complete_meta_whatsapp_setup_attempt(
   uuid,uuid,uuid,integer,text,text,text,text,uuid,text
