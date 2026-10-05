@@ -111,5 +111,133 @@ exception
 end
 $function$;
 
+create or replace function public.enforce_communication_channel_binding_contract()
+returns trigger
+language plpgsql
+set search_path to 'public', 'auth', 'pg_catalog'
+as $function$
+declare
+  v_business_status text;
+  v_branch_business_id uuid;
+  v_branch_org_id uuid;
+  v_branch_status text;
+  v_connection_org_id uuid;
+  v_connection_channel text;
+  v_connection_provider text;
+  v_connection_enabled boolean;
+  v_connection_status text;
+begin
+  if tg_op = 'UPDATE' then
+    if new.organization_id is distinct from old.organization_id
+       or new.tenant_business_id is distinct from old.tenant_business_id
+       or new.branch_id is distinct from old.branch_id
+       or new.integration_connection_id is distinct from old.integration_connection_id
+       or new.channel is distinct from old.channel
+       or new.created_by_user_id is distinct from old.created_by_user_id
+    then
+      raise exception 'communication channel binding scope is immutable';
+    end if;
+
+    if new.version <> old.version + 1 then
+      raise exception 'communication channel binding version must increment by exactly one';
+    end if;
+
+    if new.last_request_key = old.last_request_key then
+      raise exception 'communication channel binding update requires a new request key';
+    end if;
+  elsif new.version <> 1 then
+    raise exception 'communication channel binding initial version must be 1';
+  end if;
+
+  select b.status
+    into v_business_status
+    from public.tenant_businesses b
+   where b.organization_id = new.organization_id
+     and b.id = new.tenant_business_id;
+
+  if not found then
+    raise exception 'tenant Business not found for communication binding';
+  end if;
+
+  if new.branch_id is not null then
+    select br.organization_id, br.tenant_business_id, br.status
+      into v_branch_org_id, v_branch_business_id, v_branch_status
+      from public.branches br
+     where br.id = new.branch_id;
+
+    if not found
+       or v_branch_org_id <> new.organization_id
+       or v_branch_business_id <> new.tenant_business_id
+    then
+      raise exception 'communication binding Branch does not match tenant Business';
+    end if;
+  end if;
+
+  select ic.organization_id, ic.channel, ic.provider, ic.enabled, ic.status
+    into v_connection_org_id, v_connection_channel, v_connection_provider,
+         v_connection_enabled, v_connection_status
+    from public.integration_connections ic
+   where ic.id = new.integration_connection_id;
+
+  if not found
+     or v_connection_org_id <> new.organization_id
+     or v_connection_channel <> new.channel
+  then
+    raise exception 'integration connection does not match communication binding';
+  end if;
+
+  if tg_op = 'UPDATE'
+     and old.status = 'ACTIVE'
+     and new.status = 'ARCHIVED'
+     and exists (
+       select 1
+       from public.chatwoot_account_mappings cam
+       where cam.organization_id = new.organization_id
+         and cam.tenant_business_id = new.tenant_business_id
+         and cam.status in ('PROVISIONING','ACTIVE','DEGRADED')
+     )
+     and not exists (
+       select 1
+       from public.communication_channel_bindings sibling
+       where sibling.organization_id = new.organization_id
+         and sibling.tenant_business_id = new.tenant_business_id
+         and sibling.status = 'ACTIVE'
+         and sibling.id <> old.id
+     )
+  then
+    raise exception 'archive live Chatwoot Account mapping before last communication binding';
+  end if;
+
+  if new.status = 'ACTIVE' then
+    if v_business_status <> 'ACTIVE' then
+      raise exception 'ACTIVE communication binding requires ACTIVE tenant Business';
+    end if;
+
+    if new.branch_id is not null and v_branch_status <> 'ACTIVE' then
+      raise exception 'ACTIVE communication binding requires ACTIVE Branch';
+    end if;
+
+    if not v_connection_enabled
+       or not (
+         v_connection_status = 'CONNECTED'
+         or (
+           new.channel = 'WHATSAPP'
+           and upper(trim(coalesce(v_connection_provider,''))) = 'META'
+           and v_connection_status = 'READY'
+         )
+       )
+    then
+      raise exception 'ACTIVE communication binding requires CONNECTED integration or READY META WhatsApp setup slot';
+    end if;
+  end if;
+
+  new.updated_at := now();
+  return new;
+end;
+$function$;
+
+comment on function public.enforce_communication_channel_binding_contract() is
+  'Canonical communication binding invariant. ACTIVE normally requires CONNECTED integration; READY is permitted only for the pre-authorization META/WHATSAPP setup slot and is not provider-connected evidence.';
+
 comment on function public.create_communication_channel_binding(uuid,uuid,uuid,uuid,text,text) is
   'Canonical communication binding command. Requires CONNECTED integration evidence, except a narrow READY META/WHATSAPP setup slot used before provider authorization. READY never means provider Connected.';
