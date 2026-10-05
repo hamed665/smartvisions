@@ -26,6 +26,9 @@ jobs:
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      META_APP_ID: ${{ secrets.META_APP_ID }}
+      NEXT_PUBLIC_META_APP_ID: ${{ secrets.META_APP_ID }}
+      NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID: ${{ secrets.META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID }}
       NEXT_PUBLIC_APP_NAME: Smart Visions Growth OS
       NEXT_PUBLIC_SUPABASE_URL: https://pkypexzpyfbikdnkrzvw.supabase.co
       CANDIDATE_URL: https://smartvisions-growth-os-release-candidate.hamedarezoo900.workers.dev
@@ -63,6 +66,11 @@ jobs:
           fi
           [ "$missing" -eq 0 ] || exit 1
           echo "Permanent deploy credentials are present. Values were not printed."
+          if [ -z "${META_APP_ID:-}" ] || [ -z "${NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID:-}" ]; then
+            echo "::warning::Customer WhatsApp Embedded Signup remains BLOCKED_EXTERNAL until META_APP_ID and META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID are configured."
+          else
+            echo "Customer WhatsApp Embedded Signup public identifiers are configured."
+          fi
 
       - name: Validate Growth Supabase credential read-only
         shell: bash
@@ -127,6 +135,9 @@ jobs:
             DEPLOYMENT_ENV:'candidate',
             NEXT_PUBLIC_APP_NAME:'Smart Visions Growth OS',
             NEXT_PUBLIC_SUPABASE_URL:'https://pkypexzpyfbikdnkrzvw.supabase.co',
+            META_APP_ID:process.env.META_APP_ID,
+            NEXT_PUBLIC_META_APP_ID:process.env.NEXT_PUBLIC_META_APP_ID,
+            NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID:process.env.NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID,
             APP_BASE_URL:process.env.CANDIDATE_URL,
             EMAIL_PROVIDER:'RESEND',
             GLOBAL_KILL_SWITCH:'false',
