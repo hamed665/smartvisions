@@ -52,7 +52,7 @@ begin
   if v_owner_def is null
      or v_owner_def not like '%Organization OWNER required%'
      or v_owner_def not like '%completion_actor_type = ''OWNER''%'
-     or v_owner_def not like '%official WhatsApp Business App coexistence completion is not enabled yet%'
+     or v_owner_def like '%official WhatsApp Business App coexistence completion is not enabled yet%'
   then
     raise exception 'owner completion boundary or provenance drifted';
   end if;
