@@ -60,6 +60,7 @@ describe('customer WhatsApp self-service authority', () => {
 
   it('keeps pre-authorization integration evidence READY, never fake CONNECTED', () => {
     expect(bootstrapRoute).toContain("status: 'READY'");
+    expect(bootstrapRoute).toContain("integration.status !== 'CONNECTED'");
     expect(bootstrapRoute).not.toMatch(/status:\s*'CONNECTED'\s*,/);
     expect(truthfulBootstrapMigration).toContain("v_ic.status='CONNECTED'");
     expect(truthfulBootstrapMigration).toContain("v_channel='WHATSAPP'");
