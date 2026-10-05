@@ -29,6 +29,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid WhatsApp setup request' }, { status: 400 });
     }
 
+    if (connectionMode === 'BUSINESS_APP_COEXISTENCE') {
+      return NextResponse.json({
+        error: 'Same-number WhatsApp Business App Coexistence is blocked until the official non-destructive activation path is verified. Smart Visions will not fall back to account deletion or destructive migration.',
+        blockedExternal: true,
+      }, { status: 409 });
+    }
+
     const { data: binding, error: bindingError } = await ctx.supabase
       .from('communication_channel_bindings')
       .select('id,organization_id,tenant_business_id,channel,status,version,provider,provider_destination_id')
