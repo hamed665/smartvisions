@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
 import {
+  discoverMetaWhatsAppPhoneNumber,
   exchangeMetaAuthorizationCode,
   metaGraphVersion,
   safeMetaWhatsAppCompletionError,
@@ -41,7 +42,6 @@ export async function POST(request: Request) {
       || !bindingId
       || !code
       || !wabaId
-      || !phoneNumberId
       || !Number.isInteger(expectedVersion)
       || expectedVersion < 1
     ) {
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     const service = createSupabaseServiceClient();
     const { data: attempt, error: attemptError } = await service
       .from('communication_channel_setup_attempts')
-      .select('id,organization_id,communication_channel_binding_id,binding_version,status,expires_at,provider_destination_label')
+      .select('id,organization_id,communication_channel_binding_id,binding_version,status,expires_at,provider_destination_label,connection_mode')
       .eq('organization_id', ctx.organizationId)
       .eq('id', attemptId)
       .eq('communication_channel_binding_id', bindingId)
@@ -132,11 +132,24 @@ export async function POST(request: Request) {
     }
 
     const accessToken = await exchangeMetaAuthorizationCode({ code, appId, appSecret });
+    let resolvedPhoneNumberId = phoneNumberId;
+    if (!resolvedPhoneNumberId) {
+      if (attempt.connection_mode !== 'BUSINESS_APP_COEXISTENCE') {
+        return NextResponse.json({ error: 'Meta completion did not include a WhatsApp phone number.' }, { status: 409 });
+      }
+      const discovered = await discoverMetaWhatsAppPhoneNumber({
+        graphVersion: metaGraphVersion(),
+        accessToken,
+        wabaId,
+      });
+      resolvedPhoneNumberId = discovered.phoneNumberId;
+    }
+
     const assets = await verifyMetaWhatsAppSelectedAssets({
       graphVersion: metaGraphVersion(),
       accessToken,
       wabaId,
-      phoneNumberId,
+      phoneNumberId: resolvedPhoneNumberId,
     });
 
     const requestKey = `meta-whatsapp-setup-complete:${attemptId}`;
@@ -148,7 +161,7 @@ export async function POST(request: Request) {
         p_binding_id: bindingId,
         p_expected_binding_version: expectedVersion,
         p_waba_id: wabaId,
-        p_phone_number_id: phoneNumberId,
+        p_phone_number_id: resolvedPhoneNumberId,
         p_display_phone_number: assets.displayPhoneNumber,
         p_access_token: accessToken,
         p_actor_user_id: ctx.userId,
