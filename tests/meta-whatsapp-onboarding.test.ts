@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import {
+  discoverMetaWhatsAppPhoneNumber,
   exchangeMetaAuthorizationCode,
   normalizeMetaWhatsAppConnectionMode,
   safeMetaWhatsAppCompletionError,
@@ -61,6 +62,39 @@ describe('Meta WhatsApp onboarding contract', () => {
       displayPhoneNumber: '+96890000000',
       verifiedName: 'Clinic',
     });
+  });
+
+  it('discovers exactly one WhatsApp phone for Coexistence completion when Meta omits phone_number_id', async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      expect(url).toContain('/waba-1/phone_numbers');
+      return new Response(JSON.stringify({
+        data: [{ id: 'phone-1', display_phone_number: '+96890000000', verified_name: 'Clinic' }],
+      }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    await expect(discoverMetaWhatsAppPhoneNumber({
+      graphVersion: 'v23.0',
+      accessToken: 'token-with-enough-length-123456789',
+      wabaId: 'waba-1',
+      fetchImpl,
+    })).resolves.toMatchObject({
+      phoneNumberId: 'phone-1',
+      displayPhoneNumber: '+96890000000',
+      verifiedName: 'Clinic',
+    });
+  });
+
+  it('fails closed when Coexistence completion cannot identify exactly one phone', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      data: [{ id: 'phone-1' }, { id: 'phone-2' }],
+    }), { status: 200 })) as unknown as typeof fetch;
+
+    await expect(discoverMetaWhatsAppPhoneNumber({
+      graphVersion: 'v23.0',
+      accessToken: 'token-with-enough-length-123456789',
+      wabaId: 'waba-1',
+      fetchImpl,
+    })).rejects.toThrow('exactly one WhatsApp phone number');
   });
 
   it('rejects a phone that is valid but belongs to another WABA', async () => {
