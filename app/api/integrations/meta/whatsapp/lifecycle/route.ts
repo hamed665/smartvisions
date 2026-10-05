@@ -25,6 +25,7 @@ type BindingRow = {
   version: number;
   tenant_business_id: string;
   branch_id: string | null;
+  integration_connection_id: string;
   channel: string;
   status: string;
   provider: string | null;
@@ -121,7 +122,7 @@ export async function POST(request: Request) {
     const service = createSupabaseServiceClient();
     const { data, error } = await service
       .from('communication_channel_bindings')
-      .select('id,version,tenant_business_id,branch_id,channel,status,provider,provider_account_id,provider_destination_id,last_error_code')
+      .select('id,version,tenant_business_id,branch_id,integration_connection_id,channel,status,provider,provider_account_id,provider_destination_id,last_error_code')
       .eq('organization_id', ctx.organizationId)
       .eq('id', bindingId)
       .maybeSingle();
@@ -200,6 +201,16 @@ export async function POST(request: Request) {
             actorUserId: ctx.userId,
             state: 'SUBSCRIPTION_MISSING',
           });
+          const checkedAt = new Date().toISOString();
+          await service.from('integration_connections')
+            .update({
+              status: 'DEGRADED',
+              last_checked_at: checkedAt,
+              last_error: 'META_PROVIDER_SUBSCRIPTION_MISSING',
+              updated_at: checkedAt,
+            })
+            .eq('organization_id', ctx.organizationId)
+            .eq('id', binding.integration_connection_id);
           return NextResponse.json({
             error: safeHealthMessage('SUBSCRIPTION_MISSING'),
             reconnectRequired: true,
@@ -215,6 +226,17 @@ export async function POST(request: Request) {
           actorUserId: ctx.userId,
           state: 'VERIFIED',
         });
+        const checkedAt = new Date().toISOString();
+        await service.from('integration_connections')
+          .update({
+            enabled: true,
+            status: 'CONNECTED',
+            last_checked_at: checkedAt,
+            last_error: null,
+            updated_at: checkedAt,
+          })
+          .eq('organization_id', ctx.organizationId)
+          .eq('id', binding.integration_connection_id);
 
         return NextResponse.json({
           ok: true,
@@ -236,6 +258,18 @@ export async function POST(request: Request) {
           actorUserId: ctx.userId,
           state: kind === 'INVALID_OR_REVOKED' ? 'CREDENTIAL_INVALID' : 'UNCONFIRMED',
         });
+        const checkedAt = new Date().toISOString();
+        await service.from('integration_connections')
+          .update({
+            status: 'DEGRADED',
+            last_checked_at: checkedAt,
+            last_error: kind === 'INVALID_OR_REVOKED'
+              ? 'META_CREDENTIAL_INVALID_OR_REVOKED'
+              : 'META_CREDENTIAL_HEALTH_UNCONFIRMED',
+            updated_at: checkedAt,
+          })
+          .eq('organization_id', ctx.organizationId)
+          .eq('id', binding.integration_connection_id);
         return NextResponse.json({
           error: safeHealthMessage(kind),
           reconnectRequired: true,
