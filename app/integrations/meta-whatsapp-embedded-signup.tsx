@@ -247,7 +247,7 @@ export function MetaWhatsAppEmbeddedSignup(props: {
     return body.binding;
   }
 
-  async function launch() {
+  function launch() {
     if (
       !configured
       || !sdkReady
@@ -269,60 +269,64 @@ export function MetaWhatsAppEmbeddedSignup(props: {
     sessionRef.current = null;
     attemptRef.current = null;
     savingRef.current = false;
-    setState('PREPARING');
-    setMessage('Creating a secure, version-bound setup attempt…');
+    setState('WAITING');
+    setMessage('Complete the Meta-hosted signup window. Smart Visions never asks for your Meta password or a copied token.');
 
-    try {
-      const target = await ensureSelectedBinding();
-      const startResponse = await fetch('/api/integrations/meta/whatsapp/embedded-signup/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bindingId: target.id,
-          expectedVersion: target.version,
-          connectionMode,
-        }),
-      });
-      const start = await startResponse.json() as SetupAttempt & { error?: string };
-      if (!startResponse.ok || !start.attemptId) {
-        throw new Error(start.error || 'Unable to start WhatsApp setup');
+    const extras = connectionMode === 'BUSINESS_APP_COEXISTENCE'
+      ? {
+          setup: {},
+          featureType: 'whatsapp_business_app_onboarding',
+          sessionInfoVersion: '3',
+        }
+      : {
+          setup: {},
+          sessionInfoVersion: '3',
+        };
+
+    window.FB.login((response) => {
+      const code = response.authResponse?.code?.trim();
+      if (!code) {
+        setState('ERROR');
+        setMessage('Meta signup was cancelled or returned no authorization code. Your existing WhatsApp was not changed.');
+        return;
       }
 
-      attemptRef.current = start;
-      setState('WAITING');
-      setMessage('Complete the Meta-hosted signup window. Smart Visions never asks for your Meta password or a copied token.');
+      codeRef.current = code;
+      setState('PREPARING');
+      setMessage('Authorization returned. Binding this setup to the selected Business…');
 
-      const extras = connectionMode === 'BUSINESS_APP_COEXISTENCE'
-        ? {
-            setup: {},
-            featureType: 'whatsapp_business_app_onboarding',
-            sessionInfoVersion: '3',
+      void (async () => {
+        try {
+          const target = await ensureSelectedBinding();
+          const startResponse = await fetch('/api/integrations/meta/whatsapp/embedded-signup/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bindingId: target.id,
+              expectedVersion: target.version,
+              connectionMode,
+            }),
+          });
+          const attempt = await startResponse.json() as SetupAttempt & { error?: string };
+          if (!startResponse.ok || !attempt.attemptId) {
+            throw new Error(attempt.error || 'Unable to start WhatsApp setup');
           }
-        : {
-            setup: {},
-            sessionInfoVersion: '3',
-          };
 
-      window.FB.login((response) => {
-        const code = response.authResponse?.code?.trim();
-        if (!code) {
+          attemptRef.current = attempt;
+          void finishIfReady();
+        } catch (error) {
+          attemptRef.current = null;
+          codeRef.current = null;
           setState('ERROR');
-          setMessage('Meta signup was cancelled or returned no authorization code. Your existing WhatsApp was not changed.');
-          return;
+          setMessage(error instanceof Error ? error.message : 'Unable to start WhatsApp setup');
         }
-        codeRef.current = code;
-        void finishIfReady();
-      }, {
-        config_id: props.configurationId,
-        response_type: 'code',
-        override_default_response_type: true,
-        extras,
-      });
-    } catch (error) {
-      attemptRef.current = null;
-      setState('ERROR');
-      setMessage(error instanceof Error ? error.message : 'Unable to start WhatsApp setup');
-    }
+      })();
+    }, {
+      config_id: props.configurationId,
+      response_type: 'code',
+      override_default_response_type: true,
+      extras,
+    });
   }
 
   const setupAvailable = bindings.length > 0 || canBootstrap;
