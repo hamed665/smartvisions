@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Business is not accessible.' }, { status: 404 });
     }
 
-    let { data: integration, error: integrationError } = await ctx.supabase
+    const { data: initialIntegration, error: integrationError } = await ctx.supabase
       .from('integration_connections')
       .select('id,provider,channel,enabled,status,last_error')
       .eq('organization_id', ctx.organizationId)
@@ -56,6 +56,8 @@ export async function POST(request: Request) {
     if (integrationError) {
       return NextResponse.json({ error: 'Unable to read the canonical WhatsApp integration.' }, { status: 503 });
     }
+
+    let integration = initialIntegration;
 
     if (!integration) {
       const created = await ctx.supabase
