@@ -98,7 +98,10 @@ export async function POST(request: Request) {
       return NextResponse.json({
         error: 'The canonical WhatsApp integration is disabled and requires operator reconciliation before setup can continue.',
       }, { status: 409 });
-    } else if (!integration.enabled || integration.status !== 'READY') {
+    } else if (
+      integration.status !== 'CONNECTED'
+      && (!integration.enabled || integration.status !== 'READY')
+    ) {
       const updated = await ctx.supabase
         .from('integration_connections')
         .update({
