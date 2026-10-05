@@ -127,6 +127,13 @@ describe('customer WhatsApp self-service UI', () => {
     expect(coexistenceActivationMigration).toContain('to service_role');
   });
 
+  it('opens Meta signup directly from the customer click before asynchronous bootstrap work', () => {
+    const loginCall = embeddedSignup.indexOf('window.FB.login');
+    const bootstrapAwait = embeddedSignup.indexOf('await ensureSelectedBinding()');
+    expect(loginCall).toBeGreaterThan(-1);
+    expect(bootstrapAwait).toBeGreaterThan(loginCall);
+  });
+
   it('can bootstrap a missing Business binding and continue the existing Embedded Signup flow', () => {
     expect(embeddedSignup).toContain('/api/customer/connections/whatsapp/bootstrap');
     expect(embeddedSignup).toContain('/api/integrations/meta/whatsapp/embedded-signup/start');
