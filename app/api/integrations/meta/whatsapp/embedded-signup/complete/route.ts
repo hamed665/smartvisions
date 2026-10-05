@@ -61,15 +61,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'WhatsApp setup attempt is missing or stale' }, { status: 409 });
     }
 
+    if (
+      attempt.connection_mode === 'BUSINESS_APP_COEXISTENCE'
+      && process.env.META_WHATSAPP_COEXISTENCE_ENABLED?.trim().toLowerCase() !== 'true'
+    ) {
+      return NextResponse.json({
+        error: 'Same-number WhatsApp Business App Coexistence is not enabled for this Meta Embedded Signup configuration.',
+        blockedExternal: true,
+      }, { status: 409 });
+    }
+
     if (attempt.status === 'COMPLETED') {
       const { data: completedBinding } = await service
         .from('communication_channel_bindings')
-        .select('id,version,provider_destination_label')
+        .select('id,version,provider,provider_account_id,provider_destination_id,provider_destination_label')
         .eq('organization_id', ctx.organizationId)
         .eq('id', bindingId)
         .maybeSingle();
 
-      if (completedBinding) {
+      const replayMatches = completedBinding
+        && completedBinding.provider === 'META'
+        && completedBinding.provider_account_id === wabaId
+        && (
+          completedBinding.provider_destination_id === phoneNumberId
+          || (
+            attempt.connection_mode === 'BUSINESS_APP_COEXISTENCE'
+            && !phoneNumberId
+            && Boolean(completedBinding.provider_destination_id)
+          )
+        );
+
+      if (replayMatches) {
         return NextResponse.json({
           ok: true,
           bindingId,
@@ -78,6 +100,8 @@ export async function POST(request: Request) {
           replayed: true,
         });
       }
+
+      return NextResponse.json({ error: 'Completed WhatsApp setup no longer matches the canonical binding.' }, { status: 409 });
     }
 
     if (attempt.status !== 'STARTED' || new Date(attempt.expires_at).getTime() <= Date.now()) {
