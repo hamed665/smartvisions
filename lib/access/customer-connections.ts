@@ -22,7 +22,6 @@ type WhatsAppBindingRow = {
   id: string;
   organization_id: string;
   tenant_business_id: string;
-  branch_id: string | null;
   integration_connection_id: string;
   status: string;
   version: number;
@@ -203,7 +202,7 @@ export async function loadCustomerConnections(input: {
   const bindingResult = await supabase
     .from('communication_channel_bindings')
     .select(
-      'id,organization_id,tenant_business_id,branch_id,integration_connection_id,status,version,provider,provider_account_id,provider_destination_id,provider_destination_label,provider_secret_ref,last_verified_at,last_error_code',
+      'id,organization_id,tenant_business_id,integration_connection_id,status,version,provider,provider_account_id,provider_destination_id,provider_destination_label,provider_secret_ref,last_verified_at,last_error_code',
     )
     .eq('organization_id', business.organizationId)
     .eq('tenant_business_id', business.id)
