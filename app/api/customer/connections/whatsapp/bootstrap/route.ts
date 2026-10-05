@@ -4,7 +4,7 @@ import {
   loadCustomerBusinessAccessContext,
   normalizeCustomerBusinessId,
 } from '@/lib/access/customer-business-scope';
-import { getCurrentOrganization } from '@/lib/supabase/org';
+import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
 
@@ -21,7 +21,7 @@ function providerConfigured() {
 
 export async function POST(request: Request) {
   try {
-    const ctx = await getCurrentOrganization(true);
+    const supabase = await createClient();
     const body = await request.json().catch(() => ({})) as Body;
     const businessId = normalizeCustomerBusinessId(body.businessId);
 
@@ -37,18 +37,23 @@ export async function POST(request: Request) {
 
     const access = await loadCustomerBusinessAccessContext({
       requestedBusinessId: businessId,
-      supabase: ctx.supabase,
+      supabase,
     });
     const business = access.selectedBusiness;
 
-    if (!business || business.organizationId !== ctx.organizationId) {
+    if (!business) {
       return NextResponse.json({ error: 'Business is not accessible.' }, { status: 404 });
     }
+    if (business.organizationRole !== 'OWNER') {
+      return NextResponse.json({ error: 'Organization OWNER permission is required.' }, { status: 403 });
+    }
 
-    const { data: initialIntegration, error: integrationError } = await ctx.supabase
+    const organizationId = business.organizationId;
+
+    const { data: initialIntegration, error: integrationError } = await supabase
       .from('integration_connections')
       .select('id,provider,channel,enabled,status,last_error')
-      .eq('organization_id', ctx.organizationId)
+      .eq('organization_id', organizationId)
       .eq('provider', 'META')
       .eq('channel', 'WHATSAPP')
       .maybeSingle();
@@ -60,16 +65,15 @@ export async function POST(request: Request) {
     let integration = initialIntegration;
 
     if (!integration) {
-      const created = await ctx.supabase
+      const created = await supabase
         .from('integration_connections')
         .insert({
-          organization_id: ctx.organizationId,
+          organization_id: organizationId,
           provider: 'META',
           channel: 'WHATSAPP',
           enabled: true,
-          status: 'CONNECTED',
+          status: 'READY',
           account_label: 'WhatsApp Business',
-          last_checked_at: new Date().toISOString(),
           last_error: null,
           config: {},
         })
@@ -77,10 +81,10 @@ export async function POST(request: Request) {
         .single();
 
       if (created.error || !created.data) {
-        const raced = await ctx.supabase
+        const raced = await supabase
           .from('integration_connections')
           .select('id,provider,channel,enabled,status,last_error')
-          .eq('organization_id', ctx.organizationId)
+          .eq('organization_id', organizationId)
           .eq('provider', 'META')
           .eq('channel', 'WHATSAPP')
           .maybeSingle();
@@ -95,31 +99,38 @@ export async function POST(request: Request) {
       return NextResponse.json({
         error: 'The canonical WhatsApp integration requires operator reconciliation before a new connection can start.',
       }, { status: 409 });
-    } else if (!integration.enabled || integration.status !== 'CONNECTED') {
-      const updated = await ctx.supabase
+    } else if (integration.status === 'CONNECTED' && !integration.enabled) {
+      return NextResponse.json({
+        error: 'The canonical WhatsApp integration is disabled and requires operator reconciliation before setup can continue.',
+      }, { status: 409 });
+    } else if (
+      integration.status !== 'CONNECTED'
+      && (!integration.enabled || integration.status !== 'READY')
+    ) {
+      const updated = await supabase
         .from('integration_connections')
         .update({
           enabled: true,
-          status: 'CONNECTED',
-          last_checked_at: new Date().toISOString(),
+          status: 'READY',
+          last_checked_at: null,
           last_error: null,
           updated_at: new Date().toISOString(),
         })
-        .eq('organization_id', ctx.organizationId)
+        .eq('organization_id', organizationId)
         .eq('id', integration.id)
         .select('id,provider,channel,enabled,status,last_error')
         .single();
 
       if (updated.error || !updated.data) {
-        return NextResponse.json({ error: 'Unable to activate the canonical WhatsApp integration.' }, { status: 409 });
+        return NextResponse.json({ error: 'Unable to prepare the canonical WhatsApp integration safely.' }, { status: 409 });
       }
       integration = updated.data;
     }
 
-    const existingResult = await ctx.supabase
+    const existingResult = await supabase
       .from('communication_channel_bindings')
       .select('id,version,tenant_business_id,provider_destination_label,integration_connection_id')
-      .eq('organization_id', ctx.organizationId)
+      .eq('organization_id', organizationId)
       .eq('tenant_business_id', business.id)
       .eq('channel', 'WHATSAPP')
       .eq('status', 'ACTIVE')
@@ -153,10 +164,10 @@ export async function POST(request: Request) {
       }, { headers: { 'Cache-Control': 'private, no-store' } });
     }
 
-    const occupied = await ctx.supabase
+    const occupied = await supabase
       .from('communication_channel_bindings')
       .select('id,tenant_business_id')
-      .eq('organization_id', ctx.organizationId)
+      .eq('organization_id', organizationId)
       .eq('integration_connection_id', integration.id)
       .eq('channel', 'WHATSAPP')
       .eq('status', 'ACTIVE')
@@ -172,8 +183,8 @@ export async function POST(request: Request) {
       }, { status: 409 });
     }
 
-    const { data, error } = await ctx.supabase.rpc('create_communication_channel_binding', {
-      p_organization_id: ctx.organizationId,
+    const { data, error } = await supabase.rpc('create_communication_channel_binding', {
+      p_organization_id: organizationId,
       p_tenant_business_id: business.id,
       p_branch_id: null,
       p_integration_connection_id: integration.id,
@@ -185,15 +196,15 @@ export async function POST(request: Request) {
     if (
       error
       || !row?.id
-      || row.organization_id !== ctx.organizationId
+      || row.organization_id !== organizationId
       || row.tenant_business_id !== business.id
       || row.channel !== 'WHATSAPP'
       || row.status !== 'ACTIVE'
     ) {
-      const raced = await ctx.supabase
+      const raced = await supabase
         .from('communication_channel_bindings')
         .select('id,version,tenant_business_id,provider_destination_label')
-        .eq('organization_id', ctx.organizationId)
+        .eq('organization_id', organizationId)
         .eq('tenant_business_id', business.id)
         .eq('channel', 'WHATSAPP')
         .eq('status', 'ACTIVE')

@@ -533,4 +533,71 @@ begin
 end;
 $security_contract$;
 
+
+-- PR4 closeout: a READY integration is a logical setup slot only for META/WHATSAPP.
+insert into public.integration_connections(
+  id,organization_id,provider,channel,enabled,status,account_label,config
+) values
+  ('40000000-0000-4000-8000-00000000f601','00000000-0000-0000-0000-00000000f601','META','WHATSAPP',true,'READY','Truthful WhatsApp setup','{}'::jsonb),
+  ('40000000-0000-4000-8000-00000000f602','00000000-0000-0000-0000-00000000f601','META','EMAIL',true,'READY','Invalid READY email setup','{}'::jsonb);
+
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-00000000e601',false);
+
+do $truthful_whatsapp_ready_binding$
+declare
+  v_binding public.communication_channel_bindings%rowtype;
+begin
+  select *
+    into v_binding
+    from public.create_communication_channel_binding(
+      '00000000-0000-0000-0000-00000000f601',
+      '20000000-0000-4000-8000-00000000f601',
+      null,
+      '40000000-0000-4000-8000-00000000f601',
+      'WHATSAPP',
+      'truthful-whatsapp-ready-binding'
+    );
+
+  if v_binding.channel <> 'WHATSAPP'
+     or v_binding.status <> 'ACTIVE'
+     or v_binding.integration_connection_id <> '40000000-0000-4000-8000-00000000f601'::uuid
+  then
+    raise exception 'READY META WhatsApp setup slot did not create the canonical binding';
+  end if;
+
+  if (
+    select status
+      from public.integration_connections
+     where id='40000000-0000-4000-8000-00000000f601'
+  ) <> 'READY' then
+    raise exception 'WhatsApp bootstrap manufactured CONNECTED evidence before provider authorization';
+  end if;
+end;
+$truthful_whatsapp_ready_binding$;
+
+do $ready_non_whatsapp_rejected$
+begin
+  begin
+    perform public.create_communication_channel_binding(
+      '00000000-0000-0000-0000-00000000f601',
+      '20000000-0000-4000-8000-00000000f601',
+      null,
+      '40000000-0000-4000-8000-00000000f602',
+      'EMAIL',
+      'invalid-ready-email-binding'
+    );
+    raise exception 'READY non-WhatsApp integration unexpectedly created a binding';
+  exception
+    when others then
+      if sqlerrm not like 'CONNECTED integration connection or READY META WhatsApp setup slot%' then
+        raise;
+      end if;
+  end;
+end;
+$ready_non_whatsapp_rejected$;
+
+reset role;
+select set_config('request.jwt.claim.sub','',false);
+
 rollback;

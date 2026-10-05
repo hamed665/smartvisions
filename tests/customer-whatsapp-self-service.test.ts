@@ -17,6 +17,10 @@ const connectionsRuntime = readFileSync(
   new URL('../lib/access/customer-connections.ts', import.meta.url),
   'utf8',
 );
+const startRoute = readFileSync(
+  new URL('../app/api/integrations/meta/whatsapp/embedded-signup/start/route.ts', import.meta.url),
+  'utf8',
+);
 const provisionRoute = readFileSync(
   new URL('../app/api/integrations/meta/whatsapp/embedded-signup/provision/route.ts', import.meta.url),
   'utf8',
@@ -25,11 +29,25 @@ const lifecycleRoute = readFileSync(
   new URL('../app/api/integrations/meta/whatsapp/lifecycle/route.ts', import.meta.url),
   'utf8',
 );
+const truthfulBootstrapMigration = readFileSync(
+  new URL(
+    '../supabase/migrations/20261005040000_customer_whatsapp_truthful_bootstrap.sql',
+    import.meta.url,
+  ),
+  'utf8',
+);
+const productionDeploy = readFileSync(
+  new URL('../.github/workflows/cloudflare-production-deploy.yml', import.meta.url),
+  'utf8',
+);
 
 describe('customer WhatsApp self-service authority', () => {
   it('bootstraps only through canonical Business, integration and binding authorities', () => {
-    expect(bootstrapRoute).toContain('getCurrentOrganization(true)');
+    expect(bootstrapRoute).toContain('createClient');
     expect(bootstrapRoute).toContain('loadCustomerBusinessAccessContext');
+    expect(bootstrapRoute).toContain("business.organizationRole !== 'OWNER'");
+    expect(bootstrapRoute).not.toContain('getCurrentOrganization');
+    expect(bootstrapRoute).not.toContain('getServerOperatorContext');
     expect(bootstrapRoute).toContain("from('integration_connections')");
     expect(bootstrapRoute).toContain("rpc('create_communication_channel_binding'");
     expect(bootstrapRoute).toContain("provider: 'META'");
@@ -42,6 +60,9 @@ describe('customer WhatsApp self-service authority', () => {
     expect(bootstrapRoute).toContain('META_APP_SECRET');
     expect(bootstrapRoute).toContain('NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID');
     expect(bootstrapRoute).toContain('Smart Visions Meta provider configuration is not ready');
+    expect(productionDeploy).toContain('META_APP_ID: ${{ secrets.META_APP_ID }}');
+    expect(productionDeploy).toContain('META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID');
+    expect(productionDeploy).toContain('BLOCKED_EXTERNAL');
   });
 
   it('is replay and race safe instead of manufacturing a second binding', () => {
@@ -49,6 +70,18 @@ describe('customer WhatsApp self-service authority', () => {
     expect(bootstrapRoute).toContain("eq('status', 'ACTIVE')");
     expect(bootstrapRoute).toContain('This Organization WhatsApp integration is already bound to another Business');
     expect(bootstrapRoute.match(/communication_channel_bindings/g)?.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('keeps pre-authorization integration evidence READY, never fake CONNECTED', () => {
+    expect(bootstrapRoute).toContain("status: 'READY'");
+    expect(bootstrapRoute).toContain("integration.status !== 'CONNECTED'");
+    expect(bootstrapRoute).not.toMatch(/status:\s*'CONNECTED'\s*,/);
+    expect(truthfulBootstrapMigration).toContain("v_ic.status='CONNECTED'");
+    expect(truthfulBootstrapMigration).toContain("v_channel='WHATSAPP'");
+    expect(truthfulBootstrapMigration).toContain("v_ic.status='READY'");
+    expect(truthfulBootstrapMigration).toContain("coalesce(v_ic.provider,'')");
+    expect(truthfulBootstrapMigration).toContain('enforce_communication_channel_binding_contract');
+    expect(truthfulBootstrapMigration).toContain("v_connection_status = 'READY'");
   });
 });
 
@@ -59,13 +92,16 @@ describe('customer WhatsApp self-service UI', () => {
     expect(embeddedSignup).not.toMatch(/facebookPassword|accessTokenInput|paste.*token/i);
   });
 
-  it('fails Coexistence closed before any canonical bootstrap mutation', () => {
+  it('fails Coexistence closed in both UI and server runtime before provider mutation', () => {
     const coexistenceGuard = embeddedSignup.indexOf("connectionMode === 'BUSINESS_APP_COEXISTENCE'");
     const bootstrapCall = embeddedSignup.indexOf('await ensureSelectedBinding()');
     expect(coexistenceGuard).toBeGreaterThan(-1);
     expect(bootstrapCall).toBeGreaterThan(coexistenceGuard);
     expect(embeddedSignup).toContain('will not be deleted or migrated');
     expect(embeddedSignup).toContain('will not fall back to Delete Account or destructive migration');
+    expect(startRoute).toContain("connectionMode === 'BUSINESS_APP_COEXISTENCE'");
+    expect(startRoute).toContain('blockedExternal: true');
+    expect(startRoute).toContain('will not fall back to account deletion or destructive migration');
   });
 
   it('can bootstrap a missing Business binding and continue the existing Embedded Signup flow', () => {
