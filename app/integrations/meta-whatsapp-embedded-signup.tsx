@@ -373,7 +373,7 @@ export function MetaWhatsAppEmbeddedSignup(props: {
             Finalize communication Inbox
           </button>
         : null}
-      {state === 'REGISTRATION_REQUIRED' && attemptRef.current ? <div style={{ display: 'grid', gap: 8 }}>
+      {state === 'REGISTRATION_REQUIRED' && bindingId ? <div style={{ display: 'grid', gap: 8 }}>
         <label>WhatsApp two-step verification PIN
           <input
             type="password"
@@ -390,18 +390,18 @@ export function MetaWhatsAppEmbeddedSignup(props: {
         <button
           type="button"
           disabled={!/^\d{6}$/.test(registrationPin)}
-          onClick={() => void provisionSelected(attemptRef.current!.bindingId, registrationPin)}
+          onClick={() => void provisionSelected(bindingId, registrationPin)}
         >
           Register WhatsApp number
         </button>
       </div> : null}
-      {state === 'PROVISIONING_ERROR' && attemptRef.current
-        ? <button type="button" onClick={() => void provisionSelected(attemptRef.current!.bindingId)}>Retry provider verification</button>
+      {state === 'PROVISIONING_ERROR' && bindingId
+        ? <button type="button" onClick={() => void provisionSelected(bindingId)}>Retry provider verification</button>
         : null}
-      {state === 'CHATWOOT_ACTION_REQUIRED' && attemptRef.current
+      {state === 'CHATWOOT_ACTION_REQUIRED' && bindingId
         ? <div style={{ display: 'grid', gap: 8 }}>
             <p className="muted smallText">Meta authorization is already saved. Retrying this step does not repeat Meta login or create another WhatsApp connection.</p>
-            <button type="button" onClick={() => void provisionChatwootSelected(attemptRef.current!.bindingId)}>Retry communication Inbox</button>
+            <button type="button" onClick={() => void provisionChatwootSelected(bindingId)}>Retry communication Inbox</button>
           </div>
         : null}
     </> : <p className="muted">Create an active tenant Business before connecting Meta assets.</p>}
