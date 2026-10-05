@@ -17,6 +17,10 @@ const connectionsRuntime = readFileSync(
   new URL('../lib/access/customer-connections.ts', import.meta.url),
   'utf8',
 );
+const startRoute = readFileSync(
+  new URL('../app/api/integrations/meta/whatsapp/embedded-signup/start/route.ts', import.meta.url),
+  'utf8',
+);
 const provisionRoute = readFileSync(
   new URL('../app/api/integrations/meta/whatsapp/embedded-signup/provision/route.ts', import.meta.url),
   'utf8',
@@ -79,13 +83,16 @@ describe('customer WhatsApp self-service UI', () => {
     expect(embeddedSignup).not.toMatch(/facebookPassword|accessTokenInput|paste.*token/i);
   });
 
-  it('fails Coexistence closed before any canonical bootstrap mutation', () => {
+  it('fails Coexistence closed in both UI and server runtime before provider mutation', () => {
     const coexistenceGuard = embeddedSignup.indexOf("connectionMode === 'BUSINESS_APP_COEXISTENCE'");
     const bootstrapCall = embeddedSignup.indexOf('await ensureSelectedBinding()');
     expect(coexistenceGuard).toBeGreaterThan(-1);
     expect(bootstrapCall).toBeGreaterThan(coexistenceGuard);
     expect(embeddedSignup).toContain('will not be deleted or migrated');
     expect(embeddedSignup).toContain('will not fall back to Delete Account or destructive migration');
+    expect(startRoute).toContain("connectionMode === 'BUSINESS_APP_COEXISTENCE'");
+    expect(startRoute).toContain('blockedExternal: true');
+    expect(startRoute).toContain('will not fall back to account deletion or destructive migration');
   });
 
   it('can bootstrap a missing Business binding and continue the existing Embedded Signup flow', () => {
