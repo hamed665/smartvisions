@@ -35,8 +35,11 @@ const truthfulBootstrapMigration = readFileSync(
 
 describe('customer WhatsApp self-service authority', () => {
   it('bootstraps only through canonical Business, integration and binding authorities', () => {
-    expect(bootstrapRoute).toContain('getCurrentOrganization(true)');
+    expect(bootstrapRoute).toContain('createClient');
     expect(bootstrapRoute).toContain('loadCustomerBusinessAccessContext');
+    expect(bootstrapRoute).toContain("business.organizationRole !== 'OWNER'");
+    expect(bootstrapRoute).not.toContain('getCurrentOrganization');
+    expect(bootstrapRoute).not.toContain('getServerOperatorContext');
     expect(bootstrapRoute).toContain("from('integration_connections')");
     expect(bootstrapRoute).toContain("rpc('create_communication_channel_binding'");
     expect(bootstrapRoute).toContain("provider: 'META'");
