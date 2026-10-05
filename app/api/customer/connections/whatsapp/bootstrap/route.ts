@@ -75,9 +75,20 @@ export async function POST(request: Request) {
         .single();
 
       if (created.error || !created.data) {
-        return NextResponse.json({ error: 'Unable to prepare the canonical WhatsApp integration.' }, { status: 409 });
+        const raced = await ctx.supabase
+          .from('integration_connections')
+          .select('id,provider,channel,enabled,status,last_error')
+          .eq('organization_id', ctx.organizationId)
+          .eq('provider', 'META')
+          .eq('channel', 'WHATSAPP')
+          .maybeSingle();
+        if (raced.error || !raced.data) {
+          return NextResponse.json({ error: 'Unable to prepare the canonical WhatsApp integration.' }, { status: 409 });
+        }
+        integration = raced.data;
+      } else {
+        integration = created.data;
       }
-      integration = created.data;
     } else if (integration.status === 'PAUSED' || integration.status === 'ERROR' || integration.status === 'DEGRADED') {
       return NextResponse.json({
         error: 'The canonical WhatsApp integration requires operator reconciliation before a new connection can start.',
@@ -177,6 +188,31 @@ export async function POST(request: Request) {
       || row.channel !== 'WHATSAPP'
       || row.status !== 'ACTIVE'
     ) {
+      const raced = await ctx.supabase
+        .from('communication_channel_bindings')
+        .select('id,version,tenant_business_id,provider_destination_label')
+        .eq('organization_id', ctx.organizationId)
+        .eq('tenant_business_id', business.id)
+        .eq('channel', 'WHATSAPP')
+        .eq('status', 'ACTIVE')
+        .limit(1)
+        .maybeSingle();
+
+      if (!raced.error && raced.data?.id) {
+        return NextResponse.json({
+          ok: true,
+          replayed: true,
+          binding: {
+            id: raced.data.id,
+            version: raced.data.version,
+            tenantBusinessId: business.id,
+            businessName: business.name,
+            branchName: null,
+            destinationLabel: raced.data.provider_destination_label ?? null,
+          },
+        }, { headers: { 'Cache-Control': 'private, no-store' } });
+      }
+
       return NextResponse.json({ error: 'Unable to create the canonical WhatsApp binding safely.' }, { status: 409 });
     }
 
