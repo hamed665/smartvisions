@@ -67,9 +67,8 @@ export async function POST(request: Request) {
           provider: 'META',
           channel: 'WHATSAPP',
           enabled: true,
-          status: 'CONNECTED',
+          status: 'READY',
           account_label: 'WhatsApp Business',
-          last_checked_at: new Date().toISOString(),
           last_error: null,
           config: {},
         })
@@ -95,13 +94,17 @@ export async function POST(request: Request) {
       return NextResponse.json({
         error: 'The canonical WhatsApp integration requires operator reconciliation before a new connection can start.',
       }, { status: 409 });
-    } else if (!integration.enabled || integration.status !== 'CONNECTED') {
+    } else if (integration.status === 'CONNECTED' && !integration.enabled) {
+      return NextResponse.json({
+        error: 'The canonical WhatsApp integration is disabled and requires operator reconciliation before setup can continue.',
+      }, { status: 409 });
+    } else if (!integration.enabled || integration.status !== 'READY') {
       const updated = await ctx.supabase
         .from('integration_connections')
         .update({
           enabled: true,
-          status: 'CONNECTED',
-          last_checked_at: new Date().toISOString(),
+          status: 'READY',
+          last_checked_at: null,
           last_error: null,
           updated_at: new Date().toISOString(),
         })
@@ -111,7 +114,7 @@ export async function POST(request: Request) {
         .single();
 
       if (updated.error || !updated.data) {
-        return NextResponse.json({ error: 'Unable to activate the canonical WhatsApp integration.' }, { status: 409 });
+        return NextResponse.json({ error: 'Unable to prepare the canonical WhatsApp integration safely.' }, { status: 409 });
       }
       integration = updated.data;
     }
