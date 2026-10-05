@@ -194,6 +194,7 @@ export async function loadCustomerConnections(input: {
     return {
       ...access,
       whatsappBindings: [],
+      whatsappBindingOptions: [],
       whatsapp: deriveCustomerWhatsAppConnection({}),
     };
   }
@@ -246,11 +247,26 @@ export async function loadCustomerConnections(input: {
       integration: integrationById.get(binding.integration_connection_id) ?? null,
     }),
   );
+  const whatsappBindingOptions = bindings.map((binding) => ({
+    id: binding.id,
+    version: binding.version,
+    tenantBusinessId: binding.tenant_business_id,
+    businessName: business.name,
+    branchName: null,
+    provider: binding.provider,
+    configured: binding.provider === 'META'
+      && Boolean(binding.provider_destination_id)
+      && Boolean(binding.provider_secret_ref),
+    destinationLabel: binding.provider_destination_label,
+    lastErrorCode: binding.last_error_code,
+    lastVerifiedAt: binding.last_verified_at,
+  }));
 
   if (!whatsappBindings.length) {
     return {
       ...access,
       whatsappBindings,
+      whatsappBindingOptions,
       whatsapp: deriveCustomerWhatsAppConnection({}),
     };
   }
@@ -259,6 +275,7 @@ export async function loadCustomerConnections(input: {
     return {
       ...access,
       whatsappBindings,
+      whatsappBindingOptions,
       whatsapp: whatsappBindings[0],
     };
   }
@@ -277,6 +294,7 @@ export async function loadCustomerConnections(input: {
   return {
     ...access,
     whatsappBindings,
+    whatsappBindingOptions,
     whatsapp: {
       status,
       bindingId: null,
