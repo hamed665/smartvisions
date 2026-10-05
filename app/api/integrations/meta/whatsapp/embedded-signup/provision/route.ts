@@ -23,6 +23,7 @@ export async function POST(request: Request) {
   const service = createSupabaseServiceClient();
   let organizationId: string | null = null;
   let bindingId: string | null = null;
+  let integrationConnectionId: string | null = null;
 
   try {
     const ctx = await getCurrentOrganization(true);
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
 
     const { data: binding, error } = await ctx.supabase
       .from('communication_channel_bindings')
-      .select('id,tenant_business_id,branch_id,channel,status,provider,provider_account_id,provider_destination_id')
+      .select('id,tenant_business_id,branch_id,integration_connection_id,channel,status,provider,provider_account_id,provider_destination_id')
       .eq('organization_id', ctx.organizationId)
       .eq('id', bindingId)
       .maybeSingle();
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
     ) {
       return NextResponse.json({ error: 'WhatsApp binding is not ready for provider provisioning' }, { status: 409 });
     }
+    integrationConnectionId = binding.integration_connection_id;
 
     const { data: attempt, error: attemptError } = await service
       .from('communication_channel_setup_attempts')
@@ -126,6 +128,19 @@ export async function POST(request: Request) {
       .eq('id', binding.id);
     if (bindingError) throw new Error('Meta provisioning evidence could not be committed');
 
+    const { error: integrationError } = await service
+      .from('integration_connections')
+      .update({
+        enabled: true,
+        status: 'CONNECTED',
+        last_checked_at: now,
+        last_error: null,
+        updated_at: now,
+      })
+      .eq('organization_id', ctx.organizationId)
+      .eq('id', binding.integration_connection_id);
+    if (integrationError) throw new Error('Meta integration health evidence could not be committed');
+
     const { error: auditError } = await service.from('audit_logs').insert({
       organization_id: ctx.organizationId,
       actor_type: 'USER',
@@ -165,6 +180,17 @@ export async function POST(request: Request) {
         .update({ last_error_code: 'META_PROVISIONING_NOT_CONFIRMED', updated_at: now })
         .eq('organization_id', organizationId)
         .eq('id', bindingId);
+      if (integrationConnectionId) {
+        await service.from('integration_connections')
+          .update({
+            status: 'DEGRADED',
+            last_checked_at: now,
+            last_error: 'META_PROVISIONING_NOT_CONFIRMED',
+            updated_at: now,
+          })
+          .eq('organization_id', organizationId)
+          .eq('id', integrationConnectionId);
+      }
     }
     return NextResponse.json({ error: safeMetaWhatsAppProvisioningError(error) }, { status: 503 });
   }
