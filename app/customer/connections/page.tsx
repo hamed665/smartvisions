@@ -1,9 +1,12 @@
 import Link from 'next/link';
 
+import { MetaWhatsAppEmbeddedSignup } from '@/app/integrations/meta-whatsapp-embedded-signup';
+import { MetaWhatsAppLifecycle } from '@/app/integrations/meta-whatsapp-lifecycle';
 import {
   type CustomerConnectionStatus,
   loadCustomerConnections,
 } from '@/lib/access/customer-connections';
+import { metaGraphVersion } from '@/lib/whatsapp/meta-onboarding';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +25,14 @@ export default async function CustomerConnectionsPage({
   });
   const business = context.selectedBusiness;
   if (!business) return null;
+
   const whatsapp = context.whatsapp;
+  const canManageWhatsApp = business.organizationRole === 'OWNER';
+  const appId = process.env.NEXT_PUBLIC_META_APP_ID?.trim()
+    || process.env.META_APP_ID?.trim()
+    || null;
+  const configurationId = process.env.NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID?.trim()
+    || null;
 
   return (
     <div>
@@ -90,16 +100,35 @@ export default async function CustomerConnectionsPage({
             ))}
           </div>
         ) : null}
-
-        <div className="quickActions">
-          {whatsapp.canConnect ? <span aria-disabled="true">Connect WhatsApp</span> : null}
-          {whatsapp.canReconnect ? <span aria-disabled="true">Reconnect WhatsApp</span> : null}
-          {whatsapp.canDisconnect ? <span aria-disabled="true">Disconnect safely</span> : null}
-        </div>
-        <p className="muted smallText">
-          Customer self-service actions are intentionally not executed from this read-only PR. The next guarded WhatsApp workflow will reuse this same canonical binding and connection state.
-        </p>
       </section>
+
+      {canManageWhatsApp ? (
+        <>
+          <MetaWhatsAppEmbeddedSignup
+            appId={appId}
+            configurationId={configurationId}
+            graphVersion={metaGraphVersion()}
+            bindings={context.whatsappBindingOptions.map((row) => ({
+              id: row.id,
+              version: row.version,
+              tenantBusinessId: row.tenantBusinessId,
+              businessName: row.businessName,
+              branchName: row.branchName,
+              destinationLabel: row.destinationLabel,
+            }))}
+            bootstrapBusinessId={business.id}
+            bootstrapBusinessName={business.name}
+          />
+          <MetaWhatsAppLifecycle bindings={context.whatsappBindingOptions} />
+        </>
+      ) : (
+        <section className="panel settingsCreate">
+          <h2>WhatsApp connection management</h2>
+          <p className="muted">
+            This Business is visible to your account, but Meta credential changes and disconnect actions require the Organization OWNER. No broader panel or provider authority is granted implicitly.
+          </p>
+        </section>
+      )}
     </div>
   );
 }
