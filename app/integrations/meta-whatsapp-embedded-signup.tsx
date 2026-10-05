@@ -43,7 +43,10 @@ export function MetaWhatsAppEmbeddedSignup(props: {
   configurationId: string | null;
   graphVersion: string;
   bindings: BindingOption[];
+  bootstrapBusinessId?: string | null;
+  bootstrapBusinessName?: string | null;
 }) {
+  const [bindings, setBindings] = useState(props.bindings);
   const [bindingId, setBindingId] = useState(props.bindings[0]?.id ?? '');
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>(defaultMode(props.bindings[0]));
   const [sdkReady, setSdkReady] = useState(false);
@@ -55,7 +58,8 @@ export function MetaWhatsAppEmbeddedSignup(props: {
   const attemptRef = useRef<SetupAttempt | null>(null);
   const savingRef = useRef(false);
 
-  const selected = props.bindings.find((item) => item.id === bindingId);
+  const selected = bindings.find((item) => item.id === bindingId);
+  const canBootstrap = Boolean(props.bootstrapBusinessId && props.bootstrapBusinessName);
 
   async function provisionChatwootSelected(targetBindingId: string) {
     setState('CHATWOOT_PROVISIONING');
@@ -136,12 +140,12 @@ export function MetaWhatsAppEmbeddedSignup(props: {
   }
 
   async function finishIfReady() {
+    const attempt = attemptRef.current;
     if (
       savingRef.current
       || !codeRef.current
       || !sessionRef.current
-      || !selected
-      || !attemptRef.current
+      || !attempt
     ) return;
 
     savingRef.current = true;
@@ -153,9 +157,9 @@ export function MetaWhatsAppEmbeddedSignup(props: {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          attemptId: attemptRef.current.attemptId,
-          bindingId: selected.id,
-          expectedVersion: attemptRef.current.bindingVersion,
+          attemptId: attempt.attemptId,
+          bindingId: attempt.bindingId,
+          expectedVersion: attempt.bindingVersion,
           code: codeRef.current,
           wabaId: sessionRef.current.wabaId,
           phoneNumberId: sessionRef.current.phoneNumberId,
@@ -164,7 +168,7 @@ export function MetaWhatsAppEmbeddedSignup(props: {
       const body = await response.json() as { error?: string; displayPhoneNumber?: string | null };
       if (!response.ok) throw new Error(body.error || 'Unable to complete Meta connection');
       setMessage(`Connected securely${body.displayPhoneNumber ? ` · ${body.displayPhoneNumber}` : ''}. Finalizing provider setup…`);
-      await provisionSelected(selected.id);
+      await provisionSelected(attempt.bindingId);
     } catch (error) {
       savingRef.current = false;
       codeRef.current = null;
@@ -199,12 +203,40 @@ export function MetaWhatsAppEmbeddedSignup(props: {
 
   const configured = Boolean(props.appId && props.configurationId);
 
+  async function ensureSelectedBinding() {
+    if (selected) return selected;
+    if (!props.bootstrapBusinessId || !props.bootstrapBusinessName) {
+      throw new Error('No canonical WhatsApp binding is available for this Business.');
+    }
+
+    setMessage('Preparing the canonical WhatsApp connection for this Business…');
+    const response = await fetch('/api/customer/connections/whatsapp/bootstrap', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ businessId: props.bootstrapBusinessId }),
+    });
+    const body = await response.json() as {
+      error?: string;
+      binding?: BindingOption;
+    };
+    if (!response.ok || !body.binding?.id) {
+      throw new Error(body.error || 'Unable to prepare WhatsApp setup for this Business.');
+    }
+
+    setBindings((current) => (
+      current.some((item) => item.id === body.binding?.id)
+        ? current
+        : [body.binding as BindingOption, ...current]
+    ));
+    setBindingId(body.binding.id);
+    return body.binding;
+  }
+
   async function launch() {
     if (
       !configured
       || !sdkReady
       || !window.FB
-      || !selected
       || state === 'PREPARING'
       || state === 'WAITING'
       || state === 'SAVING'
@@ -226,12 +258,13 @@ export function MetaWhatsAppEmbeddedSignup(props: {
     setMessage('Creating a secure, version-bound setup attempt…');
 
     try {
+      const target = await ensureSelectedBinding();
       const startResponse = await fetch('/api/integrations/meta/whatsapp/embedded-signup/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          bindingId: selected.id,
-          expectedVersion: selected.version,
+          bindingId: target.id,
+          expectedVersion: target.version,
           connectionMode,
         }),
       });
@@ -266,6 +299,8 @@ export function MetaWhatsAppEmbeddedSignup(props: {
     }
   }
 
+  const setupAvailable = bindings.length > 0 || canBootstrap;
+
   return <section className="panel settingsCreate">
     <Script
       src="https://connect.facebook.net/en_US/sdk.js"
@@ -279,24 +314,27 @@ export function MetaWhatsAppEmbeddedSignup(props: {
     <h2>Connect WhatsApp Business</h2>
     <p className="muted">Authorization happens on Meta. Smart Visions never asks for your Facebook password or a copied access token.</p>
     <p className="muted"><strong>Your existing WhatsApp Business app is never deleted or destructively migrated by this setup.</strong></p>
-    {props.bindings.length ? <>
-      <label>Business destination
+    {setupAvailable ? <>
+      {bindings.length ? <label>Business destination
         <select
           value={bindingId}
           onChange={(event) => {
             const nextId = event.target.value;
-            const next = props.bindings.find((item) => item.id === nextId);
+            const next = bindings.find((item) => item.id === nextId);
             setBindingId(nextId);
             setConnectionMode(defaultMode(next));
             setState('IDLE');
             setMessage('');
           }}
         >
-          {props.bindings.map((binding) => <option key={binding.id} value={binding.id}>
+          {bindings.map((binding) => <option key={binding.id} value={binding.id}>
             {binding.businessName}{binding.branchName ? ` · ${binding.branchName}` : ''}{binding.destinationLabel ? ` · ${binding.destinationLabel}` : ''}
           </option>)}
         </select>
-      </label>
+      </label> : <div className="healthList compactHealth">
+        <span>Business <strong>{props.bootstrapBusinessName}</strong></span>
+        <span>Binding <strong>Created only when setup starts</strong></span>
+      </div>}
       <label>Connection path
         <select
           value={connectionMode}
@@ -320,7 +358,7 @@ export function MetaWhatsAppEmbeddedSignup(props: {
       <button
         type="button"
         onClick={() => void launch()}
-        disabled={!configured || !sdkReady || !selected || state === 'PREPARING' || state === 'WAITING' || state === 'SAVING' || state === 'PROVISIONING' || state === 'CHATWOOT_PROVISIONING'}
+        disabled={!configured || !sdkReady || state === 'PREPARING' || state === 'WAITING' || state === 'SAVING' || state === 'PROVISIONING' || state === 'CHATWOOT_PROVISIONING'}
       >
         {state === 'CHATWOOT_PROVISIONING'
           ? 'Preparing communication Inbox…'
@@ -335,7 +373,7 @@ export function MetaWhatsAppEmbeddedSignup(props: {
             Finalize communication Inbox
           </button>
         : null}
-      {state === 'REGISTRATION_REQUIRED' && selected ? <div style={{ display: 'grid', gap: 8 }}>
+      {state === 'REGISTRATION_REQUIRED' && attemptRef.current ? <div style={{ display: 'grid', gap: 8 }}>
         <label>WhatsApp two-step verification PIN
           <input
             type="password"
@@ -352,21 +390,21 @@ export function MetaWhatsAppEmbeddedSignup(props: {
         <button
           type="button"
           disabled={!/^\d{6}$/.test(registrationPin)}
-          onClick={() => void provisionSelected(selected.id, registrationPin)}
+          onClick={() => void provisionSelected(attemptRef.current!.bindingId, registrationPin)}
         >
           Register WhatsApp number
         </button>
       </div> : null}
-      {state === 'PROVISIONING_ERROR' && selected
-        ? <button type="button" onClick={() => void provisionSelected(selected.id)}>Retry provider verification</button>
+      {state === 'PROVISIONING_ERROR' && attemptRef.current
+        ? <button type="button" onClick={() => void provisionSelected(attemptRef.current!.bindingId)}>Retry provider verification</button>
         : null}
-      {state === 'CHATWOOT_ACTION_REQUIRED' && selected
+      {state === 'CHATWOOT_ACTION_REQUIRED' && attemptRef.current
         ? <div style={{ display: 'grid', gap: 8 }}>
             <p className="muted smallText">Meta authorization is already saved. Retrying this step does not repeat Meta login or create another WhatsApp connection.</p>
-            <button type="button" onClick={() => void provisionChatwootSelected(selected.id)}>Retry communication Inbox</button>
+            <button type="button" onClick={() => void provisionChatwootSelected(attemptRef.current!.bindingId)}>Retry communication Inbox</button>
           </div>
         : null}
-    </> : <p className="muted">Create an active tenant Business and its WhatsApp communication binding before connecting Meta assets.</p>}
+    </> : <p className="muted">Create an active tenant Business before connecting Meta assets.</p>}
     {!configured ? <p className="muted">Embedded Signup is code-ready but blocked until the Meta App ID and Embedded Signup Configuration ID are configured for this environment.</p> : null}
     {message ? <p role="status" className="muted smallText">{message}</p> : null}
   </section>;
