@@ -22,6 +22,7 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
   'app/business-os-actions.ts': {
     bootstrapCanonicalOperatingHierarchy:'SPECIALIZED:BUSINESS_OS_HIERARCHY_BOOTSTRAP',
     bootstrapCanonicalTenant:'SPECIALIZED:BUSINESS_OS_TENANT_BOOTSTRAP',
+    createCanonicalBusiness:'SPECIALIZED:BUSINESS_OS_TENANT_BOOTSTRAP',
     prepareCommunicationPlaneProjection:'SPECIALIZED:CHATWOOT_TENANT_PROJECTION_PREPARE',
     provisionCommunicationPlaneAccount:'SPECIALIZED:CHATWOOT_EXTERNAL_ACCOUNT_PROVISION',
     provisionCommunicationPlaneApiInbox:'SPECIALIZED:CHATWOOT_API_INBOX_PROVISION',
@@ -259,6 +260,7 @@ describe('Control Center ↔ Telegram action coverage', () => {
     expect(CLASSIFICATION['app/daily-target-actions.ts'].setDailyOutreachTarget).toBe('SPECIALIZED:DAILY_OUTREACH_TARGET');
     expect(CLASSIFICATION['app/business-os-actions.ts'].bootstrapCanonicalOperatingHierarchy).toBe('SPECIALIZED:BUSINESS_OS_HIERARCHY_BOOTSTRAP');
     expect(CLASSIFICATION['app/business-os-actions.ts'].bootstrapCanonicalTenant).toBe('SPECIALIZED:BUSINESS_OS_TENANT_BOOTSTRAP');
+    expect(CLASSIFICATION['app/business-os-actions.ts'].createCanonicalBusiness).toBe('SPECIALIZED:BUSINESS_OS_TENANT_BOOTSTRAP');
     expect(CLASSIFICATION['app/business-os-actions.ts'].prepareCommunicationPlaneProjection).toBe('SPECIALIZED:CHATWOOT_TENANT_PROJECTION_PREPARE');
     expect(CLASSIFICATION['app/business-os-actions.ts'].provisionCommunicationPlaneAccount).toBe('SPECIALIZED:CHATWOOT_EXTERNAL_ACCOUNT_PROVISION');
     expect(CLASSIFICATION['app/business-os-actions.ts'].provisionCommunicationPlaneApiInbox).toBe('SPECIALIZED:CHATWOOT_API_INBOX_PROVISION');

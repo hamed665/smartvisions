@@ -1,6 +1,7 @@
 import {
   bootstrapCanonicalOperatingHierarchy,
   bootstrapCanonicalTenant,
+  createCanonicalBusiness,
   prepareCommunicationPlaneProjection,
   provisionCommunicationPlaneAccount,
   provisionCommunicationPlaneApiInbox,
@@ -9,6 +10,7 @@ import {
   reconcileCommunicationPlaneScopedAccess,
 } from '@/app/business-os-actions';
 import { updateOrganizationSettings } from '@/app/management-actions';
+import CustomerInviteForm from '@/app/settings/customer-invite-form';
 import { loadChatwootReadiness } from '@/lib/chatwoot/readiness';
 import { loadChatwootScopedAccessInventory } from '@/lib/chatwoot/scoped-access-reconciliation';
 import { getCurrentOrganization } from '@/lib/supabase/org';
@@ -92,6 +94,10 @@ export default async function SettingsPage() {
   const brandName = settings?.brand_name ?? 'Smart Visions';
   const canonicalBrands = brands ?? [];
   const canonicalBusinesses = businesses ?? [];
+  const activeCanonicalBrands = canonicalBrands.filter((brand) => brand.status === 'ACTIVE');
+  const activeCanonicalBusinesses = canonicalBusinesses.filter(
+    (business) => business.status === 'ACTIVE',
+  );
   const activeBindings = communicationBindings ?? [];
   const liveAccountMappings = accountMappings ?? [];
   const canonicalBranches = branches ?? [];
@@ -272,6 +278,92 @@ export default async function SettingsPage() {
               </div>
             ))}
           </div>
+        )}
+      </section>
+
+      <section className="panel">
+        <div className="headerRow">
+          <div>
+            <h2>Customer onboarding operations</h2>
+            <p className="muted">
+              Create another canonical Business under an existing Brand, then issue a one-time
+              Business-scoped customer invitation. Raw invite secrets are returned only to the
+              OWNER in this browser session and are never stored as plaintext.
+            </p>
+          </div>
+          <span className={`status ${editable ? '' : 'dangerStatus'}`}>
+            {editable ? 'OWNER operations' : 'Read only'}
+          </span>
+        </div>
+
+        {!editable ? (
+          <p className="muted smallText">
+            Organization OWNER authority is required to create Businesses or issue invitations.
+          </p>
+        ) : activeCanonicalBrands.length === 0 ? (
+          <p className="muted smallText">
+            Create the initial canonical Brand before adding a customer Business.
+          </p>
+        ) : (
+          <>
+            <h3>Add canonical Business</h3>
+            <p className="muted smallText">
+              Reuses the existing Business OS authority and idempotent bootstrap service. It does not
+              create another tenant system or another Brand.
+            </p>
+            <form action={createCanonicalBusiness} className="settingsGrid">
+              <label>
+                Parent Brand
+                <select name="brand_id" defaultValue={activeCanonicalBrands[0]?.id} required>
+                  {activeCanonicalBrands.map((brand) => (
+                    <option key={brand.id} value={brand.id}>
+                      {brand.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Business name
+                <input name="business_name" required />
+              </label>
+              <label>
+                Business slug
+                <input name="business_slug" placeholder="customer-business" required />
+              </label>
+              <label>
+                Legal name
+                <input name="legal_name" placeholder="Optional — exact registered name only" />
+              </label>
+              <label>
+                Country code
+                <input
+                  name="country_code"
+                  defaultValue={omanMarket?.country_code ?? 'OM'}
+                  maxLength={2}
+                  required
+                />
+              </label>
+              <label>
+                Timezone
+                <input
+                  name="timezone"
+                  defaultValue={omanMarket?.timezone ?? 'Asia/Muscat'}
+                  required
+                />
+              </label>
+              <button>Create Business</button>
+            </form>
+
+            <h3>Issue Business-scoped customer invite</h3>
+            {activeCanonicalBusinesses.length === 0 ? (
+              <p className="muted smallText">
+                Create the customer Business first. Invitations are never issued against a guessed
+                or placeholder Business.
+              </p>
+            ) : (
+              <CustomerInviteForm businesses={activeCanonicalBusinesses} />
+            )}
+          </>
         )}
       </section>
 
