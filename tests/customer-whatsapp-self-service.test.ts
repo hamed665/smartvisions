@@ -121,9 +121,9 @@ describe('customer WhatsApp self-service UI', () => {
     expect(productionDeploy).toContain('remains BLOCKED_EXTERNAL');
   });
 
-  it('uses the config-driven Embedded Signup v4 launch contract while keeping Coexistence fail-closed', () => {
-    expect(embeddedSignup).toContain('const extras = {};');
-    expect(embeddedSignup).not.toContain("featureType: 'whatsapp_business_app_onboarding'");
+  it('uses config-driven v4 while preserving the explicit non-destructive Coexistence selector', () => {
+    expect(embeddedSignup).toContain("connectionMode === 'BUSINESS_APP_COEXISTENCE'");
+    expect(embeddedSignup).toContain("featureType: 'whatsapp_business_app_onboarding'");
     expect(embeddedSignup).not.toContain("sessionInfoVersion: '3'");
     expect(embeddedSignup).not.toContain("sessionInfoVersion: '4'");
     expect(embeddedSignup).toContain("props.embeddedSignupVersion === 'v4'");
