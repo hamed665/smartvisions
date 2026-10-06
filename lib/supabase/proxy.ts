@@ -16,6 +16,7 @@ const SESSION_BYPASS_PATHS = new Set([
   '/api/operations/report',
   '/api/operations/telegram-daily-digest',
   '/api/operations/tick',
+  '/api/internal/meta/app-credential-readiness',
   '/api/telegram/webhook',
   '/api/telegram/notify',
   '/api/web-chat/session',
