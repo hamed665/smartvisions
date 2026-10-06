@@ -10,9 +10,12 @@ const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.ur
 const migration = read('supabase/migrations/20261005030000_customer_connections_scope.sql');
 const connectionRuntime = read('lib/access/customer-connections.ts');
 const appShell = read('app/app-shell.tsx');
+const rootLayout = read('app/layout.tsx');
 const login = read('app/login/page.tsx');
 const invite = read('app/invite/accept/page.tsx');
 const connectionsPage = read('app/customer/connections/page.tsx');
+const customerHomePage = read('app/customer/page.tsx');
+const customerMorePage = read('app/customer/more/page.tsx');
 
 const binding = {
   id: '20000000-0000-4000-8000-000000000001',
@@ -118,6 +121,12 @@ describe('customer workspace UX boundary', () => {
     expect(customerNav).toContain("['Connections', '/customer/connections']");
     expect(customerNav).not.toMatch(/Founder|Billing|Audit|System|Command Center|Approvals/);
     expect(appShell).toContain("['AI', '/customer/ai', '✦']");
+    expect(appShell).toContain('useSearchParams');
+    expect(appShell).toContain("searchParams.get('businessId')");
+    expect(appShell).toContain("href.startsWith('/customer')");
+    expect(appShell).toContain('href={scopedHref(href)}');
+    expect(rootLayout).toContain('Suspense');
+    expect(rootLayout).toContain('<AppShell>{children}</AppShell>');
   });
 
   it('uses a customer-safe sign-in message and routes real Business users to the customer namespace', () => {
@@ -131,6 +140,15 @@ describe('customer workspace UX boundary', () => {
     expect(invite).toContain('tenantBusinessId');
     expect(invite).toContain('Continue to Business workspace');
     expect(invite).toContain('/customer?businessId=');
+  });
+
+  it('preserves explicit Business context across customer navigation', () => {
+    expect(customerHomePage).toContain('/customer/inbox?businessId=');
+    expect(customerHomePage).toContain('/customer/crm?businessId=');
+    expect(customerHomePage).toContain('/customer/ai?businessId=');
+    expect(customerHomePage).toContain('/customer/more?businessId=');
+    expect(customerMorePage).toContain('searchParams: Promise<{ businessId?: string }>');
+    expect(customerMorePage).toContain('/customer/connections?businessId=');
   });
 
   it('keeps customer WhatsApp actions read-only until the guarded E2E PR', () => {

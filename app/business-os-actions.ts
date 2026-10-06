@@ -51,7 +51,32 @@ export async function bootstrapCanonicalTenant(formData: FormData) {
     metadata: {},
   });
 
-  const business = await createBusinessBootstrap({
+  await createBusinessBootstrap({
+    supabase: ctx.supabase,
+    userId: ctx.userId,
+    payload: businessPayload,
+  });
+
+  revalidatePath('/settings');
+  revalidatePath('/system');
+}
+
+
+export async function createCanonicalBusiness(formData: FormData) {
+  const ctx = await getCurrentOrganization(true);
+
+  const businessPayload = parseBusinessBootstrapPayload({
+    organizationId: ctx.organizationId,
+    brandId: value(formData, 'brand_id'),
+    name: value(formData, 'business_name'),
+    slug: value(formData, 'business_slug'),
+    legalName: value(formData, 'legal_name') || null,
+    countryCode: value(formData, 'country_code'),
+    timezone: value(formData, 'timezone'),
+    metadata: {},
+  });
+
+  await createBusinessBootstrap({
     supabase: ctx.supabase,
     userId: ctx.userId,
     payload: businessPayload,

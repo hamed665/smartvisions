@@ -78,10 +78,10 @@ export default async function CustomerHomePage({
             This customer surface is Business-scoped. Founder, Super Admin, billing administration, system controls and operator tools are not exposed here.
           </p>
           <div className="quickActions">
-            <Link href="/customer/inbox">Inbox</Link>
-            <Link href="/customer/crm">CRM</Link>
-            <Link href="/customer/ai">AI</Link>
-            <Link href="/customer/more">More</Link>
+            <Link href={`/customer/inbox?businessId=${encodeURIComponent(business.id)}`}>Inbox</Link>
+            <Link href={`/customer/crm?businessId=${encodeURIComponent(business.id)}`}>CRM</Link>
+            <Link href={`/customer/ai?businessId=${encodeURIComponent(business.id)}`}>AI</Link>
+            <Link href={`/customer/more?businessId=${encodeURIComponent(business.id)}`}>More</Link>
           </div>
         </div>
       </section>

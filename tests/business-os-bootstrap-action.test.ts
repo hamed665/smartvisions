@@ -71,6 +71,7 @@ vi.mock('@/lib/business-os/control-plane-bootstrap', () => ({
 import {
   bootstrapCanonicalOperatingHierarchy,
   bootstrapCanonicalTenant,
+  createCanonicalBusiness,
   prepareCommunicationPlaneProjection,
   provisionCommunicationPlaneAccount,
   provisionCommunicationPlaneApiInbox,
@@ -153,6 +154,55 @@ describe('Business OS canonical tenant bootstrap action', () => {
     expect(revalidatePath).toHaveBeenCalledWith('/settings');
     expect(revalidatePath).toHaveBeenCalledWith('/system');
     expect(result).toBeUndefined();
+  });
+
+  it('adds another Business under an existing canonical Brand without creating parallel tenant authority', async () => {
+    const supabase = { marker: 'authenticated-client' };
+
+    getCurrentOrganization.mockResolvedValue({
+      supabase,
+      organizationId: ORG,
+      role: 'OWNER',
+      userId: USER,
+    });
+    createBusinessBootstrap.mockResolvedValue({
+      row: { id: BUSINESS },
+      created: true,
+    });
+
+    const form = new FormData();
+    form.set('organization_id', '99999999-0000-4000-8000-000000000999');
+    form.set('brand_id', BRAND);
+    form.set('business_name', 'Customer Clinic');
+    form.set('business_slug', 'customer-clinic');
+    form.set('legal_name', 'Customer Clinic LLC');
+    form.set('country_code', 'OM');
+    form.set('timezone', 'Asia/Muscat');
+
+    await createCanonicalBusiness(form);
+
+    expect(getCurrentOrganization).toHaveBeenCalledWith(true);
+    expect(createBrandBootstrap).not.toHaveBeenCalled();
+    expect(parseBusinessBootstrapPayload).toHaveBeenCalledWith({
+      organizationId: ORG,
+      brandId: BRAND,
+      name: 'Customer Clinic',
+      slug: 'customer-clinic',
+      legalName: 'Customer Clinic LLC',
+      countryCode: 'OM',
+      timezone: 'Asia/Muscat',
+      metadata: {},
+    });
+    expect(createBusinessBootstrap).toHaveBeenCalledWith({
+      supabase,
+      userId: USER,
+      payload: expect.objectContaining({
+        organizationId: ORG,
+        brandId: BRAND,
+      }),
+    });
+    expect(revalidatePath).toHaveBeenCalledWith('/settings');
+    expect(revalidatePath).toHaveBeenCalledWith('/system');
   });
 
   it('does not accept caller-supplied organization or Brand ids', async () => {
