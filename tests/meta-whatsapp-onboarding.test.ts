@@ -19,12 +19,20 @@ describe('Meta WhatsApp onboarding contract', () => {
     expect(normalizeMetaWhatsAppConnectionMode('DELETE_ACCOUNT')).toBeNull();
   });
 
-  it('exchanges Meta authorization codes only on the server helper', async () => {
-    const fetchImpl = vi.fn(async (url: string) => {
-      expect(url).toContain('graph.facebook.com/');
-      expect(url).toContain('client_id=app-1');
-      expect(url).toContain('client_secret=secret-1');
-      expect(url).toContain('code=auth-code-1');
+  it('exchanges Meta authorization codes server-side without putting the App Secret in the URL', async () => {
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe('https://graph.facebook.com/v23.0/oauth/access_token');
+      expect(url).not.toContain('client_secret');
+      expect(url).not.toContain('secret-1');
+      expect(init?.method).toBe('POST');
+      expect(init?.headers).toMatchObject({
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+      });
+      const body = String(init?.body ?? '');
+      expect(body).toContain('client_id=app-1');
+      expect(body).toContain('client_secret=secret-1');
+      expect(body).toContain('code=auth-code-1');
       return new Response(JSON.stringify({ access_token: 'token-with-enough-length-123456789' }), { status: 200 });
     }) as unknown as typeof fetch;
 
