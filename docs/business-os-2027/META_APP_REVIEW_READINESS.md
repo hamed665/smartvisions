@@ -28,7 +28,7 @@ Meta's June 16, 2026 developer guidance describes Embedded Signup v4 as the unif
 
 Smart Visions now fails closed unless the deployed environment explicitly attests `META_WHATSAPP_EMBEDDED_SIGNUP_VERSION=v4`. That variable is not inferred from a Configuration ID. It must only be set after the actual Meta App Dashboard Embedded Signup configuration has been verified as v4.
 
-Embedded Signup v4 is treated as configuration-driven. Legacy v2/v3 inline launch selectors such as `sessionInfoVersion` and `featureType` are not sent by the Smart Visions v4 client. The authorization launch now sends `config_id`, `response_type=code`, `override_default_response_type=true`, and an empty `extras` object; products, permissions, and Coexistence eligibility belong to the verified Meta configuration rather than duplicated client-side selectors.
+Embedded Signup v4 is treated as configuration-driven for products and permissions. The Smart Visions client no longer sends the legacy `sessionInfoVersion` override. For `BUSINESS_APP_COEXISTENCE` only, the launch still sends `featureType: 'whatsapp_business_app_onboarding'` so Meta can offer the official non-destructive same-number WhatsApp Business App onboarding path. Non-Coexistence launches send no legacy selector.
 
 `META_WHATSAPP_COEXISTENCE_ENABLED` remains an independent fail-closed capability gate and must not be enabled merely because v4 is configured. The completion parser still accepts Meta's official Coexistence completion event and validates the selected WABA/phone evidence server-side.
 
