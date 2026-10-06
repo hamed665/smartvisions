@@ -12,19 +12,15 @@ Status scope: Customer Access + WhatsApp execution overlay. This file does not c
 
 ## Production credential preflight
 
-The Cloudflare production deployment must not trust the presence of a `META_APP_SECRET` binding name as proof that the secret belongs to the configured Meta App ID.
+The Cloudflare deployment must not treat the presence of a `META_APP_SECRET` binding name as proof that the secret belongs to the configured Meta App ID.
 
-The production workflow performs a rollback-safe runtime preflight when customer WhatsApp public identifiers are configured:
+When customer WhatsApp public identifiers are configured, the deploy fails closed unless the GitHub Actions `META_APP_SECRET` is present and can authenticate the exact configured `META_APP_ID` against Meta Graph. The check sends the app access credential only in the `Authorization` header, never in the URL or logs, and accepts only a response whose application id matches the configured id.
 
-1. Record the single Worker version currently serving 100% of Production traffic.
-2. Generate an ephemeral one-run token that is never printed.
-3. Deploy the exact green bundle temporarily with only the credential-preflight endpoint enabled behind that token. Chatwoot provisioning stays disabled and the Coexistence capability gate keeps its configured fail-closed value.
-4. Ask Meta Graph for the configured application using an app access credential built inside the Worker from `META_APP_ID` and the existing Production `META_APP_SECRET`.
-5. Return only pass/fail. The secret, app access credential, provider response body, and ephemeral token are never printed.
-6. If verification is not HTTP 204 or the final clean deployment fails, automatically restore the previously active Worker version.
-7. Only after successful verification deploy the final exact bundle with the preflight enable flag and token removed.
+After verification, that same masked secret is supplied to Wrangler through an ephemeral `--secrets-file` while deploying the exact Candidate and Production bundles. Cloudflare preserves secret bindings omitted from that file, so unrelated provider secrets are not replaced. The temporary file is mode-restricted and removed by the step trap.
 
-This avoids enabling public Cloudflare Version URLs merely for secret verification. The temporary endpoint is unguessable, short-lived, and is removed by the same workflow; a failed verification restores the prior Production version.
+This makes the deployed Worker secret deterministic without reading the existing encrypted Worker value and without enabling public Production Version URLs. Candidate and Production safe-smoke steps may use the same masked GitHub secret to exercise the valid Meta-signature no-op path; they do not print it.
+
+`META_WHATSAPP_COEXISTENCE_ENABLED` remains a separate capability gate and is not enabled by credential pairing.
 
 ## App Review submission preparation
 

@@ -53,6 +53,8 @@ jobs:
           cache: npm
 
       - name: Production credential preflight
+        env:
+          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
         shell: bash
         run: |
           set -euo pipefail
@@ -67,10 +69,18 @@ jobs:
           fi
           [ "$missing" -eq 0 ] || exit 1
           echo "Permanent deploy credentials are present. Values were not printed."
-          if [ -z "${META_APP_ID:-}" ] || [ -z "${NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID:-}" ]; then
+          if [ -z "${META_APP_ID:-}" ] && [ -z "${NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID:-}" ]; then
             echo "::warning::Customer WhatsApp Embedded Signup remains BLOCKED_EXTERNAL until META_APP_ID and META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID are configured."
+          elif [ -z "${META_APP_ID:-}" ] || [ -z "${NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID:-}" ]; then
+            echo "::error::Meta public identifiers are only partially configured; refusing deployment."
+            exit 1
           else
-            echo "Customer WhatsApp Embedded Signup public identifiers are configured."
+            if [ -z "${META_APP_SECRET:-}" ]; then
+              echo "::error::META_APP_SECRET GitHub Actions secret is required before deploying the configured Meta App."
+              exit 1
+            fi
+            node scripts/verify-meta-app-credential-pair.mjs
+            echo "Customer WhatsApp Embedded Signup public identifiers and App Secret pair are verified."
           fi
           if [ "${META_WHATSAPP_COEXISTENCE_ENABLED:-false}" != "true" ]; then
             echo "::warning::Same-number WhatsApp Business App Coexistence remains BLOCKED_EXTERNAL until META_WHATSAPP_COEXISTENCE_ENABLED=true after provider/config verification."
@@ -163,8 +173,25 @@ jobs:
           console.log('Release candidate validated: candidate env, Chatwoot provisioning disabled/unbound, no production route, no scheduled triggers, CPU guard=100ms.');
           NODE
 
-      - name: Deploy exact release candidate while preserving provider secrets
-        run: npx wrangler deploy --config dist/server/wrangler.json
+      - name: Deploy exact release candidate with verified Meta App Secret
+        env:
+          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${META_APP_ID:-}" ]; then
+            secret_file="$(mktemp)"
+            trap 'rm -f "$secret_file"' EXIT
+            SECRET_FILE="$secret_file" node <<'NODE'
+          const fs=require('node:fs');
+          const secret=process.env.META_APP_SECRET||'';
+          if(secret.length<16)throw new Error('Verified Meta App Secret is unavailable for Candidate deploy');
+          fs.writeFileSync(process.env.SECRET_FILE,JSON.stringify({META_APP_SECRET:secret}),{mode:0o600});
+          NODE
+            npx wrangler deploy --config dist/server/wrangler.json --secrets-file "$secret_file"
+          else
+            npx wrangler deploy --config dist/server/wrangler.json
+          fi
 
       - name: Re-assert Growth Supabase bindings on release candidate
         shell: bash
@@ -179,6 +206,8 @@ jobs:
           echo "Candidate Supabase bindings re-asserted without printing values."
 
       - name: Safe release-candidate smoke
+        env:
+          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
         run: node scripts/cloudflare-safe-smoke.mjs
 
       - name: Controlled SSR load
@@ -197,145 +226,12 @@ jobs:
           if(failed)process.exit(1);
           NODE
 
-      - name: Verify Meta app credential pair with rollback-safe Production preflight and promote
+      - name: Promote exact validated bundle with verified Meta App Secret
+        env:
+          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
         shell: bash
         run: |
           set -euo pipefail
-
-          if [ -z "${META_APP_ID:-}" ] && [ -z "${NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID:-}" ]; then
-            echo "::warning::Meta public identifiers are not configured; runtime credential-pair preflight is not applicable."
-            node <<'NODE'
-          const fs=require('node:fs');
-          const file='dist/server/wrangler.json';
-          const c=JSON.parse(fs.readFileSync(file,'utf8'));
-          c.name='smartvisions-growth-os-production';
-          c.workers_dev=false;
-          c.vars={
-            ...(c.vars||{}),
-            DEPLOYMENT_ENV:'production',
-            APP_BASE_URL:process.env.PRODUCTION_URL,
-            CHATWOOT_BASE_URL:process.env.CHATWOOT_BASE_URL,
-            CHATWOOT_WEBHOOK_PUBLIC_ORIGIN:process.env.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN,
-            META_WHATSAPP_COEXISTENCE_ENABLED:process.env.META_WHATSAPP_COEXISTENCE_ENABLED==='true'?'true':'false',
-            CHATWOOT_PROVISIONING_ENABLED:'false'
-          };
-          delete c.vars.META_CREDENTIAL_PREFLIGHT_ENABLED;
-          delete c.vars.META_CREDENTIAL_PREFLIGHT_TOKEN;
-          c.triggers={crons:['*/2 * * * *']};
-          if(c.routes||c.route)throw new Error('Production deploy must not mutate Worker Routes');
-          fs.writeFileSync(file,JSON.stringify(c,null,2)+'\n');
-          NODE
-            npx wrangler deploy --config dist/server/wrangler.json
-            exit 0
-          fi
-          if [ -z "${META_APP_ID:-}" ] || [ -z "${NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID:-}" ]; then
-            echo "::error::Meta public identifiers are only partially configured; refusing Production promotion."
-            exit 1
-          fi
-
-          deployments_file=".meta-preflight-deployments.json"
-          rollback_file=".meta-preflight-rollback.json"
-          preflight_config="dist/server/wrangler.production-preflight.json"
-          preflight_log=".meta-preflight-deploy.log"
-          final_log=".meta-production-deploy.log"
-          PREFLIGHT_TOKEN="$(openssl rand -hex 32)"
-          export PREFLIGHT_TOKEN
-          preflight_deployed=0
-          final_deployed=0
-          previous_version_id=""
-
-          cleanup_files(){
-            rm -f "$deployments_file" "$rollback_file" "$preflight_config" "$preflight_log" "$final_log"
-          }
-
-          rollback_previous(){
-            if [ "$preflight_deployed" -ne 1 ] || [ "$final_deployed" -eq 1 ] || [ -z "$previous_version_id" ]; then
-              return 0
-            fi
-            PREVIOUS_VERSION_ID="$previous_version_id" ROLLBACK_FILE="$rollback_file" node <<'NODE'
-          const fs=require('node:fs');
-          fs.writeFileSync(process.env.ROLLBACK_FILE,JSON.stringify({
-            strategy:'percentage',
-            versions:[{version_id:process.env.PREVIOUS_VERSION_ID,percentage:100}],
-            annotations:{'workers/message':'Automatic rollback after Meta credential preflight did not complete'}
-          }));
-          NODE
-            if curl --fail --silent --show-error --max-time 30               -X POST "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/smartvisions-growth-os-production/deployments"               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"               -H "Content-Type: application/json"               --data-binary "@$rollback_file" >/dev/null; then
-              echo "::warning::Restored the previously active Production Worker version after the temporary Meta credential preflight."
-            else
-              echo "::error::Automatic rollback of the temporary Production preflight version failed; manual Cloudflare rollback is required immediately."
-              return 1
-            fi
-          }
-
-          on_exit(){
-            code=$?
-            rollback_code=0
-            if [ "$code" -ne 0 ]; then rollback_previous || rollback_code=$?; fi
-            cleanup_files
-            if [ "$rollback_code" -ne 0 ]; then exit "$rollback_code"; fi
-            exit "$code"
-          }
-          trap on_exit EXIT
-
-          curl --fail --silent --show-error --max-time 20             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/smartvisions-growth-os-production/deployments"             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             -H "Accept: application/json" > "$deployments_file"
-
-          previous_version_id="$(DEPLOYMENTS_FILE="$deployments_file" node <<'NODE'
-          const fs=require('node:fs');
-          const payload=JSON.parse(fs.readFileSync(process.env.DEPLOYMENTS_FILE,'utf8'));
-          if(payload?.success!==true)throw new Error('Unable to read current Production Worker deployment');
-          const rows=Array.isArray(payload.result)?payload.result:(payload.result?.deployments??[]);
-          if(!rows.length)throw new Error('No current Production Worker deployment found');
-          rows.sort((a,b)=>String(b.created_on??'').localeCompare(String(a.created_on??'')));
-          const current=rows[0];
-          const versions=Array.isArray(current?.versions)?current.versions:[];
-          if(versions.length!==1||Number(versions[0]?.percentage)!==100||!versions[0]?.version_id){
-            throw new Error('Production Worker is not on a single 100% version; refusing temporary preflight mutation');
-          }
-          process.stdout.write(String(versions[0].version_id));
-          NODE
-          )"
-
-          cp dist/server/wrangler.json "$preflight_config"
-          PREFLIGHT_CONFIG="$preflight_config" node <<'NODE'
-          const fs=require('node:fs');
-          const file=process.env.PREFLIGHT_CONFIG;
-          const c=JSON.parse(fs.readFileSync(file,'utf8'));
-          c.name='smartvisions-growth-os-production';
-          c.workers_dev=false;
-          delete c.preview_urls;
-          delete c.routes;
-          delete c.route;
-          c.triggers={crons:['*/2 * * * *']};
-          c.vars={
-            ...(c.vars||{}),
-            DEPLOYMENT_ENV:'production',
-            APP_BASE_URL:process.env.PRODUCTION_URL,
-            CHATWOOT_BASE_URL:process.env.CHATWOOT_BASE_URL,
-            CHATWOOT_WEBHOOK_PUBLIC_ORIGIN:process.env.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN,
-            CHATWOOT_PROVISIONING_ENABLED:'false',
-            META_WHATSAPP_COEXISTENCE_ENABLED:process.env.META_WHATSAPP_COEXISTENCE_ENABLED==='true'?'true':'false',
-            META_CREDENTIAL_PREFLIGHT_ENABLED:'true',
-            META_CREDENTIAL_PREFLIGHT_TOKEN:process.env.PREFLIGHT_TOKEN,
-          };
-          if(!c.vars.META_APP_ID)throw new Error('Production preflight config is missing META_APP_ID');
-          if(!c.vars.NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID)throw new Error('Production preflight config is missing Embedded Signup configuration ID');
-          if(!c.vars.META_CREDENTIAL_PREFLIGHT_TOKEN||c.vars.META_CREDENTIAL_PREFLIGHT_TOKEN.length<32)throw new Error('Production preflight token generation failed');
-          if(c.routes||c.route)throw new Error('Production preflight must not mutate Worker Routes');
-          fs.writeFileSync(file,JSON.stringify(c,null,2)+'\n');
-          NODE
-
-          NO_COLOR=1 npx wrangler deploy --config "$preflight_config" > "$preflight_log" 2>&1
-          preflight_deployed=1
-
-          status="$(curl --silent --show-error --max-time 30 --output /dev/null --write-out '%{http_code}'             -X POST "$PRODUCTION_URL/api/internal/meta/app-credential-readiness"             -H "x-smartvisions-meta-preflight: $PREFLIGHT_TOKEN"             -H "Cache-Control: no-store")"
-
-          if [ "$status" != "204" ]; then
-            echo "::error::Meta App ID / Production META_APP_SECRET preflight failed with HTTP $status. The prior Production version will be restored automatically."
-            exit 1
-          fi
-          echo "Meta App ID / Production META_APP_SECRET pair verified inside the Production Worker. No secret value was read or printed."
-
           node <<'NODE'
           const fs=require('node:fs');
           const file='dist/server/wrangler.json';
@@ -351,8 +247,6 @@ jobs:
             META_WHATSAPP_COEXISTENCE_ENABLED:process.env.META_WHATSAPP_COEXISTENCE_ENABLED==='true'?'true':'false',
             CHATWOOT_PROVISIONING_ENABLED:'false'
           };
-          delete c.vars.META_CREDENTIAL_PREFLIGHT_ENABLED;
-          delete c.vars.META_CREDENTIAL_PREFLIGHT_TOKEN;
           c.triggers={crons:['*/2 * * * *']};
           if(c.limits?.cpu_ms!==100)throw new Error('CPU guard drifted before promotion');
           if(c.routes||c.route)throw new Error('Production deploy must not mutate Worker Routes');
@@ -362,15 +256,22 @@ jobs:
           if(c.vars?.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN!==process.env.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN)throw new Error('Production Chatwoot webhook origin invariant failed');
           if(c.vars?.CHATWOOT_PROVISIONING_ENABLED!=='false')throw new Error('Production Chatwoot provisioning must remain disabled');
           if(Object.prototype.hasOwnProperty.call(c.vars||{},'CHATWOOT_PLATFORM_TOKEN'))throw new Error('Chatwoot Platform token must never be stored in plaintext Worker vars');
-          if(Object.prototype.hasOwnProperty.call(c.vars||{},'META_CREDENTIAL_PREFLIGHT_TOKEN'))throw new Error('Ephemeral Meta preflight token leaked into final Production vars');
-          if(c.vars?.META_CREDENTIAL_PREFLIGHT_ENABLED==='true')throw new Error('Meta credential preflight remained enabled in final Production config');
           if(JSON.stringify(c.triggers?.crons)!==JSON.stringify(['*/2 * * * *']))throw new Error('Production cron invariant failed');
           fs.writeFileSync(file,JSON.stringify(c,null,2)+'\n');
           NODE
-
-          NO_COLOR=1 npx wrangler deploy --config dist/server/wrangler.json > "$final_log" 2>&1
-          final_deployed=1
-          echo "Exact validated bundle promoted to Production with the temporary credential preflight disabled."
+          if [ -n "${META_APP_ID:-}" ]; then
+            secret_file="$(mktemp)"
+            trap 'rm -f "$secret_file"' EXIT
+            SECRET_FILE="$secret_file" node <<'NODE'
+          const fs=require('node:fs');
+          const secret=process.env.META_APP_SECRET||'';
+          if(secret.length<16)throw new Error('Verified Meta App Secret is unavailable for Production deploy');
+          fs.writeFileSync(process.env.SECRET_FILE,JSON.stringify({META_APP_SECRET:secret}),{mode:0o600});
+          NODE
+            npx wrangler deploy --config dist/server/wrangler.json --secrets-file "$secret_file"
+          else
+            npx wrangler deploy --config dist/server/wrangler.json
+          fi
 
       - name: Stage Chatwoot Platform token on Production only when configured
         env:
@@ -443,6 +344,7 @@ jobs:
       - name: Safe production API and webhook rejection smoke
         env:
           CANDIDATE_URL: https://app.smartvisionsai.com
+          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
         run: node scripts/cloudflare-safe-smoke.mjs
 
       - name: Deployment summary
