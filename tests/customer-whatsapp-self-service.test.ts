@@ -73,6 +73,10 @@ describe('customer WhatsApp self-service authority', () => {
     expect(bootstrapRoute).toContain('Smart Visions Meta provider configuration is not ready');
     expect(productionDeploy).toContain('META_APP_ID: ${{ secrets.META_APP_ID }}');
     expect(productionDeploy).toContain('META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID');
+    expect(productionDeploy).toContain('META_WHATSAPP_EMBEDDED_SIGNUP_VERSION');
+    expect(customerPage).toContain("process.env.META_WHATSAPP_EMBEDDED_SIGNUP_VERSION");
+    expect(customerPage).toContain("? 'v4' as const");
+    expect(embeddedSignup).toContain("props.embeddedSignupVersion === 'v4'");
     expect(productionDeploy).toContain('BLOCKED_EXTERNAL');
   });
 
@@ -119,6 +123,8 @@ describe('customer WhatsApp self-service UI', () => {
 
   it('uses the official non-destructive Meta Coexistence launch selector when enabled', () => {
     expect(embeddedSignup).toContain("featureType: 'whatsapp_business_app_onboarding'");
+    expect(embeddedSignup).toContain("sessionInfoVersion: '3'");
+    expect(embeddedSignup).not.toContain("sessionInfoVersion: '4'");
     expect(embeddedSignup).toContain('FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING');
     expect(embeddedSignup).toContain('will not ask you to delete, uninstall, or destructively migrate the app');
     expect(completeRoute).toContain('discoverMetaWhatsAppPhoneNumber');
