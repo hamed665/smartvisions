@@ -120,6 +120,10 @@ describe('customer workspace UX boundary', () => {
     expect(customerNav).toContain("['Connections', '/customer/connections']");
     expect(customerNav).not.toMatch(/Founder|Billing|Audit|System|Command Center|Approvals/);
     expect(appShell).toContain("['AI', '/customer/ai', '✦']");
+    expect(appShell).toContain('useSearchParams');
+    expect(appShell).toContain("searchParams.get('businessId')");
+    expect(appShell).toContain("href.startsWith('/customer')");
+    expect(appShell).toContain('href={scopedHref(href)}');
   });
 
   it('uses a customer-safe sign-in message and routes real Business users to the customer namespace', () => {
