@@ -242,6 +242,28 @@ exception
 end;
 $$;
 
+-- Align Chatwoot Account mapping reads with the same canonical Customer Business
+-- authority. Mutation remains governed by the existing OWNER-only bridge RPCs.
+drop policy if exists chatwoot_account_mappings_customer_scoped_read
+  on public.chatwoot_account_mappings;
+create policy chatwoot_account_mappings_customer_scoped_read
+  on public.chatwoot_account_mappings
+  for select
+  to authenticated
+  using (
+    exists (
+      select 1
+        from public.tenant_businesses b
+       where b.organization_id = chatwoot_account_mappings.organization_id
+         and b.id = chatwoot_account_mappings.tenant_business_id
+         and public.customer_business_effective_role(
+           b.organization_id,
+           b.id,
+           b.brand_id
+         ) is not null
+    )
+  );
+
 revoke all on function private.accept_organization_member_business_invitation(text,text)
   from public, anon, authenticated, service_role;
 grant execute on function private.accept_organization_member_business_invitation(text,text)
