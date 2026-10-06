@@ -277,10 +277,15 @@ export function MetaWhatsAppEmbeddedSignup(props: {
     setState('WAITING');
     setMessage('Complete the Meta-hosted signup window. Smart Visions never asks for your Meta password or a copied token.');
 
-    // Embedded Signup v4 is configuration-driven. Products, permissions and
-    // Coexistence eligibility belong to the verified Facebook Login for Business
-    // configuration, not legacy v2/v3 inline extras.
-    const extras = {};
+    // Embedded Signup v4 keeps products and permissions in the verified
+    // Facebook Login for Business configuration. Coexistence still needs the
+    // explicit launch selector so an existing WhatsApp Business App number is
+    // offered the non-destructive same-number path.
+    const extras = connectionMode === 'BUSINESS_APP_COEXISTENCE'
+      ? {
+          featureType: 'whatsapp_business_app_onboarding',
+        }
+      : {};
 
     window.FB.login((response) => {
       const code = response.authResponse?.code?.trim();
