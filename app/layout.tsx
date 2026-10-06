@@ -1,7 +1,7 @@
 import "./styles.css";
 import "./control-center-v1.css";
 import "./live-conversation.css";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { AppShell } from "./app-shell";
 
 export const metadata = {
@@ -13,7 +13,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <AppShell>{children}</AppShell>
+        <Suspense fallback={children}>
+          <AppShell>{children}</AppShell>
+        </Suspense>
       </body>
     </html>
   );
