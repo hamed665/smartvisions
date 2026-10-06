@@ -28,9 +28,9 @@ Meta's June 16, 2026 developer guidance describes Embedded Signup v4 as the unif
 
 Smart Visions now fails closed unless the deployed environment explicitly attests `META_WHATSAPP_EMBEDDED_SIGNUP_VERSION=v4`. That variable is not inferred from a Configuration ID. It must only be set after the actual Meta App Dashboard Embedded Signup configuration has been verified as v4.
 
-The existing `sessionInfoVersion: '3'` launch value is intentionally retained. It describes the Embedded Signup session-info event payload format used by the current Coexistence completion parser; it is not an assertion that the Meta configuration itself is v3. Do not replace it with `4` merely because the configuration is v4.
+Embedded Signup v4 is treated as configuration-driven. Legacy v2/v3 inline launch selectors such as `sessionInfoVersion` and `featureType` are not sent by the Smart Visions v4 client. The authorization launch now sends `config_id`, `response_type=code`, `override_default_response_type=true`, and an empty `extras` object; products, permissions, and Coexistence eligibility belong to the verified Meta configuration rather than duplicated client-side selectors.
 
-The official non-destructive Coexistence selector `featureType: 'whatsapp_business_app_onboarding'` remains present. `META_WHATSAPP_COEXISTENCE_ENABLED` remains an independent fail-closed capability gate and must not be enabled merely because v4 is configured.
+`META_WHATSAPP_COEXISTENCE_ENABLED` remains an independent fail-closed capability gate and must not be enabled merely because v4 is configured. The completion parser still accepts Meta's official Coexistence completion event and validates the selected WABA/phone evidence server-side.
 
 App Review remains **DEPENDENCY_PENDING** until the real Meta configuration is verified as v4 and the authorization/session event, selected asset identifiers, Coexistence completion, and account-model assumptions pass controlled testing. No App Review screencast should present the flow as final before that evidence exists.
 
