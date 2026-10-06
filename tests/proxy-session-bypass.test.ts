@@ -27,6 +27,7 @@ describe('session proxy bypass paths', () => {
     expect(shouldBypassSession('/api/operations/telegram-daily-digest')).toBe(true);
     expect(shouldBypassSession('/api/operations/tick')).toBe(true);
     expect(shouldBypassSession('/api/telegram/notify')).toBe(true);
+    expect(shouldBypassSession('/api/internal/meta/app-credential-readiness')).toBe(true);
   });
 
   it('keeps normal application and non-exact API routes behind session auth', () => {
@@ -41,6 +42,7 @@ describe('session proxy bypass paths', () => {
     expect(shouldBypassSession('/api/telegram/customer/webhook/not-a-uuid')).toBe(false);
     expect(shouldBypassSession('/api/telegram/customer/webhook/00000000-0000-4000-8000-000000000001/extra')).toBe(false);
     expect(shouldBypassSession('/api/telegram/notify/extra')).toBe(false);
+    expect(shouldBypassSession('/api/internal/meta/app-credential-readiness/extra')).toBe(false);
     expect(shouldBypassSession('/api/web-chat/widget/extra')).toBe(false);
     expect(shouldBypassSession('/api/web-chat/upload/extra')).toBe(false);
     expect(shouldBypassSession('/api/web-chat/attachments/123/extra')).toBe(false);
