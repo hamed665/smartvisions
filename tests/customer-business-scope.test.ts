@@ -214,6 +214,15 @@ describe('customer Business access migration contract', () => {
     expect(hardeningMigration).toContain("v_base.canonical_role := 'VIEWER'");
     expect(hardeningMigration).toContain('CUSTOMER_BUSINESS_MEMBERSHIP_SCOPED');
     expect(hardeningMigration).toContain("'business_role', v_scope_role");
+    expect(hardeningMigration).toContain('chatwoot_account_mappings_customer_scoped_read');
+    expect(hardeningMigration).toContain('public.customer_business_effective_role(');
+    const mappingPolicy = hardeningMigration.slice(
+      hardeningMigration.indexOf('create policy chatwoot_account_mappings_customer_scoped_read'),
+      hardeningMigration.indexOf(
+        'revoke all on function private.accept_organization_member_business_invitation',
+      ),
+    );
+    expect(mappingPolicy).not.toContain('chatwoot_bridge_can_read');
   });
 
   it('does not let a Meta/WhatsApp setup capability become customer panel authority', () => {
