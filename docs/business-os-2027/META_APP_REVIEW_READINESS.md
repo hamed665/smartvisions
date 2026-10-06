@@ -22,6 +22,19 @@ This makes the deployed Worker secret deterministic without reading the existing
 
 `META_WHATSAPP_COEXISTENCE_ENABLED` remains a separate capability gate and is not enabled by credential pairing.
 
+## Embedded Signup version readiness
+
+Current customer UI still launches Meta Embedded Signup with `sessionInfoVersion: '3'`.
+
+Meta's June 16, 2026 developer guidance describes Embedded Signup v4 as the new unified onboarding architecture and explicitly frames v2/v3 as legacy migration sources. Meta also documents an evolving WhatsApp account model that separates phone-number and messaging/billing account concerns.
+
+Therefore App Review readiness is **DEPENDENCY_PENDING** on one of these evidence paths before submission:
+
+1. verify the Production Embedded Signup configuration and customer flow against v4, then migrate the runtime with controlled tests; or
+2. obtain explicit current Meta evidence that this app/config is intentionally supported on the existing v3 path for the required Tech Provider + Coexistence flow.
+
+Do not change `sessionInfoVersion` from 3 to 4 as a blind string replacement. The authorization/session event contract, selected asset identifiers, Coexistence completion, and account-model assumptions must be verified together. No App Review screencast should present the current version as final until this gate is resolved.
+
 ## App Review submission preparation
 
 ### Permission usage
