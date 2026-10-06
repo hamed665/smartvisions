@@ -14,17 +14,17 @@ Status scope: Customer Access + WhatsApp execution overlay. This file does not c
 
 The Cloudflare production deployment must not trust the presence of a `META_APP_SECRET` binding name as proof that the secret belongs to the configured Meta App ID.
 
-The production workflow therefore uses an inactive Worker Version before promotion when customer WhatsApp public identifiers are configured:
+The production workflow performs a rollback-safe runtime preflight when customer WhatsApp public identifiers are configured:
 
-1. Confirm Production Version URLs are already enabled. The workflow does not enable them silently.
-2. Upload the exact production bundle as an inactive Worker Version. Normal production traffic remains on the existing deployment.
-3. Enable a one-run preflight endpoint only in that inactive version and protect it with an ephemeral random token.
-4. Ask Meta Graph for the configured application using an app access credential built inside the Worker from `META_APP_ID` and `META_APP_SECRET`.
-5. Return only pass/fail. The secret, app access credential, provider response body, and token are never printed.
-6. Promote only after the preflight returns HTTP 204.
-7. The active Production configuration does not contain the preflight-enable flag or ephemeral token, so the endpoint returns 404 after normal deployment.
+1. Record the single Worker version currently serving 100% of Production traffic.
+2. Generate an ephemeral one-run token that is never printed.
+3. Deploy the exact green bundle temporarily with only the credential-preflight endpoint enabled behind that token. Chatwoot provisioning stays disabled and the Coexistence capability gate keeps its configured fail-closed value.
+4. Ask Meta Graph for the configured application using an app access credential built inside the Worker from `META_APP_ID` and the existing Production `META_APP_SECRET`.
+5. Return only pass/fail. The secret, app access credential, provider response body, and ephemeral token are never printed.
+6. If verification is not HTTP 204 or the final clean deployment fails, automatically restore the previously active Worker version.
+7. Only after successful verification deploy the final exact bundle with the preflight enable flag and token removed.
 
-If Version URLs are disabled, promotion stops before mutation of Production traffic. Enabling Version URLs is an explicit Cloudflare configuration decision, not a hidden workaround.
+This avoids enabling public Cloudflare Version URLs merely for secret verification. The temporary endpoint is unguessable, short-lived, and is removed by the same workflow; a failed verification restores the prior Production version.
 
 ## App Review submission preparation
 
