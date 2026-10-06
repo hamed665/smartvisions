@@ -12,19 +12,15 @@ Status scope: Customer Access + WhatsApp execution overlay. This file does not c
 
 ## Production credential preflight
 
-The Cloudflare production deployment must not trust the presence of a `META_APP_SECRET` binding name as proof that the secret belongs to the configured Meta App ID.
+The Cloudflare deployment must not treat the presence of a `META_APP_SECRET` binding name as proof that the secret belongs to the configured Meta App ID.
 
-The production workflow therefore uses an inactive Worker Version before promotion when customer WhatsApp public identifiers are configured:
+When customer WhatsApp public identifiers are configured, the deploy fails closed unless the GitHub Actions `META_APP_SECRET` is present and can authenticate the exact configured `META_APP_ID` against Meta Graph. The check sends the app access credential only in the `Authorization` header, never in the URL or logs, and accepts only a response whose application id matches the configured id.
 
-1. Confirm Production Version URLs are already enabled. The workflow does not enable them silently.
-2. Upload the exact production bundle as an inactive Worker Version. Normal production traffic remains on the existing deployment.
-3. Enable a one-run preflight endpoint only in that inactive version and protect it with an ephemeral random token.
-4. Ask Meta Graph for the configured application using an app access credential built inside the Worker from `META_APP_ID` and `META_APP_SECRET`.
-5. Return only pass/fail. The secret, app access credential, provider response body, and token are never printed.
-6. Promote only after the preflight returns HTTP 204.
-7. The active Production configuration does not contain the preflight-enable flag or ephemeral token, so the endpoint returns 404 after normal deployment.
+After verification, that same masked secret is supplied to Wrangler through an ephemeral `--secrets-file` while deploying the exact Candidate and Production bundles. Cloudflare preserves secret bindings omitted from that file, so unrelated provider secrets are not replaced. The temporary file is mode-restricted and removed by the step trap.
 
-If Version URLs are disabled, promotion stops before mutation of Production traffic. Enabling Version URLs is an explicit Cloudflare configuration decision, not a hidden workaround.
+This makes the deployed Worker secret deterministic without reading the existing encrypted Worker value and without enabling public Production Version URLs. Candidate and Production safe-smoke steps may use the same masked GitHub secret to exercise the valid Meta-signature no-op path; they do not print it.
+
+`META_WHATSAPP_COEXISTENCE_ENABLED` remains a separate capability gate and is not enabled by credential pairing.
 
 ## App Review submission preparation
 
