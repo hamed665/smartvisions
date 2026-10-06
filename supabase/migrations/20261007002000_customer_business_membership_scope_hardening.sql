@@ -152,7 +152,6 @@ begin
       action,
       entity_type,
       entity_id,
-      tenant_business_id,
       after_data
     ) values (
       v_invite.organization_id,
@@ -161,8 +160,8 @@ begin
       'CUSTOMER_BUSINESS_MEMBERSHIP_SCOPED',
       'organization_member',
       v_actor::text,
-      v_invite.tenant_business_id,
       pg_catalog.jsonb_build_object(
+        'tenant_business_id', v_invite.tenant_business_id,
         'organization_role', 'VIEWER',
         'business_role', v_scope_role,
         'invited_role', v_invite.role,
