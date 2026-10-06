@@ -45,6 +45,7 @@ function defaultMode(binding: BindingOption | undefined): ConnectionMode {
 export function MetaWhatsAppEmbeddedSignup(props: {
   appId: string | null;
   configurationId: string | null;
+  embeddedSignupVersion: 'v4' | null;
   coexistenceEnabled: boolean;
   graphVersion: string;
   bindings: BindingOption[];
@@ -216,7 +217,11 @@ export function MetaWhatsAppEmbeddedSignup(props: {
     return () => window.removeEventListener('message', receive);
   });
 
-  const configured = Boolean(props.appId && props.configurationId);
+  const configured = Boolean(
+    props.appId
+    && props.configurationId
+    && props.embeddedSignupVersion === 'v4'
+  );
 
   async function ensureSelectedBinding() {
     if (selected) return selected;
@@ -439,7 +444,7 @@ export function MetaWhatsAppEmbeddedSignup(props: {
           </div>
         : null}
     </> : <p className="muted">Create an active tenant Business before connecting Meta assets.</p>}
-    {!configured ? <p className="muted">Embedded Signup is code-ready but blocked until the Meta App ID and Embedded Signup Configuration ID are configured for this environment.</p> : null}
+    {!configured ? <p className="muted">Embedded Signup is blocked until the Meta App ID, Configuration ID, and an explicitly verified v4 configuration are configured for this environment.</p> : null}
     {message ? <p role="status" className="muted smallText">{message}</p> : null}
   </section>;
 }
