@@ -121,10 +121,12 @@ describe('customer WhatsApp self-service UI', () => {
     expect(productionDeploy).toContain('remains BLOCKED_EXTERNAL');
   });
 
-  it('uses the official non-destructive Meta Coexistence launch selector when enabled', () => {
-    expect(embeddedSignup).toContain("featureType: 'whatsapp_business_app_onboarding'");
-    expect(embeddedSignup).toContain("sessionInfoVersion: '3'");
+  it('uses the config-driven Embedded Signup v4 launch contract while keeping Coexistence fail-closed', () => {
+    expect(embeddedSignup).toContain('const extras = {};');
+    expect(embeddedSignup).not.toContain("featureType: 'whatsapp_business_app_onboarding'");
+    expect(embeddedSignup).not.toContain("sessionInfoVersion: '3'");
     expect(embeddedSignup).not.toContain("sessionInfoVersion: '4'");
+    expect(embeddedSignup).toContain("props.embeddedSignupVersion === 'v4'");
     expect(embeddedSignup).toContain('FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING');
     expect(embeddedSignup).toContain('will not ask you to delete, uninstall, or destructively migrate the app');
     expect(completeRoute).toContain('discoverMetaWhatsAppPhoneNumber');
