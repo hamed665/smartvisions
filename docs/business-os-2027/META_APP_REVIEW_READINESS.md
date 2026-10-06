@@ -1,0 +1,71 @@
+# Meta App Review and Production Readiness
+
+Status scope: Customer Access + WhatsApp execution overlay. This file does not create a new roadmap cursor.
+
+## State separation
+
+- Meta Business Verification: verified.
+- Meta Tech Provider / Access Verification: external review; do not infer approval from Business Verification.
+- Meta App Review: draft only until the Meta submission is actually completed.
+- WhatsApp Business App Coexistence: capability remains fail-closed until official eligibility and provider/config evidence exist.
+- Real customer end-to-end: dependency pending until a real authorized Business/asset exists and the complete path is observed.
+
+## Production credential preflight
+
+The Cloudflare production deployment must not trust the presence of a `META_APP_SECRET` binding name as proof that the secret belongs to the configured Meta App ID.
+
+The production workflow therefore uses an inactive Worker Version before promotion when customer WhatsApp public identifiers are configured:
+
+1. Confirm Production Version URLs are already enabled. The workflow does not enable them silently.
+2. Upload the exact production bundle as an inactive Worker Version. Normal production traffic remains on the existing deployment.
+3. Enable a one-run preflight endpoint only in that inactive version and protect it with an ephemeral random token.
+4. Ask Meta Graph for the configured application using an app access credential built inside the Worker from `META_APP_ID` and `META_APP_SECRET`.
+5. Return only pass/fail. The secret, app access credential, provider response body, and token are never printed.
+6. Promote only after the preflight returns HTTP 204.
+7. The active Production configuration does not contain the preflight-enable flag or ephemeral token, so the endpoint returns 404 after normal deployment.
+
+If Version URLs are disabled, promotion stops before mutation of Production traffic. Enabling Version URLs is an explicit Cloudflare configuration decision, not a hidden workaround.
+
+## App Review submission preparation
+
+### Permission usage
+
+`whatsapp_business_messaging`
+: Used to receive customer WhatsApp messages and send authorized human or governed automation replies through the official WhatsApp Cloud API. Smart Visions does not collect a Facebook password or require customers to paste an access token.
+
+`whatsapp_business_management`
+: Used after Meta-hosted authorization to read and bind only the WhatsApp Business Account and phone assets selected/authorized by the business.
+
+`business_management`
+: Used only where Meta requires business-level authorization/asset discovery for the customer-selected business assets. Do not claim broad portfolio management that is not implemented.
+
+`public_profile`
+: Basic Meta identity context required by the authorization flow; it is not a substitute for Smart Visions Business authorization.
+
+### Reviewer path
+
+1. Open Smart Visions customer sign-in/invitation flow.
+2. Enter a Business-scoped workspace using a reviewer account that actually exists for review.
+3. Open Connections.
+4. Start Meta-hosted WhatsApp authorization.
+5. Show the Meta consent surface and selected authorized business assets.
+6. Return to Smart Visions and show the connection state derived from provider evidence.
+7. Open Inbox and, only when a real test asset is available, demonstrate a real inbound message and an authorized reply.
+8. For a phone number already active in WhatsApp Business App, demonstrate only official Business App Coexistence. Never demonstrate account deletion or destructive migration.
+
+Do not record a screencast until the exact reviewer account, Meta test/business asset, authorization configuration, and the demonstrated message path are actually working. A mock Connected state is not acceptable evidence.
+
+## Public policy prerequisites
+
+- Privacy Policy URL must resolve publicly and describe actual Smart Visions data handling.
+- Data Deletion instructions must resolve publicly and provide a real request path.
+- The Data Deletion flow may be manual if that is the real process; do not claim automated deletion.
+- Reviewer instructions must identify any external dependency that prevents a truthful demo.
+
+## Chatwoot
+
+Chatwoot remains the communication plane, while Smart Core remains Business/data/permission authority. External provisioning stays disabled until the Production platform token and activation prerequisites are verified. Retry must reconcile and reuse canonical mappings instead of creating duplicate accounts/inboxes/bindings.
+
+## Evidence vocabulary
+
+Use only: IMPLEMENTED, CONFIGURED, CONTROLLED_TEST_VERIFIED, PRODUCTION_VERIFIED, BLOCKED_EXTERNAL, DEPENDENCY_PENDING, DEFERRED_WITH_REASON, SUPERSEDED_WITH_EVIDENCE, NOT_REPROBED.
