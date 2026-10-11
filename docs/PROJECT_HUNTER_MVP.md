@@ -27,11 +27,12 @@ The existing Gmail-connected hourly opportunity watch may notify the owner about
 
 1. Check current `main`, open PRs, CI, Shadow Mode, Cloudflare deployment gate and Supabase advisors.
 2. Merge only after lint, typecheck, full tests, PostgreSQL 17 chain, Next, Vinext, and Cloudflare scheduled verification are green, review threads resolved and safe runtime permission evidence exists.
-3. Before deploying code that selects the new fields, apply ordered migration `20261011143000_project_hunter_intent_review.sql` to the correct Production project `pkypexzpyfbikdnkrzvw` *after code review*.
-4. Confirm RLS remains enabled, org read/write scope is unchanged, no new `anon` permissions, index exists and role-specific owner-only Server Actions enforce writes. Recheck Supabase advisors.
-5. Promote validated Cloudflare bundle through the existing release gates. Keep Shadow Mode ON and verify the new route with a real authorized owner (no synthetic accounts).
-6. First real import must be an operator-approved genuine public listing; verify status, one-source dedupe, audit log and zero outbound/provider usage rows.
-7. If runtime fails, roll back Worker to previous verified deployment. Leave additive nullable columns in place until reviewed cleanup, rather than performing destructive Production rollback.
+3. The PostgreSQL 17 CI chain uses a **CI-only** legacy intent-opportunities bootstrap because the historical 0002_hunters migration is outside the 0068+ smoke subset; the Project Hunter schema-smoke confirms the new columns, RLS and index. No such bootstrap belongs in Production.
+4. Before deploying code that selects the new fields, apply ordered migration `20261011143000_project_hunter_intent_review.sql` to the correct Production project `pkypexzpyfbikdnkrzvw` *after code review*.
+5. Confirm RLS remains enabled, org read/write scope is unchanged, no new `anon` permissions, index exists and role-specific owner-only Server Actions enforce writes. Recheck Supabase advisors.
+6. Promote validated Cloudflare bundle through the existing release gates. Keep Shadow Mode ON and verify the new route with a real authorized owner (no synthetic accounts).
+7. First real import must be an operator-approved genuine public listing; verify status, one-source dedupe, audit log and zero outbound/provider usage rows.
+8. If runtime fails, roll back Worker to previous verified deployment. Leave additive nullable columns in place until reviewed cleanup, rather than performing destructive Production rollback.
 
 **Activation state at PR creation:** CODE READY FOR REVIEW, not Production verified. Do not claim live cross-channel automation until per-source authorized acquisition, alert delivery, owner approval and Production telemetry are proven.
 
