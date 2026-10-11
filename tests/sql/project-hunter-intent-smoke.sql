@@ -20,6 +20,10 @@ begin
   if not exists(select 1 from pg_constraint where conname='project_hunter_review_guard') then
     raise exception 'Project Hunter status guard missing';
   end if;
+  if not exists(select 1 from pg_trigger
+    where tgname='intent_project_hunter_owner_mutation_guard' and tgenabled='O') then
+    raise exception 'Project Hunter OWNER database guard missing';
+  end if;
   if has_table_privilege('anon','public.intent_opportunities','INSERT') then
     raise exception 'Project Hunter anonymous import is forbidden';
   end if;

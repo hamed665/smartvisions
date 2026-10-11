@@ -9,7 +9,7 @@
 - Existing Intent classifier/scorer plus $0 deterministic *job fit* signals (relevant technical skills, competition, declared budget, stated payment verification, age and explicit geographic exclusions).
 - Bounded draft for an Owner to personalize. No AI provider calls, invented success metrics, or new spend.
 - Explicit human-only stages: `REVIEW → REJECTED` or `DRAFT_READY → APPROVED_FOR_MANUAL_SEND → SENT_MANUALLY → REPLIED → WON/LOST` (with rejection/review options as defined in the application).
-- Canonical audit logging for owner mutations; no outbound, webhook, email, WhatsApp or third-party form submission side effects.
+- Canonical audit logging and an OWNER-only database mutation trigger for the new lane; no outbound, webhook, email, WhatsApp or third-party form submission side effects.
 - New `/hunters/project-hunter` route linked from existing Hunter center.
 
 ## What is deliberately NOT included
