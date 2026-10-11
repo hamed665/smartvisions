@@ -42,3 +42,22 @@ The existing Gmail-connected hourly opportunity watch may notify the owner about
 - Agency partnering and direct-company lead scoring from the existing Business Hunter/Growth Opportunity evidence.
 - AI personalized drafts behind existing Agent model router, Cost Guard, Knowledge/Portfolio evidence and human review.
 - Telegram notifications via the existing owner notification journal, with no independent bot or outbox.
+
+## Upwork official GraphQL adapter (11 October 2026)
+
+- Search page: `/hunters/project-hunter/upwork` (OWNER only).
+- **On-demand search only:** it uses the official `marketplaceJobPostingsSearch` query with `USER_JOBS_SEARCH`, page size 10, GraphQL OAuth bearer token and optional tenant header. No automatic polling or scheduled Upwork search.
+- Search only goes to `https://api.upwork.com/graphql`; no scraping, login automation, mutation, proposal send, Upwork API result persistence or unapproved content aggregation. Transient results appear in the Upwork-specific subpage.
+- Environment gate `UPWORK_OFFICIAL_API_ENABLED=false` until approved, with `UPWORK_OAUTH_ACCESS_TOKEN` and optional `UPWORK_API_TENANT_ID` stored in platform secrets, not source. Access token expires: the env option is a **short pilot bridge**, not completed long-lived OAuth. Build OAuth authorization-code/refresh + canonical Vault-bound storage after Upwork approval, never publish the bearer token in a URL, browser, or Git.
+- Upwork's current API-key eligibility: authentic profile/address/photo, verified identity and payment, at least USD 25,000 historical spend/earnings, freelancer JSS >= 90% and no suspension. Approval is discretionary, normally ~one week. Never imply this account meets all requirements without verification.
+- Application must identify the correct organization context and internal-only use; request `Common Entities - Read-Only Access` and `Read marketplace Job Postings` only. Confirm API & MCP current terms before activation. No Client Credentials grant for non-Enterprise.
+- Temporary parallel track: use Upwork's own saved-search alerts and the existing authorized Gmail opportunity watch; user must enable Upwork job alerts on their own Upwork account. Nothing here bypasses account/API eligibility.
+- Even if configured, do not claim production-connected until an owner-initiated authenticated smoke returns real jobs and exact route/CI/Cloudflare verification passes.
+
+## Preferred launch for new Upwork accounts: official Upwork MCP
+
+- Upwork offers a **separate official MCP server** at `https://mcp.upwork.com/mcp`, with account OAuth authorization and no public API key requirement for standard account use.
+- Official source: `https://www.upwork.com/ai/mcp`. Direct ChatGPT plugin listing, per Upwork: `https://chatgpt.com/plugins/plugin_asdk_app_6a75165ed2d8819182548553aa4cb6d5`.
+- User must install/authorize the Upwork connector in ChatGPT (or supported client); this repo **cannot** silently grant an Upwork MCP OAuth connection on their behalf. Never copy Upwork access tokens or session cookies into this app.
+- Upwork MCP supports freelancer job discovery and draft-confirm proposals with the owner explicitly confirming Connects spending; no auto-bidding is authorized in this project.
+- MCP in the user's ChatGPT session is not equivalent to a server-to-server Smart Core job-ingestion API. The GraphQL module remains an **inactive, owner-initiated read-only adapter** pending explicit Upwork API approval, authorized OAuth and deployed credentials.

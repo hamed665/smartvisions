@@ -33,6 +33,7 @@ export default async function ProjectHunterPage() {
   return <main className="pageStack">
     <section className="panel">
       <div className="headerRow"><div><p className="eyebrow">Smart Visions Project Hunter</p><h1>Project Opportunities</h1></div><Link className="textLink" href="/hunters">← Hunters</Link></div>
+      <p><Link className="textLink" href="/hunters/project-hunter/upwork">Official Upwork search (requires approved API) →</Link></p>
       <p className="muted">Manual verified-source intake for the controlled MVP. Reuses canonical intent opportunities. $0 deterministic matching and draft generation. No scraping, automated platform submissions, external email, provider spending, or CRM duplication.</p>
       <div className="grid">
         <div className="card"><span className="muted">Imported</span><div className="value">{rows.length}</div></div>
