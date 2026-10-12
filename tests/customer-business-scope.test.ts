@@ -16,6 +16,13 @@ const migration = readFileSync(
   ),
   'utf8',
 );
+const hardeningMigration = readFileSync(
+  new URL(
+    '../supabase/migrations/20261007002000_customer_business_membership_scope_hardening.sql',
+    import.meta.url,
+  ),
+  'utf8',
+);
 const inviteRoute = readFileSync(
   new URL('../app/api/access/invites/route.ts', import.meta.url),
   'utf8',
@@ -198,6 +205,24 @@ describe('customer Business access migration contract', () => {
     expect(migration).toContain('i.created_by_user_id = p_assigned_by');
     expect(migration).toContain('i.last_request_key = p_request_key');
     expect(migration).toContain("new.scope_type <> 'BUSINESS'");
+  });
+
+  it('keeps new Business-scoped members Organization-VIEWER while preserving their exact Business role', () => {
+    expect(hardeningMigration).toContain('not v_had_membership');
+    expect(hardeningMigration).toMatch(/set role\s*=\s*'VIEWER'/);
+    expect(hardeningMigration).toContain("m.role <> 'OWNER'");
+    expect(hardeningMigration).toContain("v_base.canonical_role := 'VIEWER'");
+    expect(hardeningMigration).toContain('CUSTOMER_BUSINESS_MEMBERSHIP_SCOPED');
+    expect(hardeningMigration).toContain("'business_role', v_scope_role");
+    expect(hardeningMigration).toContain('chatwoot_account_mappings_customer_scoped_read');
+    expect(hardeningMigration).toContain('public.customer_business_effective_role(');
+    const mappingPolicy = hardeningMigration.slice(
+      hardeningMigration.indexOf('create policy chatwoot_account_mappings_customer_scoped_read'),
+      hardeningMigration.indexOf(
+        'revoke all on function private.accept_organization_member_business_invitation',
+      ),
+    );
+    expect(mappingPolicy).not.toContain('chatwoot_bridge_can_read');
   });
 
   it('does not let a Meta/WhatsApp setup capability become customer panel authority', () => {

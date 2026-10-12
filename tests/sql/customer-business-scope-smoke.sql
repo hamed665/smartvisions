@@ -121,7 +121,7 @@ begin
     'customer-business-accept'
   );
 
-  if v_first.canonical_role <> 'ADMIN'
+  if v_first.canonical_role <> 'VIEWER'
      or v_first.business_role <> 'ADMIN'
      or v_first.tenant_business_id <> '20000000-0000-4000-8000-00000000f601'::uuid
      or v_first.scope_replayed
@@ -148,6 +148,39 @@ begin
       and a.tenant_business_id='20000000-0000-4000-8000-00000000f601'
   ) <> 1 then
     raise exception 'customer acceptance duplicated canonical Business scope';
+  end if;
+
+  if (
+    select m.role
+      from public.organization_members m
+     where m.organization_id='00000000-0000-0000-0000-00000000f601'
+       and m.user_id='00000000-0000-0000-0000-00000000e602'
+  ) <> 'VIEWER' then
+    raise exception 'Business-scoped customer membership was not normalized to Organization VIEWER';
+  end if;
+
+  if not public.is_unified_inbox_scoped_only_member(
+    '00000000-0000-0000-0000-00000000f601'
+  ) then
+    raise exception 'Business-scoped customer is not represented as Unified Inbox scoped-only';
+  end if;
+
+  if public.unified_inbox_effective_role(
+    '00000000-0000-0000-0000-00000000f601',
+    '10000000-0000-4000-8000-00000000f601',
+    '20000000-0000-4000-8000-00000000f601',
+    null,null,null
+  ) <> 'ADMIN' then
+    raise exception 'Business-scoped ADMIN lost its exact Unified Inbox Business role';
+  end if;
+
+  if public.unified_inbox_effective_role(
+    '00000000-0000-0000-0000-00000000f601',
+    '10000000-0000-4000-8000-00000000f601',
+    '20000000-0000-4000-8000-00000000f602',
+    null,null,null
+  ) is not null then
+    raise exception 'Business-scoped ADMIN gained Unified Inbox access to another Business';
   end if;
 end;
 $accept_business_invite$;
@@ -199,8 +232,8 @@ begin
   where organization_id='00000000-0000-0000-0000-00000000f601'
     and user_id='00000000-0000-0000-0000-00000000e602';
 
-  if v_role <> 'ADMIN' then
-    raise exception 'delegated ADMIN self-promoted to OWNER';
+  if v_role <> 'VIEWER' then
+    raise exception 'Business-scoped ADMIN changed its Organization scoped-only membership';
   end if;
 
   begin

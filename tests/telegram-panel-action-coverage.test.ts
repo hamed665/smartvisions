@@ -156,6 +156,10 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
     createPaymentLinkV1:'SPECIALIZED:PAYMENT_EXTENSION',
     executePaymentRefundV1:'SPECIALIZED:PAYMENT_EXTENSION',
   },
+  'app/project-hunter-actions.ts': {
+    addProjectHunterOpportunity:'SPECIALIZED:PROJECT_HUNTER_OWNER_INTAKE',
+    reviewProjectHunterOpportunity:'SPECIALIZED:PROJECT_HUNTER_OWNER_REVIEW',
+  },
   'app/preview-actions.ts': {
     generateControlledPreviewPilot:'preview.generate_pilot', approvePreview:'preview.approve', markPreviewSent:'preview.mark_sent', markControlledPreviewShared:'preview.mark_internal_shared',
   },
