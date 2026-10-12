@@ -278,3 +278,13 @@ The owner explicitly confirmed distribution rights for the official logo and acc
 Meta rejected the white-background PNG and requested transparency. Uploaded the previously prepared official transparent 1024 PNG, adjusted the crop to preserve the entire logo, saved Basic settings, and reloaded: Replace app icon and the transparent filename persisted; the missing-icon warning disappeared. Existing privacy/deletion/category/site settings persisted.
 
 Messaging and WhatsApp management API tests remain Completed in Meta; business_management remains 0 of 1. Genuine screencasts, restricted reviewer access, processor geography/controller and authority-history answers remain incomplete. Submit for review remains disabled; the draft is not submitted and the app is unpublished. PR #494 previous-head CI 38235143356 succeeded. Current main remains 9414fea7d131db46c96171e594e2e8a1bf65b043 with successful production deployment 38233938930. PR #487 remains Draft at 1113cc37a50f1daf3926e3b3c50202f7da3be97e, with the v4 verification gate unresolved.
+
+## Data Handling — owner response confirmed 2026-10-12 (Meta field NOT reverified)
+
+The owner has explicitly confirmed that, during the preceding 12 months, **Smart Visions has made no disclosures of user data to public authorities for national-security purposes, within the definition of the specific Meta Data Handling question** (excluding the criminal warrant/court-order requests excluded by the question).
+
+- **Prepared answer to this specific question only:** `No`.
+- **Evidence type:** owner self-attestation received in conversation on October 12, 2026. This is **not** an independent legal/audit certification and does not attest to other Data Handling questions.
+- **Meta form status:** **NOT REPROBED / NOT SAVED BY THIS STEP**. The assistant did not have a fresh authenticated Meta Dashboard session to open this exact question, enter the answer, or verify persistence. The owner-approved No may be entered only for the matching national-security-disclosure question after confirming exact wording/scope in draft `2879554815753929`.
+- No inference should be made about the locations of processors, other government requests, notice/challenge policies, deletion/retention, actual security controls, or data transfers. Leave separate questions pending until individually evidenced and owner-confirmed.
+- Do not mark the Data Handling section complete or Submit enabled on account of this answer.
