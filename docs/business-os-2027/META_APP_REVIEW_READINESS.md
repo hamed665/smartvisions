@@ -49,7 +49,7 @@ This makes the deployed Worker secret deterministic without reading the existing
 7. Open Inbox and, only when a real test asset is available, demonstrate a real inbound message and an authorized reply.
 8. For a phone number already active in WhatsApp Business App, demonstrate only official Business App Coexistence. Never demonstrate account deletion or destructive migration.
 
-Do not record a screencast until the exact reviewer account, Meta test/business asset, authorization configuration, and the demonstrated message path are actually working. A mock Connected state is not acceptable evidence.
+App Review can be prepared **before customer Embedded Signup is fully launched**, according to Meta's official Embedded Signup documentation. Use only the actual provider-authorized test path requested for each permission in the current Meta wizard. Do not insist on a real-customer Production integration as a precondition for starting App Review. A mock Connected state is not acceptable evidence; only working, expressly labeled test/sandbox/provider flows count.
 
 ## Public policy prerequisites
 
@@ -118,7 +118,7 @@ No independent user-profile Graph API use has been proven. Determine whether Met
 
 **No new permissions** may be added, nor existing draft permissions deleted, without exact configuration and flow evidence.
 
-### Reviewer instructions draft (paste only after real access and E2E are verified)
+### Reviewer instructions draft (paste only after the precise demonstrated review path and credentials are verified)
 
 > App: Smart vision company (Smart Visions LLC)
 >
@@ -136,7 +136,7 @@ No independent user-profile Graph API use has been proven. Determine whether Met
 
 ### Screencast capture checklist: real recording only
 
-Capture an actual authenticated session **after** the #488 -> #487 + credential + v4 + Chatwoot + provider gates and a controlled real test business have been verified. Use a private, authorized reviewer/test business rather than Sahara Center personal communications unless separate approval is obtained.
+**Do not confuse the App Review gate with first-customer Production launch.** Meta's official Embedded Signup documentation says to start App Review early, before finishing Embedded Signup. Check the exact *per-permission instructions* in the live Meta wizard first. If they permit real official Quickstart / Try It Out / Meta-issued sandbox assets, use that *genuine provider test path* without claiming the first customer is connected. If the instructions require your deployed app UI, prove the actual customer/reviewer path first; for that **particular recording** the #488 -> #487 + credential + v4 + provider/Chatwoot gates remain relevant. Never show Sahara Center's conversations or credentials without separate authorization.
 
 1. **0:00–0:15:** Working product URL, safe sign-in with the dedicated reviewer account. No password shown.
 2. **0:15–0:35:** Customer Business-scoped Home; navigate to Connections/WhatsApp. Demonstrate business scope without exposing unrelated businesses.
@@ -147,6 +147,21 @@ Capture an actual authenticated session **after** the #488 -> #487 + credential 
 7. Capture a **separate focused, real screencast per requested permission** if the live Meta wizard requires separate video upload/description fields. Messaging clip: inbound webhook / Inbox and authorized reply. WhatsApp management clip: real Embedded Signup, WABA/phone verification and connection state. Business management clip, only if required: the Meta business asset selection/authorization actually requested by the current `config_id`. Public profile clip, only if a separate review field requires it: Meta login identity authorization with no fabricated profile UI. If any relevant behavior is blocked, disclose the blocker instead of editing together a fake success.
 
 **Screencast availability:** no verified recording found or uploaded in this audit. Do not link, claim or upload a fabricated video. Verify the exact current video format, duration and placement requirements within the per-permission Meta wizard before upload.
+
+
+### Independent App Review path vs. real-customer go-live (clarification after official Meta docs)
+
+**Authoritative source:** Meta's WhatsApp Business Platform-owned Embedded Signup collection: https://www.postman.com/meta/whatsapp-business-platform/documentation/du6gzjv/embedded-signup . It explicitly says to begin App Review **before** Embedded Signup is fully implemented, and names Advanced Access to business_management and whatsapp_business_management as release requirements. This is separate from Production readiness and real customer same-number entitlement.
+
+**Reviewer requirements cannot be invented from generic guides.** On this account, read the **live per-permission Show Instructions** (Tech Provider / App Review wizard), including actual screencast and test-call rules. A practitioner report dated October 1, 2026 indicates some flows request: a controlled Meta "Try it out" send and live WhatsApp receipt for messaging; WhatsApp Manager template creation plus Meta Postman API calls for management, with up to about a day for calls to appear in the review form. This is **third-party experience, not confirmed instructions for this app**: https://www.amzath.com/blog/meta-whatsapp-app-review-guide . Follow this app's actual instructions over that report.
+
+**Two truthful review demonstrations:**
+- A real, official Meta Quickstart/Try It Out/sandbox flow using *Meta-provided* test WABA/phone/recipient where currently allowed. A provider-issued sandbox account is not fabricated client data; distinguish it from Production. Only use API calls that the user has authorized, and never reveal access tokens, credentials or private recipient identifiers in video. This route can often be prepared independently of a fully enabled real-customer Embedded Signup, but must meet the actual Meta form requirements.
+- A deployed customer-facing app, with a real authorized reviewer Business, real provider connection, and genuine WhatsApp send/receive where required. This path requires #488 security scope, #487 UX/v4/secret transport, verified deployment and actual test assets; **not** necessarily permission approval yet if Meta gates the connection itself. If provider refuses onboarding pending Advanced Access, report that block, never fake success.
+
+**Production activation remains a separate subsequent gate:** App Review Advanced Access approval + real configured v4 setup + valid GitHub Actions Meta secret/deploy + #488 -> #487 merges + Chatwoot verified provisioning + actual customer consent + official BUSINESS_APP_COEXISTENCE eligibility + isolated Business-scoped Inbox E2E. The existing WhatsApp Business mobile app must remain intact throughout.
+
+**Specific likely video gap requiring live Meta instructions:** current repository code clearly sends WhatsApp messages and reads/subscribes authorized WABA/phone assets, but a dedicated **message-template create/edit UI** has not been identified in the current tree. If the actual WhatsApp Business Management wizard requires a template-creation demonstration, do not falsely claim such a Smart Visions UI exists. Determine whether genuine WhatsApp Manager operations are accepted under this application's exact review instruction, or implement the minimal real capability through the canonical code path only if necessary and approved. Do not invent a parallel template manager.
 
 ### Data Handling questionnaire: factual inventory vs. owner confirmation
 
@@ -170,15 +185,15 @@ Meta's official 2026-10-09 post:
 
 The public article says Access Verification is being removed from Tech Provider onboarding and no longer gates the affected API calls. It explicitly preserves **Business Verification**, **App Review of advanced permissions**, and **data-handling obligations**. This announcement is not proof that this exact app's Dashboard has transitioned or that its particular permissions are approved. Do not withdraw or resubmit the previously in-review Access Verification.
 
-**Meta Dashboard submission gate (all required):**
+**Meta Dashboard App Review submission gate (not equivalent to first-customer Production launch):**
 
 - [ ] Authenticated live read of current app, draft ID, app settings, permission statuses, unpublished/publish status.
 - [ ] Verified company contact, approved category and icon; publicly reachable Privacy Policy and deletion instructions registered in the actual app.
-- [ ] Verified current Meta Embedded Signup **v4 `config_id`** and actual permission set; justified only necessary advanced permissions.
-- [ ] Security-sensitive Production credential pair configured via GitHub Actions secrets, verified deploy; #488 Business scope guard merged/deployed **before** #487 customer UI/hardening; CI and runtime rechecked.
-- [ ] Official Coexistence entitlement tested on authorized real/test app number before selecting same-number path; `META_WHATSAPP_COEXISTENCE_ENABLED` remains fail-closed otherwise.
-- [ ] Business-scoped restricted reviewer login and approved Meta test WABA/phone configured, not real customer credentials.
-- [ ] Actual authorized inbound + outbound test verified in correct Business Inbox/Chatwoot plane; no fake E2E claim.
+- [ ] Actual Meta `config_id`, requested scopes and permission set are inspected. For a deployed customer connection/demo, Embedded Signup **v4** is verified first; App Review preparation/submission itself need not wait for production customer v4 activation unless the per-permission wizard says so.
+- [ ] The required **review demonstration path** is operational, either an officially supported Meta-controlled real test/Quickstart route permitted by the per-permission wizard, **or** a deployed restricted reviewer-facing app route. For the latter only: GitHub Actions credentials, secure #488 -> #487 merge/deploy, v4 config and scoped access must be verified. Never claim a Meta test sender is a live customer.
+- [ ] If a Coexistence demonstration is actually requested, official eligibility and genuine same-number authorization are verified; otherwise App Review may be demonstrated through the correct Meta-permitted independent test path. `META_WHATSAPP_COEXISTENCE_ENABLED` stays fail-closed for customers until eligibility is proven.
+- [ ] Any requested reviewer login is a scoped, limited and tested account; any WhatsApp test asset is actually issued/authorized by Meta or owned with explicit consent. If per-permission official test tools do not require product login, explain their exact legitimate use without fabricating credentials.
+- [ ] Actual authorized send/receive evidence is shown as specifically required by the current `whatsapp_business_messaging` instructions (Meta test sender/recipient or working scoped Inbox, whichever legitimately matches the form). Show WhatsApp receipt; no fake E2E claim. For `whatsapp_business_management`, inspect whether Meta specifically requests a real WhatsApp Manager template demo and API test calls, rather than assuming a Coexistence recording suffices.
 - [ ] Exact per-permission screencast requirements inspected and genuine video captured, uploaded and reviewed.
 - [ ] Exact Data Handling questions answered with authoritative technical + owner/legal support; explicit allowed-use acknowledgments accepted by authorized person.
 - [ ] Current reviewer instructions saved in the actual Meta draft; all wizard sections green, Submit enabled.
