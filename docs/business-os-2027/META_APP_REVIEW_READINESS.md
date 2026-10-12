@@ -199,4 +199,60 @@ The public article says Access Verification is being removed from Tech Provider 
 - [ ] Current reviewer instructions saved in the actual Meta draft; all wizard sections green, Submit enabled.
 - [ ] Only then submit the necessary permissions, capture the **actual Meta submission ID and final status**, and separately decide Publish/Live mode. Do not publish early.
 
-**This pack's completion = repo documentation only. Actual Meta Dashboard fields modified: NONE. App Review submitted: NO. Permission granted: NONE asserted. Support Case ID: NONE.**
+**Historical preparation-only audit:** at the earlier audit no Meta fields were modified. The later live Dashboard execution below supersedes that no-access/no-mutation statement. App Review remains unsubmitted.
+
+## Live Dashboard execution — 2026-10-12 Muscat (supersedes earlier no-access audit)
+
+Authenticated Cloud Browser access is now available. App Review draft remains `2879554815753929`; this is not a final submitted request. App stays Unpublished, Submit remains disabled.
+
+### Changes actually saved in Meta
+
+- Basic settings: Privacy Policy `https://smartvisionsai.com/en/company/privacy`, manual Data Deletion Instructions `https://smartvisionsai.com/en/data-deletion`, Category **Business and pages**. Meta displayed **Changes saved**; a separate Basic-page read confirmed all three persisted.
+- Added **Website** platform with Site URL `https://app.smartvisionsai.com/`; Meta displayed **Changes saved**. This resolved the previously hidden prerequisite for Reviewer Instructions (no platform configured).
+- Saved evidence-bounded usage descriptions for `whatsapp_business_messaging`, `business_management`, and `whatsapp_business_management` through each permission's **Save** button. No allowed-usage checkbox accepted. WhatsApp Management Business Description was entered to open its form; the written description intentionally does not claim unsupported template/QR administration or blanket legal compliance.
+- Saved reviewer instructions and Facebook Login integrated = Yes. Reopening the form confirmed persisted text. Instructions explicitly identify the dedicated restricted reviewer account, demonstrated integration and exact final test steps as pending; they are **not submission-ready**. No reviewer credential or real customer account was created.
+- Data Handling: inspected real questions, selected factual existence of processors (Yes). The complete section and provider list remain incomplete; no unsupported country/authority-policy declaration was entered. Do not treat the selection as a completed questionnaire.
+
+### Exact observed permission/testing requirements
+
+| Permission | Live form requirement/status |
+| --- | --- |
+| whatsapp_business_messaging | Description, genuine screen recording, API testing, allowed-usage agreement. API calls **Completed**; no video uploaded. Form points to WhatsApp Try it out / Cloud Messaging API. |
+| whatsapp_business_management | Description, genuine screen recording, terminal/Postman management API testing, allowed-usage agreement. API calls **Completed**; no video uploaded. Form gives phone/WABA settings as examples; no mandatory template-create demonstration stated in this inspected form. |
+| business_management | Description, genuine recording, **0 of 1 API call(s) required**, allowed-usage agreement. Testing panel directs to Graph API Explorer. Existing Explorer token's selected permissions did not include business_management; no new permission grant or token was generated. |
+| public_profile | Auto-granted baseline per live form; allowed-usage confirmation only. No independent description/video field appeared. No checkbox accepted. |
+
+Testing page states successful test data may take 24 hours to appear and tests are valid for 30 days. Green test markers are Meta test evidence, not customer Production E2E.
+
+### Configuration observed, not modified
+
+Actual configuration **Smart Visions WhatsApp Signup**, ID `945907201473210`:
+- Login variation: WhatsApp Embedded Signup.
+- Products: WhatsApp Cloud API and Marketing Messages API for WhatsApp.
+- System-user access token; expiration Never.
+- Required asset: WhatsApp accounts. Tasks: develop, manage_templates, view_phone_assets, manage_phone_assets, view_templates, messaging, manage.
+- Selected permissions: whatsapp_business_management, whatsapp_business_messaging. business_management is not listed in this configuration; retain review permission pending authoritative dependency verification, do not add/remove blindly.
+- Read-only edit wizard inspection did not expose an explicit v4 version field. Cancelled without Save. No v4 attestation variable or Coexistence activation changed.
+
+### Verification and Production evidence
+
+- Live Verification: Business **Verified**, Access Verification **In review**. The app's Dashboard has not shown completed retirement/approval. Previously cited October 9 policy article could not be freshly retrieved through web lookup in this run; do not infer this app's entitlement from it.
+- main remains `9d7c45c0db6a7208f4c9021359ba6d2d9e2d536d`.
+- #494 head `8c2da6fd63b7330fdf95c5a7ceafb3c254f7d84c` CI `38194493805` **SUCCESS** (before this documentation update).
+- #488 head `939590d05a904b56196aa3b817639e0214c64972` CI `37528770429` SUCCESS; #487 head `5f8ecde2fe3a990fcbc80fd38985c2dac01d188b` CI `37538031464` SUCCESS. Both remain Draft/unmerged; dependency order unchanged.
+- Deploy `38134814312` latest inspected job `114456411747`: failed at Production credential preflight because META_APP_SECRET was absent; deployment steps skipped. Later same-main run `38194737290` skipped. No rerun without credential change.
+- Live GitHub Actions secrets UI confirmed no repository META_APP_SECRET and no environment secrets. No secret read, copied, generated or configured by this execution.
+- Read-only Supabase: tenant_businesses=0, member_scope_assignments=0, communication_channel_setup_attempts=0, unified_inbox_conversation_projections=0.
+- Live authenticated Production Integrations: WhatsApp tenant Bindings=0, no real lifecycle binding, active tenant Business required, Embedded Signup blocked because App ID/config identifiers are not configured in the deployed environment. Existing legacy Meta/WhatsApp health is **STALE**, not new acceptance evidence.
+- No first customer connected, no message sent, no production data mutation, no safety flag changes. Chatwoot current runtime version not independently verified in this execution.
+
+### Concrete owner/legal gates
+
+1. Official existing white PNG is 1024x1024, 58,809 bytes, visually checked. Basic confirms missing icon. Prepared crop dialog but **did not click Upload** because Meta requires certification of distribution rights and non-pornographic content. Obtain exact owner confirmation first.
+2. Each of the four permission forms asks: “If approved, I agree that any data I receive through [permission] will be used in accordance with the allowed usage.” Obtain explicit owner confirmation before accepting.
+3. Data Handling asks for every processor name, service categories, **all** processing/remote-access countries, legal controller and country, national-security disclosure history for past 12 months (excluding criminal warrant/court-order requests), and actual authority-request policies. Complete processor geography cannot be inferred from Supabase primary region alone; OVH location and provider access/processing countries remain pending.
+4. Dedicated restricted reviewer account creation and test permission/asset authorization require specific approval before expanding access. No owner/customer Production credentials may be supplied.
+5. Owner must enter the existing Meta App Secret directly in GitHub Actions encrypted secret `META_APP_SECRET`. Never through chat, docs, URL or logs. Then require exact App-ID/secret preflight and deployment success before #488 -> #487 promotion.
+6. No genuine permission screencast has been provided/uploaded in this run. Independent official Meta test route remains possible; no test send is authorized without a specific controlled recipient/asset.
+
+**Execution outcome:** settings/descriptions/reviewer draft saved; App Review NOT submitted; no new final Submission ID, permission approval, support Case ID or first-customer Production verification.
