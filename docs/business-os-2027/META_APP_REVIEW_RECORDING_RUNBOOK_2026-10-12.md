@@ -105,8 +105,8 @@ The most recent live Meta account observation treated this as baseline/automatic
 
 Do not upload video until authentic clip is reviewed against the exact per-permission Meta Show Instructions, with credentials/sensitive fields removed. Complete Data Handling and authorized restricted reviewer access if demanded; only submit after Meta's actual Submit control enables.
 
-## Separate legal question (MUST ask owner; never infer from customer-history)
+## Separate Data Handling national-security question — owner confirmed answer
 
-Over the last 12 months, has Smart Visions or any service provider acting for it disclosed user/platform data to a public authority under a request concerning national security, excluding criminal warrants or court orders as the Meta form specifies? If Yes, obtain count/range and exact Meta form wording; if No, get an explicit No; if unknown, leave unanswered pending legal verification. This is NOT the question 'Have you previously connected a customer on Meta?'
+On October 12, 2026, the owner explicitly attested that Smart Visions made **no user-data disclosures to public authorities for national-security purposes during the previous 12 months**, as defined by the Meta question. The prepared answer for **this specific question only** is **No**. This is an owner self-attestation, not independent legal verification, and does not establish an answer for service providers or any separate disclosure/policy question beyond the attested scope. The exact Meta wizard text must be checked before entry. **The field was NOT entered or saved in the actual Meta Draft by this action.** No wider Data Handling section is complete. The confirmation is unrelated to whether any prior Meta customer was connected.
 
 Prepared as operational instructions, not evidence of a completed recording. All real media must be captured from the live authorized provider/product flow.
