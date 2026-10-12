@@ -53,6 +53,7 @@ export default async function HuntersPage() {
         </div>
         <p><Link className="textLink" href="/hunters/growth-opportunities">Open Growth Opportunity Router →</Link></p>
         <p><Link className="textLink" href="/hunters/human-acquisition">Open GCC Human Acquisition Queue →</Link></p>
+        <p><Link className="textLink" href="/hunters/project-hunter">Open Project Hunter (manual review MVP) →</Link></p>
       </div>
       <div className="panel">
         <h2>Sales lanes</h2>
