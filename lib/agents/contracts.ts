@@ -387,6 +387,7 @@ export type AgentContext = {
   leadId?: string;
   conversationId?: string;
   businessName?: string;
+  servingBusiness?: { name: string; countryCode?: string; timezone?: string };
   countryCode?: string;
   language?: string;
   dialect?: string;
