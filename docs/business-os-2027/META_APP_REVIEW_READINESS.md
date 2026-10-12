@@ -71,50 +71,50 @@ Use only: IMPLEMENTED, CONFIGURED, CONTROLLED_TEST_VERIFIED, PRODUCTION_VERIFIED
 
 ## 2026-10-12 — Evidence-based App Review submission pack (NOT submitted)
 
-**Purpose:** supply reviewer-ready, source-grounded text and a concrete completion checklist for Meta App \`2838776553165089\` / Business \`1060156986989312\` / existing draft \`2879554815753929\`. This is a GitHub documentation proposal, **not** a change to Meta Dashboard or a submitted App Review.
+**Purpose:** supply reviewer-ready, source-grounded text and a concrete completion checklist for Meta App `2838776553165089` / Business `1060156986989312` / existing draft `2879554815753929`. This is a GitHub documentation proposal, **not** a change to Meta Dashboard or a submitted App Review.
 
 ### Evidence, environment and freeze
 
-- Fresh GitHub \`main\` examined: \`9d7c45c0db6a7208f4c9021359ba6d2d9e2d536d\` (2026-10-12 audit). Main CI run \`38134549382\` succeeded, but Cloudflare Production deployment run \`38134814312\` failed at **Production credential preflight**; later deploy workflows for this main SHA were skipped. Do **not** equate a green CI with a deployed app.
-- Open, unmerged draft PRs: #488 (Business-only tenant scoping, required before #487) and #487 (customer Business/invite UI, OAuth secret transport hardening, Embedded Signup v4). Do not claim their implementations are live. #487 states \`META_APP_SECRET\` is missing from GitHub Actions and calls for verification of actual Meta v4 configuration plus \`META_WHATSAPP_EMBEDDED_SIGNUP_VERSION=v4\` before promoting.
-- Main \`app/integrations/meta-whatsapp-embedded-signup.tsx\` still has \`sessionInfoVersion: '3'\`; #487 removes this legacy override, using \`config_id\` with \`featureType: 'whatsapp_business_app_onboarding'\` only for Coexistence. Main \`lib/whatsapp/meta-onboarding.ts\` still places the Meta app secret in the OAuth query URL; #487 replaces that with a POST body. Both are deployment blockers for reviewer demonstration.
-- Read-only Supabase Production counts on 2026-10-12: \`tenant_businesses=0\`; \`member_scope_assignments=0\`; WhatsApp \`communication_channel_bindings=0\`; \`communication_channel_setup_attempts=0\`; \`unified_inbox_conversation_projections=0\`. This prevents any claim of a completed first customer demo.
+- Fresh GitHub `main` examined: `9d7c45c0db6a7208f4c9021359ba6d2d9e2d536d` (2026-10-12 audit). Main CI run `38134549382` succeeded, but Cloudflare Production deployment run `38134814312` failed at **Production credential preflight**; later deploy workflows for this main SHA were skipped. Do **not** equate a green CI with a deployed app.
+- Open, unmerged draft PRs: #488 (Business-only tenant scoping, required before #487) and #487 (customer Business/invite UI, OAuth secret transport hardening, Embedded Signup v4). Do not claim their implementations are live. #487 states `META_APP_SECRET` is missing from GitHub Actions and calls for verification of actual Meta v4 configuration plus `META_WHATSAPP_EMBEDDED_SIGNUP_VERSION=v4` before promoting.
+- Main `app/integrations/meta-whatsapp-embedded-signup.tsx` still has `sessionInfoVersion: '3'`; #487 removes this legacy override, using `config_id` with `featureType: 'whatsapp_business_app_onboarding'` only for Coexistence. Main `lib/whatsapp/meta-onboarding.ts` still places the Meta app secret in the OAuth query URL; #487 replaces that with a POST body. Both are deployment blockers for reviewer demonstration.
+- Read-only Supabase Production counts on 2026-10-12: `tenant_businesses=0`; `member_scope_assignments=0`; WhatsApp `communication_channel_bindings=0`; `communication_channel_setup_attempts=0`; `unified_inbox_conversation_projections=0`. This prevents any claim of a completed first customer demo.
 - The Meta Dashboard was **not** readable through an authenticated session during this audit. The following were *owner-reported from the 2026-10-12 wizard*, not reobserved live: Business Verification Verified; Access Verification In review; App Unpublished; App Review Not submitted; submit button disabled; Wizard Verification 100%, App settings 25%, Allowed usage 0%, Data handling 0%, Reviewer instructions 0%. Recheck all fields in the authenticated Dashboard before every change or submission.
 - Real production customer target: Sahara Center / مرکز صحرا. Never use customer secrets, live patients, or messages in a reviewer recording without explicit authorization. Do not create fake businesses, contacts, data, Meta authorizations or message events to pass review.
 
 ### Verified public legal pages
 
-- **Privacy Policy URL**: \`https://smartvisionsai.com/en/company/privacy\` — publicly returned HTTP 200 and substantive English policy text on 2026-10-12. Page states effective date 2026-10-06.
-- **User Data Deletion instructions URL**: \`https://smartvisionsai.com/en/data-deletion\` — publicly returned HTTP 200 and substantive English manual deletion-request process on 2026-10-12. Owner authorization is verified before acting; disconnect alone is **not** deletion.
-- The guesses \`/privacy\`, \`/privacy-policy\` and \`/data-deletion\` **without the \`/en/\` locale** returned 404 on the same check. Do not enter them into Meta.
-- The legal pages are source-backed by repository \`hamed665/smartvisions-website\`, routes \`app/[locale]/company/privacy/page.tsx\` and \`app/[locale]/data-deletion/page.tsx\`. They are **not** modifications made by this pack.
+- **Privacy Policy URL**: `https://smartvisionsai.com/en/company/privacy` — publicly returned HTTP 200 and substantive English policy text on 2026-10-12. Page states effective date 2026-10-06.
+- **User Data Deletion instructions URL**: `https://smartvisionsai.com/en/data-deletion` — publicly returned HTTP 200 and substantive English manual deletion-request process on 2026-10-12. Owner authorization is verified before acting; disconnect alone is **not** deletion.
+- The guesses `/privacy`, `/privacy-policy` and `/data-deletion` **without the `/en/` locale** returned 404 on the same check. Do not enter them into Meta.
+- The legal pages are source-backed by repository `hamed665/smartvisions-website`, routes `app/[locale]/company/privacy/page.tsx` and `app/[locale]/data-deletion/page.tsx`. They are **not** modifications made by this pack.
 - Meta App settings: recommend **Business** category only if that is offered and fits the live current Meta choices; use the legal registered app/company name and **existing verified official logo**; audit app icon dimensions/validity and app contact email in the Dashboard. No icon, email, App Domain, data-deletion callback URL, or reviewer login has been verified by this pack. Do not invent or substitute any.
 
 ### Permissions: actual use and draft text (English, not yet entered in Meta)
 
-**\`whatsapp_business_messaging\` — core, supported by source code**
+**`whatsapp_business_messaging` — core, supported by source code**
 
 > Smart Visions is a business-scoped customer service and automation platform. After an authorized business completes Meta-hosted WhatsApp Embedded Signup, our application receives inbound WhatsApp message and status webhooks for that business and supports sending authorized service replies through the official WhatsApp Cloud API. Messages and conversation state are shown in the business's scoped Inbox. Sending is restricted by our canonical send policy, provider binding, and human/automation safety controls. We do not collect Facebook passwords or ask customers to paste their access tokens.
 
-Code entry points: \`app/api/whatsapp/webhook/route.ts\`, \`lib/whatsapp/webhook.ts\`, \`app/api/whatsapp/send/route.ts\`, \`lib/whatsapp/meta-cloud.ts\`; Inbox projection through existing Smart Core / Chatwoot paths. Do not imply first-real-customer Production E2E was already verified.
+Code entry points: `app/api/whatsapp/webhook/route.ts`, `lib/whatsapp/webhook.ts`, `app/api/whatsapp/send/route.ts`, `lib/whatsapp/meta-cloud.ts`; Inbox projection through existing Smart Core / Chatwoot paths. Do not imply first-real-customer Production E2E was already verified.
 
-**\`whatsapp_business_management\` — core, supported by source code**
+**`whatsapp_business_management` — core, supported by source code**
 
 > Smart Visions uses this permission to complete a business-authorized WhatsApp connection and manage only the WhatsApp Business Account and phone assets that the business explicitly selects in Meta-hosted Embedded Signup. After authorization, we verify the selected WABA, phone number, and membership through the Meta Graph API, reconcile the app subscription when permitted, and associate the verified identifiers with the existing Business-scoped connection record. This enables connection status, routing, and authorized messaging for that business. We do not access unrelated business assets.
 
-Code entry points: \`app/api/integrations/meta/whatsapp/embedded-signup/complete/route.ts\`, \`lib/whatsapp/meta-onboarding.ts\`, \`lib/whatsapp/meta-provisioning.ts\`, \`lib/whatsapp/lifecycle.ts\`. The wizard's Business Description can use: **“Smart Visions LLC provides a business-scoped AI-assisted customer communication platform for authorized businesses. Businesses connect their own WhatsApp Business assets using Meta Embedded Signup. The integration verifies WABA/phone ownership and powers their Inbox and authorized service replies.”**
+Code entry points: `app/api/integrations/meta/whatsapp/embedded-signup/complete/route.ts`, `lib/whatsapp/meta-onboarding.ts`, `lib/whatsapp/meta-provisioning.ts`, `lib/whatsapp/lifecycle.ts`. The wizard's Business Description can use: **“Smart Visions LLC provides a business-scoped AI-assisted customer communication platform for authorized businesses. Businesses connect their own WhatsApp Business assets using Meta Embedded Signup. The integration verifies WABA/phone ownership and powers their Inbox and authorized service replies.”**
 
-**\`business_management\` — conditionally necessary; not proven from default-branch direct Graph calls**
+**`business_management` — conditionally necessary; not proven from default-branch direct Graph calls**
 
 > If required by the verified Facebook Login for Business configuration, Smart Visions uses business-level asset authorization to allow an authorized business administrator to grant the application access to the WhatsApp Business Account and phone assets selected in Meta's Embedded Signup. This access is bounded to the customer's authorized business connection; we do not perform unrelated business portfolio administration.
 
-Do **not** mark this as an implemented separate business portfolio management feature. Audit the **real \`config_id\` and permissions** in Meta Dashboard, actual requested scopes, and Meta's current requirements first. The source code uses WABA and phone Graph reads, but does not establish that broad \`business_management\` is required for every embedded-signup configuration. Preserve the draft item until dependencies are verified; request it only if justified.
+Do **not** mark this as an implemented separate business portfolio management feature. Audit the **real `config_id` and permissions** in Meta Dashboard, actual requested scopes, and Meta's current requirements first. The source code uses WABA and phone Graph reads, but does not establish that broad `business_management` is required for every embedded-signup configuration. Preserve the draft item until dependencies are verified; request it only if justified.
 
-**\`public_profile\` — Facebook Login baseline, independent advanced use not established**
+**`public_profile` — Facebook Login baseline, independent advanced use not established**
 
 > Smart Visions initiates Meta-hosted Facebook Login for Business to allow the authorized business administrator to approve access to the selected WhatsApp assets. We use Meta authorization only to establish that approved connection; Smart Visions customer workspace access is governed separately by our own authentication and Business-scoped authorization.
 
-No independent user-profile Graph API use has been proven. Determine whether Meta treats \`public_profile\` as a standard/default Facebook Login permission in this configuration or whether the wizard actually requires its independent review. Do not claim profile enrichment, marketing or social user-data collection.
+No independent user-profile Graph API use has been proven. Determine whether Meta treats `public_profile` as a standard/default Facebook Login permission in this configuration or whether the wizard actually requires its independent review. Do not claim profile enrichment, marketing or social user-data collection.
 
 **No new permissions** may be added, nor existing draft permissions deleted, without exact configuration and flow evidence.
 
@@ -140,7 +140,7 @@ Capture an actual authenticated session **after** the #488 -> #487 + credential 
 
 1. **0:00–0:15:** Working product URL, safe sign-in with the dedicated reviewer account. No password shown.
 2. **0:15–0:35:** Customer Business-scoped Home; navigate to Connections/WhatsApp. Demonstrate business scope without exposing unrelated businesses.
-3. **0:35–1:15:** Launch Meta-hosted Embedded Signup with the real Meta \`config_id\`; show the Meta permission/consent screens and the authorized test WABA/phone. No token, App Secret, SMS OTP, private phone numbers or sensitive IDs shown.
+3. **0:35–1:15:** Launch Meta-hosted Embedded Signup with the real Meta `config_id`; show the Meta permission/consent screens and the authorized test WABA/phone. No token, App Secret, SMS OTP, private phone numbers or sensitive IDs shown.
 4. **1:15–1:40:** Return to Connections; show the actual verified connection status (not simulated success). Show relevant WABA/phone asset management only if the app genuinely exposes it.
 5. **1:40–2:25:** Receive a real inbound WhatsApp test message from an authorized controlled sender into the business-scoped Inbox; send a real policy-compliant reply and verify receipt in the controlled WhatsApp device. Use screen redaction for phone identifiers, people, and any private content.
 6. **Optional separate Coexistence clip:** On an eligible controlled number already in WhatsApp Business App, show the official same-number selector and verify the existing mobile app remains usable. Do not record this until Meta Coexistence is genuinely available; never claim this from a mocked UI.
@@ -154,9 +154,9 @@ Capture an actual authenticated session **after** the #488 -> #487 + credential 
 | --- | --- | --- |
 | What data | Business and phone identifiers, integration credentials, WhatsApp messages/status/media metadata, scoped account/access/audit records; see Privacy Policy and code | Exact question wording, selected data categories, whether optional AI/media features have been enabled for any reviewer/customer |
 | Meta / WhatsApp | Official Meta-hosted authorization, Graph asset reads, signed incoming webhook path and WhatsApp Cloud API sending | Exact Meta app product configuration and live entitlement; actual authorized reviewer WABA/phone |
-| Supabase | Production project \`pkypexzpyfbikdnkrzvw\`, observed region \`ap-south-1\`, PostgreSQL 17, canonical records / authorization | Provider contractual disclosures, backups, data lifecycle, encryption in transit/at rest as configured, Vault credential retention and deletion specifics |
+| Supabase | Production project `pkypexzpyfbikdnkrzvw`, observed region `ap-south-1`, PostgreSQL 17, canonical records / authorization | Provider contractual disclosures, backups, data lifecycle, encryption in transit/at rest as configured, Vault credential retention and deletion specifics |
 | Cloudflare | Workers hosts the production app and API | Actual runtime/logging/analytics processors, transfer/retention configuration, applicable data location policy and contractual terms |
-| Chatwoot | Official Chatwoot CE communication plane at \`inbox.smartvisionsai.com\`, OVH VPS; projections/bridges in code | OVH hosting country/datacenter, VPS backups, message/attachment retention, access roster, activated real-customer provisioning |
+| Chatwoot | Official Chatwoot CE communication plane at `inbox.smartvisionsai.com`, OVH VPS; projections/bridges in code | OVH hosting country/datacenter, VPS backups, message/attachment retention, access roster, activated real-customer provisioning |
 | AI / other providers | App code has AI/runtime and provider integrations, controlled by configuration | Exactly which providers/models receive customer messages or media in the *submitted demonstrated flow*, AI on/off policy, opt-in, and any human-review/data-use commitments |
 | Retention / deletion | Public deletion instructions describe a **manual identity-verified request**; disconnect is not automatic erasure | Specific retention durations, full processor deletion paths, lawful exceptions and fulfillment timeline before entering definite answers |
 | Security and disclosure | Source contains access scope checks, provider signature/credential boundaries and policy controls | Whether the questionnaire requests guarantees for encryption, incident response, selling/sharing, training, cross-border processing, third-party disclosures or developer contact. Do not guess a Yes/No. |
@@ -166,7 +166,7 @@ Capture an actual authenticated session **after** the #488 -> #487 + credential 
 ### Meta policy, distinct approvals and decision gates
 
 Meta's official 2026-10-09 post:
-\`https://developers.facebook.com/blog/post/2026/10/09/retiring-access-verification-for-tech-provider-apps/\`
+`https://developers.facebook.com/blog/post/2026/10/09/retiring-access-verification-for-tech-provider-apps/`
 
 The public article says Access Verification is being removed from Tech Provider onboarding and no longer gates the affected API calls. It explicitly preserves **Business Verification**, **App Review of advanced permissions**, and **data-handling obligations**. This announcement is not proof that this exact app's Dashboard has transitioned or that its particular permissions are approved. Do not withdraw or resubmit the previously in-review Access Verification.
 
@@ -174,9 +174,9 @@ The public article says Access Verification is being removed from Tech Provider 
 
 - [ ] Authenticated live read of current app, draft ID, app settings, permission statuses, unpublished/publish status.
 - [ ] Verified company contact, approved category and icon; publicly reachable Privacy Policy and deletion instructions registered in the actual app.
-- [ ] Verified current Meta Embedded Signup **v4 \`config_id\`** and actual permission set; justified only necessary advanced permissions.
+- [ ] Verified current Meta Embedded Signup **v4 `config_id`** and actual permission set; justified only necessary advanced permissions.
 - [ ] Security-sensitive Production credential pair configured via GitHub Actions secrets, verified deploy; #488 Business scope guard merged/deployed **before** #487 customer UI/hardening; CI and runtime rechecked.
-- [ ] Official Coexistence entitlement tested on authorized real/test app number before selecting same-number path; \`META_WHATSAPP_COEXISTENCE_ENABLED\` remains fail-closed otherwise.
+- [ ] Official Coexistence entitlement tested on authorized real/test app number before selecting same-number path; `META_WHATSAPP_COEXISTENCE_ENABLED` remains fail-closed otherwise.
 - [ ] Business-scoped restricted reviewer login and approved Meta test WABA/phone configured, not real customer credentials.
 - [ ] Actual authorized inbound + outbound test verified in correct Business Inbox/Chatwoot plane; no fake E2E claim.
 - [ ] Exact per-permission screencast requirements inspected and genuine video captured, uploaded and reviewed.
