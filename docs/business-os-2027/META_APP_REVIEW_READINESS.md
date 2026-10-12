@@ -256,3 +256,16 @@ Actual configuration **Smart Visions WhatsApp Signup**, ID `945907201473210`:
 6. No genuine permission screencast has been provided/uploaded in this run. Independent official Meta test route remains possible; no test send is authorized without a specific controlled recipient/asset.
 
 **Execution outcome:** settings/descriptions/reviewer draft saved; App Review NOT submitted; no new final Submission ID, permission approval, support Case ID or first-customer Production verification.
+
+## Credential and scope-hardening closeout — 2026-10-12 Muscat (latest)
+
+This entry supersedes earlier missing-secret, #488 unmerged and old-runtime statements above.
+
+- Owner entered the existing Meta App Secret directly in GitHub Actions. Live settings list showed META_APP_SECRET dated October 12; value was not read/copied by the agent.
+- Exact original-main deploy `38134814312` attempt 2 SUCCESS on `9d7c45c0db6a7208f4c9021359ba6d2d9e2d536d`: credential pairing, read-only Supabase validation, build, Candidate smoke, controlled SSR, promotion, routed Production and API/webhook rejection smokes passed. Runtime Integrations no longer showed the missing App ID/config banner; real Business/binding still absent.
+- #488 existing branch synced to main with head `4b608a30fb286e8606e37053d1ecfbb2cc8ccd8c`; CI `38232962051` SUCCESS including PostgreSQL 17 Business isolation smoke. No unresolved reviews. Squash-merged to main `9414fea7d131db46c96171e594e2e8a1bf65b043`.
+- Exact merged SQL blob `2093205be7b60736a691608ea8bb2736127bc6ef` applied to Production as `customer_business_membership_scope_hardening`, migration version `20261012100357`. Initial migration tool transport error was reconciled read-only (no migration/changed function), then one retry succeeded. Post-read confirmed one migration, scoped normalization guard/audit, canonical mapping policy and EXECUTE authenticated=true, anon=false, service_role=false. Businesses/scopes/invitations remain 0. No fake customer/isolation rows inserted in Production.
+- Post-DDL security advisors unchanged from same-run baseline: rls_enabled_no_policy=17 INFO, auth_leaked_password_protection=1 WARN. No new finding claimed.
+- Merged-main CI `38233479261` SUCCESS. Exact-main Cloudflare deploy `38233938930` attempt 1 failed on Wrangler's GET Candidate deployments response (HTTP 200 malformed body) before Production promotion. No successful new upload was reported. One controlled retry, attempt 2, SUCCESS including Candidate and routed Production smokes. Production is now verified on main `9414fea7d131db46c96171e594e2e8a1bf65b043`.
+- #487 synced on its existing branch with #488/current main. Head `1113cc37a50f1daf3926e3b3c50202f7da3be97e`, behind main 0, original 22-file scope retained. Three-way merged shared Telegram coverage test preserved both Project Hunter classification and createCanonicalBusiness classification. CI `38234611779` running at this update. **Still Draft/unmerged**: no v4 attestation variable changed and no provider-controlled v4 flow proven.
+- App Review still not submitted. Icon rights certification, four allowed-usage declarations, complete processor geography/controller/authority-history answers, genuine recordings and restricted reviewer access remain pending. No new permission/token grant, customer consent, Coexistence activation, Chatwoot provisioning or provider send.
