@@ -2,6 +2,39 @@
 
 > STATUS: PREPARATION ONLY. No videos captured or uploaded by this document; App Review draft 2879554815753929 remains unsubmitted. Do not substitute a marketing video, mock, synthetic tenant, fabricated connection, provider request sample response, or slideshow for running behavior.
 
+
+## Fresh authenticated Meta execution — 12 October 2026
+
+This section supersedes the earlier NOT_REPROBED assumptions about video requirements, national-security answer entry and absence of a visible ES version. It does not establish a submitted App Review or a working customer connection.
+
+- **CONFIGURED:** Existing draft `2879554815753929` reopened authenticated. App settings and Verification wizard indicators are 100%; Allowed usage/Data handling/Reviewer instructions remain 0%. App remains Unpublished and Submit disabled.
+- **CONFIGURED:** Exact requests-3 question asks whether users' personal data was provided to public authorities in response to national-security requests in the previous 12 months, excluding criminal search warrants/court orders. Entered owner-authorized **No**. Reloaded the page and reopened Data Handling: No remained selected and the page showed Auto-saved.
+- **DEPENDENCY_PENDING:** The provider dialog explicitly requires **all processing countries, including countries of remote Internet access**. Primary database region alone does not satisfy that field. Processor list, legal controller name/country and requests-4 organization policies remain incomplete; no guessed countries or policy answers were saved.
+- **CONTROLLED_TEST_VERIFIED (UI observation only):** Found account-specific Show Instructions under Use cases → WhatsApp Customize → Become Tech Provider → Record video documentation, independently of the generic Draft permission modals.
+  - Messaging: permits Try it out test send to yourself, instructs embedding the step-2 cURL in the website, and requires video of the app sending plus WhatsApp web/mobile receiving that same message. A standalone console send is not established as a complete substitute. Never expose bearer credentials in the website/client or recording.
+  - WhatsApp management: explicitly requires API tests **and a separate unique video creating and saving a message template in WhatsApp Manager**. This supersedes the previous conditional/no-explicit-template-requirement inference.
+  - business_management: generic Draft modal still requires a real usage screencast and 0/1 API tests; the Tech Provider page exposes only the two WhatsApp-specific Show Instructions, not a separate third button. No fabricated Business feature and no new token/scope grant.
+  - public_profile remains Edit; no fourth recording requirement was established.
+- **NOT_REPROBED:** No numerical video duration or upload-size limit was visible in these live instructions; the upload input accepts `video/*`. Do not invent a format/duration acceptance guarantee.
+- **CONFIGURED (builder display only):** Embedded Signup Builder shows selected configuration Smart Visions WhatsApp Signup (`945907201473210`), **ES Version v4**, Session Info Version 3 and Feature Type None. Tech Provider Meta-hosted link separately included v4 and the Coexistence feature. No authorization launched, no variable/feature changed, and no provider session response proved a working flow. This is new v4 UI evidence, not customer Coexistence eligibility or Production verification.
+- **CONTROLLED_TEST_VERIFIED (owned test asset inspection only):** WhatsApp Manager lists **Test WhatsApp Business Account**, ID `901492672680754`, Owned By Smart vision company. Inspected its real existing templates. No customer asset used and no template saved/created.
+- **DEPENDENCY_PENDING:** Prepared a reviewable unsent template editor on that Test WABA: Utility / English; name `smartvisions_connection_status_review_20261012`; body: “Smart Visions connection update: please open Connections in your workspace to review your WhatsApp setup status.” No variables/header/buttons. Final submission awaits specific owner authorization and real capture.
+- **BLOCKED_EXTERNAL (capture):** Available Cloud Browser API advertises no recording capability. Desktop Commander Windows device `DESKTOP-0K3842L` remains offline; the online device is the OVH server, not this authenticated cloud browser. No real MP4 captured or uploaded. Do not manufacture a video from screenshots or use AI generation.
+- **CONTROLLED_TEST_VERIFIED (read-only production counts):** businesses=0, scope_assignments=0, setup_attempts=0, inbox_projections=0. No customer records or messages inserted.
+- **NOT_REPROBED (Chatwoot version):** Docker inspection on the authorized VPS failed for lack of docker socket access; the sudo command was rejected by the remote tool. No bypass attempted. Current runtime version remains independently unverified.
+- GitHub main remains `9414fea7d131db46c96171e594e2e8a1bf65b043`; deploy `38233938930` completed successfully. PR #494 pre-edit head `3e584e28b0fed2c6bcff53cad30746700579f367` CI `38239627242` succeeded; PR #487 remains Draft/unmerged at `1113cc37a50f1daf3926e3b3c50202f7da3be97e`.
+
+### Immediate real capture procedure
+
+For management, record the real Test WABA selection, Create template, Utility/English selection, the approved actual content, and final creation/save/result in WhatsApp Manager. Show resulting status exactly (Pending is not Approved). Owner must authorize that provider-side creation; the operator must capture continuously with an actual recorder or camera. Never substitute the already-existing Meta sample templates for a newly observed creation.
+
+For messaging, use the official Meta test sender and a separately approved controlled recipient, demonstrate a real app/backend send and receipt of the matching message. The live instructions permit official test assets, but still require the website/app send scene. No standalone parallel sending app or exposed client token, no fake canonical binding, and no safety-gate bypass. The current Smart Visions scoped connection path has no real Business/binding; enabling a genuine reviewer/test path requires separate access/asset approvals.
+
+For Data Handling, confirm the exact registered controller entity/country and which requests-4 policies actually exist: legality review, challenging unlawful requests, minimization, request/response/legal-reasoning documentation, none, or legally prohibited from answering. The saved No is not an answer to those separate policies.
+
+
+## Historical preparation context (superseded where noted above)
+
 ## Scope and evidence priority
 
 - Meta App: 2838776553165089; Meta Review draft: 2879554815753929; production app: https://app.smartvisionsai.com.
