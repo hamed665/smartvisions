@@ -288,3 +288,30 @@ The owner has explicitly confirmed that, during the preceding 12 months, **Smart
 - **Meta form status:** **NOT REPROBED / NOT SAVED BY THIS STEP**. The assistant did not have a fresh authenticated Meta Dashboard session to open this exact question, enter the answer, or verify persistence. The owner-approved No may be entered only for the matching national-security-disclosure question after confirming exact wording/scope in draft `2879554815753929`.
 - No inference should be made about the locations of processors, other government requests, notice/challenge policies, deletion/retention, actual security controls, or data transfers. Leave separate questions pending until individually evidenced and owner-confirmed.
 - Do not mark the Data Handling section complete or Submit enabled on account of this answer.
+
+## Data Handling — provider country evidence (2026-10-12, NOT entered into Meta)
+
+This records a **read-only evidence investigation**, NOT a Meta Dashboard write, completed App Review, or permission to guess countries. Meta review draft remains `2879554815753929` unsubmitted. Exact live Data Handling wording and provider geography must be rechecked in authenticated Meta Dashboard before saving.
+
+| System and relevance | Read-only evidence | Location disposition for Meta |
+| --- | --- | --- |
+| **Supabase Smart Core Production** `pkypexzpyfbikdnkrzvw` (canonical WhatsApp message and tenant data store) | Connected Supabase management API returned project region `ap-south-1`, active/healthy, PostgreSQL 17.6.1. This AWS region is Mumbai, **India**. | **Verified primary storage country: India.** Supabase's processing/subprocessor access may involve additional countries; this region is NOT their complete list. |
+| **Supabase website** `fsxuvhayyjkftltgxvig` | Connected Supabase management API returned `ap-northeast-1` (Tokyo, **Japan**), active/healthy. | **Verified website database country: Japan.** Applicability to Meta Platform Data is **NOT YET VERIFIED**; do not add Japan solely because an unrelated site database exists. |
+| **OVH server hosting Chatwoot** (known `inbox.smartvisionsai.com` communications plane) | Authorized read-only Desktop Commander on `vps-eae2ade9` returned external IP geolocation `DE / Hesse / Frankfurt am Main`, network `AS16276 OVH SAS`. | **Germany indicated by current IP geolocation.** Actual contractual OVH data center location, backup residency, remote support locations and scope of Meta customer data must be corroborated. This is NOT a verified OVH order/invoice location. |
+| **Cloudflare Workers** `app.smartvisionsai.com` production runtime | Source/deploy architecture shows Cloudflare. Cloudflare's official documentation describes Workers processing across its **global edge network**, not one static AWS/database region. | **Provider processing countries NOT EXHAUSTIVELY IDENTIFIED**. Do NOT enter only France, the US, or Oman as a substitute for Cloudflare's actual country and subprocessor processing disclosures. Check actual routing/services (Workers, KV, R2, logs, AI Gateway if used) and published DPA. |
+| **OpenAI and other optional integrations** | Repository includes OpenAI agent/voice integration entry points; code presence is not evidence that every feature is enabled or that Meta-derived payloads are actually transferred in Production. | **Applicability, data flow, subprocessors and locations PENDING**. Do not assert US-only processing or omit verified external processors. |
+| **Smart Visions registered company / team** | Owner context identifies operating company in **Oman**. | Oman is the suggested country for legal controller / business team **only if exact registered entity and jurisdiction match the live form**. Company country and processor processing countries are different Meta fields. |
+
+**Submission guard:** For Meta processor country question, include only countries supported by actual processors of Meta Platform Data and their facilities/support access; do not automatically union every vendor's global legal presence or every database from unrelated projects. Supabase's October 6, 2026 Data Residency FAQ explicitly states that primary database residency is not a complete cross-border processing map.
+
+**Public reference documents (provider-authored):**
+- https://supabase.com/docs/guides/platform/regions
+- https://supabase.com/legal/privacy-resources/data-residency-and-transfers-faq
+- https://supabase.com/legal/customer-resources/subprocessor-list
+- https://developers.cloudflare.com/workers/reference/how-workers-works/
+- https://www.cloudflare.com/gdpr/subprocessors/cloudflare-services/
+- https://developers.meta.com/vr/resources/data-handling-questions/ (Meta Horizon-specific publicly visible questionnaire analogue, NOT confirmation of exact Facebook Login/WhatsApp wizard wording).
+
+**Remaining independent verification gates:** confirm Meta user-data flows to website Supabase (if any), OVH physical location, relevant Cloudflare data handling and processing geographies, real OpenAI/third-party access and subprocessors, controller's exact legal name and jurisdiction, full live processor list and current form fields. Then enter all supported values into the real Meta Dashboard, save, reopen and confirm persistence. Neither this documentation edit nor earlier processor-existence 'Yes' equals a saved complete form.
+
+**No execution in Meta:** This session has no authenticated Meta App Review browser surface or app-management connector that can edit private Data Handling fields; the accessible Windows desktop was offline, and the available Meta Ads connector does not offer Developer App Review editing. No geographical fields were submitted or saved in Meta. Keep `Submit` disabled and the draft unsubmitted.
