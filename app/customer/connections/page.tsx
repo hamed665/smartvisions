@@ -7,6 +7,8 @@ import {
   loadCustomerConnections,
 } from '@/lib/access/customer-connections';
 import { metaGraphVersion } from '@/lib/whatsapp/meta-onboarding';
+import { getCurrentOrganization } from '@/lib/supabase/org';
+import { RegisteredWhatsAppImport } from './registered-whatsapp-import';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +30,18 @@ export default async function CustomerConnectionsPage({
 
   const whatsapp = context.whatsapp;
   const canManageWhatsApp = business.organizationRole === 'OWNER';
+  let registeredNumber: string | null = null;
+  if (canManageWhatsApp) {
+    const ctx = await getCurrentOrganization(true);
+    if (ctx.organizationId === business.organizationId) {
+      const integration = await ctx.supabase.from('integration_connections').select('config')
+        .eq('organization_id', ctx.organizationId).eq('provider', 'META').eq('channel', 'WHATSAPP').maybeSingle();
+      const prepared = integration.data?.config?.metaWhatsAppVaultImport;
+      if (prepared?.tenantBusinessId === business.id && typeof prepared.displayPhoneNumber === 'string') {
+        registeredNumber = prepared.displayPhoneNumber;
+      }
+    }
+  }
   const appId = process.env.NEXT_PUBLIC_META_APP_ID?.trim()
     || process.env.META_APP_ID?.trim()
     || null;
@@ -106,6 +120,7 @@ export default async function CustomerConnectionsPage({
 
       {canManageWhatsApp ? (
         <>
+          {registeredNumber ? <RegisteredWhatsAppImport businessId={business.id} displayPhoneNumber={registeredNumber} /> : null}
           <MetaWhatsAppEmbeddedSignup
             appId={appId}
             configurationId={configurationId}
