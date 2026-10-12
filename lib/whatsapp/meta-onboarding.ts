@@ -27,12 +27,22 @@ export async function exchangeMetaAuthorizationCode(input: {
   fetchImpl?: typeof fetch;
 }) {
   const fetchImpl = input.fetchImpl ?? fetch;
-  const tokenUrl = new URL(`https://graph.facebook.com/${metaGraphVersion()}/oauth/access_token`);
-  tokenUrl.searchParams.set('client_id', input.appId);
-  tokenUrl.searchParams.set('client_secret', input.appSecret);
-  tokenUrl.searchParams.set('code', input.code);
+  const tokenUrl = `https://graph.facebook.com/${metaGraphVersion()}/oauth/access_token`;
+  const body = new URLSearchParams({
+    client_id: input.appId,
+    client_secret: input.appSecret,
+    code: input.code,
+  });
 
-  const response = await fetchImpl(tokenUrl.toString(), { cache: 'no-store' });
+  const response = await fetchImpl(tokenUrl, {
+    method: 'POST',
+    cache: 'no-store',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
+    },
+    body,
+  });
   if (!response.ok) throw new Error(`Meta authorization exchange failed (${response.status})`);
   const token = await response.json() as { access_token?: string };
   if (!token.access_token || token.access_token.length < 20) {

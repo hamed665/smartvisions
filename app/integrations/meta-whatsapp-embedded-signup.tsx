@@ -45,6 +45,7 @@ function defaultMode(binding: BindingOption | undefined): ConnectionMode {
 export function MetaWhatsAppEmbeddedSignup(props: {
   appId: string | null;
   configurationId: string | null;
+  embeddedSignupVersion: 'v4' | null;
   coexistenceEnabled: boolean;
   graphVersion: string;
   bindings: BindingOption[];
@@ -216,7 +217,11 @@ export function MetaWhatsAppEmbeddedSignup(props: {
     return () => window.removeEventListener('message', receive);
   });
 
-  const configured = Boolean(props.appId && props.configurationId);
+  const configured = Boolean(
+    props.appId
+    && props.configurationId
+    && props.embeddedSignupVersion === 'v4'
+  );
 
   async function ensureSelectedBinding() {
     if (selected) return selected;
@@ -272,16 +277,15 @@ export function MetaWhatsAppEmbeddedSignup(props: {
     setState('WAITING');
     setMessage('Complete the Meta-hosted signup window. Smart Visions never asks for your Meta password or a copied token.');
 
+    // Embedded Signup v4 keeps products and permissions in the verified
+    // Facebook Login for Business configuration. Coexistence still needs the
+    // explicit launch selector so an existing WhatsApp Business App number is
+    // offered the non-destructive same-number path.
     const extras = connectionMode === 'BUSINESS_APP_COEXISTENCE'
       ? {
-          setup: {},
           featureType: 'whatsapp_business_app_onboarding',
-          sessionInfoVersion: '3',
         }
-      : {
-          setup: {},
-          sessionInfoVersion: '3',
-        };
+      : {};
 
     window.FB.login((response) => {
       const code = response.authResponse?.code?.trim();
@@ -439,7 +443,7 @@ export function MetaWhatsAppEmbeddedSignup(props: {
           </div>
         : null}
     </> : <p className="muted">Create an active tenant Business before connecting Meta assets.</p>}
-    {!configured ? <p className="muted">Embedded Signup is code-ready but blocked until the Meta App ID and Embedded Signup Configuration ID are configured for this environment.</p> : null}
+    {!configured ? <p className="muted">Embedded Signup is blocked until the Meta App ID, Configuration ID, and an explicitly verified v4 configuration are configured for this environment.</p> : null}
     {message ? <p role="status" className="muted smallText">{message}</p> : null}
   </section>;
 }

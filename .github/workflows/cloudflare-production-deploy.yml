@@ -29,6 +29,7 @@ jobs:
       META_APP_ID: ${{ secrets.META_APP_ID }}
       NEXT_PUBLIC_META_APP_ID: ${{ secrets.META_APP_ID }}
       NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID: ${{ secrets.META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID }}
+      META_WHATSAPP_EMBEDDED_SIGNUP_VERSION: ${{ vars.META_WHATSAPP_EMBEDDED_SIGNUP_VERSION }}
       META_WHATSAPP_COEXISTENCE_ENABLED: ${{ vars.META_WHATSAPP_COEXISTENCE_ENABLED }}
       NEXT_PUBLIC_APP_NAME: Smart Visions Growth OS
       NEXT_PUBLIC_SUPABASE_URL: https://pkypexzpyfbikdnkrzvw.supabase.co
@@ -75,6 +76,10 @@ jobs:
             echo "::error::Meta public identifiers are only partially configured; refusing deployment."
             exit 1
           else
+            if [ "${META_WHATSAPP_EMBEDDED_SIGNUP_VERSION:-}" != "v4" ]; then
+              echo "::error::META_WHATSAPP_EMBEDDED_SIGNUP_VERSION must be v4 after the actual Meta configuration is verified; refusing legacy Embedded Signup deployment."
+              exit 1
+            fi
             if [ -z "${META_APP_SECRET:-}" ]; then
               echo "::error::META_APP_SECRET GitHub Actions secret is required before deploying the configured Meta App."
               exit 1
@@ -154,6 +159,7 @@ jobs:
             META_APP_ID:process.env.META_APP_ID,
             NEXT_PUBLIC_META_APP_ID:process.env.NEXT_PUBLIC_META_APP_ID,
             NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID:process.env.NEXT_PUBLIC_META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID,
+            META_WHATSAPP_EMBEDDED_SIGNUP_VERSION:process.env.META_WHATSAPP_EMBEDDED_SIGNUP_VERSION,
             META_WHATSAPP_COEXISTENCE_ENABLED:process.env.META_WHATSAPP_COEXISTENCE_ENABLED==='true'?'true':'false',
             APP_BASE_URL:process.env.CANDIDATE_URL,
             EMAIL_PROVIDER:'RESEND',
@@ -170,6 +176,7 @@ jobs:
           delete c.triggers;
           fs.writeFileSync(file,JSON.stringify(c,null,2)+'\n');
           if(c.name!=='smartvisions-growth-os-release-candidate'||c.vars?.DEPLOYMENT_ENV!=='candidate'||c.vars?.CHATWOOT_PROVISIONING_ENABLED!=='false'||c.vars?.CHATWOOT_BASE_URL||c.vars?.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN||c.vars?.CHATWOOT_PLATFORM_TOKEN||c.limits?.cpu_ms!==100||c.routes||c.route||c.triggers)throw new Error('Release candidate isolation validation failed');
+          if(c.vars?.META_APP_ID&&c.vars?.META_WHATSAPP_EMBEDDED_SIGNUP_VERSION!=='v4')throw new Error('Release candidate Meta Embedded Signup must be explicitly attested as v4');
           console.log('Release candidate validated: candidate env, Chatwoot provisioning disabled/unbound, no production route, no scheduled triggers, CPU guard=100ms.');
           NODE
 
@@ -244,6 +251,7 @@ jobs:
             APP_BASE_URL:process.env.PRODUCTION_URL,
             CHATWOOT_BASE_URL:process.env.CHATWOOT_BASE_URL,
             CHATWOOT_WEBHOOK_PUBLIC_ORIGIN:process.env.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN,
+            META_WHATSAPP_EMBEDDED_SIGNUP_VERSION:process.env.META_WHATSAPP_EMBEDDED_SIGNUP_VERSION,
             META_WHATSAPP_COEXISTENCE_ENABLED:process.env.META_WHATSAPP_COEXISTENCE_ENABLED==='true'?'true':'false',
             CHATWOOT_PROVISIONING_ENABLED:'false'
           };
@@ -255,6 +263,7 @@ jobs:
           if(c.vars?.CHATWOOT_BASE_URL!==process.env.CHATWOOT_BASE_URL)throw new Error('Production Chatwoot base URL invariant failed');
           if(c.vars?.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN!==process.env.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN)throw new Error('Production Chatwoot webhook origin invariant failed');
           if(c.vars?.CHATWOOT_PROVISIONING_ENABLED!=='false')throw new Error('Production Chatwoot provisioning must remain disabled');
+          if(c.vars?.META_APP_ID&&c.vars?.META_WHATSAPP_EMBEDDED_SIGNUP_VERSION!=='v4')throw new Error('Production Meta Embedded Signup must be explicitly attested as v4');
           if(Object.prototype.hasOwnProperty.call(c.vars||{},'CHATWOOT_PLATFORM_TOKEN'))throw new Error('Chatwoot Platform token must never be stored in plaintext Worker vars');
           if(JSON.stringify(c.triggers?.crons)!==JSON.stringify(['*/2 * * * *']))throw new Error('Production cron invariant failed');
           fs.writeFileSync(file,JSON.stringify(c,null,2)+'\n');
@@ -365,5 +374,6 @@ jobs:
           echo "Outbound provider sends invoked by smoke: none"
           echo "Chatwoot Production base URL: inbox.smartvisionsai.com"
           echo "Chatwoot webhook public origin: app.smartvisionsai.com"
+          echo "Meta Embedded Signup version attestation: ${META_WHATSAPP_EMBEDDED_SIGNUP_VERSION:-unset}"
           echo "Chatwoot provisioning: disabled"
           echo "Chatwoot Platform token transport: Production Worker secret only when configured; never release candidate"

@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { isPublicShellPath } from '@/lib/public-paths';
 
@@ -38,10 +38,16 @@ function isActive(pathname: string, href: string) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const customerPortal = pathname === '/customer' || pathname.startsWith('/customer/');
+  const customerBusinessId = customerPortal ? searchParams.get('businessId') : null;
   const groups = customerPortal ? customerGroups : operatorGroups;
   const mobilePrimary = customerPortal ? customerMobilePrimary : operatorMobilePrimary;
+  const scopedHref = (href: string) =>
+    customerBusinessId && href.startsWith('/customer')
+      ? `${href}?businessId=${encodeURIComponent(customerBusinessId)}`
+      : href;
 
   const pageTitle = useMemo(() => {
     for (const [, items] of groups) {
@@ -77,7 +83,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="navGroup" key={group}>
               <span className="navLabel">{group}</span>
               {items.map(([item, href]) => (
-                <Link className={isActive(pathname, href) ? 'active' : undefined} href={href} key={item}>
+                <Link className={isActive(pathname, href) ? 'active' : undefined} href={scopedHref(href)} key={item}>
                   {item}
                 </Link>
               ))}
@@ -112,7 +118,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {mobilePrimary.map(([label, href, icon]) => (
           <Link
             className={isActive(pathname, href) ? 'active' : undefined}
-            href={href}
+            href={scopedHref(href)}
             key={href}
             onClick={() => setMobileMenuOpen(false)}
           >

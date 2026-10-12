@@ -100,6 +100,23 @@ describe('customer invite + auth capability', () => {
     expect(recovery).toContain('resetPasswordForEmail');
   });
 
+  it('exposes an OWNER-operated Business-scoped invite surface without widening customer authority', () => {
+    const settings = read('app/settings/page.tsx');
+    const inviteForm = read('app/settings/customer-invite-form.tsx');
+
+    expect(settings).toContain('Customer onboarding operations');
+    expect(settings).toContain('createCanonicalBusiness');
+    expect(settings).toContain('<CustomerInviteForm businesses={activeCanonicalBusinesses} />');
+
+    expect(inviteForm).toContain("fetch('/api/access/invites'");
+    expect(inviteForm).toContain('tenantBusinessId');
+    expect(inviteForm).toContain('inviteUrl');
+    expect(inviteForm).toContain('defaultValue="ADMIN"');
+    expect(inviteForm).toContain('<option value="ADMIN">');
+    expect(inviteForm).not.toContain('<option value="OWNER">');
+    expect(inviteForm).not.toContain('console.');
+  });
+
   it('opens only the bounded unauthenticated invite surfaces and hides operator navigation', () => {
     const proxy = read('lib/supabase/proxy.ts');
     expect(proxy).toContain("'/api/access/invites/redeem'");
