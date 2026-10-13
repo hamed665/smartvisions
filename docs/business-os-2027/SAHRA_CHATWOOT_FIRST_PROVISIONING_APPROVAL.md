@@ -1,6 +1,6 @@
 # Sahra first Chatwoot provisioning — owner approval proposal
 
-Status: DRAFT / NOT AUTHORIZED. Do not merge or execute until the owner approves this exact Production change and the health gate is proven.
+Status: OWNER APPROVED on 2026-10-13 at 16:48 Muscat. #501 merged to fdf40bd3c1f32718e40e04d20c33ec407f1c586d; main CI 38400378897 and Production deploy 38400884157 succeeded. Live readiness: no blockers, HEALTHY / HTTP 200 / 409 ms. First Sahra Finalize communication Inbox attempt returned a sanitized 503 (support ID 676ed619-3850-4723-8b0c-f57ef80c0bb3). Existing Account mapping remains PROVISIONING v1 / external ID null; CLAIM_ACCOUNT_EXTERNAL_CREATE is durable. External Accounts UI still contains only prior smartvisions ID 1. No duplicate create, membership, Inbox or provider send. Next action is safe failure classification and receipt-backed reconciliation, never claim deletion or blind create replay. Additional owner-reviewed Sahra commercial knowledge and consented live-test authorization remain pending.
 
 ## Proposed change
 
