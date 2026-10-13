@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ChatwootHttpError } from '@/lib/chatwoot/http';
+import { provisioningDiagnostic } from '@/lib/chatwoot/provisioning-diagnostic-contract';
 
 import {
   ChatwootProvisioningError,
@@ -45,7 +46,8 @@ function safeMessage(error: unknown) {
   if (error.code === 'INVALID_INPUT') {
     return 'This WhatsApp connection is not eligible for Chatwoot projection.';
   }
-  return 'The WhatsApp connection is saved, but the communication Inbox needs reconciliation before it can be marked ready.';
+  return 'The WhatsApp connection is saved, but the communication Inbox needs reconciliation before it can be marked ready. '
+    + provisioningDiagnostic(error.code, error.diagnosticReason, statusFor(error));
 }
 
 export async function POST(request: Request) {

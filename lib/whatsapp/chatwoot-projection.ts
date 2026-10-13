@@ -39,8 +39,8 @@ type ChatwootAccountMapping = {
   version: number;
 };
 
-function fail(message: string): never {
-  throw new ChatwootProvisioningError('RECONCILIATION_REQUIRED', message);
+function fail(message: string, diagnosticReason: string): never {
+  throw new ChatwootProvisioningError('RECONCILIATION_REQUIRED', message, diagnosticReason);
 }
 
 function boundedName(value: string) {
@@ -140,7 +140,7 @@ async function requireMetaProvisioningEvidence(input: {
     || evidence.phone_number_id !== input.binding.provider_destination_id
     || evidence.subscription_confirmed !== true
   ) {
-    return fail('Verified Meta provider provisioning evidence is required before Chatwoot projection');
+    return fail('Verified Meta provider provisioning evidence is required before Chatwoot projection', 'META_PROVISIONING_EVIDENCE_MISSING');
   }
 
   return data;
@@ -159,7 +159,7 @@ async function loadLiveAccountMapping(input: {
     .in('status', ['PROVISIONING', 'ACTIVE', 'DEGRADED'])
     .maybeSingle();
 
-  if (error) return fail('Unable to read Chatwoot Account mapping state');
+  if (error) return fail('Unable to read Chatwoot Account mapping state', 'ACCOUNT_MAPPING_READ_FAILED');
   return (data ?? null) as ChatwootAccountMapping | null;
 }
 
@@ -203,7 +203,7 @@ export async function provisionWhatsAppChatwootProjection(input: {
     || !binding.last_verified_at
     || binding.last_error_code
   ) {
-    return fail('Canonical WhatsApp binding is not ready for Chatwoot projection');
+    return fail('Canonical WhatsApp binding is not ready for Chatwoot projection', 'WHATSAPP_BINDING_NOT_READY');
   }
 
   const { data: business, error: businessError } = await input.supabase
@@ -221,7 +221,7 @@ export async function provisionWhatsAppChatwootProjection(input: {
     || typeof business.name !== 'string'
     || !business.name.trim()
   ) {
-    return fail('Active tenant Business is required for Chatwoot projection');
+    return fail('Active tenant Business is required for Chatwoot projection', 'TENANT_BUSINESS_NOT_ACTIVE');
   }
 
   const service = createSupabaseServiceClient();
@@ -248,7 +248,7 @@ export async function provisionWhatsAppChatwootProjection(input: {
     || accountMapping.tenant_business_id !== binding.tenant_business_id
     || accountMapping.status === 'ARCHIVED'
   ) {
-    return fail('Chatwoot Account mapping does not match the WhatsApp tenant scope');
+    return fail('Chatwoot Account mapping does not match the WhatsApp tenant scope', 'ACCOUNT_TENANT_SCOPE_MISMATCH');
   }
 
   accountMapping = await provisionChatwootAccount({
@@ -260,7 +260,7 @@ export async function provisionWhatsAppChatwootProjection(input: {
   }) as ChatwootAccountMapping;
 
   if (accountMapping.status !== 'ACTIVE' || !accountMapping.chatwoot_account_id) {
-    return fail('Chatwoot Account projection is not ACTIVE');
+    return fail('Chatwoot Account projection is not ACTIVE', 'ACCOUNT_PROJECTION_NOT_ACTIVE');
   }
 
   await provisionCurrentOwnerChatwootAccess({
@@ -288,7 +288,7 @@ export async function provisionWhatsAppChatwootProjection(input: {
     || mapping.communication_channel_binding_id !== binding.id
     || mapping.chatwoot_account_mapping_id !== accountMapping.id
   ) {
-    return fail('Chatwoot Inbox projection did not reconcile to the WhatsApp binding');
+    return fail('Chatwoot Inbox projection did not reconcile to the WhatsApp binding', 'INBOX_BINDING_MISMATCH');
   }
 
   const { data: priorAudit } = await service
@@ -321,7 +321,7 @@ export async function provisionWhatsAppChatwootProjection(input: {
         projection: 'SMART_CORE_TO_CHATWOOT_CHANNEL_API',
       },
     });
-    if (auditError) return fail('Chatwoot projection audit evidence could not be committed');
+    if (auditError) return fail('Chatwoot projection audit evidence could not be committed', 'PROJECTION_AUDIT_NOT_COMMITTED');
   }
 
   let pendingInboundSync: Awaited<ReturnType<typeof processPendingWhatsAppChatwootSync>> | null = null;
