@@ -8,7 +8,9 @@ const workflow = fs.readFileSync(
 
 describe('Chatwoot Cloudflare runtime boundary', () => {
   it('keeps the release candidate disconnected from Production Chatwoot and without the Platform token', () => {
-    expect(workflow).toContain("CHATWOOT_PROVISIONING_ENABLED:'false'");
+    const candidate = workflow.slice(0, workflow.indexOf('- name: Promote exact validated bundle'));
+    expect(candidate).toContain("CHATWOOT_PROVISIONING_ENABLED:'false'");
+    expect(candidate).not.toContain("CHATWOOT_PROVISIONING_ENABLED:'true'");
     expect(workflow).toContain('delete c.vars.CHATWOOT_BASE_URL');
     expect(workflow).toContain('delete c.vars.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN');
     expect(workflow).toContain('delete c.vars.CHATWOOT_PLATFORM_TOKEN');
@@ -20,7 +22,7 @@ describe('Chatwoot Cloudflare runtime boundary', () => {
     );
   });
 
-  it('publishes only non-secret Production Chatwoot routing vars while provisioning stays disabled', () => {
+  it('publishes non-secret Production routing vars with the separately approved gate', () => {
     expect(workflow).toContain(
       'CHATWOOT_BASE_URL: https://inbox.smartvisionsai.com',
     );
@@ -34,7 +36,7 @@ describe('Chatwoot Cloudflare runtime boundary', () => {
       'CHATWOOT_WEBHOOK_PUBLIC_ORIGIN:process.env.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN',
     );
     expect(workflow).toContain(
-      "if(c.vars?.CHATWOOT_PROVISIONING_ENABLED!=='false')throw new Error('Production Chatwoot provisioning must remain disabled');",
+      "if(c.vars?.CHATWOOT_PROVISIONING_ENABLED!=='true')throw new Error('Approved Production Chatwoot provisioning flag invariant failed');",
     );
     expect(workflow).toContain(
       "if(Object.prototype.hasOwnProperty.call(c.vars||{},'CHATWOOT_PLATFORM_TOKEN'))throw new Error('Chatwoot Platform token must never be stored in plaintext Worker vars');",
@@ -55,7 +57,7 @@ describe('Chatwoot Cloudflare runtime boundary', () => {
       "if(!names.has('CHATWOOT_PLATFORM_TOKEN'))throw new Error('Production Chatwoot Platform token binding name was not created');",
     );
     expect(workflow).toContain(
-      'Chatwoot Platform token staged only on the Production Worker; provisioning remains disabled.',
+      'Chatwoot Platform token staged only on the Production Worker; external execution remains tenant/OWNER/claim gated.',
     );
   });
 });
