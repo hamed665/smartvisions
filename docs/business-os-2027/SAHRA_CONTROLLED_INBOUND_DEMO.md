@@ -26,6 +26,10 @@ claim, enabled test, window, cap, Shadow, pauses, Kill Switch, DNC/human state a
 The canonical provider gate and Cost Guard remain authoritative. Text-only output excludes
 catalog, template and generated audio artifacts. These reply keys do not schedule Growth
 first-touch follow-ups.
+Automatic approval uses the existing `decide_message_approval` authority, authorized by the
+USER/OWNER on the immutable consent audit. It never directly changes pending approval status.
+A separate SYSTEM audit identifies automated execution and explicitly records that there was
+no manual reviewer click. Current OWNER membership is required again at the provider boundary.
 
 ## Private configuration contract
 

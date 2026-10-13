@@ -22,6 +22,8 @@ describe('internal live WhatsApp reply invariants', () => {
     expect(helper).toContain('controlledShadowPilot: true');
     expect(helper).toContain("controlledVoiceReplyPilot: policy.deliveryMode === 'VOICE_REPLY'");
     expect(helper).toContain('deliveryMode: policy.deliveryMode');
+    expect(helper).toContain("supabase.rpc('approve_whatsapp_controlled_inbound_reply'");
+    expect(helper).not.toContain("approval_reason: 'INTERNAL_TEST_LIVE_WINDOW_AUTO_APPROVAL'");
     expect(helper).not.toContain('app.smartvisionsai.com');
     expect(helper).not.toMatch(/\bfetch\s*\(/);
   });

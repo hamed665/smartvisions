@@ -12,7 +12,7 @@ insert into public.businesses(id,organization_id,name,country_code,whatsapp)
 insert into public.leads(id,organization_id,business_id,status,agent_mode)
  values('20000000-0000-4000-8000-00000000ca01','00000000-0000-0000-0000-00000000fb01','10000000-0000-4000-8000-00000000ca01','NEW','AUTO');
 insert into public.audit_logs(id,organization_id,actor_type,actor_id,action,entity_type,entity_id,after_data)
- values('30000000-0000-4000-8000-00000000ca01','00000000-0000-0000-0000-00000000fb01','SYSTEM','ci-fixture',
+ values('30000000-0000-4000-8000-00000000ca01','00000000-0000-0000-0000-00000000fb01','USER','00000000-0000-0000-0000-00000000eb01',
  'SAHRA_CONTROLLED_TEST_CONSENT_RECORDED','test','ci-fixture',jsonb_build_object(
  'ownerReportedConsent',true,'inboundOnly',true,'channelBindingId',(select value from c4_inbox_state where key='binding_id'),
  'recipients',jsonb_build_array('+96890000001')));
@@ -38,8 +38,8 @@ do $$ declare n integer; c uuid; m uuid; o uuid; v_metadata jsonb; begin
     original_text,status,provenance,source_plane,source_message_id,metadata)
    values(m,'00000000-0000-0000-0000-00000000fb01',c,'20000000-0000-4000-8000-00000000ca01','wamid.ci-controlled-'||n,
      'WHATSAPP','INBOUND','TEXT','fixture','RECEIVED','CUSTOMER','META_WHATSAPP','wamid.ci-controlled-'||n,v_metadata);
-  insert into public.whatsapp_events(organization_id,lead_id,conversation_id,provider_message_id,direction,event_type,payload)
-   values('00000000-0000-0000-0000-00000000fb01','20000000-0000-4000-8000-00000000ca01',c,'wamid.ci-controlled-'||n,'INBOUND','TEXT',
+  insert into public.whatsapp_events(id,organization_id,lead_id,conversation_id,provider_message_id,direction,event_type,payload)
+   values(gen_random_uuid(),'00000000-0000-0000-0000-00000000fb01','20000000-0000-4000-8000-00000000ca01',c,'wamid.ci-controlled-'||n,'INBOUND','TEXT',
     jsonb_build_object('from','96890000001','routing',jsonb_build_object('tenantBusinessId','20000000-0000-0000-0000-00000000fb01',
       'bindingId',(select value from c4_inbox_state where key='binding_id')),'canonical',jsonb_build_object('messageId',m)));
   insert into public.unified_inbox_conversation_projections(organization_id,conversation_id,brand_id,tenant_business_id,branch_id,

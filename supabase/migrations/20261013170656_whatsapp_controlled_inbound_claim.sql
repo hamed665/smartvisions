@@ -10,6 +10,7 @@ declare
   v_controls public.system_controls%rowtype;
   v_cfg jsonb;
   v_consent jsonb;
+  v_consent_owner uuid;
   v_receipt jsonb;
   v_start timestamptz;
   v_end timestamptz;
@@ -47,7 +48,8 @@ begin
     v_cap := (v_cfg->>'maxRepliesTotal')::integer;
     v_tenant := (v_cfg->>'tenantBusinessId')::uuid;
     v_binding := (v_cfg->>'bindingId')::uuid;
-    select after_data into v_consent from public.audit_logs
+    select after_data,case when actor_type='USER' then actor_id::uuid end
+      into v_consent,v_consent_owner from public.audit_logs
      where organization_id=p_organization_id and id=(v_cfg->>'consentAuditId')::uuid
        and action='SAHRA_CONTROLLED_TEST_CONSENT_RECORDED';
   exception when invalid_text_representation or datetime_field_overflow then
@@ -61,7 +63,9 @@ begin
   if v_consent is null or v_consent->'ownerReportedConsent' is distinct from 'true'::jsonb
      or v_consent->'inboundOnly' is distinct from 'true'::jsonb
      or v_consent->>'channelBindingId' is distinct from v_binding::text
-     or jsonb_typeof(v_consent->'recipients') is distinct from 'array' then
+     or jsonb_typeof(v_consent->'recipients') is distinct from 'array'
+     or v_consent_owner is null or not exists(select 1 from public.organization_members om
+       where om.organization_id=p_organization_id and om.user_id=v_consent_owner and om.role='OWNER') then
     return jsonb_build_object('allowed',false,'reason','LIVE_TEST_CONSENT_UNAVAILABLE');
   end if;
   -- Every configured participant must be present in the immutable private consent.
@@ -178,3 +182,60 @@ exception when invalid_text_representation or datetime_field_overflow then
 end $$;
 revoke all on function public.verify_or_claim_whatsapp_controlled_inbound(uuid,uuid,text,boolean,uuid) from public,anon,authenticated;
 grant execute on function public.verify_or_claim_whatsapp_controlled_inbound(uuid,uuid,text,boolean,uuid) to service_role;
+
+-- Automatic execution of the OWNER's bounded authorization still goes through
+-- the existing governed Approval command. Never write approval status directly.
+create or replace function public.approve_whatsapp_controlled_inbound_reply(
+  p_organization_id uuid,p_message_id uuid
+) returns jsonb language plpgsql security invoker set search_path='' as $$
+declare
+  m public.conversation_messages%rowtype;
+  v_inbound_id uuid;
+  v_recipient text;
+  v_evidence jsonb;
+  v_cfg jsonb;
+  v_owner uuid;
+  v_result jsonb;
+begin
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+    'whatsapp-controlled-inbound:'||p_organization_id::text,0));
+  select * into m from public.conversation_messages
+   where organization_id=p_organization_id and id=p_message_id for update;
+  if m.id is null or m.direction<>'OUTBOUND' or m.channel<>'WHATSAPP' or m.media_type<>'TEXT'
+     or m.status<>'APPROVAL_REQUIRED' or m.requires_approval is distinct from true
+     or m.metadata->>'source' is distinct from 'SHADOW_MODE'
+     or m.metadata->>'idempotency_key' !~ '^agent:whatsapp-pilot:live:[0-9a-f-]{36}:shadow$'
+     or m.provider_message_id is distinct from 'shadow:'||(m.metadata->>'idempotency_key')
+     or nullif(m.metadata->'send_context'->>'catalog_content_id','') is not null
+     or nullif(m.metadata->'send_context'->>'template_name','') is not null
+     or m.metadata->'send_context'->'voice_reply'='true'::jsonb then
+    return jsonb_build_object('allowed',false,'reason','CONTROLLED_APPROVAL_ARTIFACT_INVALID');
+  end if;
+  v_inbound_id:=split_part(m.metadata->>'idempotency_key',':',4)::uuid;
+  v_recipient:=m.metadata->'send_context'->>'to';
+  if not exists(select 1 from public.outreach_messages i where i.organization_id=p_organization_id
+    and i.id=v_inbound_id and i.lead_id=m.lead_id
+    and i.metadata->>'conversation_id'=m.conversation_id::text) then
+    return jsonb_build_object('allowed',false,'reason','CONTROLLED_APPROVAL_INBOUND_MISMATCH');
+  end if;
+  v_evidence:=public.verify_or_claim_whatsapp_controlled_inbound(
+    p_organization_id,v_inbound_id,v_recipient,false,m.conversation_id);
+  if v_evidence->'allowed' is distinct from 'true'::jsonb then return v_evidence; end if;
+  select config->'internalTestLiveReply' into v_cfg from public.approval_rules
+   where organization_id=p_organization_id and action_key='WHATSAPP_OUTBOUND';
+  select a.actor_id::uuid into v_owner from public.audit_logs a join public.organization_members om
+    on om.organization_id=a.organization_id and om.user_id::text=a.actor_id and om.role='OWNER'
+   where a.organization_id=p_organization_id and a.id=(v_cfg->>'consentAuditId')::uuid
+     and a.actor_type='USER' and a.action='SAHRA_CONTROLLED_TEST_CONSENT_RECORDED';
+  if v_owner is null then return jsonb_build_object('allowed',false,'reason','CONSENT_OWNER_NO_LONGER_AUTHORIZED'); end if;
+  v_result:=public.decide_message_approval(p_organization_id,v_owner,p_message_id,'APPROVE',null,
+    'controlled-inbound:auto:'||v_inbound_id::text);
+  insert into public.audit_logs(organization_id,actor_type,actor_id,action,entity_type,entity_id,after_data)
+  values(p_organization_id,'SYSTEM','whatsapp_controlled_inbound','WHATSAPP_CONTROLLED_INBOUND_AUTO_APPROVED',
+    'conversation_message',p_message_id::text,jsonb_build_object('inboundId',v_inbound_id,
+      'consentAuditId',v_cfg->>'consentAuditId','authorizedByOwnerUserId',v_owner,
+      'method','GOVERNED_MESSAGE_APPROVAL','automatic',true,'manualReviewerClick',false,'shadowModeRemainsOn',true));
+  return v_result||jsonb_build_object('allowed',true,'automatic',true);
+end $$;
+revoke all on function public.approve_whatsapp_controlled_inbound_reply(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.approve_whatsapp_controlled_inbound_reply(uuid,uuid) to service_role;

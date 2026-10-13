@@ -280,18 +280,19 @@ export async function runInternalTestLiveReply(input: {
   }
 
   const shadowId = shadowProviderMessageId(idempotencyKey);
+  const approval = await supabase.rpc('approve_whatsapp_controlled_inbound_reply', {
+    p_organization_id: input.organizationId, p_message_id: queued.messageId,
+  });
+  if (approval.error || record(approval.data).allowed !== true) {
+    return { attempted: true, sent: false, reason: 'CONTROLLED_GOVERNED_APPROVAL_FAILED', messageId: String(queued.messageId), runId: stringValue(payload.runId) };
+  }
   const { data: approved, error: approveError } = await supabase.from('conversation_messages')
-    .update({
-      status: 'APPROVED',
-      requires_approval: false,
-      approval_reason: 'INTERNAL_TEST_LIVE_WINDOW_AUTO_APPROVAL',
-    })
+    .select('id,status,requires_approval,channel,lead_id,conversation_id,provider_message_id,metadata')
     .eq('organization_id', input.organizationId)
     .eq('id', queued.messageId)
-    .eq('status', 'APPROVAL_REQUIRED')
-    .eq('requires_approval', true)
+    .eq('status', 'APPROVED')
+    .eq('requires_approval', false)
     .eq('provider_message_id', shadowId)
-    .select('id,status,requires_approval,channel,lead_id,conversation_id,provider_message_id,metadata')
     .maybeSingle();
   if (approveError || !approved) {
     return { attempted: true, sent: false, reason: 'CONTROLLED_AUTO_APPROVAL_FAILED', messageId: String(queued.messageId), runId: stringValue(payload.runId) };
