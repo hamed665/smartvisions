@@ -22,6 +22,18 @@ function enableProvisioning() {
 }
 
 describe('Chatwoot provisioning HTTP client', () => {
+  it.each(['GET', 'POST'] as const)('rejects redirects without following credentials or retrying %s', async method => {
+    enableProvisioning();
+    const fetchMock = vi.fn().mockResolvedValue(new Response('', {
+      status: 302, headers: { Location: 'https://untrusted.example/collect' },
+    }));
+    await expect(chatwootPlatformProvisioningRequest({
+      path: '/platform/api/v1/accounts', method, fetchImpl: fetchMock as unknown as typeof fetch,
+    })).rejects.toMatchObject({ status: 302 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[1]?.redirect).toBe('manual');
+  });
+
   it('fails closed before fetch when provisioning is not explicitly enabled', async () => {
     vi.stubEnv('CHATWOOT_PROVISIONING_ENABLED', 'false');
     vi.stubEnv('CHATWOOT_BASE_URL', 'https://inbox.example.com');
