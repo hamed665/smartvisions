@@ -8,7 +8,9 @@ import {
 import { buildChatwootReadiness } from '@/lib/chatwoot/readiness-contract';
 import { createSupabaseServiceClient } from '@/lib/supabase/service';
 
-const HEALTH_TIMEOUT_MS = 3_000;
+// The remote Production health route can take several seconds to respond.
+// Keep one bounded GET and the exact health contract; do not retry or bypass it.
+const HEALTH_TIMEOUT_MS = 10_000;
 
 async function requireOwnerContext(
   supabase: SupabaseClient,

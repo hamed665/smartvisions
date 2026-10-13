@@ -1,3 +1,12 @@
+## Sahra Chatwoot credential staging — 2026-10-13 (Muscat)
+
+- Exactly one `Smart Visions Core` Platform App exists (ID 1). Its generated token was copied directly into GitHub Actions Secret `CHATWOOT_PLATFORM_TOKEN`; no value is recorded in code, logs, screenshots or this document.
+- Exact-main `cf62c62ca7fa1b823b6072388958662d0d08cbfd` Production Deploy run `38337817180`, latest job `115277262282`, succeeded. Logs prove Production-only token staging, Candidate token exclusion and provisioning still disabled.
+- Live Settings no longer reports `PLATFORM_TOKEN_MISSING`; it still reports `CHATWOOT_UNHEALTHY`. Independent GET `/health` returned HTTP 200 with `{"status":"woot"}`, with one measured response taking 7.57 seconds. This suggests the 3-second readiness deadline can yield a false negative; it does not establish the Worker-side failure cause.
+- The health probe deadline is extended to 10 seconds with one GET, no retry, normal TLS, redirect rejection, bounded response and exact `woot` validation retained. Controlled tests cover an 8-second valid response and an over-deadline abort. Live Worker readiness after deployment remains to be verified.
+- Existing Sahra Account mapping `02262236-4989-4d72-94bd-bb63cacfaba0` remains PROVISIONING v1, external Account ID NULL; no external-create claim observed, Inbox/Membership counts zero. Provider binding remains ACTIVE v3.
+- Provisioning activation, external account/membership/inbox creation, Meta Publish and the consented WhatsApp pilot remain separate gates. Shadow Mode stays ON. The demo is NOT Production Verified.
+
 ## Sahra WhatsApp demo checkpoint — 2026-10-13 (Muscat)
 
 - Goal is a real customer WhatsApp round-trip, not a Meta field-test badge. **Not Production Verified.**
