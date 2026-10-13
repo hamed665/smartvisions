@@ -86,6 +86,34 @@ afterEach(() => {
 });
 
 describe('Chatwoot readiness loader', () => {
+  it.each([
+    { body: '', status: 302, code: 'HTTP_ERROR' },
+    { body: 'private upstream body', status: 503, code: 'HTTP_ERROR' },
+    { body: '<html>private upstream body</html>', status: 200, code: 'INVALID_JSON' },
+    { body: '{"status":"not-woot","secret":"private upstream body"}', status: 200, code: 'UNEXPECTED_STATUS' },
+    { body: 'private upstream body'.repeat(40), status: 200, code: 'BODY_TOO_LARGE' },
+  ])('reports bounded health failure metadata without upstream content: $code', async ({ body, status, code }) => {
+    vi.stubEnv('DEPLOYMENT_ENV', 'production');
+    vi.stubEnv('CHATWOOT_BASE_URL', 'https://inbox.example.com');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body, { status })));
+    createSupabaseServiceClient.mockReturnValue(serviceClient({ counts: {} }));
+    const state = await loadChatwootReadiness({ supabase: ownerSupabase(), organizationId: ORG });
+    expect(state.healthProbe).toMatchObject({ code, httpStatus: status });
+    expect(state.chatwootHealthy).toBe(false);
+    expect(state.activationReady).toBe(false);
+    expect(JSON.stringify(state)).not.toContain('private upstream body');
+  });
+
+  it('does not expose network error details', async () => {
+    vi.stubEnv('DEPLOYMENT_ENV', 'production');
+    vi.stubEnv('CHATWOOT_BASE_URL', 'https://inbox.example.com');
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('sensitive network detail')));
+    createSupabaseServiceClient.mockReturnValue(serviceClient({ counts: {} }));
+    const state = await loadChatwootReadiness({ supabase: ownerSupabase(), organizationId: ORG });
+    expect(state.healthProbe).toMatchObject({ code: 'NETWORK_OR_REDIRECT_ERROR', httpStatus: null });
+    expect(JSON.stringify(state)).not.toContain('sensitive network detail');
+  });
+
   it.each([{ responseAt: 8_000, healthy: true }, { responseAt: 11_000, healthy: false }])(
     'keeps a slow health check bounded without enabling provisioning: %j',
     async ({ responseAt, healthy }) => {
@@ -109,6 +137,7 @@ describe('Chatwoot readiness loader', () => {
       await vi.advanceTimersByTimeAsync(10_000);
       const state = await pending;
       expect(state.chatwootHealthy).toBe(healthy);
+      expect(state.healthProbe.code).toBe(healthy ? 'HEALTHY' : 'TIMEOUT');
       expect(state.activationReady).toBe(healthy);
       expect(state.liveProvisioningReady).toBe(false);
       expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -149,7 +178,7 @@ describe('Chatwoot readiness loader', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'https://inbox.example.com/health',
-      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+      expect.objectContaining({ method: 'GET', cache: 'no-store', redirect: 'manual' }),
     );
     expect(state.activationReady).toBe(true);
     expect(state.liveProvisioningReady).toBe(false);

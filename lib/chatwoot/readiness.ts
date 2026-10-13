@@ -73,7 +73,12 @@ async function countScopedUserMappings(
 }
 
 async function readChatwootHealth(baseUrl: string | null) {
-  if (!baseUrl) return false;
+  const startedAt = Date.now();
+  let httpStatus: number | null = null;
+  const result = (code: 'HEALTHY' | 'BASE_URL_MISSING' | 'HTTP_ERROR' | 'BODY_TOO_LARGE' | 'INVALID_JSON' | 'UNEXPECTED_STATUS' | 'TIMEOUT' | 'NETWORK_OR_REDIRECT_ERROR') => ({
+    healthy: code === 'HEALTHY', code, httpStatus, latencyMs: Math.max(0, Date.now() - startedAt),
+  });
+  if (!baseUrl) return result('BASE_URL_MISSING');
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), HEALTH_TIMEOUT_MS);
@@ -82,19 +87,25 @@ async function readChatwootHealth(baseUrl: string | null) {
     const response = await fetch(baseUrl + '/health', {
       method: 'GET',
       cache: 'no-store',
-      redirect: 'error',
+      redirect: 'manual',
       signal: controller.signal,
       headers: { Accept: 'application/json' },
     });
-    if (!response.ok) return false;
+    httpStatus = response.status;
+    if (!response.ok) return result('HTTP_ERROR');
 
     const body = await response.text();
-    if (body.length > 512) return false;
+    if (body.length > 512) return result('BODY_TOO_LARGE');
 
-    const payload = JSON.parse(body) as { status?: unknown };
-    return payload.status === 'woot';
+    let payload: { status?: unknown } | null;
+    try {
+      payload = JSON.parse(body) as { status?: unknown } | null;
+    } catch {
+      return result('INVALID_JSON');
+    }
+    return result(payload?.status === 'woot' ? 'HEALTHY' : 'UNEXPECTED_STATUS');
   } catch {
-    return false;
+    return result(controller.signal.aborted ? 'TIMEOUT' : 'NETWORK_OR_REDIRECT_ERROR');
   } finally {
     clearTimeout(timeout);
   }
@@ -112,7 +123,7 @@ export async function loadChatwootReadiness(input: {
   });
 
   const [
-    chatwootHealthy,
+    healthProbe,
     brandCount,
     tenantBusinessCount,
     communicationBindingCount,
@@ -158,7 +169,7 @@ export async function loadChatwootReadiness(input: {
     ),
   ]);
 
-  return buildChatwootReadiness({
+  const readiness = buildChatwootReadiness({
     deploymentEnvironment:
       typeof process.env.DEPLOYMENT_ENV === 'string'
         ? process.env.DEPLOYMENT_ENV
@@ -169,7 +180,7 @@ export async function loadChatwootReadiness(input: {
     platformTokenConfigured: Boolean(
       normalizeChatwootAccessToken(process.env.CHATWOOT_PLATFORM_TOKEN),
     ),
-    chatwootHealthy,
+    chatwootHealthy: healthProbe.healthy,
     brandCount,
     tenantBusinessCount,
     communicationBindingCount,
@@ -179,4 +190,7 @@ export async function loadChatwootReadiness(input: {
     inboxMappingCount,
     teamMappingCount,
   });
+  return { ...readiness, healthProbe: {
+    code: healthProbe.code, httpStatus: healthProbe.httpStatus, latencyMs: healthProbe.latencyMs,
+  } };
 }

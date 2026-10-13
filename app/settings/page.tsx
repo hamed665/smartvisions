@@ -632,6 +632,9 @@ export default async function SettingsPage() {
                   ? 'none'
                   : 'PROVISIONING_DISABLED'}.`
             : ''}
+          {editable && chatwootReadiness
+            ? ` Health probe: ${chatwootReadiness.healthProbe.code}; HTTP ${chatwootReadiness.healthProbe.httpStatus ?? 'unavailable'}; ${chatwootReadiness.healthProbe.latencyMs} ms.`
+            : ''}
         </p>
       </section>
 
