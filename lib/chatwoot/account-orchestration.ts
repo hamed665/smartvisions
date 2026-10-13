@@ -21,8 +21,8 @@ type AccountAttemptClaim = {
   mapping_version: number;
 };
 
-function fail(message: string): never {
-  throw new ChatwootProvisioningError('RECONCILIATION_REQUIRED', message);
+function fail(message: string, diagnosticReason: string): never {
+  throw new ChatwootProvisioningError('RECONCILIATION_REQUIRED', message, diagnosticReason);
 }
 
 function requireExternalProvisioningActivation() {
@@ -58,7 +58,7 @@ async function loadMapping(input: {
       data.organization_id !== input.organizationId ||
       !isUuid(data.tenant_business_id) ||
       !Number.isSafeInteger(data.version) || data.version < 1) {
-    return fail('Chatwoot Account mapping is unavailable or invalid');
+    return fail('Chatwoot Account mapping is unavailable or invalid', 'ACCOUNT_MAPPING_INVALID');
   }
   return data as ChatwootAccountMappingRow;
 }
@@ -70,7 +70,7 @@ async function requireActiveOwnerAndBusiness(input: {
 }): Promise<string> {
   const { data: auth, error: authError } = await input.supabase.auth.getUser();
   if (authError || !auth.user?.id) {
-    return fail('Authenticated Smart owner is required');
+    return fail('Authenticated Smart owner is required', 'OWNER_AUTH_REQUIRED');
   }
 
   const [member, business] = await Promise.all([
@@ -93,7 +93,7 @@ async function requireActiveOwnerAndBusiness(input: {
       business.data.status !== 'ACTIVE' ||
       typeof business.data.name !== 'string' ||
       !business.data.name.trim()) {
-    return fail('Smart owner or active tenant Business verification failed');
+    return fail('Smart owner or active tenant Business verification failed', 'OWNER_BUSINESS_INVALID');
   }
   return business.data.name.trim();
 }
@@ -118,7 +118,7 @@ export async function provisionChatwootAccount(input: {
   const requestKey = normalizeRequestKey(input.requestKey);
   if (!isUuid(input.organizationId) || !isUuid(input.mappingId) ||
       !requestKey || requestKey.length > 190) {
-    return fail('Chatwoot Account provisioning input is invalid');
+    return fail('Chatwoot Account provisioning input is invalid', 'ACCOUNT_INPUT_INVALID');
   }
 
   let mapping = await loadMapping(input);
@@ -130,21 +130,21 @@ export async function provisionChatwootAccount(input: {
 
   if (mapping.status === 'ACTIVE') {
     if (mapping.chatwoot_account_id === null) {
-      return fail('ACTIVE Chatwoot Account mapping lacks an external ID');
+      return fail('ACTIVE Chatwoot Account mapping lacks an external ID', 'ACCOUNT_EXTERNAL_ID_MISSING');
     }
     const account = await reconcileChatwootAccount({
       tenantBusinessId: mapping.tenant_business_id,
       fetchImpl: input.fetchImpl,
     });
     if (!account || account.id !== mapping.chatwoot_account_id) {
-      return fail('ACTIVE Chatwoot Account mapping has external identity drift');
+      return fail('ACTIVE Chatwoot Account mapping has external identity drift', 'ACCOUNT_IDENTITY_DRIFT');
     }
     return mapping;
   }
 
   if ((mapping.status !== 'PROVISIONING' && mapping.status !== 'DEGRADED') ||
       mapping.chatwoot_account_id !== null) {
-    return fail('Chatwoot Account mapping is not eligible for provisioning');
+    return fail('Chatwoot Account mapping is not eligible for provisioning', 'ACCOUNT_MAPPING_INELIGIBLE');
   }
 
   const { data, error } = await input.supabase.rpc(
@@ -163,7 +163,7 @@ export async function provisionChatwootAccount(input: {
       claim.mapping_id !== mapping.id ||
       claim.tenant_business_id !== mapping.tenant_business_id ||
       claim.mapping_version !== mapping.version) {
-    return fail('Chatwoot Account external claim is unavailable; reconcile');
+    return fail('Chatwoot Account external claim is unavailable; reconcile', 'ACCOUNT_CLAIM_UNAVAILABLE');
   }
 
   // Recheck after the durable claim. A revoked owner or archived Business
@@ -178,7 +178,7 @@ export async function provisionChatwootAccount(input: {
       mapping.version !== claim.mapping_version ||
       (mapping.status !== 'PROVISIONING' && mapping.status !== 'DEGRADED') ||
       mapping.chatwoot_account_id !== null) {
-    return fail('Chatwoot Account mapping changed after external claim');
+    return fail('Chatwoot Account mapping changed after external claim', 'ACCOUNT_CHANGED_AFTER_CLAIM');
   }
 
   const account = claim.may_attempt_create
@@ -193,7 +193,7 @@ export async function provisionChatwootAccount(input: {
       });
 
   if (!account) {
-    return fail('Prior Chatwoot Account attempt has no exact external match');
+    return fail('Prior Chatwoot Account attempt has no exact external match', 'ACCOUNT_EXTERNAL_MATCH_MISSING');
   }
 
   const updated = await setChatwootAccountMappingState({
@@ -210,7 +210,7 @@ export async function provisionChatwootAccount(input: {
       updated.tenant_business_id !== mapping.tenant_business_id ||
       updated.chatwoot_account_id !== account.id ||
       updated.status !== 'ACTIVE') {
-    return fail('Chatwoot Account mapping commit did not match external evidence');
+    return fail('Chatwoot Account mapping commit did not match external evidence', 'ACCOUNT_COMMIT_MISMATCH');
   }
   return updated;
 }

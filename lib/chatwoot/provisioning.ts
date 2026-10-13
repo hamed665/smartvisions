@@ -35,11 +35,13 @@ export type ChatwootProvisioningErrorCode =
 
 export class ChatwootProvisioningError extends Error {
   code: ChatwootProvisioningErrorCode;
+  diagnosticReason?: string;
 
-  constructor(code: ChatwootProvisioningErrorCode, message: string) {
+  constructor(code: ChatwootProvisioningErrorCode, message: string, diagnosticReason?: string) {
     super(message);
     this.name = 'ChatwootProvisioningError';
     this.code = code;
+    this.diagnosticReason = diagnosticReason;
   }
 }
 
