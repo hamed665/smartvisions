@@ -117,6 +117,7 @@ export async function reconcileChatwootAccount(input: {
 export async function ensureChatwootAccount(input: {
   tenantBusinessId: string;
   name: string;
+  beforeCreate?: () => Promise<void>;
   fetchImpl?: typeof fetch;
 }): Promise<{
   account: ChatwootAccountProjection;
@@ -151,6 +152,7 @@ export async function ensureChatwootAccount(input: {
     return { account: existing.account, outcome: 'ADOPTED' };
   }
 
+  await input.beforeCreate?.();
   try {
     const raw = await chatwootPlatformProvisioningRequest<unknown>({
       path: '/platform/api/v1/accounts',

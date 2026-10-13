@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/chatwoot/account-reconciliation', () => ({
+  recoverChatwootAccountFromVerifiedAbsence: vi.fn(async () => null),
+}));
 
 import { provisionCandidateChatwootAccount } from '@/lib/chatwoot/account-orchestration';
 
