@@ -13,6 +13,7 @@ import {
   followupStopReason,
   operationalAlertCodeForBudgetMode,
   operationalAutomationAllowed,
+  prioritizeFreshInbound,
   stableAgentRequestKey,
   type AutomationRuleSnapshot,
 } from '@/lib/operations/executor-core';
@@ -262,15 +263,16 @@ export async function POST(request: Request) {
     ? null
     : Number((Array.isArray(webChatExpiry.data) ? webChatExpiry.data[0]?.expired_count : webChatExpiry.data?.expired_count) ?? 0);
 
-  const [controlsResult, inboundResult, firstTouchSentResult, followupResult, stuckResult, failedSendResult] = await Promise.all([
+  const [controlsResult, inboundResult, freshInboundResult, firstTouchSentResult, followupResult, stuckResult, failedSendResult] = await Promise.all([
     supabase.from('system_controls').select('organization_id,global_kill_switch,email_paused,whatsapp_ai_paused,agents_paused,shadow_mode'),
     supabase.from('outreach_messages').select('id,organization_id,lead_id,channel,body,provider_message_id,metadata,received_at,created_at').eq('direction', 'INBOUND').eq('status', 'RECEIVED').in('channel', ['EMAIL','WHATSAPP']).not('provider_message_id', 'is', null).order('created_at', { ascending: true }).limit(MAX_INBOUND_SCAN),
+    supabase.from('outreach_messages').select('id,organization_id,lead_id,channel,body,provider_message_id,metadata,received_at,created_at').eq('direction', 'INBOUND').eq('status', 'RECEIVED').in('channel', ['EMAIL','WHATSAPP']).not('provider_message_id', 'is', null).gte('received_at', new Date(now.getTime() - 5 * 60_000).toISOString()).order('created_at', { ascending: false }).limit(MAX_INBOUND_SCAN),
     supabase.from('conversation_messages').select('id,organization_id,lead_id,channel,metadata,sent_at,processed_at,created_at').eq('direction', 'OUTBOUND').eq('status', 'SENT').in('channel', ['EMAIL','WHATSAPP']).not('lead_id', 'is', null).order('sent_at', { ascending: false, nullsFirst: false }).limit(MAX_FIRST_TOUCH_RECONCILE),
     supabase.from('followup_jobs').select('id,organization_id,lead_id,campaign_id,channel,sequence,scheduled_at,status').eq('status', 'PENDING').lte('scheduled_at', now.toISOString()).order('scheduled_at', { ascending: true }).limit(MAX_FOLLOWUPS),
     supabase.from('agent_runs').select('id,organization_id,lead_id,conversation_id,request_key,started_at').eq('status', 'PROCESSING').lt('started_at', stuckBefore).limit(25),
     supabase.from('conversation_messages').select('id,organization_id,lead_id,status,approval_reason,processed_at').eq('status', 'FAILED').not('approval_reason', 'is', null).order('processed_at', { ascending: false }).limit(50),
   ]);
-  const firstError = [controlsResult.error, inboundResult.error, firstTouchSentResult.error, followupResult.error, stuckResult.error, failedSendResult.error].find(Boolean);
+  const firstError = [controlsResult.error, inboundResult.error, freshInboundResult.error, firstTouchSentResult.error, followupResult.error, stuckResult.error, failedSendResult.error].find(Boolean);
   if (firstError) return NextResponse.json({ error: `Operational discovery failed: ${firstError!.message}` }, { status: 503 });
 
   const controlsByOrganization = new Map((controlsResult.data ?? []).map((row) => [String(row.organization_id), record(row)]));
@@ -349,7 +351,7 @@ export async function POST(request: Request) {
 
   const liveTestResults: Array<{ attempted: boolean; sent: boolean; reason: string }> = [];
   const agentTasks: Array<{ requestKey: string; channel: 'EMAIL'|'WHATSAPP'; payload: Record<string, unknown> }> = [];
-  for (const inbound of inboundResult.data ?? []) {
+  for (const inbound of prioritizeFreshInbound(freshInboundResult.data ?? [], inboundResult.data ?? [])) {
     if (agentTasks.length + liveTestResults.filter((result) => result.attempted).length >= MAX_AGENT_TASKS) break;
     const channel = String(inbound.channel).toUpperCase();
     const providerMessageId = String(inbound.provider_message_id ?? '').trim();

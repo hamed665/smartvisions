@@ -2,6 +2,12 @@ import { normalizeIdempotencyKey } from '@/lib/agents/idempotency';
 
 export type OperationalChannel = 'EMAIL' | 'WHATSAPP';
 
+// Fresh customer replies must not sit behind retained historical RECEIVED rows.
+// Both lists come from the same canonical inbound authority and retain its IDs.
+export function prioritizeFreshInbound<T extends { id: string }>(fresh: T[], historical: T[]): T[] {
+  return [...new Map([...fresh, ...historical].map(row => [row.id, row])).values()];
+}
+
 export type OperationalInbound = {
   organizationId: string;
   leadId: string | null;
