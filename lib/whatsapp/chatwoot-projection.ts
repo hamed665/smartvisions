@@ -111,6 +111,27 @@ async function requireMetaProvisioningEvidence(input: {
     .maybeSingle();
 
   const evidence = evidenceObject(data?.after_data);
+  if (!error && !data) {
+    // Registered API assets need no new registration. The existing service-only
+    // lifecycle command records the actual phone/subscription GET verification.
+    // Accept only its exact current binding/tenant receipt, never a stale badge.
+    const verified = await input.service.from('audit_logs')
+      .select('id,after_data,created_at')
+      .eq('organization_id', input.binding.organization_id)
+      .eq('action', 'META_WHATSAPP_CREDENTIAL_HEALTH_VERIFIED')
+      .eq('entity_type', 'communication_channel_binding')
+      .eq('entity_id', input.binding.id)
+      .eq('tenant_business_id', input.binding.tenant_business_id)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    const receipt = evidenceObject(verified.data?.after_data);
+    const observed = Date.parse(String(verified.data?.created_at ?? ''));
+    const boundObserved = Date.parse(input.binding.last_verified_at ?? '');
+    if (!verified.error && receipt?.binding_id === input.binding.id
+      && receipt.health_state === 'VERIFIED' && Number.isFinite(observed)
+      && Number.isFinite(boundObserved) && Math.abs(observed - boundObserved) <= 1000) {
+      return verified.data;
+    }
+  }
   if (
     error
     || !data
