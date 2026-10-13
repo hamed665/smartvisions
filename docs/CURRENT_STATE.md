@@ -2085,3 +2085,15 @@ Before mutation, re-audit current main/open PRs/exact-head CI and Production Hun
 **Fresh continuation cursor:** `SECTION SEGMENT_SALES_MARKETING -> CUSTOMER-SUCCESS-LOYALTY`.
 
 Before mutation, fresh-audit current main/open PRs/exact-head CI and Production onboarding/health/retention/churn/reactivation/loyalty/referral/lifecycle-task authorities. Reuse canonical Person/Account/Lead/Deal/Task/Support/Segment/Marketing Consent/Campaign authorities and do not create a second customer, task, campaign, consent, scoring or billing truth.
+
+
+### Sahra professional voice/consent checkpoint and recovered-browser diagnostic — 2026-10-13
+
+- Issue #496 checkpoints 6150082086 and 6150223368 extend the same Knowledge source: nine active APPROVED BUSINESS-scoped sections, including `sahra_professional_conversation_voice` v1; services v2 retains inactive v1. Existing tenant isolation remains authoritative.
+- Voice policy is transcript-only, short answer-first Arabic/Persian/English, no repeated known details, clarification of uncertain model/year/number, no human impersonation or unsupported completion claims. Voice reception targets text response; generated voice output and automatic photo delivery are separate unverified capabilities.
+- Seven participant consents exist only in the private canonical audit. Test remains NOT_ACTIVE, inbound-only, maximum 90 minutes and 20 total replies; no invitation, proactive send or automated follow-up. Personal recipient values are omitted here.
+- Work Browser recovered and the existing OWNER Integrations destination was confirmed. One existing Finalize/Reconcile returned AUTH_FAILED / HTTP 401, support `3aa3d180-b075-46f6-bc04-728354080801`. This establishes the actual privileged API blocker, not a cause guessed from /health.
+- Platform App ID 1 `Smart Visions Core` exists. Super Admin still shows 1 Account / 1 User / 0 Inboxes; Account Mapping remains PROVISIONING v1 / external ID NULL, memberships/Inboxes zero, Binding ACTIVE v3 / error NULL.
+- Same-token GitHub Secret restaging was prepared through direct secure UI transfer without credential extraction. Automatic approval review rejected its final save as a security-sensitive repository access change needing action-time confirmation. The existing Secret was not changed, unsaved field/clipboard cleared, no Rotate or blind Account replay.
+- Runtime hardening (exact private allowlist, tenant/Binding/fresh-inbound receipts, atomic total cap, controlled voice intake and final gate rechecks) belongs to a separate coherent implementation package. This PR remains documentation-only and does not authorize/activate the live exception.
+- Knowledge CONFIGURED; actual WhatsApp handset/voice/Human Takeover acceptance BLOCKED_EXTERNAL, NOT PRODUCTION_VERIFIED. Shadow ON and global outbound approval remain authoritative.
