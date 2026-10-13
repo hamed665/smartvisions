@@ -35,12 +35,15 @@ no manual reviewer click. Current OWNER membership is required again at the prov
 
 `internalTestLiveReply`: `enabled`, `allowVerifiedOmanInbound`, `inboundOnly`,
 `tenantBusinessId`, `bindingId`, `consentAuditId`, `recipients`, `startsAt`, `endsAt`,
+`senderPhoneNumberId`, `senderWabaId`,
 `maxRepliesTotal` and `deliveryMode: TEXT`. Participant values belong only in private
 canonical settings and the consent audit, never in this file, PR text or public logs.
 
 Maximum window: 90 minutes; total conservative admission ceiling: 20. The provider timestamp
 must be inside the window, not in the future, and no older than five minutes at admission/send.
 The active rule must keep global approval required. New windows cannot reuse old receipts.
+The signed event, current Binding and claim receipt must also match the configured original
+Phone Number ID/WABA, so changing the destination under an unchanged Binding ID fails closed.
 
 ## Deployment and rollback
 

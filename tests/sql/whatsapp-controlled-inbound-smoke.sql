@@ -55,6 +55,11 @@ reset role;
 do $$ declare r jsonb; i uuid; c uuid; cfg jsonb; begin
  select id,(metadata->>'conversation_id')::uuid into i,c from public.outreach_messages where idempotency_key='ci:controlled-inbound:1';
  select config into cfg from public.approval_rules where organization_id='00000000-0000-0000-0000-00000000fb01' and action_key='WHATSAPP_OUTBOUND';
+ update public.approval_rules set config=jsonb_set(cfg,'{internalTestLiveReply,senderPhoneNumberId}','"another-sender"')
+  where organization_id='00000000-0000-0000-0000-00000000fb01' and action_key='WHATSAPP_OUTBOUND';
+ r:=public.verify_or_claim_whatsapp_controlled_inbound('00000000-0000-0000-0000-00000000fb01',i,'96890000001',false);
+ if r->>'reason' is distinct from 'LIVE_TEST_COMMUNICATION_NOT_READY' then raise exception 'sender drift not blocked: %',r; end if;
+ update public.approval_rules set config=cfg where organization_id='00000000-0000-0000-0000-00000000fb01' and action_key='WHATSAPP_OUTBOUND';
  update public.sales_conversations set requires_human=true where id=c;
  r:=public.verify_or_claim_whatsapp_controlled_inbound('00000000-0000-0000-0000-00000000fb01',i,'96890000001',false);
  if r->>'reason'<>'LIVE_TEST_HUMAN_OR_IDENTITY_BLOCKED' then raise exception 'post-claim human revocation failed: %',r; end if;

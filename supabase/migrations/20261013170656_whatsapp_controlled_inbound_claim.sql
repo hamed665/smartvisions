@@ -37,6 +37,8 @@ begin
   end if;
   if v_cfg->'allowVerifiedOmanInbound' is distinct from 'true'::jsonb
      or v_cfg->'inboundOnly' is distinct from 'true'::jsonb
+     or length(coalesce(v_cfg->>'senderPhoneNumberId','')) not between 1 and 200
+     or length(coalesce(v_cfg->>'senderWabaId','')) not between 1 and 200
      or coalesce(v_cfg->>'deliveryMode','TEXT') <> 'TEXT'
      or jsonb_typeof(v_cfg->'recipients') is distinct from 'array'
      or jsonb_array_length(v_cfg->'recipients') not between 1 and 7 then
@@ -121,6 +123,8 @@ begin
        and e.direction='INBOUND' and e.conversation_id=v_conversation and e.lead_id=v_inbound.lead_id
        and e.payload->'routing'->>'tenantBusinessId'=v_tenant::text
        and e.payload->'routing'->>'bindingId'=v_binding::text
+       and e.payload->'routing'->>'phoneNumberId'=v_cfg->>'senderPhoneNumberId'
+       and e.payload->'routing'->>'wabaId'=v_cfg->>'senderWabaId'
        and e.payload->'canonical'->>'messageId'=v_message.id::text
        and regexp_replace(coalesce(e.payload->>'from',''),'[^0-9]','','g')=v_recipient)
      or not exists(select 1 from public.communication_channel_bindings b
@@ -129,6 +133,8 @@ begin
        join public.chatwoot_account_mappings a on a.id=i.chatwoot_account_mapping_id
        where b.organization_id=p_organization_id and b.id=v_binding and b.tenant_business_id=v_tenant
          and b.channel='WHATSAPP' and b.provider='META' and b.status='ACTIVE'
+         and b.provider_destination_id=v_cfg->>'senderPhoneNumberId'
+         and b.provider_account_id=v_cfg->>'senderWabaId'
          and b.last_error_code is null and b.provider_secret_ref is not null and p.organization_id=p_organization_id
          and p.conversation_id=v_conversation and p.tenant_business_id=v_tenant
          and p.lifecycle_status='ACTIVE' and i.organization_id=p_organization_id
@@ -167,12 +173,15 @@ begin
       'INTERNAL_TEST_LIVE_REPLY_CLAIMED','outreach_message',p_inbound_id::text,
       jsonb_build_object('windowStartsAt',v_start,'windowEndsAt',v_end,'maxRepliesTotal',v_cap,
         'tenantBusinessId',v_tenant,'bindingId',v_binding,'consentAuditId',v_cfg->>'consentAuditId',
+        'senderPhoneNumberId',v_cfg->>'senderPhoneNumberId','senderWabaId',v_cfg->>'senderWabaId',
         'slot',v_count+1,'shadowModeRemainsOn',true,'automaticRetry',false));
   elsif v_receipt is null or v_count>v_cap
      or (v_receipt->>'windowStartsAt')::timestamptz is distinct from v_start
      or (v_receipt->>'windowEndsAt')::timestamptz is distinct from v_end
      or v_receipt->>'tenantBusinessId' is distinct from v_tenant::text
      or v_receipt->>'bindingId' is distinct from v_binding::text
+     or v_receipt->>'senderPhoneNumberId' is distinct from v_cfg->>'senderPhoneNumberId'
+     or v_receipt->>'senderWabaId' is distinct from v_cfg->>'senderWabaId'
      or v_receipt->>'consentAuditId' is distinct from v_cfg->>'consentAuditId' then
     return jsonb_build_object('allowed',false,'reason','LIVE_TEST_CLAIM_RECEIPT_INVALID');
   end if;

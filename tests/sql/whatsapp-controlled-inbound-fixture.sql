@@ -2,6 +2,7 @@
 select set_config('smartvisions.chatwoot_bridge_command','1',true);
 update public.communication_channel_bindings
  set status='ACTIVE',provider='META',provider_secret_ref=gen_random_uuid(),
+     provider_destination_id='ci-phone-fixture',provider_account_id='ci-waba-fixture',
      version=version+1,last_request_key='ci-controlled-binding-ready'
  where id=(select value::uuid from c4_inbox_state where key='binding_id');
 select set_config('smartvisions.chatwoot_bridge_command','0',true);
@@ -19,6 +20,7 @@ insert into public.audit_logs(id,organization_id,actor_type,actor_id,action,enti
 insert into public.approval_rules(organization_id,action_key,requires_approval,mode,expiry_minutes,escalation_minutes,allow_delegation,reviewer_roles,delegation_roles,config)
  values('00000000-0000-0000-0000-00000000fb01','WHATSAPP_OUTBOUND',true,'STRICT',1440,240,false,array['OWNER']::text[],'{}'::text[],jsonb_build_object('internalTestLiveReply',jsonb_build_object(
  'enabled',true,'allowVerifiedOmanInbound',true,'inboundOnly',true,'deliveryMode','TEXT',
+ 'senderPhoneNumberId','ci-phone-fixture','senderWabaId','ci-waba-fixture',
  'tenantBusinessId','20000000-0000-0000-0000-00000000fb01','bindingId',(select value from c4_inbox_state where key='binding_id'),
  'consentAuditId','30000000-0000-4000-8000-00000000ca01','recipients',jsonb_build_array('96890000001'),
  'startsAt',clock_timestamp()-interval '1 minute','endsAt',clock_timestamp()+interval '30 minutes','maxRepliesTotal',20)));
@@ -41,7 +43,8 @@ do $$ declare n integer; c uuid; m uuid; o uuid; v_metadata jsonb; begin
   insert into public.whatsapp_events(id,organization_id,lead_id,conversation_id,provider_message_id,direction,event_type,payload)
    values(gen_random_uuid(),'00000000-0000-0000-0000-00000000fb01','20000000-0000-4000-8000-00000000ca01',c,'wamid.ci-controlled-'||n,'INBOUND','TEXT',
     jsonb_build_object('from','96890000001','routing',jsonb_build_object('tenantBusinessId','20000000-0000-0000-0000-00000000fb01',
-      'bindingId',(select value from c4_inbox_state where key='binding_id')),'canonical',jsonb_build_object('messageId',m)));
+      'bindingId',(select value from c4_inbox_state where key='binding_id'),
+      'phoneNumberId','ci-phone-fixture','wabaId','ci-waba-fixture'),'canonical',jsonb_build_object('messageId',m)));
   insert into public.unified_inbox_conversation_projections(organization_id,conversation_id,brand_id,tenant_business_id,branch_id,
     communication_channel_binding_id,chatwoot_inbox_mapping_id,chatwoot_conversation_display_id,last_request_key)
    values('00000000-0000-0000-0000-00000000fb01',c,'10000000-0000-0000-0000-00000000fb01','20000000-0000-0000-0000-00000000fb01',
