@@ -24,6 +24,9 @@ insert into public.approval_rules(organization_id,action_key,requires_approval,m
  'tenantBusinessId','20000000-0000-0000-0000-00000000fb01','bindingId',(select value from c4_inbox_state where key='binding_id'),
  'consentAuditId','30000000-0000-4000-8000-00000000ca01','recipients',jsonb_build_array('96890000001'),
  'startsAt',clock_timestamp()-interval '1 minute','endsAt',clock_timestamp()+interval '30 minutes','maxRepliesTotal',20)));
+-- Shadow drafts enter the canonical general OUTBOUND_SEND approval queue.
+insert into public.approval_rules(organization_id,action_key,requires_approval,mode,expiry_minutes,escalation_minutes,allow_delegation,reviewer_roles,delegation_roles,config)
+ values('00000000-0000-0000-0000-00000000fb01','OUTBOUND_SEND',true,'STRICT',1440,240,false,array['OWNER']::text[],'{}'::text[],'{}'::jsonb);
 select set_config('smartvisions.unified_inbox_projection_command','1',true);
 do $$ declare n integer; c uuid; m uuid; o uuid; v_metadata jsonb; begin
  for n in 1..30 loop
