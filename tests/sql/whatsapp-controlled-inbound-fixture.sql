@@ -16,8 +16,8 @@ insert into public.audit_logs(id,organization_id,actor_type,actor_id,action,enti
  'SAHRA_CONTROLLED_TEST_CONSENT_RECORDED','test','ci-fixture',jsonb_build_object(
  'ownerReportedConsent',true,'inboundOnly',true,'channelBindingId',(select value from c4_inbox_state where key='binding_id'),
  'recipients',jsonb_build_array('+96890000001')));
-insert into public.approval_rules(organization_id,action_key,requires_approval,config)
- values('00000000-0000-0000-0000-00000000fb01','WHATSAPP_OUTBOUND',true,jsonb_build_object('internalTestLiveReply',jsonb_build_object(
+insert into public.approval_rules(organization_id,action_key,requires_approval,mode,expiry_minutes,escalation_minutes,allow_delegation,reviewer_roles,delegation_roles,config)
+ values('00000000-0000-0000-0000-00000000fb01','WHATSAPP_OUTBOUND',true,'STRICT',1440,240,false,array['OWNER']::text[],'{}'::text[],jsonb_build_object('internalTestLiveReply',jsonb_build_object(
  'enabled',true,'allowVerifiedOmanInbound',true,'inboundOnly',true,'deliveryMode','TEXT',
  'tenantBusinessId','20000000-0000-0000-0000-00000000fb01','bindingId',(select value from c4_inbox_state where key='binding_id'),
  'consentAuditId','30000000-0000-4000-8000-00000000ca01','recipients',jsonb_build_array('96890000001'),
