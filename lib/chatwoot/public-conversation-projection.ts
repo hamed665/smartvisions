@@ -34,7 +34,7 @@ async function request<T>(path: string, init?: RequestInit, fetchImpl: typeof fe
     ...init,
     headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     cache: 'no-store',
-    redirect: 'error',
+    redirect: 'manual',
   });
   if (!response.ok) throw new PublicProjectionHttpError(response.status);
   return await response.json() as T;
@@ -235,7 +235,7 @@ export async function createChatwootPublicIncomingMessage(input: {
     headers: { Accept: 'application/json' },
     body: form,
     cache: 'no-store',
-    redirect: 'error',
+    redirect: 'manual',
   });
   if (!response.ok) throw new PublicProjectionHttpError(response.status);
   const body = await response.json() as {

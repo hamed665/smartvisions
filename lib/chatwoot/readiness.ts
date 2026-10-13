@@ -87,7 +87,7 @@ async function readChatwootHealth(baseUrl: string | null) {
     const response = await fetch(baseUrl + '/health', {
       method: 'GET',
       cache: 'no-store',
-      redirect: 'error',
+      redirect: 'manual',
       signal: controller.signal,
       headers: { Accept: 'application/json' },
     });

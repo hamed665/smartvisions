@@ -87,6 +87,7 @@ afterEach(() => {
 
 describe('Chatwoot readiness loader', () => {
   it.each([
+    { body: '', status: 302, code: 'HTTP_ERROR' },
     { body: 'private upstream body', status: 503, code: 'HTTP_ERROR' },
     { body: '<html>private upstream body</html>', status: 200, code: 'INVALID_JSON' },
     { body: '{"status":"not-woot","secret":"private upstream body"}', status: 200, code: 'UNEXPECTED_STATUS' },
@@ -177,7 +178,7 @@ describe('Chatwoot readiness loader', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'https://inbox.example.com/health',
-      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+      expect.objectContaining({ method: 'GET', cache: 'no-store', redirect: 'manual' }),
     );
     expect(state.activationReady).toBe(true);
     expect(state.liveProvisioningReady).toBe(false);

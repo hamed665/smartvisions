@@ -271,7 +271,7 @@ export async function chatwootProvisioningRequest<T>(input: {
         },
         body: requestBody,
         cache: 'no-store',
-        redirect: 'error',
+        redirect: 'manual',
         signal: controller.signal,
       });
 

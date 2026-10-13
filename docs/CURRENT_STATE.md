@@ -1,5 +1,7 @@
 ## Sahra Chatwoot credential staging — 2026-10-13 (Muscat)
 
+- PR #502 merged as `3874b9b315cdb531a8ae83307ca9e154666a5e76`; main CI `38395144451` and deploy `38395626161` succeeded. Live OWNER Settings reported `NETWORK_OR_REDIRECT_ERROR`, no HTTP response and 0 ms. A local workerd reproduction of the same GET/init confirmed the runtime throws for `redirect:'error'` and instructs callers to use `manual` plus status validation. Readiness, authenticated Chatwoot HTTP and public projection now use manual redirects; existing non-2xx rejection remains enforced, so credentials and customer data cannot follow a redirect. Live Production readiness after this fix remains to be verified; provisioning remains OFF.
+
 - PR #500 merged as `df1747a598348ba581dcd57cb1658904b9eece71`; main CI `38393432238` and Production Deploy `38393906799` succeeded. Live Worker Settings still reported `CHATWOOT_UNHEALTHY` with the 10-second deadline, so timeout relaxation alone did not resolve readiness. OWNER-only readiness now exposes only a bounded failure code, numeric HTTP status and latency; upstream bodies, exceptions and credentials are never returned. No activation is implied by this diagnostic change.
 
 - Exactly one `Smart Visions Core` Platform App exists (ID 1). Its generated token was copied directly into GitHub Actions Secret `CHATWOOT_PLATFORM_TOKEN`; no value is recorded in code, logs, screenshots or this document.
