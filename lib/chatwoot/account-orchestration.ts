@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { recoverChatwootAccountFromVerifiedAbsence } from './account-reconciliation';
 import { evaluateChatwootProvisioningActivation } from '@/lib/chatwoot/activation-contract';
 import {
   ChatwootProvisioningError,
@@ -181,7 +182,7 @@ export async function provisionChatwootAccount(input: {
     return fail('Chatwoot Account mapping changed after external claim', 'ACCOUNT_CHANGED_AFTER_CLAIM');
   }
 
-  const account = claim.may_attempt_create
+  let account = claim.may_attempt_create
     ? (await ensureChatwootAccount({
         tenantBusinessId: mapping.tenant_business_id,
         name,
@@ -192,6 +193,21 @@ export async function provisionChatwootAccount(input: {
         fetchImpl: input.fetchImpl,
       });
 
+  if (!account && !claim.may_attempt_create) {
+    account = await recoverChatwootAccountFromVerifiedAbsence({
+      supabase: input.supabase, organizationId: input.organizationId, mapping,
+      requestKey, name, fetchImpl: input.fetchImpl,
+      beforeExternalCreate: async () => {
+        requireExternalProvisioningActivation();
+        await requireActiveOwnerAndBusiness({ ...input, tenantBusinessId: mapping.tenant_business_id });
+        const fresh = await loadMapping(input);
+        if (fresh.version !== mapping.version || fresh.tenant_business_id !== mapping.tenant_business_id
+          || !['PROVISIONING', 'DEGRADED'].includes(fresh.status) || fresh.chatwoot_account_id !== null) {
+          return fail('Account changed before receipt-backed recovery', 'ACCOUNT_CHANGED_AFTER_CLAIM');
+        }
+      },
+    });
+  }
   if (!account) {
     return fail('Prior Chatwoot Account attempt has no exact external match', 'ACCOUNT_EXTERNAL_MATCH_MISSING');
   }
