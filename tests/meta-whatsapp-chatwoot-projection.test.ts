@@ -127,7 +127,7 @@ function setupSupabase(input?: {
   return { supabase };
 }
 
-function setupService(input?: { metaEvidence?: boolean; priorAudit?: boolean }) {
+function setupService(input?: { metaEvidence?: boolean; priorAudit?: boolean; healthAt?: string; healthBinding?: string }) {
   const auditReads: QueryResult[] = [
     {
       data: input?.metaEvidence === false
@@ -149,6 +149,10 @@ function setupService(input?: { metaEvidence?: boolean; priorAudit?: boolean }) 
     },
   ];
 
+  if (input?.metaEvidence === false) auditReads.splice(1, 0, {
+    error: null, data: input.healthAt ? { id: 'current-health', created_at: input.healthAt,
+      after_data: { binding_id: input.healthBinding ?? BINDING, health_state: 'VERIFIED' } } : null,
+  });
   const auditQueries: ReturnType<typeof createQuery>[] = [];
   const service = {
     from: vi.fn((table: string) => {
@@ -308,5 +312,26 @@ describe('WhatsApp to existing Chatwoot projection', () => {
 
     expect(provisionAccount).not.toHaveBeenCalled();
     expect(provisionInbox).not.toHaveBeenCalled();
+  });
+});
+
+describe('registered API asset current health receipt', () => {
+  it('accepts the canonical current GET health receipt without claiming a new registration', async () => {
+    const { supabase } = setupSupabase();
+    const { auditQueries } = setupService({ metaEvidence: false, healthAt: '2026-10-01T15:00:00.000Z' });
+    await provisionWhatsAppChatwootProjection({ supabase, organizationId: ORG, bindingId: BINDING });
+    expect(provisionAccount).toHaveBeenCalledOnce();
+    expect(auditQueries[1].eq).toHaveBeenCalledWith('tenant_business_id', BUSINESS);
+    expect(auditQueries[1].eq).toHaveBeenCalledWith('action', 'META_WHATSAPP_CREDENTIAL_HEALTH_VERIFIED');
+  });
+  it.each([
+    { healthAt: '2026-10-01T14:59:00.000Z' },
+    { healthAt: '2026-10-01T15:00:00.000Z', healthBinding: 'other-binding' },
+    { healthAt: 'invalid' },
+  ])('rejects stale or mismatched health evidence %j', async options => {
+    const { supabase } = setupSupabase();
+    setupService({ metaEvidence: false, ...options });
+    await expect(provisionWhatsAppChatwootProjection({ supabase, organizationId: ORG, bindingId: BINDING })).rejects.toThrow();
+    expect(provisionAccount).not.toHaveBeenCalled();
   });
 });

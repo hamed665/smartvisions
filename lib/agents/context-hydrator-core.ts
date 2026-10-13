@@ -155,6 +155,41 @@ export async function hydrateAgentContext(input: {
   const conversationChannel = clip(conversation?.channel, 40).toUpperCase();
   const personId = clip(conversation?.person_id, 80) || clip(lead?.person_id, 80) || undefined;
 
+  // Resolve the serving tenant before any Knowledge or commercial context is read.
+  // Caller-supplied context is never a tenant authority.
+  const targetScopeResult = conversationId
+    ? await supabase.from('unified_inbox_conversation_projections')
+      .select('brand_id,tenant_business_id,branch_id,department_id,team_id,lifecycle_status')
+      .eq('organization_id', organizationId).eq('conversation_id', conversationId)
+      .in('lifecycle_status', ['ACTIVE', 'DEGRADED']).maybeSingle()
+    : { data: null, error: null };
+  if (targetScopeResult.error) throw new Error('Canonical serving Business scope is unavailable');
+  const targetScopeRow = targetScopeResult.data as Record<string, unknown> | null;
+  const targetScope = {
+    brandId: clip(targetScopeRow?.brand_id, 80) || undefined,
+    tenantBusinessId: clip(targetScopeRow?.tenant_business_id, 80) || undefined,
+    branchId: clip(targetScopeRow?.branch_id, 80) || undefined,
+    departmentId: clip(targetScopeRow?.department_id, 80) || undefined,
+    teamId: clip(targetScopeRow?.team_id, 80) || undefined,
+  };
+  let servingBusiness: AgentContext['servingBusiness'];
+  if (targetScope.tenantBusinessId) {
+    const tenant = await supabase.from('tenant_businesses').select('id,name,country_code,timezone,status')
+      .eq('organization_id', organizationId).eq('id', targetScope.tenantBusinessId).maybeSingle();
+    if (tenant.error || tenant.data?.status !== 'ACTIVE' || !tenant.data.name) {
+      throw new Error('Canonical serving Business is unavailable');
+    }
+    if (targetScope.branchId) {
+      const branch = await supabase.from('branches').select('id,status')
+        .eq('organization_id', organizationId).eq('tenant_business_id', targetScope.tenantBusinessId)
+        .eq('id', targetScope.branchId).maybeSingle();
+      if (branch.error || branch.data?.status !== 'ACTIVE') throw new Error('Serving Branch scope is invalid');
+    }
+    servingBusiness = { name: clip(tenant.data.name, 240),
+      countryCode: clip(tenant.data.country_code, 8), timezone: clip(tenant.data.timezone, 80) };
+  }
+  const tenantScoped = Boolean(servingBusiness);
+
   const [
     outreachMessagesResult,
     conversationMessagesResult,
@@ -172,7 +207,6 @@ export async function hydrateAgentContext(input: {
     toolRegistryResult,
     membershipResult,
     scopeAssignmentsResult,
-    targetScopeResult,
   ] = await Promise.all([
     authoritativeLeadId && conversationId && conversationChannel
       ? supabase
@@ -199,12 +233,12 @@ export async function hydrateAgentContext(input: {
       : Promise.resolve({ data: [], error: null }),
     supabase.rpc('get_knowledge_context_v2', {
       p_organization_id: organizationId,
-      p_tenant_business_id: null,
-      p_branch_id: null,
+      p_tenant_business_id: targetScope.tenantBusinessId ?? null,
+      p_branch_id: targetScope.branchId ?? null,
       p_include_stale: false,
       p_limit: 16,
     }),
-    supabase
+    tenantScoped ? Promise.resolve({ data: [], error: null }) : supabase
       .from('prompt_versions')
       .select('agent_name,version,prompt_text,active,created_at')
       .eq('organization_id', organizationId)
@@ -214,24 +248,24 @@ export async function hydrateAgentContext(input: {
       .from('agent_settings')
       .select('agent_name,enabled,model,confidence_threshold,config')
       .eq('organization_id', organizationId),
-    supabase
+    tenantScoped ? Promise.resolve({ data: [], error: null }) : supabase
       .from('services')
       .select('id,name,enabled,config')
       .eq('organization_id', organizationId)
       .eq('enabled', true),
-    supabase
+    tenantScoped ? Promise.resolve({ data: [], error: null }) : supabase
       .from('service_booking_profiles')
       .select('service_id,booking_enabled,duration_minutes,location_mode,booking_rules')
       .eq('organization_id', organizationId)
       .eq('booking_enabled', true),
-    countryCode
+    countryCode && !tenantScoped
       ? supabase
         .from('service_prices')
         .select('service_id,country_code,currency,price,minimum_price,max_auto_discount_pct,max_discount_with_approval_pct')
         .eq('organization_id', organizationId)
         .eq('country_code', countryCode)
       : Promise.resolve({ data: [], error: null }),
-    (industry || countryCode || recommendedOffer)
+    !tenantScoped && (industry || countryCode || recommendedOffer)
       ? supabase
         .from('portfolio_items')
         .select('id,title,service_id,industry,country_code,approved,public_url,tags')
@@ -239,7 +273,7 @@ export async function hydrateAgentContext(input: {
         .eq('approved', true)
         .limit(50)
       : Promise.resolve({ data: [], error: null }),
-    supabase.rpc('compile_business_twin_v2', {
+    tenantScoped ? Promise.resolve({ data: null, error: null }) : supabase.rpc('compile_business_twin_v2', {
       p_organization_id: organizationId,
     }),
     supabase.rpc('get_memory_context_v2', {
@@ -291,15 +325,6 @@ export async function hydrateAgentContext(input: {
         .order('scope_type', { ascending: true })
         .limit(16)
       : Promise.resolve({ data: [], error: null }),
-    conversationId
-      ? supabase
-        .from('unified_inbox_conversation_projections')
-        .select('brand_id,tenant_business_id,branch_id,department_id,team_id,lifecycle_status')
-        .eq('organization_id', organizationId)
-        .eq('conversation_id', conversationId)
-        .in('lifecycle_status', ['ACTIVE', 'DEGRADED'])
-        .maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
   ]);
 
   const firstError = [
@@ -325,14 +350,6 @@ export async function hydrateAgentContext(input: {
     .find(Boolean);
   if (firstError) throw new Error(`Agent context hydration failed: ${firstError.message}`);
 
-  const targetScopeRow = targetScopeResult.data as Record<string, unknown> | null;
-  const targetScope = {
-    brandId: clip(targetScopeRow?.brand_id, 80) || undefined,
-    tenantBusinessId: clip(targetScopeRow?.tenant_business_id, 80) || undefined,
-    branchId: clip(targetScopeRow?.branch_id, 80) || undefined,
-    departmentId: clip(targetScopeRow?.department_id, 80) || undefined,
-    teamId: clip(targetScopeRow?.team_id, 80) || undefined,
-  };
   let effectiveRole: string | undefined;
   if (input.actorUserId) {
     if (!membershipResult.data) {
@@ -370,6 +387,7 @@ export async function hydrateAgentContext(input: {
   );
 
   const knowledgeContext: KnowledgeSnapshot[] = ((knowledgeResult.data ?? []) as Array<Record<string, unknown>>)
+    .filter((row) => !tenantScoped || ['BUSINESS','BRANCH'].includes(String(row.scope_type)))
     .map((row) => ({
       key: clip(row.knowledge_key, 120),
       version: numberOrZero(row.version),
@@ -386,12 +404,15 @@ export async function hydrateAgentContext(input: {
     }))
     .filter((item) => item.key && item.version > 0);
 
+  if (tenantScoped && knowledgeContext.length === 0) throw new Error('Approved serving Business knowledge is required');
+
   const customerContext = projectCustomerContext({
     person: customerPersonResult.data as Record<string, unknown> | null,
     relationships: (customerRelationshipsResult.data ?? []) as Array<Record<string, unknown>>,
   });
   const memoryContext = projectMemoryContext(
-    (memoryResult.data ?? []) as Array<Record<string, unknown>>,
+    ((memoryResult.data ?? []) as Array<Record<string, unknown>>)
+      .filter((row) => !tenantScoped || row.conversation_id === conversationId),
   );
   const businessTwinContext = projectBusinessTwinContext(businessTwinResult.data);
   const toolAvailability = projectToolAvailability(
@@ -493,7 +514,7 @@ export async function hydrateAgentContext(input: {
     });
 
   let activeBookings: BookingContextSnapshot['activeBookings'] = [];
-  if (personId) {
+  if (personId && !tenantScoped) {
     const bookingResult = await supabase.from('bookings')
       .select('id,booking_reference,service_id,status,branch_id,staff_user_id,starts_at,ends_at')
       .eq('organization_id', organizationId)
@@ -631,6 +652,7 @@ export async function hydrateAgentContext(input: {
       leadId: authoritativeLeadId,
       conversationId,
       businessName,
+      servingBusiness,
       countryCode,
       industry,
       conversationSummary,
@@ -647,6 +669,7 @@ export async function hydrateAgentContext(input: {
       permissionContext,
       contextEvidence,
       activePrompts,
+      ...(tenantScoped ? { quotedService: undefined, quotedPrice: undefined, quotedCurrency: undefined } : {}),
       agentSettings,
       approvedPortfolio,
       stage,
