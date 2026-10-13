@@ -132,7 +132,9 @@ export function mutationOutcomeMayBeAmbiguous(input: {
   if (isChatwootReadMethod(input.method)) return false;
   if (input.networkFailure) return true;
   if (input.status === null || input.status === undefined) return true;
-  return input.status >= 500;
+  // A mutation may have been accepted before an origin redirects its response.
+  // Manual redirect rejection must therefore remain reconciliation-only.
+  return input.status >= 500 || (input.status >= 300 && input.status < 400);
 }
 
 export function parseRetryAfterMs(

@@ -29,7 +29,7 @@ describe('Chatwoot provisioning HTTP client', () => {
     }));
     await expect(chatwootPlatformProvisioningRequest({
       path: '/platform/api/v1/accounts', method, fetchImpl: fetchMock as unknown as typeof fetch,
-    })).rejects.toMatchObject({ status: 302 });
+    })).rejects.toMatchObject({ status: 302, ambiguousMutationOutcome: method === 'POST' });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[1]?.redirect).toBe('manual');
   });
