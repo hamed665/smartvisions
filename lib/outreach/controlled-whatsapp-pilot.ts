@@ -5,6 +5,7 @@ import {
 
 export type ControlledWhatsAppPilotEvidence = {
   messageStatus: string;
+  canonicalLiveEvidenceVerified?: boolean;
   requiresApproval: boolean;
   channel: string;
   metadataSource?: unknown;
@@ -69,7 +70,7 @@ export function verifyControlledWhatsAppPilot(
   const verifiedOmanLiveInbound = idempotencyKey.startsWith('agent:whatsapp-pilot:live:')
     && recipient.length === 11
     && recipient.startsWith('968');
-  if (!internalTestBusiness && !verifiedOmanLiveInbound) {
+  if (!internalTestBusiness && (!verifiedOmanLiveInbound || input.canonicalLiveEvidenceVerified !== true)) {
     return { verified: false, reason: 'BUSINESS_NOT_INTERNAL_TEST' };
   }
 

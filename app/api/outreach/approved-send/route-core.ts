@@ -1,3 +1,4 @@
+import { controlledInboundEvidence, controlledInboundId } from '@/lib/whatsapp/controlled-inbound-evidence';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
@@ -253,7 +254,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Controlled pilot conversation verification failed: ${conversationError?.message ?? 'not found'}` }, { status: 409 });
     }
 
+    const liveInboundId = controlledInboundId(idempotencyKey);
+    const liveEvidence = liveInboundId ? await controlledInboundEvidence({
+      supabase, organizationId: body.organizationId, inboundId: liveInboundId,
+      recipient: sendContext.to ?? '', conversationId: message.conversation_id,
+    }) : null;
+    if (liveInboundId && (message.media_type !== 'TEXT' || sendContext.catalog_content_id
+      || sendContext.template_name || sendContext.voice_reply === true)) {
+      return NextResponse.json({ error: 'Controlled inbound demonstration permits text replies only' }, { status: 409 });
+    }
+    if (liveInboundId && !liveEvidence?.allowed) {
+      return NextResponse.json({ error: 'Controlled inbound receipt failed closed', reason: liveEvidence?.reason }, { status: 409 });
+    }
     const verification = verifyControlledWhatsAppCatalogPilot({
+      canonicalLiveEvidenceVerified: liveEvidence?.allowed,
       messageStatus: message.status,
       requiresApproval: Boolean(message.requires_approval),
       channel: message.channel,
@@ -469,6 +483,15 @@ export async function POST(request: Request) {
     if (!['EMAIL', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK_MESSENGER', 'TELEGRAM'].includes(message.channel)) throw new Error('Approved send channel is unsupported');
 
     const assertFinalProviderBoundary = async () => {
+      const liveInboundId = controlledInboundId(idempotencyKey);
+      if (body.controlledShadowPilot && liveInboundId) {
+        const freshEvidence = await controlledInboundEvidence({
+          supabase, organizationId: body.organizationId!, inboundId: liveInboundId,
+          recipient: sendContext.to ?? '', conversationId: message.conversation_id!,
+        });
+        if (!freshEvidence.allowed) throw new Error(`LIVE_TEST_FINAL_BOUNDARY:${freshEvidence.reason}`);
+      }
+
       const gate = await assertCanonicalSendAllowed({
         supabase,
         organizationId: body.organizationId!,
@@ -586,6 +609,8 @@ export async function POST(request: Request) {
       if (tenantProvider.bindingId !== projection.communication_channel_binding_id) {
         throw new Error('Approved WhatsApp tenant credential does not match the conversation channel binding');
       }
+      // Credential resolution can await I/O; re-read the exception and canonical guards afterwards.
+      await assertFinalProviderBoundary();
       const provider = tenantProvider.provider;
       const catalogContentId = sendContext.catalog_content_id?.trim() || null;
       let whatsappOperation: 'SEND_TEMPLATE' | 'SEND_TEXT' | 'SEND_PRODUCT' | 'SEND_AUDIO';

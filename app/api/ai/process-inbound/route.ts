@@ -128,6 +128,7 @@ export async function POST(request: Request) {
     idempotencyKey?: string;
     deliveryContext?: unknown;
     actorUserId?: string;
+    expectedInboundProviderMessageId?: string;
   };
   if (!body.context?.message || !body.context.organizationId) {
     return NextResponse.json({ error: 'context.message and context.organizationId are required' }, { status: 400 });
@@ -180,6 +181,7 @@ export async function POST(request: Request) {
       conversationId: preparedConversationId ?? undefined,
       leadId: trustedContext.leadId,
       signal: request.signal,
+      expectedProviderMessageId: body.expectedInboundProviderMessageId,
     });
     preparedConversationId = mediaPreparation.conversationId ?? preparedConversationId;
   } catch (error) {
