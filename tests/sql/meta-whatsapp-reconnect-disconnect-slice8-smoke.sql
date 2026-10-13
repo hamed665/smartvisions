@@ -28,7 +28,7 @@ begin
 
   select pg_get_functiondef(p.oid) into v_health_def
     from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-   where n.nspname='public' and p.proname='mark_meta_whatsapp_binding_health';
+   where n.nspname='private' and p.proname='mark_meta_whatsapp_binding_health_internal';
 
   select pg_get_functiondef(p.oid) into v_start_def
     from pg_proc p join pg_namespace n on n.oid=p.pronamespace
