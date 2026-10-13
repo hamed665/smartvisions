@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { ChatwootHttpError } from '@/lib/chatwoot/http';
 
 import {
   ChatwootProvisioningError,
@@ -29,6 +30,12 @@ function statusFor(error: unknown) {
 }
 
 function safeMessage(error: unknown) {
+  if (error instanceof ChatwootHttpError) {
+    const allowedCodes = new Set(['PROVISIONING_DISABLED', 'CONFIG_INVALID', 'AUTH_FAILED', 'NOT_FOUND', 'RATE_LIMITED', 'VALIDATION_FAILED', 'UPSTREAM_FAILED', 'NETWORK_FAILED', 'REQUEST_TOO_LARGE', 'RESPONSE_TOO_LARGE', 'INVALID_RESPONSE']);
+    const code = allowedCodes.has(error.code) ? error.code : 'UNKNOWN';
+    const status = Number.isSafeInteger(error.status) && error.status! >= 100 && error.status! <= 599 ? error.status : 'unavailable';
+    return `Communication Inbox provisioning is temporarily unavailable. Diagnostic: ${code}; HTTP ${status}.`;
+  }
   if (!(error instanceof ChatwootProvisioningError)) {
     return 'Communication Inbox provisioning is temporarily unavailable.';
   }
