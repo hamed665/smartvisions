@@ -5,6 +5,9 @@ export type InternalTestLiveReplyPolicyInput = {
   businessWhatsapp?: string | null;
   businessPhone?: string | null;
   inboundFrom?: string | null;
+  tenantBusinessId?: string | null;
+  bindingId?: string | null;
+  inboundReceivedAt?: string | null;
   shadowMode: boolean;
   globalKillSwitch: boolean;
   agentsPaused: boolean;
@@ -69,6 +72,18 @@ export function evaluateInternalTestLiveReplyPolicy(
     if (businessRecipient.length !== 11 || !businessRecipient.startsWith('968')) {
       return { allowed: false, reason: 'OMAN_TEST_RECIPIENT_REQUIRED' };
     }
+    const recipients = Array.isArray(config.recipients)
+      ? config.recipients.map(normalizeInternalTestPhone) : [];
+    if (!recipients.includes(inboundFrom)) {
+      return { allowed: false, reason: 'RECIPIENT_NOT_CONSENTED' };
+    }
+    if (!input.tenantBusinessId || !input.bindingId
+      || config.tenantBusinessId !== input.tenantBusinessId || config.bindingId !== input.bindingId) {
+      return { allowed: false, reason: 'LIVE_TEST_TENANT_BINDING_MISMATCH' };
+    }
+    if (config.inboundOnly !== true || config.deliveryMode === 'VOICE_REPLY') {
+      return { allowed: false, reason: 'INBOUND_TEXT_REPLY_REQUIRED' };
+    }
   }
 
   const startsAt = typeof config.startsAt === 'string' ? config.startsAt : '';
@@ -85,7 +100,18 @@ export function evaluateInternalTestLiveReplyPolicy(
   if (nowMs < startMs) return { allowed: false, reason: 'LIVE_TEST_NOT_STARTED' };
   if (nowMs >= endMs) return { allowed: false, reason: 'LIVE_TEST_EXPIRED' };
 
-  const maxReplies = Math.max(1, Math.min(20, Number(config.maxReplies ?? 10) || 10));
+  if (businessCategory !== 'INTERNAL_TEST') {
+    const inboundMs = Date.parse(input.inboundReceivedAt ?? '');
+    if (!Number.isFinite(inboundMs) || inboundMs < startMs || inboundMs > nowMs
+      || nowMs - inboundMs > 5 * 60_000) {
+      return { allowed: false, reason: 'FRESH_WINDOW_INBOUND_REQUIRED' };
+    }
+  }
+
+  const maxReplies = Number(config.maxRepliesTotal ?? config.maxReplies ?? 10);
+  if (!Number.isInteger(maxReplies) || maxReplies < 1 || maxReplies > 20) {
+    return { allowed: false, reason: 'LIVE_TEST_REPLY_CAP_INVALID' };
+  }
   if (input.claimedCount >= maxReplies) return { allowed: false, reason: 'LIVE_TEST_REPLY_CAP_REACHED' };
 
   const configuredDeliveryMode = typeof config.deliveryMode === 'string'

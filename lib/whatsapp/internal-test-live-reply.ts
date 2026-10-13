@@ -5,6 +5,8 @@ import { POST as channelGuardPost } from '@/app/api/operations/channel-guard/rou
 import { stableAgentRequestKey } from '@/lib/operations/executor-core';
 import { queueShadowDraft, shadowProviderMessageId } from '@/lib/outreach/shadow-approval';
 import { verifyControlledWhatsAppPilot } from '@/lib/outreach/controlled-whatsapp-pilot';
+import { controlledInboundEvidence } from '@/lib/whatsapp/controlled-inbound-evidence';
+import { prepareLatestInboundMediaForAi } from '@/lib/media/preprocess';
 import { evaluateInternalTestLiveReplyPolicy } from '@/lib/whatsapp/internal-test-live-reply-policy';
 
 export type InternalTestLiveReplyResult = {
@@ -70,12 +72,12 @@ async function audit(input: {
 export async function runInternalTestLiveReply(input: {
   organizationId: string;
   providerMessageId: string;
-  inboundFrom: string;
+  inboundFrom?: string;
   messageType: string;
   now?: Date;
 }): Promise<InternalTestLiveReplyResult> {
-  if (input.messageType.toLowerCase() !== 'text') {
-    return { attempted: false, sent: false, reason: 'TEXT_ONLY_LIVE_TEST' };
+  if (!['text', 'audio', 'voice'].includes(input.messageType.toLowerCase())) {
+    return { attempted: false, sent: false, reason: 'TEXT_OR_VOICE_LIVE_TEST_REQUIRED' };
   }
 
   const internalKey = process.env.INTERNAL_API_KEY;
@@ -93,6 +95,15 @@ export async function runInternalTestLiveReply(input: {
     return { attempted: false, sent: false, reason: 'DURABLE_INBOUND_NOT_READY' };
   }
 
+  const canonicalInbound = await supabase.from('conversation_messages')
+    .select('metadata').eq('organization_id', input.organizationId)
+    .eq('provider_message_id', input.providerMessageId).eq('channel', 'WHATSAPP')
+    .eq('direction', 'INBOUND').eq('provenance', 'CUSTOMER').eq('source_plane', 'META_WHATSAPP').maybeSingle();
+  const canonicalFrom = stringValue(record(canonicalInbound.data?.metadata).from);
+  if (canonicalInbound.error || !canonicalFrom || (input.inboundFrom && input.inboundFrom !== canonicalFrom)) {
+    return { attempted: false, sent: false, reason: 'CANONICAL_INBOUND_SENDER_REQUIRED' };
+  }
+  const inboundMetadata = record(inbound.metadata);
   const conversationId = stringValue(record(inbound.metadata).conversation_id);
   if (!conversationId) return { attempted: false, sent: false, reason: 'CONVERSATION_LINKAGE_MISSING' };
 
@@ -147,7 +158,10 @@ export async function runInternalTestLiveReply(input: {
     businessCategory: business.category,
     businessWhatsapp: business.whatsapp,
     businessPhone: business.phone ?? business.international_phone,
-    inboundFrom: input.inboundFrom,
+    inboundFrom: canonicalFrom,
+    tenantBusinessId: stringValue(inboundMetadata.tenant_business_id),
+    bindingId: stringValue(inboundMetadata.communication_channel_binding_id),
+    inboundReceivedAt: stringValue(inbound.received_at),
     shadowMode: Boolean(controls.shadow_mode),
     globalKillSwitch: Boolean(controls.global_kill_switch),
     agentsPaused: Boolean(controls.agents_paused),
@@ -157,40 +171,7 @@ export async function runInternalTestLiveReply(input: {
   });
   if (!initialPolicy.allowed) return { attempted: false, sent: false, reason: initialPolicy.reason };
 
-  const [{ count: duplicateClaim, error: duplicateClaimError }, { count: claimedCount, error: claimedCountError }] = await Promise.all([
-    supabase.from('audit_logs')
-      .select('id', { count: 'exact', head: true })
-      .eq('organization_id', input.organizationId)
-      .eq('action', 'INTERNAL_TEST_LIVE_REPLY_CLAIMED')
-      .eq('entity_type', 'outreach_message')
-      .eq('entity_id', String(inbound.id)),
-    supabase.from('audit_logs')
-      .select('id', { count: 'exact', head: true })
-      .eq('organization_id', input.organizationId)
-      .eq('action', 'INTERNAL_TEST_LIVE_REPLY_CLAIMED')
-      .gte('created_at', initialPolicy.startsAt)
-      .lt('created_at', initialPolicy.endsAt),
-  ]);
-  if (duplicateClaimError || claimedCountError) {
-    return { attempted: false, sent: false, reason: 'LIVE_TEST_CLAIM_LEDGER_UNAVAILABLE' };
-  }
-  if ((duplicateClaim ?? 0) > 0) return { attempted: false, sent: false, reason: 'LIVE_TEST_INBOUND_ALREADY_CLAIMED' };
-
-  const policy = evaluateInternalTestLiveReplyPolicy({
-    ruleRequiresApproval: Boolean(rule.requires_approval),
-    ruleConfig: rule.config,
-    businessCategory: business.category,
-    businessWhatsapp: business.whatsapp,
-    businessPhone: business.phone ?? business.international_phone,
-    inboundFrom: input.inboundFrom,
-    shadowMode: Boolean(controls.shadow_mode),
-    globalKillSwitch: Boolean(controls.global_kill_switch),
-    agentsPaused: Boolean(controls.agents_paused),
-    whatsappPaused: Boolean(controls.whatsapp_ai_paused),
-    claimedCount: Number(claimedCount ?? 0),
-    now: input.now,
-  });
-  if (!policy.allowed) return { attempted: false, sent: false, reason: policy.reason };
+  const policy = initialPolicy;
 
   const requestKey = stableAgentRequestKey('WHATSAPP', input.providerMessageId);
   const { data: existingRun, error: existingRunError } = await supabase.from('agent_runs')
@@ -207,27 +188,45 @@ export async function runInternalTestLiveReply(input: {
   }));
   if (!guard.ok) return { attempted: false, sent: false, reason: `CHANNEL_GUARD_${guard.status}` };
 
-  await audit({
-    organizationId: input.organizationId,
-    action: 'INTERNAL_TEST_LIVE_REPLY_CLAIMED',
-    entityId: String(inbound.id),
-    afterData: {
-      providerMessageId: input.providerMessageId,
-      windowStartsAt: policy.startsAt,
-      windowEndsAt: policy.endsAt,
-      maxReplies: policy.maxReplies,
-      shadowModeRemainsOn: true,
-      automaticRetry: false,
-    },
+  const claim = await controlledInboundEvidence({
+    supabase, organizationId: input.organizationId, inboundId: String(inbound.id),
+    recipient: policy.recipient, claim: true,
   });
+  if (!claim.allowed) return { attempted: true, sent: false, reason: claim.reason };
+
+  let inboundText = String(inbound.body);
+  if (input.messageType.toLowerCase() !== 'text') {
+    try {
+      const media = await prepareLatestInboundMediaForAi({
+        organizationId: input.organizationId, conversationId,
+        expectedProviderMessageId: input.providerMessageId,
+      });
+      const canonical = await supabase.from('conversation_messages')
+        .select('transcript').eq('organization_id', input.organizationId)
+        .eq('conversation_id', conversationId).eq('provider_message_id', input.providerMessageId)
+        .eq('direction', 'INBOUND').maybeSingle();
+      const transcript = stringValue(canonical.data?.transcript);
+      if (media.kind !== 'VOICE' || canonical.error || !transcript) {
+        return { attempted: true, sent: false, reason: 'SUCCESSFUL_EXACT_TRANSCRIPT_REQUIRED' };
+      }
+      inboundText = transcript;
+    } catch {
+      return { attempted: true, sent: false, reason: 'VOICE_NOT_READY_NO_AUTOMATIC_RETRY' };
+    }
+  }
+  const evidence = await controlledInboundEvidence({
+    supabase, organizationId: input.organizationId, inboundId: String(inbound.id), recipient: policy.recipient,
+  });
+  if (!evidence.allowed) return { attempted: true, sent: false, reason: evidence.reason };
 
   const agentResponse = await processInboundPost(internalJsonRequest('/api/ai/process-inbound', internalKey, {
     idempotencyKey: requestKey,
+    expectedInboundProviderMessageId: input.providerMessageId,
     context: {
       organizationId: input.organizationId,
       leadId: inbound.lead_id,
       conversationId,
-      message: String(inbound.body),
+      message: inboundText,
     },
   }));
   const payload = await agentResponse.json().catch(() => ({})) as Record<string, unknown>;
@@ -254,8 +253,8 @@ export async function runInternalTestLiveReply(input: {
 
   const secretary = agentData(trace, 'secretary');
   const culture = agentData(trace, 'culture_locale');
-  const catalog = record(payload.catalogRecommendation);
-  const catalogContentId = stringValue(catalog.contentId);
+  // This inbound-only demonstration is text output; portfolio/media delivery is separate.
+  const catalogContentId = undefined;
   const idempotencyKey = `agent:whatsapp-pilot:live:${inbound.id}:shadow`;
   const queued = await queueShadowDraft({
     organizationId: input.organizationId,
@@ -301,6 +300,7 @@ export async function runInternalTestLiveReply(input: {
   const metadata = record(approved.metadata);
   const sendContext = record(metadata.send_context);
   const verification = verifyControlledWhatsAppPilot({
+    canonicalLiveEvidenceVerified: evidence.allowed,
     messageStatus: approved.status,
     requiresApproval: Boolean(approved.requires_approval),
     channel: approved.channel,

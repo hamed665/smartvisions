@@ -30,6 +30,7 @@ export async function prepareLatestInboundMediaForAi(input: {
   conversationId?: string;
   leadId?: string;
   signal?: AbortSignal;
+  expectedProviderMessageId?: string;
 }): Promise<MediaPreprocessResult> {
   const service = createSupabaseServiceClient();
   let conversationId = text(input.conversationId, 80);
@@ -65,6 +66,9 @@ export async function prepareLatestInboundMediaForAi(input: {
   if (!latest.data) return { kind: 'NONE', conversationId };
 
   const message = latest.data as Record<string, unknown>;
+  if (input.expectedProviderMessageId && message.provider_message_id !== input.expectedProviderMessageId) {
+    throw new Error('EXPECTED_INBOUND_IS_NOT_CURRENT');
+  }
   if (text(message.channel, 40).toUpperCase() !== 'WHATSAPP') {
     return { kind: 'NONE', conversationId };
   }

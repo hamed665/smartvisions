@@ -1,3 +1,4 @@
+import { runInternalTestLiveReply } from '@/lib/whatsapp/internal-test-live-reply';
 import { NextResponse } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
@@ -346,14 +347,31 @@ export async function POST(request: Request) {
     } catch { /* fail closed in paid operations; alert sampling must not break tick */ }
   }
 
+  const liveTestResults: Array<{ attempted: boolean; sent: boolean; reason: string }> = [];
   const agentTasks: Array<{ requestKey: string; channel: 'EMAIL'|'WHATSAPP'; payload: Record<string, unknown> }> = [];
   for (const inbound of inboundResult.data ?? []) {
-    if (agentTasks.length >= MAX_AGENT_TASKS) break;
+    if (agentTasks.length + liveTestResults.filter((result) => result.attempted).length >= MAX_AGENT_TASKS) break;
     const channel = String(inbound.channel).toUpperCase();
     const providerMessageId = String(inbound.provider_message_id ?? '').trim();
     const leadId = stringValue(inbound.lead_id);
     const conversationId = conversationIdFromMetadata(inbound.metadata);
     if (!leadId || !conversationId || !providerMessageId || !['EMAIL','WHATSAPP'].includes(channel)) continue;
+    if (channel === 'WHATSAPP') {
+      try {
+        const result = await runInternalTestLiveReply({
+          organizationId: String(inbound.organization_id), providerMessageId,
+          messageType: String(record(inbound.metadata).type ?? 'text'),
+        });
+        if (result.attempted) {
+          liveTestResults.push({ attempted: result.attempted, sent: result.sent, reason: result.reason });
+          continue;
+        }
+      } catch {
+        // A potentially claimed/paid operation must not fall through into another AI run.
+        liveTestResults.push({ attempted: true, sent: false, reason: 'LIVE_TEST_FAILED_NO_AUTOMATIC_RETRY' });
+        continue;
+      }
+    }
     const requestKey = stableAgentRequestKey(channel, providerMessageId);
     const { data: existingRun, error: runError } = await supabase.from('agent_runs').select('id,status').eq('organization_id', inbound.organization_id).eq('request_key', requestKey).maybeSingle();
     if (runError || existingRun) continue;
@@ -497,6 +515,7 @@ export async function POST(request: Request) {
     generatedAt: now.toISOString(),
     webChatExpired,
     agentTasks,
+    liveTestResults,
     followupReconciliation,
     followups: followupResults,
     limits: { maxAgentTasksPerTick: MAX_AGENT_TASKS, maxInboundScan: MAX_INBOUND_SCAN, maxFirstTouchReconcile: MAX_FIRST_TOUCH_RECONCILE, maxFollowups: MAX_FOLLOWUPS },

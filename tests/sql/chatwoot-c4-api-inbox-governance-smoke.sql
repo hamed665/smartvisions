@@ -421,4 +421,10 @@ $final_state$;
 
 reset role;
 
+-- Optional committed fixture is used only in the ephemeral CI PostgreSQL database.
+\if :{?controlled_inbound_fixture}
+\ir whatsapp-controlled-inbound-fixture.sql
+commit;
+\else
 rollback;
+\endif

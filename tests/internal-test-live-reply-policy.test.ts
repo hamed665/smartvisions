@@ -41,16 +41,20 @@ describe('internal test live WhatsApp reply policy', () => {
     });
   });
 
-  it('allows a different exact Oman inbound sender only when the time-boxed Oman multi-number flag is enabled', () => {
+  it('requires exact consented recipient, tenant/binding and fresh inbound for a scoped Oman window', () => {
     const result = evaluateInternalTestLiveReplyPolicy({
       ...base(),
       businessCategory: 'dental_clinic',
       businessWhatsapp: '+968 9115 0976',
       inboundFrom: '96891150976',
+      tenantBusinessId: 'tenant-fixture', bindingId: 'binding-fixture',
+      inboundReceivedAt: '2026-09-05T13:59:00.000Z',
       ruleConfig: {
         internalTestLiveReply: {
           ...config.internalTestLiveReply,
           allowVerifiedOmanInbound: true,
+          recipients: ['96891150976'], tenantBusinessId: 'tenant-fixture', bindingId: 'binding-fixture',
+          inboundOnly: true,
           maxReplies: 20,
         },
       },
@@ -63,6 +67,23 @@ describe('internal test live WhatsApp reply policy', () => {
       maxReplies: 20,
       deliveryMode: 'TEXT',
     });
+  });
+
+  it.each([
+    [{ inboundFrom: '96890000002', businessWhatsapp: '96890000002' }, 'RECIPIENT_NOT_CONSENTED'],
+    [{ tenantBusinessId: 'another-tenant' }, 'LIVE_TEST_TENANT_BINDING_MISMATCH'],
+    [{ bindingId: 'another-binding' }, 'LIVE_TEST_TENANT_BINDING_MISMATCH'],
+    [{ inboundReceivedAt: '2026-09-05T13:29:00Z' }, 'FRESH_WINDOW_INBOUND_REQUIRED'],
+    [{ inboundReceivedAt: '2026-09-05T13:54:59Z' }, 'FRESH_WINDOW_INBOUND_REQUIRED'],
+    [{ inboundReceivedAt: '2026-09-05T14:00:01Z' }, 'FRESH_WINDOW_INBOUND_REQUIRED'],
+  ])('fails closed for scoped evidence mismatch %#', (patch, reason) => {
+    expect(evaluateInternalTestLiveReplyPolicy({
+      ...base(), businessCategory: 'customer', businessWhatsapp: '96890000001', inboundFrom: '96890000001',
+      tenantBusinessId: 'tenant-fixture', bindingId: 'binding-fixture', inboundReceivedAt: '2026-09-05T13:59:00Z',
+      ruleConfig: { internalTestLiveReply: { ...config.internalTestLiveReply, allowVerifiedOmanInbound: true,
+        recipients: ['96890000001'], tenantBusinessId: 'tenant-fixture', bindingId: 'binding-fixture', inboundOnly: true } },
+      ...patch,
+    })).toEqual({ allowed: false, reason });
   });
 
   it('does not treat a non-Oman sender as part of the Oman multi-number window', () => {

@@ -5,12 +5,9 @@ import { describe, expect, it } from 'vitest';
 describe('live-test market-window exception invariants', () => {
   it('requires active live provenance, durable claim and the existing live policy', () => {
     const source = readFileSync(resolve(process.cwd(), 'lib/whatsapp/live-test-market-window-exception.ts'), 'utf8');
-    expect(source).toContain("/^agent:whatsapp-pilot:live:([0-9a-f-]{36}):shadow$/i");
-    expect(source).toContain(".eq('action', 'INTERNAL_TEST_LIVE_REPLY_CLAIMED')");
-    expect(source).toContain(".eq('entity_type', 'outreach_message')");
-    expect(source).toContain(".eq('action_key', 'WHATSAPP_OUTBOUND')");
-    expect(source).toContain('evaluateInternalTestLiveReplyPolicy({');
-    expect(source).toContain('claimMs >= startMs && claimMs < endMs');
+    expect(source).toContain('controlledInboundId(input.idempotencyKey)');
+    expect(source).toContain('controlledInboundEvidence({');
+    expect(source).toContain('if (!evidence.allowed) return false');
   });
 
   it('does not let a controlled-pilot request alone bypass the provider-boundary market gate', () => {

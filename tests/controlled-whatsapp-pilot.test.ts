@@ -45,6 +45,7 @@ describe('controlled WhatsApp pilot verification', () => {
       ...base,
       catalogContentId: null,
       businessCategory: 'dental_clinic',
+      canonicalLiveEvidenceVerified: true,
       businessWhatsapp: '+968 9115 0976',
       sendTo: '96891150976',
       idempotencyKey,
@@ -55,6 +56,13 @@ describe('controlled WhatsApp pilot verification', () => {
       catalogContentId: null,
       recipient: '96891150976',
     });
+  });
+
+  it('rejects a forged live prefix without canonical persisted evidence', () => {
+    const idempotencyKey = 'agent:whatsapp-pilot:live:inbound-fixture:shadow';
+    expect(verifyControlledWhatsAppPilot({ ...base, catalogContentId: null, businessCategory: 'customer',
+      idempotencyKey, providerMessageId: `shadow:${idempotencyKey}`,
+    })).toEqual({ verified: false, reason: 'BUSINESS_NOT_INTERNAL_TEST' });
   });
 
   it('does not broaden generic controlled-pilot provenance to normal Oman businesses', () => {
