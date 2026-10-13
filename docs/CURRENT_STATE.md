@@ -1,3 +1,12 @@
+## Sahra real inbound failure and repair checkpoint — 2026-10-14 (Muscat)
+
+- PR #508 merged at `90ec6bde1204f22aaa44e63a67361590b0638098`; exact-main CI `38473133040` and Production Deploy `38473568894` succeeded. Reviewed receipt-backed recovery migration is applied, invoker functions verified and security advisors run.
+- Fresh complete Super Admin inventory was reviewed. A protected service receipt was recorded and the existing OWNER Finalize consumed one canonical recovery reservation without resetting the original Claim. External Sahra Account `2`, OWNER/admin membership and API Inbox `1` are now ACTIVE in Smart Core. Old Account `1` remains untouched.
+- The existing seven-person private consented test window was activated at `2026-10-13T21:57:17.928054Z`, ending `23:27:17.928054Z`, cap 20, inbound-only, approval required and Shadow ON. It was maintenance-paused after an actual initiated handset text failed to receive a reply; no invitation or proactive send was performed.
+- The handset inbound was durably received at `21:59:25Z`; no Agent run or reply is proven. Sender links to a legacy INTERNAL_TEST pilot Lead held HUMAN since September. The canonical OWNER Resume command fails PostgreSQL `22P02` on its empty enum COALESCE; attempted release/settings transaction rolled back completely.
+- Runtime diagnosis also found oldest-first scans hide fresh inbound behind 43 retained RECEIVED rows and current projection behind 39 PENDING events. PR #509 repairs enum-safe canonical Resume, scoped legacy test admission and fresh inbound/projection priority, preserving canonical claims, DNC/terminal checks, audit, RLS, paid replay and final send gates. Local 40 focused tests and Typecheck passed; exact-head CI is pending. Repairs are NOT yet Production-verified.
+- Existing configuration remains maintenance-disabled; original test clock was not extended. Handset text/voice/delivery/no-duplicates/Human Takeover acceptance remains NOT CONTROLLED_TEST_VERIFIED and the full demo is NOT PRODUCTION_VERIFIED. Issue #496 contains sanitized receipts and continuation evidence. Personal allowlist remains private.
+
 ## Sahra owner knowledge configured — 2026-10-13 (Muscat)
 
 - Owner requested real ingestion of service/pricing details, AI/seller responsibilities and Omani-Arabic-first natural replies with Persian/English language matching.
