@@ -1,5 +1,7 @@
 ## Sahra Chatwoot credential staging — 2026-10-13 (Muscat)
 
+- PR #500 merged as `df1747a598348ba581dcd57cb1658904b9eece71`; main CI `38393432238` and Production Deploy `38393906799` succeeded. Live Worker Settings still reported `CHATWOOT_UNHEALTHY` with the 10-second deadline, so timeout relaxation alone did not resolve readiness. OWNER-only readiness now exposes only a bounded failure code, numeric HTTP status and latency; upstream bodies, exceptions and credentials are never returned. No activation is implied by this diagnostic change.
+
 - Exactly one `Smart Visions Core` Platform App exists (ID 1). Its generated token was copied directly into GitHub Actions Secret `CHATWOOT_PLATFORM_TOKEN`; no value is recorded in code, logs, screenshots or this document.
 - Exact-main `cf62c62ca7fa1b823b6072388958662d0d08cbfd` Production Deploy run `38337817180`, latest job `115277262282`, succeeded. Logs prove Production-only token staging, Candidate token exclusion and provisioning still disabled.
 - Live Settings no longer reports `PLATFORM_TOKEN_MISSING`; it still reports `CHATWOOT_UNHEALTHY`. Independent GET `/health` returned HTTP 200 with `{"status":"woot"}`, with one measured response taking 7.57 seconds. This suggests the 3-second readiness deadline can yield a false negative; it does not establish the Worker-side failure cause.
