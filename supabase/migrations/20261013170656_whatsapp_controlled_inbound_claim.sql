@@ -102,7 +102,11 @@ begin
      or regexp_replace(coalesce(v_message.metadata->>'from',''),'[^0-9]','','g')<>v_recipient
      or v_message.metadata->>'tenant_business_id' is distinct from v_tenant::text
      or v_message.metadata->>'communication_channel_binding_id' is distinct from v_binding::text
-     or (not p_claim and v_message.media_type in ('VOICE','AUDIO') and nullif(btrim(v_message.transcript),'') is null)
+     or (not p_claim and v_message.media_type in ('VOICE','AUDIO') and (
+       nullif(btrim(v_message.transcript),'') is null
+       or v_message.metadata->'media_analysis'->>'status' is distinct from 'SUCCEEDED'
+       or v_message.metadata->'media_analysis'->>'kind' is distinct from 'VOICE_TRANSCRIPTION'
+       or nullif(v_message.metadata->'media_analysis'->>'sourceId','') is null))
      or exists(select 1 from public.conversation_messages m where m.organization_id=p_organization_id
        and m.conversation_id=v_conversation and m.direction='INBOUND'
        and (m.created_at,m.id)>(v_message.created_at,v_message.id)) then

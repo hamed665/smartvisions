@@ -16,6 +16,9 @@ channel guard, successful tenant-bound media transcription, Shadow draft and app
 handler. Voice produces text output. A newer inbound fails closed before transcription;
 failed/processing voice is never treated as customer speech. Claims are conservative: a
 failed attempt consumes its slot and does not trigger automatic replay.
+Voice verification requires the existing canonical `media_analysis` success receipt
+(`VOICE_TRANSCRIPTION`, `SUCCEEDED`, source ID), as well as a nonempty exact transcript;
+bare text in the transcript column cannot activate the exception.
 
 Both initial approval and the final provider boundary verify private consent, exact recipient,
 Business/Binding, current real inbound, active communication projection/Inbox/Account, durable
