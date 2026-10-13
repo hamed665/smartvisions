@@ -79,12 +79,43 @@ function serviceClient(input: {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
 
 describe('Chatwoot readiness loader', () => {
+  it.each([{ responseAt: 8_000, healthy: true }, { responseAt: 11_000, healthy: false }])(
+    'keeps a slow health check bounded without enabling provisioning: %j',
+    async ({ responseAt, healthy }) => {
+      vi.useFakeTimers();
+      vi.stubEnv('DEPLOYMENT_ENV', 'production');
+      vi.stubEnv('CHATWOOT_PROVISIONING_ENABLED', 'false');
+      vi.stubEnv('CHATWOOT_BASE_URL', 'https://inbox.example.com');
+      vi.stubEnv('CHATWOOT_PLATFORM_TOKEN', 'test-platform-token');
+      const fetchMock = vi.fn((_url: string, options: RequestInit) => new Promise<Response>((resolve, reject) => {
+        const timer = setTimeout(() => resolve(new Response('{"status":"woot"}', { status: 200 })), responseAt);
+        options.signal?.addEventListener('abort', () => {
+          clearTimeout(timer);
+          reject(new Error('aborted'));
+        }, { once: true });
+      }));
+      vi.stubGlobal('fetch', fetchMock);
+      createSupabaseServiceClient.mockReturnValue(serviceClient({ counts: {
+        brands: 1, tenant_businesses: 1, communication_channel_bindings: 1, chatwoot_account_mappings: 1,
+      } }));
+      const pending = loadChatwootReadiness({ supabase: ownerSupabase(), organizationId: ORG });
+      await vi.advanceTimersByTimeAsync(10_000);
+      const state = await pending;
+      expect(state.chatwootHealthy).toBe(healthy);
+      expect(state.activationReady).toBe(healthy);
+      expect(state.liveProvisioningReady).toBe(false);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
+
   it('uses OWNER-gated server reads and scopes global User mappings through memberships', async () => {
     vi.stubEnv('DEPLOYMENT_ENV', 'production');
     vi.stubEnv('CHATWOOT_PROVISIONING_ENABLED', 'false');
