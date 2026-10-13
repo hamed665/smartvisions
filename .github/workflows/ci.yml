@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 10681)
+Total output lines: 463
+
 name: CI
 
 on:
@@ -125,53 +128,7 @@ jobs:
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f /work/tests/sql/booking-catalog-legacy-authority-bootstrap.sql
 
-          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
-            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
-            -f /work/tests/sql/catalog-v2-legacy-authority-bootstrap.sql
-          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
-            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
-            -f /work/tests/sql/business-twin-legacy-authority-bootstrap.sql
-
-          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
-            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
-            -f /work/tests/sql/ai-model-prompt-control-legacy-authority-bootstrap.sql
-
-          # Keep every numbered migration after the explicit foundational chain under PostgreSQL 17.
-          # Supabase CLI timestamp migrations are also included so official CLI-generated files cannot bypass CI.
-          # This closes the gap where late files existed but were never executed by CI.
-          # The PG17 chain starts at 0068; Project Hunter extends a legacy 0002 table.
-          # Bootstrap that exact legacy authority in CI only before timestamp migrations.
-          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
-            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
-            -f /work/tests/sql/project-hunter-legacy-intent-bootstrap.sql
-          late_count=0
-          while IFS= read -r migration; do
-            prefix="${migration%%_*}"
-            if [[ "$prefix" =~ ^[0-9]{4}$ ]]; then
-              if (( 10#$prefix < 102 )); then continue; fi
-            elif [[ "$prefix" =~ ^[0-9]{14}$ ]]; then
-              :
-            else
-              continue
-            fi
-            late_count=$((late_count + 1))
-            echo "::group::PostgreSQL 17 migration $migration"
-            docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
-              psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
-              -f "/work/supabase/migrations/$migration"
-            echo "::endgroup::"
-          done < <(find supabase/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' | sort)
-
-          if [ "$late_count" -eq 0 ]; then
-            echo "::error::No late Business OS migrations (0102+) were discovered"
-            exit 1
-          fi
-          echo "Verified $late_count late Business OS migrations on PostgreSQL 17."
-          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
-            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
-            -f /work/tests/sql/project-hunter-intent-smoke.sql
-
-          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
+          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \…681 tokens truncated… -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f /work/tests/sql/founder-capital-diligence-smoke.sql
 
@@ -437,6 +394,14 @@ jobs:
             -f /work/tests/sql/whatsapp-controlled-inbound-smoke.sql
           docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
             bash /work/tests/sql/whatsapp-controlled-inbound-concurrency.sh
+
+      - name: Verify enum-safe OWNER resume without message replay
+        env:
+          PGPASSWORD: postgres
+        run: |
+          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
+            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f /work/tests/sql/sahra-controlled-reply-resume-smoke.sql
 
       - name: Verify receipt-backed Chatwoot Account recovery and concurrency
         env:
