@@ -245,7 +245,7 @@ jobs:
             CHATWOOT_BASE_URL:process.env.CHATWOOT_BASE_URL,
             CHATWOOT_WEBHOOK_PUBLIC_ORIGIN:process.env.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN,
             META_WHATSAPP_COEXISTENCE_ENABLED:process.env.META_WHATSAPP_COEXISTENCE_ENABLED==='true'?'true':'false',
-            CHATWOOT_PROVISIONING_ENABLED:'false'
+            CHATWOOT_PROVISIONING_ENABLED:'true'
           };
           c.triggers={crons:['*/2 * * * *']};
           if(c.limits?.cpu_ms!==100)throw new Error('CPU guard drifted before promotion');
@@ -254,7 +254,7 @@ jobs:
           if(c.vars?.DEPLOYMENT_ENV!=='production')throw new Error('Production deployment env is not production');
           if(c.vars?.CHATWOOT_BASE_URL!==process.env.CHATWOOT_BASE_URL)throw new Error('Production Chatwoot base URL invariant failed');
           if(c.vars?.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN!==process.env.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN)throw new Error('Production Chatwoot webhook origin invariant failed');
-          if(c.vars?.CHATWOOT_PROVISIONING_ENABLED!=='false')throw new Error('Production Chatwoot provisioning must remain disabled');
+          if(c.vars?.CHATWOOT_PROVISIONING_ENABLED!=='true')throw new Error('Approved Production Chatwoot provisioning flag invariant failed');
           if(Object.prototype.hasOwnProperty.call(c.vars||{},'CHATWOOT_PLATFORM_TOKEN'))throw new Error('Chatwoot Platform token must never be stored in plaintext Worker vars');
           if(JSON.stringify(c.triggers?.crons)!==JSON.stringify(['*/2 * * * *']))throw new Error('Production cron invariant failed');
           fs.writeFileSync(file,JSON.stringify(c,null,2)+'\n');
@@ -293,7 +293,7 @@ jobs:
           console.log('Production Chatwoot Platform token binding name verified; value was not read or printed.');
           NODE
           rm -f .chatwoot-production-secret-names.json
-          echo "Chatwoot Platform token staged only on the Production Worker; provisioning remains disabled."
+          echo "Chatwoot Platform token staged only on the Production Worker; external execution remains tenant/OWNER/claim gated."
 
       - name: Re-assert Growth Supabase bindings on production Worker
         shell: bash
@@ -365,5 +365,5 @@ jobs:
           echo "Outbound provider sends invoked by smoke: none"
           echo "Chatwoot Production base URL: inbox.smartvisionsai.com"
           echo "Chatwoot webhook public origin: app.smartvisionsai.com"
-          echo "Chatwoot provisioning: disabled"
+          echo "Chatwoot provisioning: enabled on Production only; tenant/OWNER/claim gates remain required"
           echo "Chatwoot Platform token transport: Production Worker secret only when configured; never release candidate"
