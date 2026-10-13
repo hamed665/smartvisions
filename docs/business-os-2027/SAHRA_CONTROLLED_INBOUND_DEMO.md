@@ -61,5 +61,12 @@ security-sensitive repository access change requiring action-time confirmation. 
 not changed; the unsaved field and clipboard were cleared. No credential rotation, second App,
 Account replay/reset, Meta change or WhatsApp message occurred.
 
+The request adapter now also sends the same secret in `api-access-token`, alongside the documented
+underscore header, to the same verified origin. Chatwoot v4.18.0's
+`app/controllers/concerns/access_token_auth_helper.rb` explicitly accepts `HTTP_API_ACCESS_TOKEN`;
+Rails v7.1.6 `ActionDispatch::Http::Headers#env_name` maps the hyphen form to that exact Rack key.
+This is transport compatibility, not authentication bypass or proof that the installed proxy
+drops underscores. Reconcile must still establish actual privileged API success after deployment.
+
 Disposition: implementation pending exact-head CI/deployment; actual Chatwoot authentication and
 handset text/voice/takeover verification BLOCKED_EXTERNAL. Live exception remains NOT_ACTIVE.

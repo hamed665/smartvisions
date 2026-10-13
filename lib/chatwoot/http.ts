@@ -267,6 +267,10 @@ export async function chatwootProvisioningRequest<T>(input: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
           api_access_token: token,
+          // Rack maps hyphens to HTTP_API_ACCESS_TOKEN, which Chatwoot 4.18
+          // explicitly accepts. Keep the documented underscore form too;
+          // proxies may reject/drop underscore headers. Same secret/origin.
+          'api-access-token': token,
           'X-SmartVisions-Request-Id': requestId,
         },
         body: requestBody,

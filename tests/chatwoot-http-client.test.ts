@@ -109,6 +109,7 @@ describe('Chatwoot provisioning HTTP client', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({
       api_access_token: 'platform-secret-token',
+      'api-access-token': 'platform-secret-token',
     });
   });
 
@@ -128,6 +129,7 @@ describe('Chatwoot provisioning HTTP client', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({
       api_access_token: 'ephemeral-user-token',
+      'api-access-token': 'ephemeral-user-token',
     });
   });
 
