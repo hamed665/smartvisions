@@ -262,7 +262,7 @@ describe('C3B governed Account orchestration', () => {
     await expect(provisionCandidateChatwootAccount({
       supabase, organizationId: ORGANIZATION_ID, mappingId: MAPPING_ID,
       requestKey: REQUEST_KEY, fetchImpl: fetchMock as unknown as typeof fetch,
-    })).rejects.toThrow('no exact external match');
+    })).rejects.toMatchObject({ code: 'RECONCILIATION_REQUIRED', diagnosticReason: 'ACCOUNT_EXTERNAL_MATCH_MISSING' });
     expect(fetchMock.mock.calls.map((call) => call[1]?.method)).toEqual(['GET']);
     expect(rpc).toHaveBeenCalledTimes(1);
   });
