@@ -319,8 +319,29 @@ async function getOrCreateConversation(organizationId: string, leadId: string, r
       && projection.tenant_business_id === scope.tenantBusinessId
       && (projection.branch_id ?? null) === scope.branchId
       && projection.communication_channel_binding_id === scope.bindingId;
-    if (sameScope) {
-      const { error } = await supabase.from('sales_conversations').update({ last_message_at: receivedAt, updated_at: new Date().toISOString() }).eq('id', existing.id).eq('organization_id', organizationId);
+    // A webhook can link the first customer message before the Chatwoot
+    // projection exists. When the next signed inbound arrives, only reuse
+    // this unprojected conversation if a canonical CUSTOMER/META message
+    // proves the exact same tenant binding. Never merge different tenants.
+    let priorBoundInbound = false;
+    if (!projection) {
+      const proof = await supabase.from('conversation_messages')
+        .select('id')
+        .eq('organization_id', organizationId)
+        .eq('conversation_id', existing.id)
+        .eq('direction', 'INBOUND')
+        .eq('provenance', 'CUSTOMER')
+        .eq('source_plane', 'META_WHATSAPP')
+        .eq('metadata->>tenant_business_id', scope.tenantBusinessId)
+        .eq('metadata->>communication_channel_binding_id', scope.bindingId)
+        .limit(1);
+      if (proof.error) throw new Error(`WhatsApp unprojected conversation scope proof failed: ${proof.error.message}`);
+      priorBoundInbound = (proof.data?.length ?? 0) > 0;
+    }
+    if (sameScope || priorBoundInbound) {
+      const { error } = await supabase.from('sales_conversations')
+        .update({ last_message_at: receivedAt, updated_at: new Date().toISOString() })
+        .eq('id', existing.id).eq('organization_id', organizationId);
       if (error) throw new Error(`WhatsApp conversation update failed: ${error.message}`);
       return existing;
     }
