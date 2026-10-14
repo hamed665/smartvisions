@@ -1,3 +1,15 @@
+## Sahra faster inbound execution — implementation checkpoint (2026-10-14)
+
+User explicitly requested shorter WhatsApp response latency. Existing main `6616d553e607a16ff4ae47f62cb0ad7f179b6921` / PR #518 passed exact-head CI `38555302498`, exact-main CI `38555895643` (284 files / 2004 tests), and Production Deploy `38556391437` with routed smoke at 11:26:27Z. A new real inbound `6eb5056c-98a3-48b5-bb86-1a7b09f7c9b3` at 11:30:28Z produced corrected outbound `c0573586-ccbf-4c12-859d-7f93e3b120fb` with DELIVERED evidence, but retained the two-minute queue wait.
+
+The bounded faster path extends the same Production Worker: existing full operations remain `*/2 * * * *`; a distinct `* * * * *` scheduled event only scans the exact Sahra organization/business/binding near second 0 and 30. Candidate gets no scheduled triggers. The signed webhook ACK is unchanged and performs no paid AI work. No second queue, outbox, Worker, provider gateway or Agent framework is introduced.
+
+Fresh candidates are limited to the previous 120 seconds, newest per conversation, two per sweep, supported TEXT/VOICE/AUDIO only. Permanent-owner policy and pause/kill/Shadow/general-approval state are checked on each sweep. Existing Agent runs and persisted inbound claims are excluded before execution; the canonical advisory-lock claim, daily 60 cap, Cost Guard, suppression, human takeover, final approval and provider send gate are reused without changes. A claim race or ambiguous execution is never blindly retried. Old messages are not replayed.
+
+Runtime observability uses existing audit_logs with SYSTEM action `SAHRA_FAST_INBOUND_WINDOW`: attempted/error outcomes plus five-minute idle samples. Counts and timing only, no secret or customer text. The target improvement is queue polling around 30 seconds during healthy scheduling; model/provider processing, busy batches and runtime delays remain additional. No fixed end-to-end SLA or production latency claim is made before fresh runtime/customer evidence.
+
+Implementation/tests prepared; exact-head CI, merge, exact-main CI, deployment and the live fast-trigger evidence remain separate acceptance gates. Voice/photo acceptance is not implied by text transport or scheduler tests.
+
 ## Sahra permanent inbound replies and known-vehicle recovery — 2026-10-14
 
 Production owner authorization is active for Sahra Business `c0db8ad8-04d5-40b8-843f-59b87a88bc0d`, Binding `417d76e7-b228-4bfd-a20c-73dc660f8ebe`, Meta phone `1407399779117822` / WABA `1871092380723444`. `permanentInboundReply.enabled=true`, dailyCap=60, inboundOnly/noUnsolicited=true. Owner audit `5e603839-9388-4932-90c2-d05a8179f52f` at 2026-10-14T11:02:06Z is USER with canonical OWNER membership. Shadow Mode and general WHATSAPP_OUTBOUND approval remain ON; kill/pause controls remain available. Canonical Cost Guard budget remains USD 25/month, WhatsApp USD 3, hard stop 100%. The expired 90-minute pilot is unchanged.
