@@ -19,6 +19,7 @@ import { canAutoSend, evaluateHandoff } from '@/lib/handoff/policy';
 import { evaluateSalesReplyPolicy, inferSalesHandoffSignals } from '@/lib/conversations/sales-behavior';
 import { resolveSmartVisionsCatalogRecommendation } from '@/lib/whatsapp/catalog';
 import { replyMatchesHighConfidenceMessageLanguage } from '@/lib/outreach/locale';
+import { safeVehicleQuoteClarification } from './safe-clarification';
 function applyConfidenceThreshold(context: AgentContext, result: AgentResult) {
   const threshold = context.agentSettings?.[result.agent]?.confidenceThreshold;
   if (threshold == null || result.confidence >= threshold || result.blockers.includes('BELOW_CONFIGURED_CONFIDENCE')) {
@@ -226,7 +227,7 @@ export async function processInboundMessage(
     agentResults.push(secretaryResult);
   }
 
-  const draft = secretaryCompose(context, decision, agentResults);
+  let draft = secretaryCompose(context, decision, agentResults);
   const previewPolicyPassed = !draftOffersUnrequestedCustomPreview({
     customerMessage: context.message,
     draft: draft.text,
@@ -235,6 +236,7 @@ export async function processInboundMessage(
     message: context.message,
     replyLanguage: draft.language,
     replyText: draft.text,
+    conversationHistory: context.conversationHistory,
   });
   const salesBehavior = evaluateSalesReplyPolicy({ context, draft, decision });
   const deterministicRelevance = checkRelevance(context, draft)
@@ -259,10 +261,10 @@ export async function processInboundMessage(
     relevanceResult = applyConfidenceThreshold(context, run.result);
     agentResults.push(relevanceResult);
   }
-  const relevancePassed = deterministicRelevance
+  let relevancePassed = deterministicRelevance
     && (!relevanceResult || relevanceResult.blockers.length === 0);
   const humanStyle = checkHumanReplyQuality(draft);
-  const qualitySafety = evaluateAgentQualitySafety({
+  let qualitySafety = evaluateAgentQualitySafety({
     context,
     draft,
     agentResults,
@@ -292,6 +294,57 @@ export async function processInboundMessage(
     if (item.decision.status !== 'ELIGIBLE_FOR_DOMAIN_GATE') guardrails.push(item.decision.status);
   }
   guardrails.push(...qualitySafety.blockReasons, ...qualitySafety.reviewReasons);
+
+  // If the draft was blocked for incomplete vehicle-price evidence, prefer one
+  // safe clarifying question over silence. Never bypass confidentiality, unsafe
+  // prices, human takeover, booking side effects or the canonical send gate.
+  if (
+    (qualitySafety.disposition === 'BLOCK' || !relevancePassed)
+    && routedAgents.includes('secretary')
+    && !handoff.handoff
+    && !decision.requiresHuman
+    && !decision.useDiscount
+    && !bookingToolResult
+    && toolProposals.length === 0
+    && qualitySafety.checks.every((item) => item.disposition !== 'BLOCK' || item.key === 'EVIDENCE')
+  ) {
+    const recovery = safeVehicleQuoteClarification(context);
+    if (recovery) {
+      const recoverySafety = evaluateAgentQualitySafety({
+        context,
+        draft: recovery.draft,
+        agentResults: agentResults.filter((item) => !['evidence_checker', 'relevance_checker'].includes(item.agent)),
+        toolProposals,
+        salesPolicyReasons: evaluateSalesReplyPolicy({ context, draft: recovery.draft, decision }).reasons,
+      });
+      const recoveryLanguageValid = replyMatchesHighConfidenceMessageLanguage({
+        message: context.message,
+        replyLanguage: recovery.draft.language,
+        replyText: recovery.draft.text,
+        conversationHistory: context.conversationHistory,
+      });
+      if (
+        recoverySafety.disposition === 'PASS'
+        && recoveryLanguageValid
+        && checkRelevance(context, recovery.draft)
+        && checkHumanReplyQuality(recovery.draft).passed
+      ) {
+        draft = recovery.draft;
+        qualitySafety = recoverySafety;
+        relevancePassed = true;
+        guardrails.push('SAFE_VEHICLE_QUOTE_CLARIFICATION_RECOVERY');
+        const secretary = agentResults.find((item) => item.agent === 'secretary');
+        if (secretary) {
+          secretary.data = {
+            ...secretary.data,
+            customer_reply: draft.text,
+            customer_reply_language: draft.language,
+            operator_persian_translation: recovery.persianTranslation,
+          };
+        }
+      }
+    }
+  }
 
   let delivery: PipelineTrace['delivery'];
   if (

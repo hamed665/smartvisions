@@ -82,6 +82,7 @@ export async function executeAgent(agent: AgentName, context: AgentContext): Pro
       primaryLocale: style.primaryLocale,
       fallbackLocale: style.fallbackLocale,
       preferredLanguage: context.language,
+      conversationHistory: context.conversationHistory,
     });
     return {
       agent,

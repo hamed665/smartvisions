@@ -47,6 +47,22 @@ function normalizeDetectedLanguage(language: Exclude<DetectedLanguage, 'mixed' |
   return language;
 }
 
+type ConversationLanguageTurn = { direction: string; body: string };
+
+function isAutomotiveBrandOnly(message: string) {
+  const value = message.trim().normalize('NFKC').replace(/[.,،؛!?؟]+$/gu, '').replace(/\s+/g, ' ');
+  // A car brand is an entity, not proof that the customer switched languages.
+  // This narrow exception does not cover a genuine Persian/Urdu price question.
+  return /^(?:تویوتا|تويوتا|نیسان|نيسان|هوندا|هيونداي|هیوندای|كيا|کیا|لكزس|لکسوس|مازدا|فورد|مرسيدس|مرسدس|جيب|جیپ)(?:\s+[0-9۰-۹٠-٩]{2,4})?$/iu.test(value);
+}
+
+function hasRecentArabicCustomerTurn(history?: ConversationLanguageTurn[]) {
+  return (history ?? []).slice(-8).some((turn) =>
+    turn.direction === 'INBOUND'
+    && detectHighConfidenceMessageLanguage(turn.body) === 'ar'
+  );
+}
+
 export function detectHighConfidenceMessageLanguage(message: string): Exclude<DetectedLanguage, 'mixed' | 'unknown'> | undefined {
   const detected = detectLanguageZeroCost(message);
   if (detected.language === 'unknown' || detected.language === 'mixed' || detected.confidence < 0.75) return undefined;
@@ -59,7 +75,11 @@ export function resolveReplyLanguage(input: {
   fallbackLocale?: string;
   preferredLanguage?: string;
   marketCode?: MarketCode;
+  conversationHistory?: ConversationLanguageTurn[];
 }) {
+  if (isAutomotiveBrandOnly(input.message) && hasRecentArabicCustomerTurn(input.conversationHistory)) {
+    return normalizeDetectedLanguage('ar', input.marketCode, input.primaryLocale);
+  }
   const detected = detectLanguageZeroCost(input.message);
   if (detected.language !== 'unknown' && detected.language !== 'mixed' && detected.confidence >= 0.75) {
     return normalizeDetectedLanguage(detected.language, input.marketCode, input.primaryLocale);
@@ -90,13 +110,16 @@ export function replyMatchesHighConfidenceMessageLanguage(input: {
   message: string;
   replyLanguage?: string;
   replyText: string;
+  conversationHistory?: ConversationLanguageTurn[];
 }) {
   const detected = detectLanguageZeroCost(input.message);
   const replyLanguage = String(input.replyLanguage ?? '').toLowerCase();
+  const automotiveArabicContinuity = isAutomotiveBrandOnly(input.message)
+    && hasRecentArabicCustomerTurn(input.conversationHistory) && replyLanguage.startsWith('ar');
 
   if (hasSubstantiveLanguageSignal(input.message) && replyLanguage === 'und') return false;
 
-  if (detected.language !== 'unknown' && detected.language !== 'mixed' && detected.confidence >= 0.75) {
+  if (!automotiveArabicContinuity && detected.language !== 'unknown' && detected.language !== 'mixed' && detected.confidence >= 0.75) {
     const expected = detected.language;
     if (expected === 'ar') {
       if (!replyLanguage.startsWith('ar')) return false;
