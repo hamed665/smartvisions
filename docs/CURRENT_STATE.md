@@ -1,3 +1,10 @@
+## Sahra controlled reply repair deployed — 2026-10-14 (Muscat)
+
+- #509 exact head `d796386a58ac85dd1a025d84d5f0903ca1b6c39d` passed full CI `38496804726`, including real OWNER Resume/idempotence/DNC/no-message regression and concurrent controlled inbound cap. Expected-head merge `117b9c6252bc0134b5b83eb453b0f47885f99c9c`; exact-main CI `38497211567` and standard Production Deploy `38497456215` succeeded.
+- Reviewed invoker Resume migration is applied. Actual existing OWNER command changed the current sender's legacy Lead HUMAN/HUMAN to REPLIED/AUTO; conversation is AUTO/no-human-lock. Anon execution denied and advisors run. Scoped consent applies to legacy INTERNAL_TEST contacts; fresh canonical inbound and current pending projection are prioritized over retained backlog, preserving existing claims, task limits, DNC, RLS, paid replay, Shadow and provider gates.
+- Original expired window consumed zero controlled claims/sends. Same private seven-party consent used for bounded window `2026-10-14T01:48:14.446234Z`–`03:18:14.446234Z` (05:48–07:18 Muscat), total cap20, inbound-only/TEXT/approval required/Shadow ON. OWNER-RLS activation audited; no invitation/proactive send. Actual read-only old-inbound probe returned `FRESH_SCOPED_INBOUND_REQUIRED`; no old message replay.
+- IMPLEMENTED/deployed and CONFIGURED; new handset text/voice/delivery/no-duplicates/Human Takeover remain NOT CONTROLLED_TEST_VERIFIED and full demo NOT PRODUCTION_VERIFIED. User requested to initiate a fresh text. Issue #496 carries sanitized receipts; personal allowlist stays private. Conflicting dispositions in older checkpoints below are historical.
+
 ## Sahra real inbound failure and repair checkpoint — 2026-10-14 (Muscat)
 
 - PR #508 merged at `90ec6bde1204f22aaa44e63a67361590b0638098`; exact-main CI `38473133040` and Production Deploy `38473568894` succeeded. Reviewed receipt-backed recovery migration is applied, invoker functions verified and security advisors run.
