@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildVerifiedInboundBusinessSeed,
+  buildUnscoredWhatsAppInboundLead,
   inboundAcquisitionMetadata,
   mapWhatsAppDeliveryStatus,
   normalizePhoneDigits,
@@ -47,6 +48,24 @@ describe('WhatsApp lifecycle helpers', () => {
     expect(buildVerifiedInboundBusinessSeed({ from: '+966 50 123 4567', contactName: 'Saudi Contact' })?.countryCode).toBe('SA');
     expect(buildVerifiedInboundBusinessSeed({ from: '+974 5512 3456', contactName: 'Qatar Contact' })?.countryCode).toBe('QA');
     expect(buildVerifiedInboundBusinessSeed({ from: '+968 9497 4431' })?.name).toBe('WhatsApp inbound contact');
+  });
+
+  it('creates new Meta inbound leads without triggering governed scoring provenance requirements', () => {
+    const seed = buildUnscoredWhatsAppInboundLead('org-real-test', 'business-real-test');
+    expect(seed).toEqual({
+      organization_id: 'org-real-test',
+      business_id: 'business-real-test',
+      status: 'NEW',
+      agent_mode: 'AUTO',
+    });
+    expect(seed).not.toHaveProperty('score_reasons');
+    expect(seed).not.toHaveProperty('opportunity_score');
+    expect(seed).not.toHaveProperty('intent_score');
+    expect(seed).not.toHaveProperty('scoring_source');
+    expect(seed).not.toHaveProperty('scoring_evidence');
+    // Provider message provenance remains on the signed inbound event and
+    // canonical message, not in a non-default lead scoring claim.
+    expect(inboundAcquisitionMetadata({ providerMessageId: 'wamid.provenance' }).customer_initiated).toBe(true);
   });
 
   it('distinguishes customer-initiated inbound from click-to-whatsapp attribution without inventing marketing opt-in', () => {
