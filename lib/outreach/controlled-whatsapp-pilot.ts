@@ -67,10 +67,9 @@ export function verifyControlledWhatsAppPilot(
   }
 
   const internalTestBusiness = String(input.businessCategory ?? '').toUpperCase() === 'INTERNAL_TEST';
-  const verifiedOmanLiveInbound = idempotencyKey.startsWith('agent:whatsapp-pilot:live:')
-    && recipient.length === 11
-    && recipient.startsWith('968');
-  if (!internalTestBusiness && (!verifiedOmanLiveInbound || input.canonicalLiveEvidenceVerified !== true)) {
+  const verifiedLiveInbound = idempotencyKey.startsWith('agent:whatsapp-pilot:live:')
+    && /^[0-9]{8,15}$/.test(recipient);
+  if (!internalTestBusiness && (!verifiedLiveInbound || input.canonicalLiveEvidenceVerified !== true)) {
     return { verified: false, reason: 'BUSINESS_NOT_INTERNAL_TEST' };
   }
 
