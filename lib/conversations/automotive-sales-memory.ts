@@ -112,6 +112,22 @@ export function updateAutomotiveSalesMemory(input: {
 }): AutomotiveSalesMemory {
   const extracted = inferAutomotiveFacts(input.body);
   const next = { ...(input.previous ?? {}) };
+  const carChanged = Boolean(
+    (extracted.make && next.make && extracted.make !== next.make)
+    || (extracted.model && next.model && extracted.model !== next.model)
+  );
+  if (carChanged) {
+    // An explicitly different car cannot inherit the old car's year or
+    // seating count. Only new customer evidence may reestablish these facts.
+    for (const key of ['year', 'seats'] as const) {
+      if (next[key] != null && extracted[key] == null) {
+        input.revisions.push({ field: 'automotive.' + key, from: next[key],
+          to: null, sourceId: input.item.sourceId, at: input.item.at });
+        next[key] = undefined;
+        delete input.evidence['automotive.' + key];
+      }
+    }
+  }
   for (const key of ['make', 'model', 'year', 'seats', 'service', 'preferredColor'] as const) {
     const incoming = extracted[key];
     if (incoming == null) continue;
