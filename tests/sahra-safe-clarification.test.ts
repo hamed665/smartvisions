@@ -84,7 +84,7 @@ describe('Sahra conversation resilience', () => {
       },
     };
     const result = await processInboundMessage(english, { agentsPaused: false }, runtime);
-    expect(result.trace.guardrails).toContain('SAFE_VEHICLE_QUOTE_CLARIFICATION_RECOVERY');
+    expect(result.trace.guardrails, JSON.stringify({ fallback: safeVehicleQuoteClarification(english), decision: result.trace.decision, handoff: result.trace.handoffReasons, safety: result.trace.qualitySafety })).toContain('SAFE_VEHICLE_QUOTE_CLARIFICATION_RECOVERY');
     expect(result.trace.delivery).toBe('REVIEW');
     expect(result.trace.qualitySafety?.disposition).toBe('PASS');
     expect(result.draft.text).not.toMatch(/OMR|24|10|\\$|ريال/);
