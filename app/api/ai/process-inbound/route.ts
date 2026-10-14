@@ -10,6 +10,7 @@ import { agentRunReplayState, normalizeIdempotencyKey } from '@/lib/agents/idemp
 import { queueAgentWhatsAppShadowApproval, type AgentShadowResult, type WhatsAppShadowDeliveryContext } from '@/lib/agents/shadow-delivery';
 import { humanHandoffReasons, persistHumanHandoff, shouldPersistHumanHandoff } from '@/lib/conversations/sales-lifecycle';
 import { evaluateAiRunQuota, getCostGuardState } from '@/lib/reliability/cost-guard';
+import { verifySahraInboundLifetimeQuotaExemption } from '@/lib/whatsapp/sahra-scoped-ai-quota';
 import { assertRuntimeControlsAllow, getRuntimeSafetyControls } from '@/lib/reliability/runtime-safety';
 import { requireInternalApiKey } from '@/lib/security/internal-api';
 import { prepareLatestInboundMediaForAi } from '@/lib/media/preprocess';
@@ -347,12 +348,38 @@ export async function POST(request: Request) {
       if (!costState) throw new Error('Cost Guard settings are unavailable');
       if (quotaResult.error) throw new Error(`AI quota usage unavailable: ${quotaResult.error.message}`);
       const quotaRow = quotaResult.data?.[0] as { lead_run_count?: number | string; daily_deep_run_count?: number | string } | undefined;
-      const quota = evaluateAiRunQuota({
+      let quota = evaluateAiRunQuota({
         reasoningTier: routePlan.tier,
         leadRunCount: effectiveContext.leadId ? Number(quotaRow?.lead_run_count ?? 0) : null,
         dailyDeepRunCount: Number(quotaRow?.daily_deep_run_count ?? 0),
         settings: costState.settings,
       });
+      if (!quota.allowed && quota.reason === 'MAX_AI_RUNS_PER_LEAD') {
+        // The legacy lifetime 20-run cap must not silently abandon a repeat
+        // Sahra customer. Require the already-claimed fresh Meta inbound and
+        // immutable OWNER consent through the existing PostgreSQL authority.
+        // Failed evidence remains blocked; every other budget stays enforced.
+        let scopedInbound = false;
+        try {
+          scopedInbound = await verifySahraInboundLifetimeQuotaExemption({
+            supabase, organizationId,
+            leadId: effectiveContext.leadId,
+            conversationId: effectiveContext.conversationId,
+            expectedInboundProviderMessageId: body.expectedInboundProviderMessageId,
+            requestKey,
+          });
+        } catch {
+          scopedInbound = false;
+        }
+        if (scopedInbound) {
+          quota = evaluateAiRunQuota({
+            reasoningTier: routePlan.tier,
+            leadRunCount: null,
+            dailyDeepRunCount: Number(quotaRow?.daily_deep_run_count ?? 0),
+            settings: costState.settings,
+          });
+        }
+      }
       if (!quota.allowed) {
         const handoffState = await persistFailureHandoff('AI_QUOTA_BLOCKED');
         return NextResponse.json({
