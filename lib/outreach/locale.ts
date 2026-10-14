@@ -116,6 +116,9 @@ export function resolveOmaniAutomotiveShortLanguage(input: {
     && (omaniSyntax.test(text) || arabicService.test(text))) return 'ar-OM';
   // A short Arabic-only service question can be unrecognized by the generic
   // marketing lexicon, but still be obvious in the automotive domain.
+  if (!/[A-Za-z]/.test(text) && previous?.startsWith('ar')
+    && /(?:عندكم|عندكو|عندك|شو|وش|تنصح|بغيت|ابغي|أبغي|حلو|زين|حق|يناسب|بكم|بجم)/iu.test(text))
+    return 'ar-OM';
   if (!/[A-Za-z]/.test(text) && arabicService.test(text)
     && !/[پچژگک‌ی]/.test(text)) return 'ar-OM';
   return null;
