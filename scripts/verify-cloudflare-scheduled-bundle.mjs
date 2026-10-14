@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const configPath = path.join(repoRoot, 'dist', 'server', 'wrangler.json');
 const expectedCron = '*/2 * * * *';
+const sahraFastCron = '* * * * *';
 
 function fail(message) {
   console.error(`Cloudflare scheduled bundle verification failed: ${message}`);
@@ -15,7 +16,9 @@ if (!fs.existsSync(configPath)) fail('dist/server/wrangler.json is missing; run 
 
 const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 const crons = Array.isArray(config?.triggers?.crons) ? config.triggers.crons : [];
-if (!crons.includes(expectedCron)) fail(`expected cron ${expectedCron} is missing from the built Wrangler config`);
+if (JSON.stringify([...crons].sort()) !== JSON.stringify([expectedCron, sahraFastCron].sort())) {
+  fail('built cron set must preserve full operations every two minutes and the Sahra-only fast minute trigger');
+}
 
 const main = typeof config.main === 'string' ? config.main.trim() : '';
 if (!main) fail('built Wrangler config has no main entry');
@@ -70,6 +73,7 @@ const requiredMarkers = [
   '/api/operations/data-reporting-schedules',
   '/api/ai/process-inbound',
   '/api/operations/pilot-acquisition',
+  'SAHRA_FAST_INBOUND_WINDOW',
 ];
 for (const marker of requiredMarkers) {
   if (!graphSource.includes(marker)) fail(`custom scheduled runtime marker is absent from the built entry graph: ${marker}`);
