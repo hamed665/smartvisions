@@ -20,7 +20,7 @@ export function safeOmaniConversationClarification(context: AgentContext): {
   if (!isOmaniAutomotive(context)) return null;
   const message = context.message.trim().normalize('NFKC');
   if (!message || message.length > 85 || NON_SALES_REQUEST.test(message)) return null;
-  if (!/(?:عندكم|عندكو|عندك|تركبون|يركب|ينفع|يناسب|شو تنصح|وش تنصح|شو رايك|وش رايك|أبغي|ابغي|اريد|أريد|ابي|بغيت|هل يصلح|نفس هذا|هذا يضبط|حق ال|للاند|للتويوتا|للجيب)/i.test(message)) return null;
+  if (!/(?:عندكم|عندكو|عندك|تركبون|تركبونه|يركب|ينفع|يناسب|تضبط|تضبطون|شو تنصح|وش تنصح|تنصحني|شو رايك|وش رايك|شو الفرق|وش الفرق|شو احسن|وش احسن|شو الأفضل|وش الأفضل|أبغي|ابغي|اريد|أريد|ابي|بغيت|هل يصلح|نفس هذا|هذا يضبط|حق ال|للاند|للتويوتا|للجيب)/i.test(message)) return null;
   const language = resolveReplyLanguage({
     message,
     primaryLocale: context.marketLocaleStyle?.primaryLocale ?? 'ar-OM',
@@ -32,10 +32,11 @@ export function safeOmaniConversationClarification(context: AgentContext): {
   // or one containing a clear Persian price/service question.
   const establishedArabicShortAdvice = language === 'und'
     && String(context.language ?? '').startsWith('ar')
-    && /^(?:شو|وش)\s+(?:تنصح|رايك|رأيك)(?:\s+[^؟?!.]{1,50})?[؟?!. ]*$/u.test(message);
+    && !/[پچژگک‌ی]/.test(message)
+    && /^(?:(?:شو|وش)\s+(?:تنصح|رايك|رأيك|الفرق|احسن|أحسن|الأفضل|افضل)|تنصحني)(?:\s+[^؟?!.]{1,50})?[؟?!. ]*$/u.test(message);
   if (!language.startsWith('ar') && !establishedArabicShortAdvice) return null;
-  const floorMatPattern = /(?:فرش ارض|فرش أرض|دواسات|كفبوش|كفپوش|floor mat|5d|3d)/i;
-  const tintPattern = /(?:عازل|تظليل|تضليل|جامات|تنت|window film)/i;
+  const floorMatPattern = /(?:فرش ارض|فرش أرض|فرشات\s*(?:الارض|الأرض|السيارة)|دواسات|كفبوش|كفپوش|ماتات|floor mat|5d|3d)/i;
+  const tintPattern = /(?:عازل|تظليل|تضليل|جامات|قزاز|زجاج|الشبابيك|دودي|دودی|تنت|window film|tint|ضد الحر)/i;
   const screenPattern = /(?:شاشه|شاشة|شاشات|كار بلاي|كاربلاي|carplay|اندرويد|أندرويد|winca)/i;
   const ledPattern = /(?:ليد|led|لمبات|إضاءة|اضاءة)/i;
   // New service mentions supersede older history. Only look backwards if this
