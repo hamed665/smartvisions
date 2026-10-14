@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentContext, AgentResult } from '@/lib/agents/contracts';
 import { stageValue } from '@/lib/agents/context-hydrator-core';
-import { buildAgentInputForRuntime } from '@/lib/agents/openai-runtime-core';
+import { buildAgentInputForRuntime, buildProviderAgentInputForRuntime } from '@/lib/agents/openai-runtime-core';
 import { decidePreviewStrategy, draftOffersUnrequestedCustomPreview } from '@/lib/agents/preview-policy';
 import { decideCommercialAction, secretaryCompose } from '@/lib/agents/executor-core';
 
@@ -10,6 +10,23 @@ function result(agent: AgentResult['agent'], data: Record<string, unknown> = {})
 }
 
 describe('Agent quality and Growth Brain', () => {
+  it('lets Relevance verify a draft against primary Knowledge when serviceKnowledge is empty', () => {
+    const context: AgentContext = {
+      message: 'بكم قيمة التلبيسات عندكم؟', serviceKnowledge: [],
+      knowledgeContext: [
+        { key: 'seat_upholstery', version: 2, payload: { text: 'تلبيس المقاعد: سعر معلن إرشادي ٩٩ ريال لخمس مقاعد. عرض نهائي بعد تأكيد السيارة.' } },
+        ...Array.from({ length: 8 }, (_, i) => ({ key: `unrelated_${i}`, version: 1, payload: { text: 'Unrelated warehouse procedures.' } })),
+      ],
+      collaboration: { proposedReply: { text: 'سعر تلبيس المقاعد المعلن ٩٩ ريال لخمس مقاعد، والتأكيد النهائي حسب السيارة.', language: 'ar-OM', generatedBy: 'secretary' } },
+    };
+    for (const input of [buildAgentInputForRuntime('relevance_checker', context, 6), buildProviderAgentInputForRuntime('relevance_checker', context, 6)]) {
+      const knowledge = (input as { knowledgeContext: Array<{ key: string; version: number; payload: { text: string } }> }).knowledgeContext;
+      expect(knowledge).toContainEqual(expect.objectContaining({ key: 'seat_upholstery', version: 2, payload: expect.objectContaining({ text: expect.stringContaining('٩٩') }) }));
+      expect(knowledge.length).toBeLessThanOrEqual(4);
+      expect(knowledge.some(item => item.key.startsWith('unrelated_'))).toBe(false);
+    }
+  });
+
   it('hydrates the canonical Production conversation taxonomy instead of old lead stages', () => {
     for (const stage of ['ACTIVE','CLOSING','WAITING_CUSTOMER','UNANSWERED','NEEDS_HUMAN','FOLLOW_UP_DUE','DO_NOT_CONTACT','SPAM','PAUSED'] as const) {
       expect(stageValue(stage)).toBe(stage);
