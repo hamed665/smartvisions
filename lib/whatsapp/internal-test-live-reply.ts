@@ -8,6 +8,7 @@ import { verifyControlledWhatsAppPilot } from '@/lib/outreach/controlled-whatsap
 import { controlledInboundEvidence } from '@/lib/whatsapp/controlled-inbound-evidence';
 import { prepareLatestInboundMediaForAi } from '@/lib/media/preprocess';
 import { evaluateInternalTestLiveReplyPolicy } from '@/lib/whatsapp/internal-test-live-reply-policy';
+import { eligibleUntranscribedVoiceError, untranscribedVoiceClarification } from './voice-understanding-recovery';
 
 export type InternalTestLiveReplyResult = {
   attempted: boolean;
@@ -134,7 +135,7 @@ export async function runInternalTestLiveReply(input: {
       .eq('id', lead.business_id)
       .maybeSingle(),
     supabase.from('sales_conversations')
-      .select('id,lead_id,channel,agent_mode,requires_human')
+      .select('id,lead_id,channel,agent_mode,requires_human,detected_language')
       .eq('organization_id', input.organizationId)
       .eq('id', conversationId)
       .maybeSingle(),
@@ -195,6 +196,7 @@ export async function runInternalTestLiveReply(input: {
   if (!claim.allowed) return { attempted: true, sent: false, reason: claim.reason };
 
   let inboundText = String(inbound.body);
+  let honestVoiceClarification: { text: string; language: string } | null = null;
   if (input.messageType.toLowerCase() !== 'text') {
     try {
       const media = await prepareLatestInboundMediaForAi({
@@ -210,8 +212,13 @@ export async function runInternalTestLiveReply(input: {
         return { attempted: true, sent: false, reason: 'SUCCESSFUL_EXACT_TRANSCRIPT_REQUIRED' };
       }
       inboundText = transcript;
-    } catch {
-      return { attempted: true, sent: false, reason: 'VOICE_NOT_READY_NO_AUTOMATIC_RETRY' };
+    } catch (error) {
+      // Only a verified media/transcription failure is eligible. A routing,
+      // binding, canonical evidence or provider-auth failure must remain blocked.
+      if (!eligibleUntranscribedVoiceError(error)) {
+        return { attempted: true, sent: false, reason: 'VOICE_NOT_READY_NO_AUTOMATIC_RETRY' };
+      }
+      honestVoiceClarification = untranscribedVoiceClarification(stringValue(conversation.detected_language));
     }
   }
   const evidence = await controlledInboundEvidence({
@@ -219,24 +226,34 @@ export async function runInternalTestLiveReply(input: {
   });
   if (!evidence.allowed) return { attempted: true, sent: false, reason: evidence.reason };
 
-  const agentResponse = await processInboundPost(internalJsonRequest('/api/ai/process-inbound', internalKey, {
-    idempotencyKey: requestKey,
-    expectedInboundProviderMessageId: input.providerMessageId,
-    context: {
-      organizationId: input.organizationId,
-      leadId: inbound.lead_id,
-      conversationId,
-      message: inboundText,
-    },
-  }));
-  const payload = await agentResponse.json().catch(() => ({})) as Record<string, unknown>;
-  if (!agentResponse.ok || agentResponse.status === 202 || payload.replayed === true) {
-    return {
-      attempted: true,
-      sent: false,
-      reason: agentResponse.status === 202 ? 'AGENT_RECONCILIATION_REQUIRED' : `AGENT_HTTP_${agentResponse.status}`,
-      runId: stringValue(payload.runId),
+  let payload: Record<string, unknown>;
+  if (honestVoiceClarification) {
+    // No AI generated interpretation exists: use only the fixed text request,
+    // continuing through the identical governed outbound pipeline below.
+    payload = {
+      draft: honestVoiceClarification,
+      trace: { delivery: 'REVIEW', decision: { requiresHuman: false } },
     };
+  } else {
+    const agentResponse = await processInboundPost(internalJsonRequest('/api/ai/process-inbound', internalKey, {
+      idempotencyKey: requestKey,
+      expectedInboundProviderMessageId: input.providerMessageId,
+      context: {
+        organizationId: input.organizationId,
+        leadId: inbound.lead_id,
+        conversationId,
+        message: inboundText,
+      },
+    }));
+    payload = await agentResponse.json().catch(() => ({})) as Record<string, unknown>;
+    if (!agentResponse.ok || agentResponse.status === 202 || payload.replayed === true) {
+      return {
+        attempted: true,
+        sent: false,
+        reason: agentResponse.status === 202 ? 'AGENT_RECONCILIATION_REQUIRED' : `AGENT_HTTP_${agentResponse.status}`,
+        runId: stringValue(payload.runId),
+      };
+    }
   }
 
   const draft = record(payload.draft);
@@ -273,7 +290,7 @@ export async function runInternalTestLiveReply(input: {
     persianTranslation: stringValue(secretary.operator_persian_translation),
     persianSummary: stringValue(secretary.operator_persian_summary),
     rememberCustomerLanguage: true,
-    deliveryMode: policy.deliveryMode,
+    deliveryMode: honestVoiceClarification ? 'TEXT' : policy.deliveryMode,
   });
   if (queued.duplicate) {
     return { attempted: true, sent: false, reason: 'CONTROLLED_DRAFT_ALREADY_EXISTS', messageId: String(queued.messageId), runId: stringValue(payload.runId) };
@@ -330,7 +347,7 @@ export async function runInternalTestLiveReply(input: {
     messageId: approved.id,
     priority: 'LOW',
     controlledShadowPilot: true,
-    controlledVoiceReplyPilot: policy.deliveryMode === 'VOICE_REPLY',
+    controlledVoiceReplyPilot: !honestVoiceClarification && policy.deliveryMode === 'VOICE_REPLY',
   }));
   const sendPayload = await sendResponse.json().catch(() => ({})) as Record<string, unknown>;
   if (!sendResponse.ok) {
@@ -365,6 +382,7 @@ export async function runInternalTestLiveReply(input: {
         controlledShadowPilot: true,
         shadowModeRemainsOn: true,
         automaticRetry: false,
+        honestVoiceClarification: Boolean(honestVoiceClarification),
         responseStatus: sendResponse.status,
       },
     });

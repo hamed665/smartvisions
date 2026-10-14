@@ -16,7 +16,7 @@ function normalizedAction(value: unknown): CommercialDecision['action'] | undefi
 }
 
 function directPriceQuestion(message: string) {
-  return /\b(?:price|cost|how much|pricing|what does .* cost)\b|(?:كم\s*(?:السعر|يكلف|تكلف)|السعر|سعر|تكلفة)|(?:قیمت|هزینه|چقدر\s*(?:قیمت|هزینه|می[‌\s-]?شه|میشه|درمیاد|است|هست))/i.test(message);
+  return /\b(?:price|cost|how much|pricing|what does .* cost)\b|(?:كم\s*(?:السعر|يكلف|تكلف|يطلع|تطلع|تسوى|يسوى)|بكم|بكام|بقديش|(?:جم|كم)\s*(?:تسوون|السعر|يكلف)|وش\s*(?:سعره|السعر)|شو\s*(?:سعره|السعر)|قديش|السعر|سعر|تكلفة|قيمة\s*(?:ال|هال)?)|(?:قیمت|هزینه|چقدر\s*(?:قیمت|هزینه|می[‌\s-]?شه|میشه|درمیاد|است|هست))/i.test(message);
 }
 
 function canonicalQuote(context: AgentContext, decision: CommercialDecision) {
@@ -216,7 +216,7 @@ export function secretaryCompose(context: AgentContext, decision: CommercialDeci
 
 export function checkRelevance(context: AgentContext, draft: ReplyDraft) {
   const asksPrice = directPriceQuestion(context.message);
-  if (asksPrice && !/(price|cost|OMR|AED|SAR|QAR|GBP|USD|ريال|سعر|السعر|درهم|دولار|قیمت|هزینه|£|\$)/i.test(draft.text)) return false;
+  if (asksPrice && !/(price|cost|OMR|AED|SAR|QAR|GBP|USD|ريال|سعر|السعر|درهم|دولار|قیمت|هزینه|£|\$|الموديل|موديل|سنة\s*الصنع)/i.test(draft.text)) return false;
   const asksExample = /(preview|sample|example|mockup|portfolio|past work|معاينة|نموذج|مثال|نمونه.?کار|أمثلة|امثلة)/i.test(context.message);
   if (asksExample && !/(preview|concept|sample|example|portfolio|approved|معاينة|نموذج|تصور|مثال|نمونه|أمثلة|امثلة)/i.test(draft.text)) return false;
   return true;

@@ -11,12 +11,22 @@ export function safeVehicleQuoteClarification(
   context: AgentContext,
 ): { draft: ReplyDraft; persianTranslation: string } | null {
   if (String(context.servingBusiness?.countryCode ?? context.countryCode ?? '').toUpperCase() !== 'OM') return null;
+  const currentMessage = context.message.trim().normalize('NFKC');
   const recentCustomerMessages = [
     ...(context.conversationHistory ?? []).filter((message) => message.direction === 'INBOUND').slice(-6).map((message) => message.body),
-    context.message,
+    currentMessage,
   ].join(' ');
-  if (!/(?:سعر|السعر|بكم|تكلفة|تلبيس|تنجيد|قیمت|هزینه|روکش|price|cost|quote|upholster|seat cover)/i.test(recentCustomerMessages)) return null;
-  if (!/(?:سيار|سيارة|السيارة|مقاعد|المقاعد|تلبيس|تنجيد|تویوتا|تويوتا|نيسان|نیسان|خودرو|ماشین|روکش|مقعد|vehicle|car|seat|upholster)/i.test(recentCustomerMessages)) return null;
+  const isPriceRequest = /(?:سعر|السعر|بكم|بكام|بقديش|جم\s*(?:تسوون|يطلع|السعر)|كم\s*(?:يطلع|تطلع|يكلف|السعر)|وش\s*(?:سعره|السعر)|شو\s*(?:سعره|السعر)|تكلفة|قيمة|قیمت|هزینه|چقدر|price|cost|quote|how much)/i.test(currentMessage);
+  // Single-make follow-ups require a real prior price/service request; never
+  // revive old price context in response to a new location or complaint query.
+  const isMakeFollowUp = /^(?:تویوتا|تويوتا|نیسان|نيسان|لكزس|لکسوس|لکسز|جيب|جیپ|فورد|هوندا|هيونداي|هیوندای|كيا|کیا|لاندكروزر|لاند کروزر|كورولا|كامري|يارس|برادو|باترول|صني|ألتيما|التيما|سنترا|راف4)(?:\s+[0-9۰-۹٠-٩]{2,4})?$/iu.test(currentMessage);
+  const previousPriceRequest = (context.conversationHistory ?? []).some((turn) =>
+    turn.direction === 'INBOUND'
+    && /(?:سعر|بكم|جم\s*تسوون|كم\s*يطلع|تكلفة|قیمت|هزینه|price|how much)/i.test(turn.body)
+  );
+  if (!isPriceRequest && !(isMakeFollowUp && previousPriceRequest)) return null;
+  if (!/(?:سعر|السعر|بكم|بكام|بقديش|جم\s*تسوون|كم\s*يطلع|تكلفة|قیمت|هزینه|price|cost|quote)/i.test(recentCustomerMessages)) return null;
+  if (!/(?:سيار|سيارة|السيارة|مقاعد|المقاعد|تلبيس|تلبيسات|تنجيد|عازل|تظليل|دواسات|فرش|كفبوش|كفپوش|تویوتا|تويوتا|نيسان|نیسان|لكزس|لکسوس|لاندكروزر|كامري|كورولا|خودرو|ماشین|روکش|مقعد|ppf|ceramic|vehicle|car|seat|upholster)/i.test(recentCustomerMessages)) return null;
 
   const language = resolveReplyLanguage({
     message: context.message,
