@@ -59,8 +59,8 @@ export function safeVehicleQuoteClarification(
     && /(?:سعر|بكم|جم\s*تسوون|كم\s*يطلع|تكلفة|قیمت|هزینه|price|how much)/i.test(turn.body)
   );
   if (!isPriceRequest && !(isMakeFollowUp && previousPriceRequest)) return null;
-  if (!/(?:سعر|السعر|بكم|بكام|بقديش|جم\s*تسوون|كم\s*يطلع|تكلفة|قیمت|هزینه|price|cost|quote)/i.test(recentCustomerMessages)) return null;
-  if (!/(?:سيار|سيارة|السيارة|مقاعد|المقاعد|تلبيس|تلبيسات|تنجيد|عازل|تظليل|دواسات|فرش|كفبوش|كفپوش|تویوتا|تويوتا|نيسان|نیسان|لكزس|لکسوس|لاندكروزر|كامري|كورولا|خودرو|ماشین|روکش|مقعد|ppf|ceramic|vehicle|car|seat|upholster)/i.test(recentCustomerMessages)) return null;
+  if (!/(?:سعر|السعر|بكم|بكام|بقديش|جم\s*تسوون|كم\s*يطلع|تكلفة|قیمت|هزینه|price|cost|quote|how much)/i.test(recentCustomerMessages)) return null;
+  if (!/(?:سيار|سيارة|السيارة|مقاعد|المقاعد|تلبيس|تلبيسات|تنجيد|عازل|تظليل|دواسات|فرش|كفبوش|كفپوش|تویوتا|تويوتا|نيسان|نیسان|لكزس|لکسوس|لاندكروزر|كامري|كورولا|خودرو|ماشین|روکش|مقعد|ppf|ceramic|vehicle|car|floor mats?|toyota|nissan|camry|corolla|seat|upholster)/i.test(recentCustomerMessages)) return null;
 
   const language = resolveReplyLanguage({
     message: context.message,
