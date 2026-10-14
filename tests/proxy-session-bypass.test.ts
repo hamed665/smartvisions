@@ -38,6 +38,7 @@ describe('session proxy bypass paths', () => {
     expect(shouldBypassSession('/api/operations/report')).toBe(true);
     expect(shouldBypassSession('/api/operations/telegram-daily-digest')).toBe(true);
     expect(shouldBypassSession('/api/operations/tick')).toBe(true);
+    expect(shouldBypassSession('/api/operations/sahra-inbound')).toBe(true);
     expect(shouldBypassSession('/api/telegram/notify')).toBe(true);
   });
 
@@ -47,6 +48,7 @@ describe('session proxy bypass paths', () => {
     expect(shouldBypassSession('/api/ai/process-inbound/extra')).toBe(false);
     expect(shouldBypassSession('/api/operations/analytics-warehouse/extra')).toBe(false);
     expect(shouldBypassSession('/api/operations/tick/extra')).toBe(false);
+    expect(shouldBypassSession('/api/operations/sahra-inbound/extra')).toBe(false);
     expect(shouldBypassSession('/api/operations/chatwoot-inbox-reconcile/extra')).toBe(false);
     expect(shouldBypassSession('/api/operations/report/extra')).toBe(false);
     expect(shouldBypassSession('/api/operations/telegram-daily-digest/extra')).toBe(false);

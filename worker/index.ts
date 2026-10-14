@@ -5,7 +5,6 @@ import { POST as controlledAutoDispatchPost } from '../app/api/operations/contro
 import { POST as pilotAcquisitionPost } from '../app/api/operations/pilot-acquisition/route';
 import { POST as chatwootInboxReconcilePost } from '../app/api/operations/chatwoot-inbox-reconcile/route';
 import { shouldRunScheduledOperations } from './schedule-policy';
-import { runSahraFastInbound } from '../lib/whatsapp/sahra-fast-inbound';
 import { SAHRA_FAST_CRON } from '../lib/whatsapp/sahra-fast-inbound-core';
 
 type WorkerVersionMetadata = { id?: string; tag?: string; timestamp?: string };
@@ -149,7 +148,6 @@ async function reportFailure(env: WorkerEnv, task: AgentTask, detail: string) {
 export async function runScheduledOperations(env: WorkerEnv, controller?: ScheduledController) {
   await recordScheduledHeartbeat(env, controller, 'START');
 
-  const tickResponse = await internalPost(env, '/api/operations/tick', {});
   const metrics: ScheduledMetrics = {
     discovered: 0,
     processed: 0,
@@ -158,7 +156,7 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
     throttled: 0,
     failed: 0,
     reconciliationAttention: 0,
-    tickStatus: tickResponse.status,
+    tickStatus: 0,
   };
   try {
     const reconcileResponse = await chatwootInboxReconcilePost(
@@ -180,6 +178,9 @@ export async function runScheduledOperations(env: WorkerEnv, controller?: Schedu
     metrics.failed += 1;
   }
 
+  // Inbox linkage must exist before the fresh customer reply is admitted.
+  const tickResponse = await internalPost(env, '/api/operations/tick', {});
+  metrics.tickStatus = tickResponse.status;
   if (!tickResponse.ok) {
     metrics.failed += 1;
     await recordScheduledHeartbeat(env, controller, 'RESULT', metrics);
@@ -475,7 +476,13 @@ const worker = {
   scheduled(controller: ScheduledController, env: WorkerEnv, ctx: ExecutionContextLike) {
     if (!shouldRunScheduledOperations(env)) return;
     if (controller.cron === SAHRA_FAST_CRON) {
-      ctx.waitUntil(runSahraFastInbound(env, controller.scheduledTime));
+      // Use the same framework request boundary as the working full tick so
+      // runtime bindings are initialized before server-only services execute.
+      ctx.waitUntil(internalPost(env, '/api/operations/sahra-inbound', {
+        scheduledTime: controller.scheduledTime,
+      }).then((response) => {
+        if (!response.ok) console.error('SAHRA_FAST_INBOUND_HTTP_FAILED', response.status);
+      }));
       return;
     }
     ctx.waitUntil(runScheduledOperations(env, controller));

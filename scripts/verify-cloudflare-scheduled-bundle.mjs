@@ -74,6 +74,7 @@ const requiredMarkers = [
   '/api/ai/process-inbound',
   '/api/operations/pilot-acquisition',
   'SAHRA_FAST_INBOUND_WINDOW',
+  '/api/operations/sahra-inbound',
 ];
 for (const marker of requiredMarkers) {
   if (!graphSource.includes(marker)) fail(`custom scheduled runtime marker is absent from the built entry graph: ${marker}`);

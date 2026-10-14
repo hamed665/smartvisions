@@ -134,14 +134,22 @@ export async function reconcileChatwootWebhookEvent(
 export async function processPendingChatwootInboxEvents(input?: {
   limit?: number;
   supabase?: SupabaseClient;
+  scope?: { organizationId: string; tenantBusinessId: string; inboxMappingId: string; receivedAfter: string };
 }) {
   const supabase = input?.supabase ?? createSupabaseServiceClient();
   const limit = Math.min(MAX_LIMIT, Math.max(1, Math.trunc(input?.limit ?? DEFAULT_LIMIT)));
 
-  const pending = await supabase
+  let query = supabase
     .from('chatwoot_webhook_events')
     .select('id,organization_id,tenant_business_id,chatwoot_inbox_mapping_id,event_type,payload,status,received_at')
-    .eq('status', 'RECEIVED')
+    .eq('status', 'RECEIVED');
+  if (input?.scope) {
+    query = query.eq('organization_id', input.scope.organizationId)
+      .eq('tenant_business_id', input.scope.tenantBusinessId)
+      .eq('chatwoot_inbox_mapping_id', input.scope.inboxMappingId)
+      .gte('received_at', input.scope.receivedAfter);
+  }
+  const pending = await query
     .order('received_at', { ascending: true })
     .order('id', { ascending: true })
     .limit(limit);

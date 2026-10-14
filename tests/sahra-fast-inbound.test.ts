@@ -88,10 +88,22 @@ describe('bounded Sahra fresh inbound latency', () => {
     const wrongBinding = candidate('other-binding'); wrongBinding.metadata.communication_channel_binding_id = 'other';
     const image = candidate('image'); image.metadata.type = 'image';
     const result = selectFreshSahraInbound([
-      wrongOrganization, wrongTenant, wrongBinding, candidate('old', start - 120_001),
+      wrongOrganization, wrongTenant, wrongBinding, candidate('old', start - 300_001),
       candidate('future', start + 1), image, candidate('valid'),
     ], start);
     expect(result.map((row) => row.id)).toEqual(['valid']);
+  });
+  it('keeps a fresh first message eligible while its signed Inbox projection catches up', () => {
+    expect(selectFreshSahraInbound([candidate('waiting-for-projection', start - 225_000)], start))
+      .toHaveLength(1);
+  });
+  it('records pre-claim deferral reasons without spending or claiming success', async () => {
+    const h = harness([candidate()]);
+    h.deps.run.mockResolvedValue({attempted:false, sent:false, reason:'LIVE_TEST_COMMUNICATION_NOT_READY'});
+    const result = await runSahraFastWindow('production', start, h.deps);
+    expect(result.deferred).toBe(1);
+    expect(result.sent).toBe(0);
+    expect(result.reasons.LIVE_TEST_COMMUNICATION_NOT_READY).toBe(1);
   });
   it('only considers the newest message per conversation and bounds each sweep', () => {
     const a = candidate('a', start - 5000);
