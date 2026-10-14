@@ -7,7 +7,7 @@ vi.mock('@/lib/chatwoot/vault', () => ({
 
 import { ensureChatwootPublicConversationProjection } from '@/lib/chatwoot/public-conversation-projection';
 
-function service() {
+function service(projection: { conversation_id: string; chatwoot_conversation_display_id: number } | null = null) {
   const result = { data: {
     id: 'map-1',
     organization_id: 'org',
@@ -22,12 +22,39 @@ function service() {
     eq() { return this; },
     single: async () => result,
   };
-  return { from: () => chain } as unknown as SupabaseClient;
+  const projectionChain = {
+    select() { return this; },
+    eq: vi.fn().mockReturnThis(),
+    maybeSingle: async () => ({ data: projection, error: null }),
+  };
+  return { from: (table: string) => table === 'unified_inbox_conversation_projections' ? projectionChain : chain } as unknown as SupabaseClient;
 }
 
 describe('Chatwoot public conversation projection', () => {
   beforeEach(() => {
     process.env.CHATWOOT_BASE_URL = 'https://inbox.smartvisionsai.com';
+  });
+
+  it('uses only a verified matching projection when the native public API omits attributes', async () => {
+    for (const [projection, allowed] of [
+      [{ conversation_id: 'conversation-1', chatwoot_conversation_display_id: 41 }, true],
+      [null, false],
+      [{ conversation_id: 'conversation-1', chatwoot_conversation_display_id: 42 }, false],
+      [{ conversation_id: 'other', chatwoot_conversation_display_id: 41 }, false],
+    ] as const) {
+      const fetchImpl = vi.fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify({ source_id: 'sv:binding:identity' })))
+        .mockResolvedValueOnce(new Response(JSON.stringify([{ id: 41, status: 'open' }])));
+      const promise = ensureChatwootPublicConversationProjection({
+        service: service(projection), organizationId: 'org', tenantBusinessId: 'biz',
+        bindingId: 'binding', canonicalIdentityId: 'identity', canonicalConversationId: 'conversation-1',
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+      });
+      if (allowed) await expect(promise).resolves.toMatchObject({ outcome: 'RECONCILED_EXISTING' });
+      else await expect(promise).rejects.toThrow('missing the canonical Smart Core conversation marker');
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      expect(fetchImpl.mock.calls.every(call => !call[1]?.method)).toBe(true);
+    }
   });
 
   it('reuses deterministic contact and active conversation without mutations', async () => {

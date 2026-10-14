@@ -139,7 +139,24 @@ export async function ensureChatwootPublicConversationProjection(input: {
         ? existing.custom_attributes.smartvisions_conversation_id
         : null;
       if (marker !== input.canonicalConversationId) {
-        throw new Error('Existing Chatwoot conversation is missing the canonical Smart Core conversation marker');
+        // v4.18's public response deliberately omits custom_attributes. Only a
+        // previously verified exact-scope projection can bridge that omission;
+        // an explicitly conflicting marker must never use this fallback.
+        const projection = marker === null && Number.isSafeInteger(existing.id)
+          ? await input.service.from('unified_inbox_conversation_projections')
+            .select('conversation_id,chatwoot_conversation_display_id')
+            .eq('organization_id', input.organizationId)
+            .eq('tenant_business_id', input.tenantBusinessId)
+            .eq('communication_channel_binding_id', input.bindingId)
+            .eq('conversation_id', input.canonicalConversationId)
+            .eq('chatwoot_conversation_display_id', existing.id)
+            .eq('lifecycle_status', 'ACTIVE')
+            .maybeSingle()
+          : null;
+        if (projection?.error || projection?.data?.conversation_id !== input.canonicalConversationId
+          || Number(projection?.data?.chatwoot_conversation_display_id) !== existing.id) {
+          throw new Error('Existing Chatwoot conversation is missing the canonical Smart Core conversation marker');
+        }
       }
     }
     return { contactSourceId: ctx.sourceId, contact, conversation: existing, outcome: 'RECONCILED_EXISTING' as const };

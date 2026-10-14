@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { isDoNotContactReply, persistCustomerDoNotContact, persistCustomerReplyConversationState } from '@/lib/conversations/sales-lifecycle';
 import type { NormalizedWhatsAppInbound, NormalizedWhatsAppNativeEcho, NormalizedWhatsAppStatus } from './webhook';
 import { mapWhatsAppProviderStatus } from '@/lib/omnichannel';
@@ -258,8 +258,37 @@ type WhatsAppTenantScope = {
   wabaId?: string | null;
 };
 
+export async function findProjectedWhatsAppConversation(supabase: SupabaseClient, organizationId: string, leadId: string, scope: WhatsAppTenantScope) {
+  // An unprojected newer attempt must not shadow the established conversation
+  // for this exact binding. The inner join proves CRM ownership and scope.
+  const scoped = supabase.from('sales_conversations')
+    .select('id,agent_mode,unified_inbox_conversation_projections!inner(id)')
+    .eq('organization_id', organizationId)
+    .eq('lead_id', leadId)
+    .eq('channel', 'WHATSAPP')
+    .eq('unified_inbox_conversation_projections.organization_id', organizationId)
+    .eq('unified_inbox_conversation_projections.tenant_business_id', scope.tenantBusinessId)
+    .eq('unified_inbox_conversation_projections.communication_channel_binding_id', scope.bindingId)
+    .in('unified_inbox_conversation_projections.lifecycle_status', ['ACTIVE', 'DEGRADED']);
+  const scopedResult = await (scope.branchId === null
+    ? scoped.is('unified_inbox_conversation_projections.branch_id', null)
+    : scoped.eq('unified_inbox_conversation_projections.branch_id', scope.branchId))
+    .order('updated_at', { ascending: false }).limit(2);
+  if (scopedResult.error) throw new Error(`WhatsApp projected conversation lookup failed: ${scopedResult.error.message}`);
+  if ((scopedResult.data?.length ?? 0) > 1) throw new Error('Multiple scoped WhatsApp conversations require reconciliation');
+  return scopedResult.data?.[0] ?? null;
+}
+
 async function getOrCreateConversation(organizationId: string, leadId: string, receivedAt: string, scope: WhatsAppTenantScope) {
   const supabase = serviceClient();
+  const bound = await findProjectedWhatsAppConversation(supabase, organizationId, leadId, scope);
+  if (bound) {
+    const { error } = await supabase.from('sales_conversations')
+      .update({ last_message_at: receivedAt, updated_at: new Date().toISOString() })
+      .eq('id', bound.id).eq('organization_id', organizationId);
+    if (error) throw new Error(`WhatsApp conversation update failed: ${error.message}`);
+    return { id: bound.id, agent_mode: bound.agent_mode };
+  }
   const { data: existing, error: existingError } = await supabase
     .from('sales_conversations')
     .select('id,agent_mode')

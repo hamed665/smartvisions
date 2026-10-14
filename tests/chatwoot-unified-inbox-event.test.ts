@@ -27,6 +27,28 @@ function conversation(overrides: Record<string, unknown> = {}) {
 }
 
 describe('Chatwoot Unified Inbox event parser', () => {
+  it('reads the actual v4.18 public-created custom_attributes marker', () => {
+    const payload = conversation();
+    const result = parseChatwootUnifiedInboxEvent({
+      id: EVENT_ID, event_type: 'conversation_updated', status: 'RECEIVED',
+      payload: { ...payload, custom_attributes: payload.additional_attributes, additional_attributes: {} },
+    });
+    expect(result.kind).toBe('RECONCILE');
+    if (result.kind === 'RECONCILE') expect(result.snapshot.conversationId).toBe(CONVERSATION_ID);
+  });
+
+  it('rejects conflicting signed marker locations instead of guessing linkage', () => {
+    const payload = conversation();
+    const result = parseChatwootUnifiedInboxEvent({
+      id: EVENT_ID, event_type: 'conversation_updated', status: 'RECEIVED',
+      payload: { ...payload, custom_attributes: {
+        ...payload.additional_attributes,
+        smartvisions_conversation_id: '00000000-0000-4000-8000-000000009403',
+      } },
+    });
+    expect(result).toEqual({ kind: 'FAIL', code: 'INVALID_EVENT_PAYLOAD' });
+  });
+
   it('normalizes a top-level conversation webhook into a bounded projection snapshot', () => {
     const result = parseChatwootUnifiedInboxEvent({
       id: EVENT_ID,

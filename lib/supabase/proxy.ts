@@ -11,6 +11,7 @@ const SESSION_BYPASS_PATHS = new Set([
   '/api/outreach/approved-send',
   '/api/operations/analytics-warehouse',
   '/api/operations/channel-guard',
+  '/api/operations/chatwoot-inbox-reconcile',
   '/api/operations/email-shadow',
   '/api/operations/heartbeat',
   '/api/operations/report',
@@ -34,6 +35,9 @@ const PUBLIC_AUTH_PATHS = new Set([
 
 export function shouldBypassSession(pathname: string) {
   return SESSION_BYPASS_PATHS.has(pathname)
+    // Chatwoot authenticates server-to-server delivery with its inbox HMAC,
+    // not an operator's browser session. The receiver remains authoritative.
+    || /^\/api\/chatwoot\/webhook\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(pathname)
     || /^\/api\/web-chat\/attachments\/[1-9][0-9]*$/.test(pathname)
     || /^\/api\/telegram\/customer\/webhook\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(pathname)
     || pathname.startsWith('/p/');
