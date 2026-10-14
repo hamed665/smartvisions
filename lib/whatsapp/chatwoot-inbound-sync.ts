@@ -466,6 +466,12 @@ export async function processPendingWhatsAppChatwootSync(input: {
   // to preserve first-contact conversation continuity without paid replays.
   const ordered = [...(pending.data ?? [])].sort((a,b) =>
     Date.parse(a.created_at ?? '') - Date.parse(b.created_at ?? ''));
+  // The public Chatwoot conversation create succeeds before its signed
+  // webhook projection is necessarily ACTIVE in Smart Core. Never attempt
+  // the next message from the same exact Meta sender/binding until that
+  // projection is ready; leave the second journal PENDING for the next tick.
+  // This avoids falsely creating RECONCILIATION_REQUIRED on a clean 200 GET.
+  const recentlySyncedSources = new Set<string>();
   for (const row of ordered) {
     const organizationId = String(row.organization_id ?? '');
     const payload = row.payload && typeof row.payload === 'object' && !Array.isArray(row.payload)
@@ -521,6 +527,28 @@ export async function processPendingWhatsAppChatwootSync(input: {
       continue;
     }
 
+    const sourceKey = [organizationId,routing.tenantBusinessId,routing.bindingId,event.from].join(':');
+    if (recentlySyncedSources.has(sourceKey)) {
+      const conversationId = linked?.conversationId ?? row.conversation_id;
+      if (!conversationId) {
+        summary.pending += 1;
+        continue;
+      }
+      const projection = await input.service.from('unified_inbox_conversation_projections')
+        .select('id')
+        .eq('organization_id',organizationId)
+        .eq('tenant_business_id',routing.tenantBusinessId)
+        .eq('communication_channel_binding_id',routing.bindingId)
+        .eq('conversation_id',conversationId)
+        .eq('lifecycle_status','ACTIVE')
+        .maybeSingle();
+      if (projection.error) throw new Error(`WhatsApp inbound projection readiness failed: ${projection.error.message}`);
+      if (!projection.data?.id) {
+        summary.pending += 1;
+        continue;
+      }
+    }
+
     const route: MetaWhatsAppRoute = {
       organizationId,
       tenantBusinessId: routing.tenantBusinessId,
@@ -552,7 +580,10 @@ export async function processPendingWhatsAppChatwootSync(input: {
         fetchImpl: input.fetchImpl,
       });
 
-      if (result.outcome === 'SYNCED' || result.outcome === 'REPLAY') summary.synced += 1;
+      if (result.outcome === 'SYNCED' || result.outcome === 'REPLAY') {
+        summary.synced += 1;
+        if (result.outcome === 'SYNCED') recentlySyncedSources.add(sourceKey);
+      }
       else if (result.outcome === 'RECONCILIATION_REQUIRED') summary.reconciliationRequired += 1;
       else summary.pending += 1;
     } catch {
