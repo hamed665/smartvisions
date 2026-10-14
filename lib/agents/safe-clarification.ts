@@ -37,21 +37,21 @@ export function vehicleDetailClarification(context: AgentContext, language: stri
     if (missing === 'model') return { text: 'سنة الصنع واضحة، ممكن تذكر موديل السيارة؟', translation: 'سال ساخت مشخص است، مدل خودرو را می‌فرمایید؟' };
     if (missing === 'year') return { text: 'موديل السيارة واضح، من أي سنة؟', translation: 'مدل خودرو مشخص است، سال ساخت چیست؟' };
     return { text: quote
-      ? 'بيانات سيارتك واضحة. السعر النهائي والتوفر يحتاجان تأكيد المسؤول؛ ممكن ترسل صورة للجزء اللي تقصد تركب له؟'
-      : 'بيانات سيارتك واضحة. التوافق يحتاج تأكيد المسؤول؛ ممكن ترسل صورة للجزء اللي تقصد تركب له؟',
+      ? 'بيانات سيارتك واضحة. السعر النهائي والتوفر يحتاجان تأكيد الفريق، وما نريد نعطيك رقم غير دقيق.'
+      : 'بيانات سيارتك واضحة. التوافق يحتاج تأكيد الفريق حسب الخدمة المطلوبة.',
       translation: 'مشخصات خودرو مشخص است. '+(quote ? 'قیمت نهایی و موجودی' : 'سازگاری')+' نیاز به تأیید مسئول دارد؛ از بخش موردنظر برای نصب عکس می‌فرستید؟' };
   }
   if (language.startsWith('fa')) {
     const text = missing === 'both' ? 'حتماً، برای بررسی گزینه مناسب، مدل و سال ساخت خودرو رو می‌فرمایید؟'
       : missing === 'model' ? 'سال ساخت مشخصه؛ مدل خودرو رو می‌فرمایید؟'
       : missing === 'year' ? 'مدل خودرو مشخصه؛ سال ساختش چنده؟'
-      : 'مشخصات خودرو مشخصه. '+(quote ? 'قیمت نهایی و موجودی' : 'سازگاری')+' نیاز به تأیید مسئول داره؛ از بخش موردنظر برای نصب عکس می‌فرستید؟';
+      : 'مشخصات خودرو مشخصه. '+(quote ? 'قیمت نهایی و موجودی' : 'سازگاری')+' نیاز به تأیید تیم داره؛ بدون بررسی عدد یا قول قطعی نمی‌دیم.';
     return { text, translation: text };
   }
   const text = missing === 'both' ? "What's your car's model and year?"
     : missing === 'model' ? "I have the year. What's the car model?"
     : missing === 'year' ? "I have the model. What year is your car?"
-    : 'I have your vehicle details. '+(quote ? 'The final price and availability' : 'Compatibility')+' need staff confirmation. Could you send a photo of the area you want fitted?';
+    : 'I have your vehicle details. '+(quote ? 'The final price and availability' : 'Compatibility')+' need staff confirmation before we give you an exact answer.';
   return { text, translation: missing === 'both' ? 'مدل و سال ساخت خودرو چیست؟' : missing === 'model' ? 'مدل خودرو چیست؟' : missing === 'year' ? 'سال ساخت خودرو چیست؟' : 'مشخصات خودرو مشخص است؛ تأیید مسئول لازم است. از بخش موردنظر عکس می‌فرستید؟' };
 }
 
