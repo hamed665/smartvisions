@@ -1,5 +1,39 @@
 import type { AgentContext, ReplyDraft } from './contracts';
 import { resolveReplyLanguage } from '@/lib/outreach/locale';
+import { updateAutomotiveSalesMemory } from '@/lib/conversations/automotive-sales-memory';
+
+/** Resolve only customer-provided facts using the canonical automotive parser. */
+export function vehicleDetailClarification(context: AgentContext, language: string, quote = true) {
+  let vehicle = { ...(context.salesState?.automotive ?? {}) };
+  const turns = [...(context.conversationHistory ?? []).filter((turn) => turn.direction === 'INBOUND').slice(-6),
+    { direction: 'INBOUND' as const, body: context.message }];
+  for (const item of turns) {
+    vehicle = updateAutomotiveSalesMemory({ previous: vehicle, body: item.body, item, evidence: {}, revisions: [] });
+  }
+  const missing = !vehicle.model && !vehicle.year ? 'both' : !vehicle.model ? 'model' : !vehicle.year ? 'year' : 'none';
+  if (language.startsWith('ar')) {
+    if (missing === 'both') return { text: 'أبشر، عشان نحدد المناسب لسيارتك، ممكن الموديل وسنة الصنع؟', translation: 'حتماً، برای بررسی گزینه مناسب، مدل و سال ساخت خودرو را می‌فرمایید؟' };
+    if (missing === 'model') return { text: 'سنة الصنع واضحة، ممكن تذكر موديل السيارة؟', translation: 'سال ساخت مشخص است، مدل خودرو را می‌فرمایید؟' };
+    if (missing === 'year') return { text: 'موديل السيارة واضح، من أي سنة؟', translation: 'مدل خودرو مشخص است، سال ساخت چیست؟' };
+    return { text: quote
+      ? 'بيانات سيارتك واضحة. السعر النهائي والتوفر يحتاجان تأكيد المسؤول؛ ممكن ترسل صورة للجزء اللي تقصد تركب له؟'
+      : 'بيانات سيارتك واضحة. التوافق يحتاج تأكيد المسؤول؛ ممكن ترسل صورة للجزء اللي تقصد تركب له؟',
+      translation: 'مشخصات خودرو مشخص است. '+(quote ? 'قیمت نهایی و موجودی' : 'سازگاری')+' نیاز به تأیید مسئول دارد؛ از بخش موردنظر برای نصب عکس می‌فرستید؟' };
+  }
+  if (language.startsWith('fa')) {
+    const text = missing === 'both' ? 'حتماً، برای بررسی گزینه مناسب، مدل و سال ساخت خودرو رو می‌فرمایید؟'
+      : missing === 'model' ? 'سال ساخت مشخصه؛ مدل خودرو رو می‌فرمایید؟'
+      : missing === 'year' ? 'مدل خودرو مشخصه؛ سال ساختش چنده؟'
+      : 'مشخصات خودرو مشخصه. '+(quote ? 'قیمت نهایی و موجودی' : 'سازگاری')+' نیاز به تأیید مسئول داره؛ از بخش موردنظر برای نصب عکس می‌فرستید؟';
+    return { text, translation: text };
+  }
+  const text = missing === 'both' ? "What's your car's model and year?"
+    : missing === 'model' ? "I have the year. What's the car model?"
+    : missing === 'year' ? "I have the model. What year is your car?"
+    : 'I have your vehicle details. '+(quote ? 'Final pricing and availability' : 'Compatibility')+' need staff confirmation. Could you send a photo of the area you want fitted?';
+  return { text, translation: missing === 'both' ? 'مدل و سال ساخت خودرو چیست؟' : missing === 'model' ? 'مدل خودرو چیست؟' : missing === 'year' ? 'سال ساخت خودرو چیست؟' : 'مشخصات خودرو مشخص است؛ تأیید مسئول لازم است. از بخش موردنظر عکس می‌فرستید؟' };
+}
+
 
 /**
  * A conservative recovery draft when an otherwise ordinary car-service price
@@ -36,35 +70,10 @@ export function safeVehicleQuoteClarification(
   });
   if (language === 'und') return null;
 
-  if (language.startsWith('ar')) {
-    return {
-      draft: {
-        text: 'أبشر، عشان نعطيك سعر مضبوط على سيارتك، ممكن الموديل وسنة الصنع؟ وبنتأكد لك من التفاصيل حسب اللي يناسبك.',
-        language: 'ar-OM',
-        generatedBy: 'secretary',
-      },
-      persianTranslation: 'حتماً. برای اینکه قیمت متناسب با خودروی شما اعلام کنیم، مدل و سال ساخت را می‌فرمایید؟ بعد جزئیات مناسب را بررسی می‌کنیم.',
-    };
-  }
-  if (language.startsWith('fa')) {
-    return {
-      draft: {
-        text: 'حتماً، برای اینکه قیمت مناسب خودروی شما رو دقیق بررسی کنیم، مدل و سال ساختش رو می‌فرمایید؟',
-        language: 'fa',
-        generatedBy: 'secretary',
-      },
-      persianTranslation: 'حتماً، برای اینکه قیمت مناسب خودروی شما رو دقیق بررسی کنیم، مدل و سال ساختش رو می‌فرمایید؟',
-    };
-  }
-  if (language.startsWith('en')) {
-    return {
-      draft: {
-        text: "I can check the right price for your car. What's the model and year? I'll make sure the details match before quoting.",
-        language: 'en',
-        generatedBy: 'secretary',
-      },
-      persianTranslation: 'می‌توانم قیمت متناسب با خودروی شما را بررسی کنم. مدل و سال خودرو چیست؟ قبل از اعلام قیمت، جزئیات را تطبیق می‌دهم.',
-    };
-  }
-  return null;
+  if (!['ar', 'fa', 'en'].some((prefix) => language.startsWith(prefix))) return null;
+  const clarification = vehicleDetailClarification(context, language);
+  return {
+    draft: { text: clarification.text, language: language.startsWith('ar') ? 'ar-OM' : language, generatedBy: 'secretary' },
+    persianTranslation: clarification.translation,
+  };
 }
