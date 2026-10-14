@@ -1,3 +1,4 @@
+import { automotiveSummary, updateAutomotiveSalesMemory, type AutomotiveSalesMemory } from './automotive-sales-memory';
 import type {
   ConversationMemoryItem,
   ConversationStage,
@@ -108,6 +109,7 @@ export function normalizeSalesState(value: unknown, stage?: ConversationStage, l
     objective: text(raw.objective, 500) || undefined,
     selectedService: text(raw.selectedService, 80) || undefined,
     selectedPackage: text(raw.selectedPackage, 120) || undefined,
+    automotive: normalizeAutomotiveState(raw.automotive),
     deliverables: normalizeDeliverables(raw.deliverables),
     productionNeeds: unique(Array.isArray(raw.productionNeeds) ? raw.productionNeeds.map((item) => text(item, 80)) : []).slice(0, 20),
     location: text(raw.location, 120) || undefined,
@@ -135,6 +137,20 @@ export function normalizeSalesState(value: unknown, stage?: ConversationStage, l
     revisions,
     processedEvidenceIds: unique(Array.isArray(raw.processedEvidenceIds) ? raw.processedEvidenceIds.map((item) => text(item, 160)) : []).slice(-80),
   };
+}
+
+function normalizeAutomotiveState(value: unknown): AutomotiveSalesMemory | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const allowedServices = new Set(['FLOOR_MATS', 'SEAT_UPHOLSTERY', 'THERMAL_TINT', 'PPF', 'CERAMIC_COATING', 'CAR_SCREEN', 'LED_LIGHTING', 'CAR_AUDIO']);
+  const result: AutomotiveSalesMemory = {};
+  if (typeof raw.make === 'string' && raw.make.length <= 50) result.make = raw.make;
+  if (typeof raw.model === 'string' && raw.model.length <= 65) result.model = raw.model;
+  if (Number.isInteger(raw.year) && Number(raw.year) >= 1990 && Number(raw.year) <= new Date().getUTCFullYear() + 1) result.year = Number(raw.year);
+  if (raw.seats === 5 || raw.seats === 7) result.seats = raw.seats;
+  if (typeof raw.service === 'string' && allowedServices.has(raw.service)) result.service = raw.service as AutomotiveSalesMemory['service'];
+  if (typeof raw.preferredColor === 'string' && ['black','red','beige','brown','white'].includes(raw.preferredColor)) result.preferredColor = raw.preferredColor;
+  return Object.keys(result).length ? result : undefined;
 }
 
 function scalar(value: unknown): PersistableScalar {
@@ -336,6 +352,7 @@ function buildMissingInfo(state: SalesStateSnapshot) {
 export function buildSalesStateSummary(state: SalesStateSnapshot) {
   const parts: string[] = [];
   if (state.objective) parts.push(`Need: ${state.objective}`);
+  if (state.automotive) parts.push(automotiveSummary(state.automotive));
   if (state.selectedService) parts.push(`Service: ${state.selectedService}`);
   if (state.deliverables.length) parts.push(`Deliverables: ${state.deliverables.map((item) => `${item.quantity ?? '?'} ${item.kind.toLowerCase()}${item.detail ? ` (${item.detail})` : ''}`).join(', ')}`);
   if (state.productionNeeds.length) parts.push(`Production: ${state.productionNeeds.join(', ')}`);
@@ -354,11 +371,25 @@ export function deriveSalesState(input: {
   history: ConversationMemoryItem[];
   stage?: ConversationStage;
   language?: string;
+  automotiveBusiness?: boolean;
 }) {
   const state = normalizeSalesState(input.previous, input.stage, input.language);
+  if (input.automotiveBusiness) {
+    // This organization historically used the platform marketing sales-state
+    // parser; never show obsolete SaaS/model-casting artifacts to car customers.
+    state.deliverables = [];
+    state.productionNeeds = [];
+    state.selectedService = undefined;
+    state.selectedPackage = undefined;
+    state.rejectedServices = [];
+  }
   if (input.stage) state.stage = input.stage;
   if (input.language) state.language = text(input.language, 80);
   const processed = new Set(state.processedEvidenceIds);
+  // Existing Sahra conversations were processed by an older marketing-focused
+  // parser. Recover automotive facts from their canonical CUSTOMER evidence
+  // once without replaying sends or rewriting unrelated sales decisions.
+  const backfillLegacyAutomotive = Boolean(input.automotiveBusiness && !normalizeAutomotiveState(state.automotive));
   let pendingTarget: QuestionTarget;
 
   for (const item of input.history) {
@@ -369,15 +400,41 @@ export function deriveSalesState(input: {
       continue;
     }
     if (item.senderType && item.senderType !== 'CUSTOMER') continue;
+    // Untranscribed voice and extracted media descriptions aren't confirmed
+    // statements of the car's make, model, year or budget.
+    if (input.automotiveBusiness && (
+      (['VOICE','AUDIO'].includes(item.mediaType ?? '') && item.mediaEvidenceStatus !== 'TRANSCRIPT')
+      || ['IMAGE','VIDEO','DOCUMENT','OTHER'].includes(item.mediaType ?? '')
+    )) continue;
 
     const sourceId = memoryId(item);
     const alreadyProcessed = Boolean(sourceId && processed.has(sourceId));
+    if (backfillLegacyAutomotive && alreadyProcessed) {
+      state.automotive = updateAutomotiveSalesMemory({
+        previous: state.automotive,
+        body,
+        item,
+        evidence: state.evidence,
+        revisions: state.revisions,
+      });
+    }
     if (!alreadyProcessed) {
-      applyQuestionAnswer(state, pendingTarget, body, item);
+      if (input.automotiveBusiness) {
+        state.automotive = updateAutomotiveSalesMemory({
+          previous: state.automotive,
+          body,
+          item,
+          evidence: state.evidence,
+          revisions: state.revisions,
+        });
+      } else {
+        applyQuestionAnswer(state, pendingTarget, body, item);
+      }
 
       const objective = objectiveCandidate(body);
       if (objective) setScalar(state, 'objective', objective, item);
 
+      if (!input.automotiveBusiness) {
       const rejected = rejectedServiceMatches(body);
       if (rejected.length) {
         state.rejectedServices = unique([...state.rejectedServices, ...rejected]);
@@ -409,17 +466,22 @@ export function deriveSalesState(input: {
         state.evidence.productionNeeds = evidence(item);
       }
 
+      }
+
       const location = explicitLocation(body);
       if (location) setScalar(state, 'location', location, item);
 
-      const dateRaw = explicitDateRaw(body);
+      const dateRaw = input.automotiveBusiness ? undefined : explicitDateRaw(body);
       if (dateRaw) {
         recordRevision(state, 'date', state.date?.raw, dateRaw, item);
         state.date = { raw: dateRaw, precision: datePrecision(dateRaw) };
         state.evidence.date = evidence(item);
       }
 
-      const budget = parseBudget(body);
+      const explicitAutomotiveBudget = input.automotiveBusiness && /(?:ميزانيت[يي]|ميزانية|حدي|بحدود|ما\s*يزيد|budget|up to|max\s*budget)/i.test(body);
+      const budget = input.automotiveBusiness
+        ? (explicitAutomotiveBudget ? parseBudget(normalizeDigits(body).replace(/(?:ميزانيت[يي]|ميزانية|حدي|بحدود)/i, 'budget')) : undefined)
+        : parseBudget(body);
       if (budget) {
         recordRevision(state, 'budget', state.budget?.raw, budget.raw, item);
         state.budget = budget;
@@ -430,7 +492,7 @@ export function deriveSalesState(input: {
       if (isQuestion(body)) setScalar(state, 'lastQuestion', text(body, 500), item);
 
       const signals = operationalSignals(body);
-      const hasProductionComplexity = state.productionNeeds.length > 0 || state.deliverables.filter((entry) => entry.quantity != null).length >= 2;
+      const hasProductionComplexity = !input.automotiveBusiness && (state.productionNeeds.length > 0 || state.deliverables.filter((entry) => entry.quantity != null).length >= 2);
       if (/custom (?:quote|package|scope)|bespoke|عرض مخصص|باقة مخصصة|پکیج اختصاصی|قیمت اختصاصی/i.test(body) || hasProductionComplexity) {
         state.customQuoteRequired = true;
         state.evidence.customQuoteRequired = evidence(item);
@@ -474,6 +536,7 @@ export function publicSalesState(state?: SalesStateSnapshot) {
     objective: state.objective,
     selectedService: state.selectedService,
     selectedPackage: state.selectedPackage,
+    automotive: state.automotive,
     deliverables: state.deliverables,
     productionNeeds: state.productionNeeds,
     location: state.location,
