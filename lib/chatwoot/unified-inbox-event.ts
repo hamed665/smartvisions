@@ -95,7 +95,18 @@ export function parseChatwootUnifiedInboxEvent(
   const conversation = conversationPayload(eventType, root);
   if (!conversation) return { kind: 'FAIL', code: 'INVALID_EVENT_PAYLOAD' };
 
-  const additional = record(conversation.additional_attributes);
+  // The public ConversationBuilder stores our marker in custom_attributes.
+  // Older projections used additional_attributes; never resolve conflicts by
+  // silently choosing one signed marker over the other.
+  const custom = record(conversation.custom_attributes);
+  const legacy = record(conversation.additional_attributes);
+  const keys = ['smartvisions_projection', 'smartvisions_projection_version', 'smartvisions_conversation_id'];
+  const hasCustom = keys.some(key => custom && Object.hasOwn(custom, key));
+  const hasLegacy = keys.some(key => legacy && Object.hasOwn(legacy, key));
+  if (hasCustom && hasLegacy && keys.some(key => custom?.[key] !== legacy?.[key])) {
+    return { kind: 'FAIL', code: 'INVALID_EVENT_PAYLOAD' };
+  }
+  const additional = hasCustom ? custom : legacy;
   const markerId = typeof additional?.smartvisions_conversation_id === 'string'
     ? additional.smartvisions_conversation_id.trim()
     : '';
