@@ -5,6 +5,8 @@ import { POST as controlledAutoDispatchPost } from '../app/api/operations/contro
 import { POST as pilotAcquisitionPost } from '../app/api/operations/pilot-acquisition/route';
 import { POST as chatwootInboxReconcilePost } from '../app/api/operations/chatwoot-inbox-reconcile/route';
 import { shouldRunScheduledOperations } from './schedule-policy';
+import { runSahraFastInbound } from '../lib/whatsapp/sahra-fast-inbound';
+import { SAHRA_FAST_CRON } from '../lib/whatsapp/sahra-fast-inbound-core';
 
 type WorkerVersionMetadata = { id?: string; tag?: string; timestamp?: string };
 type WorkerEnv = { INTERNAL_API_KEY?: string; DEPLOYMENT_ENV?: string; CF_VERSION_METADATA?: WorkerVersionMetadata };
@@ -472,6 +474,10 @@ const worker = {
   },
   scheduled(controller: ScheduledController, env: WorkerEnv, ctx: ExecutionContextLike) {
     if (!shouldRunScheduledOperations(env)) return;
+    if (controller.cron === SAHRA_FAST_CRON) {
+      ctx.waitUntil(runSahraFastInbound(env, controller.scheduledTime));
+      return;
+    }
     ctx.waitUntil(runScheduledOperations(env, controller));
   },
 };
