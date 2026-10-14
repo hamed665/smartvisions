@@ -17,7 +17,7 @@ const context = {
 
 describe('Sahra colloquial and voice resilience', () => {
   it('detects everyday Oman/Gulf price language without manufacturing a price', async () => {
-    for (const phrase of ['بكم يطلع؟', 'جم تسوون؟', 'شو سعره؟', 'وش سعره', 'كم يطلع تقريبا؟']) {
+    for (const phrase of ['بكم يطلع؟', 'جم تسوون؟', 'شو سعره؟', 'وش سعره', 'كم يطلع تقريبا؟', 'بجم؟', 'بجم كله؟', 'جم يطلع للجام كله؟', 'كم بيطلع؟', 'شحال؟']) {
       const signal = await executeAgent('intent_discovery', { ...context, message: phrase });
       expect(signal.data).toMatchObject({ askedPrice: true });
     }
@@ -28,6 +28,25 @@ describe('Sahra colloquial and voice resilience', () => {
     expect(result?.draft.language).toBe('ar-OM');
     expect(result?.draft.text).toContain('الموديل وسنة الصنع');
     expect(result?.draft.text).not.toMatch(/[0-9]|ريال|OMR/);
+  });
+
+  it('understands a short Omani full-window price follow-up using only customer facts', () => {
+    const continued = {
+      ...context,
+      message: 'بجم كله؟',
+      conversationHistory: [
+        { direction: 'INBOUND' as const, body: 'أبغي دودي للجامات للاندكروزر موديل ٢٠٢٢' },
+        { direction: 'OUTBOUND' as const, body: 'Is your car a Nissan Patrol 2020?' },
+      ],
+    };
+    const result = safeVehicleQuoteClarification(continued);
+    expect(result?.draft.language).toBe('ar-OM');
+    expect(result?.draft.text).toMatch(/Land Cruiser 2022/);
+    expect(result?.draft.text).toContain('سعر تظليل كل الزجاج');
+    expect(result?.draft.text).not.toMatch(/ممكن الموديل|سنة الصنع|ريال|OMR|Nissan/);
+    expect(safeVehicleQuoteClarification({
+      ...context, message: 'بجم؟', conversationHistory: [],
+    })).toBeNull();
   });
 
   it('recognizes a one-word vehicle make as a context follow-up, not a price request by itself', () => {
