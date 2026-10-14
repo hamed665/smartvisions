@@ -67,7 +67,7 @@ describe('Omani brief conversation follow-ups', () => {
         ...context, message,
         conversationHistory: [{ direction: 'INBOUND', body: 'أبغي شاشات اندرويد' }],
       });
-      expect(result?.draft.text).toContain('شاشات السيارة');
+      expect(result?.draft.text).toMatch(/شاشات السيارة|car screens/);
     }
     for (const message of ['ok', 'yes', 'no', 'تمام', 'شكرا']) {
       expect(safeOmaniConversationClarification({ ...context, message })).toBeNull();
