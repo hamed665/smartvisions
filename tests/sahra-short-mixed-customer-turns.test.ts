@@ -12,6 +12,7 @@ import {
 import { safeOmaniConversationClarification } from '@/lib/agents/omani-conversation-clarification';
 import { processInboundMessage } from '@/lib/agents/pipeline';
 import type { AgentRuntime } from '@/lib/agents/runtime';
+import type { SalesStateEvidence, SalesStateRevision } from '@/lib/agents/contracts';
 
 const base = {
   countryCode: 'OM',
@@ -99,8 +100,8 @@ describe('customer-first Arabic/English automotive code switching', () => {
   it('drops a previous car year and seat count when customer names a different car', () => {
     const first = { direction: 'INBOUND' as const, body: 'Toyota Camry 2022 5 seats' };
     const second = { direction: 'INBOUND' as const, body: 'لا، Nissan Patrol' };
-    const evidence: Record<string, any> = {};
-    const revisions: any[] = [];
+    const evidence: Record<string, SalesStateEvidence> = {};
+    const revisions: SalesStateRevision[] = [];
     const old = updateAutomotiveSalesMemory({
       body:first.body,item:first,evidence,revisions,
     });
