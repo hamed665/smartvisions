@@ -38,6 +38,9 @@ describe('customer-first Arabic/English automotive code switching', () => {
     ['PPF', 'ar-OM'],
     ['5D', 'ar-OM'],
     ['تمام', 'ar-OM'],
+    ['price', 'ar-OM'],
+    ['available', 'ar-OM'],
+    ['موجود؟', 'ar-OM'],
   ])('understands code-switched or one-word "%s" as %s', (message, expected) => {
     expect(resolveReplyLanguage({
       message, primaryLocale: 'ar-OM', preferredLanguage: 'ar-OM',
@@ -153,6 +156,18 @@ describe('customer-first Arabic/English automotive code switching', () => {
     const result = safeOmaniConversationClarification({ ...base, message: 'عندكم PPF و 5D؟' });
     expect(result?.draft.text).toContain('أي خدمة');
     expect(result?.draft.text).not.toContain('متوفر');
+  });
+
+  it('continues a single-word price or availability follow-up on the last customer service', () => {
+    for (const message of ['price', 'موجود؟']) {
+      const result = safeOmaniConversationClarification({
+        ...base,
+        message,
+        conversationHistory: [{ direction: 'INBOUND', body: 'مرحبا، عندكم تظليل؟' }],
+      });
+      expect(result?.draft.text).toContain('العازل الحراري');
+      expect(result?.draft.text).not.toMatch(/متوفر|ريال|OMR|مضمون/);
+    }
   });
 
   it('keeps English wording for short English service questions after English history', () => {
