@@ -84,11 +84,14 @@ describe('Sahra conversation resilience', () => {
       },
     };
     const result = await processInboundMessage(english, { agentsPaused: false }, runtime);
-    expect(result.trace.guardrails, JSON.stringify({ fallback: safeVehicleQuoteClarification(english), decision: result.trace.decision, handoff: result.trace.handoffReasons, safety: result.trace.qualitySafety })).toContain('SAFE_VEHICLE_QUOTE_CLARIFICATION_RECOVERY');
+    expect(result.trace.guardrails).toContain('SAFE_VEHICLE_QUOTE_CLARIFICATION_RECOVERY');
     expect(result.trace.delivery).toBe('REVIEW');
     expect(result.trace.qualitySafety?.disposition).toBe('PASS');
     expect(result.draft.text).not.toMatch(/OMR|24|10|\\$|ريال/);
-    expect(result.draft.text).toMatch(/price|pricing/i);
+    expect(result.draft.text).toMatch(/price/i);
+    expect(result.draft.text).toMatch(/Land Cruiser.*2022/);
+    expect(result.draft.text).toMatch(/windscreen/i);
+    expect(result.draft.text).not.toMatch(/send a photo|model and year/i);
     expect(result.trace.agentResults.find((agent) => agent.agent === 'secretary')?.data).toMatchObject({
       customer_reply: result.draft.text,
     });
