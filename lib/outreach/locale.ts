@@ -98,7 +98,7 @@ export function resolveOmaniAutomotiveShortLanguage(input: {
   if (/[پچژگک‌یٹڈڑںھہۓے]/.test(text)
     && !/^(?:تويوتا|تویوتا|نيسان|نیسان|هيونداي|هیوندای)\s*$/iu.test(text)) return null;
 
-  const neutralShort = /^(?:(?:ppf|5d|3d|led|carplay|android|screen|screens|tint|ceramic|floor\s*mats?|head\s*unit)|(?:عازل|تظليل|دودي|شاشات|شاشة|ارضيات|أرضيات|فرشات|سيراميك|تنجيد|تلبيسات|تمام|زين|اوكي|أوكي|اي|إي|ايوه|أيوا|نعم|لا|ok|okay|yep|yup|yes|no|sure))[؟?!.,،\s]*$/iu.test(text);
+  const neutralShort = /^(?:(?:ppf|5d|3d|led|carplay|android|screen|screens|tint|ceramic|floor\s*mats?|head\s*unit|price|cost|available)|(?:عازل|تظليل|دودي|شاشات|شاشة|ارضيات|أرضيات|فرشات|سيراميك|تنجيد|تلبيسات|تمام|زين|اوكي|أوكي|اي|إي|ايوه|أيوا|نعم|لا|موجود|متوفر|ينفع|تنفع|يركب|ok|okay|yep|yup|yes|no|sure))[؟?!.,،\s]*$/iu.test(text);
   if (neutralShort) {
     if (/^(?:ok|okay|yep|yup|yes|no|sure|تمام|زين|اوكي|أوكي|اي|إي|ايوه|أيوا|نعم|لا)[؟?!.,،\s]*$/iu.test(text)) {
       return previous ?? (/[\u0600-\u06FF]/.test(text) ? 'ar-OM' : 'en');
