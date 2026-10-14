@@ -19,6 +19,10 @@ async function hydrateCanonicalLeadQuote(input: {
   hydrated: HydratedAgentContext;
 }) {
   const { context } = input.hydrated;
+  // Organization-level SaaS prices are not Sahra/other tenant quotations.
+  // Until tenant-specific catalog prices are modeled in this quote path,
+  // fail closed instead of deriving a quote from Smart Visions services.
+  if (context.servingBusiness) return input.hydrated;
   const organizationId = String(context.organizationId ?? '').trim();
   const leadId = String(context.leadId ?? '').trim();
   const countryCode = String(context.countryCode ?? '').trim().toUpperCase();
@@ -140,6 +144,7 @@ export async function hydrateAgentContext(input: {
     primaryLocale: marketLocaleStyle.primaryLocale,
     fallbackLocale: marketLocaleStyle.fallbackLocale,
     preferredLanguage: hydrated.context.language,
+    conversationHistory: hydrated.context.conversationHistory,
   });
   const replyDialect = replyLanguage.toLowerCase().startsWith('ar')
     ? hydrated.context.dialect || marketLocaleStyle.dialect

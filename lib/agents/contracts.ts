@@ -106,11 +106,14 @@ export type SalesDeliverable = {
   detail?: string;
 };
 
+import type { AutomotiveSalesMemory } from '@/lib/conversations/automotive-sales-memory';
+
 export type SalesStateSnapshot = {
   version: 1;
   objective?: string;
   selectedService?: string;
   selectedPackage?: string;
+  automotive?: AutomotiveSalesMemory;
   deliverables: SalesDeliverable[];
   productionNeeds: string[];
   location?: string;

@@ -572,6 +572,7 @@ export async function hydrateAgentContext(input: {
     history: conversationHistory,
     stage,
     language: conversationLanguage,
+    automotiveBusiness: tenantScoped && /(?:صحرا|sahra|automotive|سيار|car\s*care)/i.test([servingBusiness?.name, industry].join(' ')),
   });
   const persistedSummary = clip(conversation?.summary, 3000) || clip(conversation?.persian_summary, 3000) || base.conversationSummary;
   const conversationSummary = [persistedSummary, salesState.rollingSummary ? `Current sales state: ${salesState.rollingSummary}` : '']
