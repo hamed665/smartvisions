@@ -133,6 +133,19 @@ export async function resolveExistingWhatsAppBusinessByPhone(organizationId: str
   return { business: exact[0] ?? null, ambiguous: false };
 }
 
+/** WhatsApp inbound is verified customer contact, not a scoring decision.
+ * The CRM scoring trigger requires provenance for any non-default score/reasons.
+ * Keep new leads unscored; provider provenance lives on canonical inbound
+ * messages and is never smuggled into score_reasons. */
+export function buildUnscoredWhatsAppInboundLead(organizationId: string, businessId: string) {
+  return {
+    organization_id: organizationId,
+    business_id: businessId,
+    status: 'NEW' as const,
+    agent_mode: 'AUTO' as const,
+  };
+}
+
 async function getOrCreateLeadForBusiness(organizationId: string, businessId: string) {
   const supabase = serviceClient();
   const { data: existing, error: existingError } = await supabase
@@ -144,15 +157,9 @@ async function getOrCreateLeadForBusiness(organizationId: string, businessId: st
   if (existingError) throw new Error(`WhatsApp lead lookup failed: ${existingError.message}`);
   if (existing) return existing;
 
-  const { data: created, error: createError } = await supabase.from('leads').insert({
-    organization_id: organizationId,
-    business_id: businessId,
-    status: 'NEW',
-    agent_mode: 'AUTO',
-    opportunity_score: 0,
-    intent_score: 0,
-    score_reasons: ['Verified customer-initiated WhatsApp inbound'],
-  }).select('id,status,agent_mode,business_id').single();
+  const { data: created, error: createError } = await supabase.from('leads')
+    .insert(buildUnscoredWhatsAppInboundLead(organizationId, businessId))
+    .select('id,status,agent_mode,business_id').single();
   if (!createError) return created;
   if (!isWhatsAppInboundDuplicateError(createError.code)) {
     throw new Error(`WhatsApp inbound lead create failed: ${createError.message}`);
