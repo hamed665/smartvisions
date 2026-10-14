@@ -28,6 +28,16 @@ describe('Permanent inbound-only Sahra service policy', () => {
       maxReplies: 60, deliveryMode: 'TEXT', permanentInbound: true,
     });
   });
+  it('admits the owner-approved 200/day ceiling', () => {
+    expect(evaluateInternalTestLiveReplyPolicy({
+      ...input, ruleConfig: {permanentInboundReply: {...policy.permanentInboundReply, dailyCap:200}},
+    })).toMatchObject({allowed:true, maxReplies:200, permanentInbound:true});
+  });
+  it.each([201, 0, -1, 200.5])('rejects invalid or excessive daily cap %s', (dailyCap) => {
+    expect(evaluateInternalTestLiveReplyPolicy({
+      ...input, ruleConfig: {permanentInboundReply: {...policy.permanentInboundReply, dailyCap}},
+    })).toEqual({allowed:false, reason:'PRODUCTION_DAILY_CAP_INVALID'});
+  });
   it('supports real verified customer-initiated non-Oman phone format', () => {
     expect(evaluateInternalTestLiveReplyPolicy({ ...input, businessWhatsapp: '+44 7700 900123',
       inboundFrom: '447700900123' }).allowed).toBe(true);
