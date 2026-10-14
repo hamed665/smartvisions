@@ -7,6 +7,7 @@ import {
 import {
   automotiveServiceCandidates,
   inferAutomotiveFacts,
+  updateAutomotiveSalesMemory,
 } from '@/lib/conversations/automotive-sales-memory';
 import { safeOmaniConversationClarification } from '@/lib/agents/omani-conversation-clarification';
 import { processInboundMessage } from '@/lib/agents/pipeline';
@@ -93,6 +94,25 @@ describe('customer-first Arabic/English automotive code switching', () => {
     ['LED', 'LED_LIGHTING'],
   ])('maps standalone service "%s" to canonical memory %s', (message, service) => {
     expect(inferAutomotiveFacts(message).service).toBe(service);
+  });
+
+  it('drops a previous car year and seat count when customer names a different car', () => {
+    const first = { direction: 'INBOUND' as const, body: 'Toyota Camry 2022 5 seats' };
+    const second = { direction: 'INBOUND' as const, body: 'لا، Nissan Patrol' };
+    const evidence: Record<string, any> = {};
+    const revisions: any[] = [];
+    const old = updateAutomotiveSalesMemory({
+      body:first.body,item:first,evidence,revisions,
+    });
+    const next = updateAutomotiveSalesMemory({
+      previous: old, body:second.body,item:second,evidence,revisions,
+    });
+    expect(next).toMatchObject({ make: 'Nissan', model: 'Patrol' });
+    expect(next.year).toBeUndefined();
+    expect(next.seats).toBeUndefined();
+    expect(revisions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'automotive.year', from: 2022, to: null }),
+    ]));
   });
 
   it('refuses to assume an order when several services are mentioned', () => {
