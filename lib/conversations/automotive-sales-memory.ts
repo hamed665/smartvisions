@@ -38,9 +38,9 @@ const models: Array<[string, string, RegExp]> = [
   ['RAV4', 'Toyota', /(?:راف\s*4|راف٤|\brav[\s-]?4\b)/i],
 ];
 const services: Array<[AutomotiveService, RegExp]> = [
-  ['THERMAL_TINT', /(?:عازل\s*حراري|عازل\s*حرارتی|عازل|تظليل|تضليل|تنت|window tint|window film|heat rejection)/i],
-  ['FLOOR_MATS', /(?:فرش\s*(?:أرضيات|ارضيات|ارض)|دواسات|كفپوش|کفپوش|5d\s*(?:mat|فرش)|3d\s*(?:mat|فرش)|floor mats?)/i],
-  ['SEAT_UPHOLSTERY', /(?:تلبيس|تلبيسات|تنجيد|تودوزی|روکش|كرسي\s*سيارة|seat covers?|upholster)/i],
+  ['THERMAL_TINT', /(?:عازل\s*حراري|عازل\s*حرارتی|عازل|تظليل|تضليل|تنت|تنتينج|دودي|دودی|تغميق\s*(?:ال)?(?:جام|قزاز|زجاج|شبابيك)|(?:tint|tinted|tinting)(?:\s*(?:the|all|my|car|windows?|glass))?|window\s*(?:film|tint)|heat rejection|privacy\s*(?:film|tint))/i],
+  ['FLOOR_MATS', /(?:فرش\s*(?:أرضيات|ارضيات|ارض)|فرشات\s*(?:الأرض|الارض|السيارة)|دواسات|ماتات\s*(?:السيارة|لل سيارة)?|كفپوش|کفپوش|5d\s*(?:mat|فرش)|3d\s*(?:mat|فرش)|floor mats?)/i],
+  ['SEAT_UPHOLSTERY', /(?:تلبيس|تلبيسات|تنجيد|تودوزی|روکش|كفرات\s*(?:الكراسي|المقاعد)|جلد\s*(?:الكراسي|المقاعد)|كرسي\s*سيارة|seat covers?|upholster)/i],
   ['PPF', /(?:\bppf\b|paint protection film|حماية\s*(?:البوية|البودي|الطلاء)|افلام\s*حماية)/i],
   ['CERAMIC_COATING', /(?:سيراميك|سرامیک|ceramic\s*(?:coating|paint)|نانو\s*سيراميك)/i],
   ['CAR_SCREEN', /(?:شاشة|شاشه|شاشات|مانیتور|مانيتور|carplay|كار\s*بلاي|اندرويد\s*للسيارة|head\s*unit)/i],
@@ -78,7 +78,12 @@ export function inferAutomotiveFacts(message: string, referenceDate = new Date()
     || /(?:خمسة|خمس|پنج)\s*(?:مقاعد|كراسي|صندلی|صندلي)/i.test(normalized) ? 5
     : /(?:^|\D)7\s*(?:مقاعد|كراسي|كرسي|صندلی|صندلي|seats?)(?!\p{L})/iu.test(normalized)
       || /(?:سبعة|سبع|هفت)\s*(?:مقاعد|كراسي|صندلی|صندلي)/i.test(normalized) ? 7 : undefined;
-  const matchedServices = services.filter(([, pattern]) => pattern.test(normalized));
+  // Customers often correct themselves aloud: "لا قصدي عازل مو فرش".
+  // Only select the explicitly corrected clause; without a correction, two
+  // different services stay ambiguous and must never become an inferred order.
+  const correction = normalized.match(/(?:^|\s)(?:لا\s+)?(?:قصدي|أقصد|اقصد|أعني|اعني|i\s+mean)\s+(.+?)(?=\s+(?:مو|مش|not|instead\s+of|rather\s+than)\s+|$)/i);
+  const serviceText = correction?.[1] || normalized;
+  const matchedServices = services.filter(([, pattern]) => pattern.test(serviceText));
   const service = matchedServices.length === 1 ? matchedServices[0][0] : undefined;
   const preferredColor = /(?:أبغي|ابغي|أريد|اريد|ابي|بغيت|prefer|want|اختار|أختار|بـ|باللون|رنگ)/i.test(normalized)
     ? colors.find(([, pattern]) => pattern.test(normalized))?.[0] : undefined;
