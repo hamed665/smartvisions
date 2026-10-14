@@ -21,6 +21,7 @@ const arabicSignals = new Set([
   'مرحبا', 'مرحباً', 'اهلا', 'أهلا', 'ممكن', 'اريد', 'أريد', 'احتاج', 'أحتاج',
   'كيف', 'خدماتكم', 'خدمات', 'سعر', 'السعر', 'كم', 'موقع', 'الموقع', 'عندي', 'عندنا',
   'مطعم', 'عيادة', 'شركة', 'تسويق', 'انستغرام', 'إنستغرام', 'واتساب', 'شكرا', 'شكراً',
+  'السلام', 'عليكم', 'وعليكم', 'عندكم', 'اهلين', 'أهلين', 'هلا', 'حياك', 'فرشات', 'كامري',
 ]);
 
 const hindiSignals = new Set([
@@ -77,6 +78,14 @@ export function detectLanguageZeroCost(text: string): { language: DetectedLangua
     if (urduSpecific.test(value)) signals.push('URDU_SPECIFIC_CHARS');
     if (persianSpecific.test(value)) signals.push('PERSIAN_SPECIFIC_CHARS');
     if (urduSpecific.test(value)) return { language: 'ur', confidence: 0.93, signals };
+    // Common Arabic greetings are often typed on a Persian keyboard (علیکم).
+    // This narrow greeting exception must run before the general Persian-script
+    // heuristic, without relabeling substantive Persian customer sentences.
+    const greeting = value.normalize('NFKC').replace(/ک/g, 'ك').replace(/ی/g, 'ي')
+      .replace(/[\u064B-\u065F\u0670]/g, '').replace(/[؟?!.،\s]+$/gu, '').trim();
+    if (/^(?:السلام عليكم(?: ورحمة الله(?: وبركاته)?)?|وعليكم السلام(?: ورحمة الله(?: وبركاته)?)?|يا هلا|هلا والله)$/u.test(greeting)) {
+      return { language: 'ar', confidence: 0.98, signals: [...signals, 'ARABIC_GREETING'] };
+    }
     if (persianSpecific.test(value)) return { language: 'fa', confidence: 0.88, signals };
     if (signalHits(value, arabicSignals) >= 1) return { language: 'ar', confidence: 0.9, signals: [...signals, 'ARABIC_LEXICAL_SIGNAL'] };
     return { language: 'unknown', confidence: 0.6, signals: [...signals, 'ARABIC_SCRIPT_LANGUAGE_UNRESOLVED'] };

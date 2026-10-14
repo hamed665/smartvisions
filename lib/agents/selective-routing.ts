@@ -1,4 +1,5 @@
 import type { AgentContext, AgentName } from './contracts';
+import { isStandaloneGreeting } from './standalone-greeting';
 
 export type ReasoningTier = 'ZERO_COST' | 'LIGHT' | 'FULL';
 
@@ -15,6 +16,16 @@ const has = (pattern: RegExp, text: string) => pattern.test(text);
 export function buildSelectiveRoutePlan(context: AgentContext): SelectiveRoutePlan {
   const text = context.message.trim();
   const lower = text.toLowerCase();
+
+  if (isStandaloneGreeting(text)) {
+    return {
+      tier: 'ZERO_COST',
+      agents: ['secretary', 'relevance_checker'],
+      paidAgents: [],
+      reasons: ['STANDALONE_GREETING_NO_COMMERCIAL_INTENT'],
+      estimatedLlmCalls: 0,
+    };
+  }
 
   if (/^(thanks|thank you|thx|شكرا|شكراً|مشكور|مشكورة|تسلم|تسلمين)[.!\s]*$/i.test(text)) {
     return {

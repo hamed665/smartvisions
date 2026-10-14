@@ -1,5 +1,6 @@
 import type { AgentContext, AgentName, AgentResult, CommercialDecision, ReplyDraft } from './contracts';
 import * as core from './executor-core';
+import { standaloneGreetingReply } from './standalone-greeting';
 import { resolveReplyLanguage } from '@/lib/outreach/locale';
 import { applyPercentageDiscount, resolveSeptember2026Offer } from '@/lib/conversations/september-offer';
 import { salesServiceKeyForCanonicalId } from '@/lib/conversations/service-key';
@@ -125,6 +126,8 @@ export function decideCommercialAction(context: AgentContext, results: AgentResu
 }
 
 export function secretaryCompose(context: AgentContext, decision: CommercialDecision, results: AgentResult[]): ReplyDraft {
+  const greeting = standaloneGreetingReply(context);
+  if (greeting) return greeting;
   const draft = core.secretaryCompose(contextWithCurrentQuoteBoundary(context), decision, results);
   const offerLine = septemberOfferLine(context, decision, draft.language);
   if (!offerLine || draft.text.includes(offerLine)) return draft;

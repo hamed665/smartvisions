@@ -240,21 +240,34 @@ export function hasUnsupportedGuaranteeLanguage(text: string) {
     /\b(?:guarantee|guaranteed|zero risk|100% guaranteed|always works)\b/i,
     /(?:نضمن|مضمون|بدون أي مخاطر|بدون مخاطر|100٪|١٠٠٪)/i,
     /(?:تضمینی|بدون ریسک|۱۰۰٪|صددرصد)/i,
+    /(?:ضمان|كفالة)\s*(?:لمدة\s*)?(?:سنة|عام|[0-9۰-۹٠-٩]+\s*(?:سنوات?|أشهر|شهور|أعوام))/i,
+    /(?:ضمانت|گارانتی)\s*(?:یک|۱|1|[0-9۰-۹٠-٩]+)\s*(?:سال|ماه)/i,
+    /\b(?:one|two|three|[0-9]+)[- ]year\s+warranty\b/i,
   ].some((pattern) => pattern.test(value));
 }
 
 type MoneyClaim = { amount: number; currency: string };
 
 function moneyClaims(text: string): MoneyClaim[] {
+  // Parse customer-visible Arabic/Persian prices, not only ASCII '37 OMR'.
+  // Year/model numbers without a nearby currency are not monetary claims.
+  const normalizedText = text
+    .replace(/[۰-۹٠-٩]/g, digit => {
+      const persian = '۰۱۲۳۴۵۶۷۸۹'.indexOf(digit);
+      return String(persian >= 0 ? persian : '٠١٢٣٤٥٦٧٨٩'.indexOf(digit));
+    })
+    .replace(/٫/g, '.').replace(/٬/g, '');
   const claims: MoneyClaim[] = [];
-  const patterns = [
-    /\b(OMR|USD|AED|SAR|QAR)\s*([0-9]+(?:\.[0-9]+)?)\b/gi,
-    /\b([0-9]+(?:\.[0-9]+)?)\s*(OMR|USD|AED|SAR|QAR)\b/gi,
+  const currencyPatterns = [
+    { pattern: /\b(OMR|USD|AED|SAR|QAR)\s*([0-9]+(?:\.[0-9]+)?)\b/gi, amount: 2, currency: 1 },
+    { pattern: /\b([0-9]+(?:\.[0-9]+)?)\s*(OMR|USD|AED|SAR|QAR)\b/gi, amount: 1, currency: 2 },
+    { pattern: /([0-9]+(?:\.[0-9]+)?)\s*(?:ريال(?:ات)?(?:\s+عمان[يى])?|ریال(?:\s+عمان[یي])?|ر\.?\s*ع\.?)(?![\p{L}])/giu, amount: 1, currency: 0 },
+    { pattern: /(?:ريال(?:ات)?(?:\s+عمان[يى])?|ریال(?:\s+عمان[یي])?|ر\.?\s*ع\.?)\s*([0-9]+(?:\.[0-9]+)?)/giu, amount: 1, currency: 0 },
   ];
-  for (const [index, pattern] of patterns.entries()) {
-    for (const match of text.matchAll(pattern)) {
-      const currency = String(index === 0 ? match[1] : match[2]).toUpperCase();
-      const amount = Number(index === 0 ? match[2] : match[1]);
+  for (const entry of currencyPatterns) {
+    for (const match of normalizedText.matchAll(entry.pattern)) {
+      const amount = Number(match[entry.amount]);
+      const currency = entry.currency ? String(match[entry.currency]).toUpperCase() : 'OMR';
       if (Number.isFinite(amount)) claims.push({ amount, currency });
     }
   }
@@ -262,6 +275,7 @@ function moneyClaims(text: string): MoneyClaim[] {
 }
 
 function canonicalMoneyClaims(context: AgentContext): MoneyClaim[] {
+  // The customer's own guessed amount is not owner-approved pricing evidence.
   const values: MoneyClaim[] = [];
   if (Number.isFinite(context.quotedPrice) && context.quotedCurrency) {
     values.push({ amount: Number(context.quotedPrice), currency: context.quotedCurrency.toUpperCase() });
@@ -273,12 +287,6 @@ function canonicalMoneyClaims(context: AgentContext): MoneyClaim[] {
       currency: service.marketPrice.currency.toUpperCase(),
     });
   }
-  values.push(...moneyClaims([
-    context.message,
-    ...(context.conversationHistory ?? [])
-      .filter((item) => item.senderType === 'CUSTOMER' || item.direction === 'INBOUND')
-      .map((item) => item.body),
-  ].join('\n')));
   return values;
 }
 
@@ -286,9 +294,8 @@ function unsupportedMoneyClaim(context: AgentContext, draft: ReplyDraft) {
   const claims = moneyClaims(draft.text);
   if (!claims.length) return false;
   const canonical = canonicalMoneyClaims(context);
-  return claims.some((claim) => !canonical.some(
-    (item) => item.amount === claim.amount && item.currency === claim.currency,
-  ));
+  return claims.some(claim => !canonical.some(item =>
+    item.amount === claim.amount && item.currency === claim.currency));
 }
 
 function check(
