@@ -63,7 +63,7 @@ begin
   if not v_conversation.requires_human
      and coalesce(v_conversation.agent_mode, 'AUTO') <> 'HUMAN'
      and coalesce(v_lead.agent_mode, 'AUTO') <> 'HUMAN'
-     and v_lead.status is distinct from 'HUMAN'::public.lead_status then
+     and v_lead.status::text is distinct from 'HUMAN' then
     return jsonb_build_object(
       'released', false,
       'reason', 'ALREADY_AUTOMATED',
