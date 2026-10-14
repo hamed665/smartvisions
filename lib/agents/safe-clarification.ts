@@ -62,12 +62,20 @@ export function safeVehicleQuoteClarification(
   if (!/(?:سعر|السعر|بكم|بكام|بقديش|جم\s*تسوون|كم\s*يطلع|تكلفة|قیمت|هزینه|price|cost|quote|how much)/i.test(recentCustomerMessages)) return null;
   if (!/(?:سيار|سيارة|السيارة|مقاعد|المقاعد|تلبيس|تلبيسات|تنجيد|عازل|تظليل|دواسات|فرش|كفبوش|كفپوش|تویوتا|تويوتا|نيسان|نیسان|لكزس|لکسوس|لاندكروزر|كامري|كورولا|خودرو|ماشین|روکش|مقعد|ppf|ceramic|vehicle|car|floor mats?|toyota|nissan|camry|corolla|seat|upholster)/i.test(recentCustomerMessages)) return null;
 
-  const language = resolveReplyLanguage({
+  const detectedLanguage = resolveReplyLanguage({
     message: context.message,
     primaryLocale: context.marketLocaleStyle?.primaryLocale ?? 'ar-OM',
     preferredLanguage: context.language,
     conversationHistory: context.conversationHistory,
   });
+  // Automotive model names dilute lexical confidence in short English price
+  // questions (e.g. "Toyota Land Cruiser 2022 all How much"). Recover only
+  // an explicit English price phrase in a Latin-only message, never from market
+  // language alone or from an ambiguous/mixed-script customer message.
+  const language = detectedLanguage === 'und'
+    && /^[A-Za-z0-9\s.,!?'"()\/-]+$/.test(currentMessage)
+    && /\b(?:how\s+much|price|cost|quote)\b/i.test(currentMessage)
+    ? 'en' : detectedLanguage;
   if (language === 'und') return null;
 
   if (!['ar', 'fa', 'en'].some((prefix) => language.startsWith(prefix))) return null;
