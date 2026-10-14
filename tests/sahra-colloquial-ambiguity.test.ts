@@ -53,6 +53,27 @@ describe('Omani brief conversation follow-ups', () => {
     expect(result?.draft.text).not.toContain('فرش الأرضيات');
   });
 
+  it('keeps Arabic as the reply language when the product name is English', () => {
+    for (const message of ['في Android screen عندكم؟', 'عندكم 5D mats?', 'PPF بكم؟']) {
+      const result = safeOmaniConversationClarification({ ...context, message });
+      expect(result?.draft.language).toBe('ar-OM');
+      expect(result?.draft.text).not.toMatch(/OMR|ريال|ضمان/);
+    }
+  });
+
+  it('uses the customer topic for very short followups but not generic acknowledgements', () => {
+    for (const message of ['بكم؟', 'price', 'all', 'fits?', 'stock']) {
+      const result = safeOmaniConversationClarification({
+        ...context, message,
+        conversationHistory: [{ direction: 'INBOUND', body: 'أبغي شاشات اندرويد' }],
+      });
+      expect(result?.draft.text).toMatch(/شاشات السيارة|car screens/);
+    }
+    for (const message of ['ok', 'yes', 'no', 'تمام', 'شكرا']) {
+      expect(safeOmaniConversationClarification({ ...context, message })).toBeNull();
+    }
+  });
+
   it('does not fake a location or bypass a request for a person, complaint or discount', () => {
     for (const message of ['وين موقعكم؟', 'أريد خصم', 'أريد موظف', 'شكوى عندي', 'أبغي حجز', 'تمام']) {
       expect(safeOmaniConversationClarification({ ...context, message })).toBeNull();

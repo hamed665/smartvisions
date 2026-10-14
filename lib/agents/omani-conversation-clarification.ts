@@ -28,7 +28,9 @@ export function safeOmaniConversationClarification(context: AgentContext): {
     .map(turn => automotiveServiceCandidates(turn.body))
     .find(items => items.length === 1)?.[0] ?? context.salesState?.automotive?.service;
   const hasShortService = currentServices.length > 0;
-  const contextualFollowUp = /^(?:كم|جم|بكم|بجم|شحال|موجود|متوفر|يركب|تنفع|شو الفرق|وش الفرق|شو تنصح|وش تنصح|تنصحني|شو رايك|وش رايك|how much|price|available|which one|what about)(?:\s+[^؟?!.]{0,32})?[؟?!. ]*$/iu.test(message);
+  // Silence is better than inventing an offer after a bare acknowledgement.
+  if (/^(?:ok(?:ay)?|yes|no|hi|hello|تمام|اوكي|أوكي|نعم|لا|شكرا|thanks)[؟?!. ]*$/iu.test(message)) return null;
+  const contextualFollowUp = /^(?:كم|جم|بكم|بجم|شحال|السعر|بكام|موجود|متوفر|يركب|تنفع|ينفع|كله|كلها|all|full|both|fit|fits|cost|stock|شو الفرق|وش الفرق|شو تنصح|وش تنصح|تنصحني|شو رايك|وش رايك|how much|price|available|which one|what about)(?:\s+[^؟?!.]{0,32})?[؟?!. ]*$/iu.test(message);
   const explicitEnquiry = /(?:عندكم|عندكو|عندك|تركبون|تركبونه|يركب|ينفع|يناسب|تضبط|تضبطون|شو تنصح|وش تنصح|تنصحني|شو رايك|وش رايك|شو الفرق|وش الفرق|أبغي|ابغي|اريد|أريد|ابي|بغيت|هل يصلح|نفس هذا|هذا يضبط|حق ال|للاند|للتويوتا|للجيب|need|want|looking for|have|price|how much)/i.test(message);
   if (!hasShortService && !explicitEnquiry && !(priorService && contextualFollowUp)) return null;
   const language = resolveReplyLanguage({
@@ -37,7 +39,17 @@ export function safeOmaniConversationClarification(context: AgentContext): {
     preferredLanguage: context.language,
     conversationHistory: context.conversationHistory,
   });
-  if (!['ar-OM', 'ar', 'en', 'fa'].includes(language)) return null;
+  // Short Omani questions with English product names must follow the
+  // customer's Arabic syntax, not the Latin product spelling.
+  const arabicQuestion = /[\u0600-\u06ff]/u.test(message)
+    && !/[پچژگک‌ی]/u.test(message)
+    && /(?:عندكم|عندك|عندكو|في|أبغي|ابغي|ابي|بغيت|كم|جم|بكم|بجم|شحال|يركب|موجود|متوفر|تنفع|شو|وش)/iu.test(message);
+  const englishQuestion = /(?:^|\s)(?:how\s*much|price|cost|available|stock|need|want|have|fit|fits|which\s*one)(?:\s|$|[?!.])/iu.test(message);
+  const replyLanguage = arabicQuestion ? 'ar-OM'
+    : language === 'und' && englishQuestion ? 'en'
+    : language === 'und' && priorService && contextualFollowUp
+      ? context.language ?? 'und' : language;
+  if (!['ar-OM', 'ar', 'en', 'fa'].includes(replyLanguage)) return null;
   // Two new services in one sentence cannot be silently collapsed to one.
   // A correction such as "لا قصدي PPF مو 5D" must be resolved by the canonical
   // customer-memory parser, not by reading older outbound bot claims.
@@ -48,16 +60,16 @@ export function safeOmaniConversationClarification(context: AgentContext): {
       : currentServices.length > 1 ? undefined : priorService;
   const ambiguousServices = currentServices.length > 1 && correctedServices.length !== 1;
   if (ambiguousServices) {
-    const text = language.startsWith('ar') ? 'تقصد أي خدمة بالضبط من اللي ذكرتها؟'
-      : language.startsWith('fa') ? 'منظورتون دقیقاً کدوم یکی از این خدماته؟'
+    const text = replyLanguage.startsWith('ar') ? 'تقصد أي خدمة بالضبط من اللي ذكرتها؟'
+      : replyLanguage.startsWith('fa') ? 'منظورتون دقیقاً کدوم یکی از این خدماته؟'
         : 'Which of those services do you mean?';
-    return { draft: { text, language, generatedBy: 'secretary' }, persianTranslation: 'مشتری چند خدمت گفت؛ باید منظورش مشخص شود.' };
+    return { draft: { text, language: replyLanguage, generatedBy: 'secretary' }, persianTranslation: 'مشتری چند خدمت گفت؛ باید منظورش مشخص شود.' };
   }
   if (!service) {
-    const text = language.startsWith('ar') ? 'حياك، أي خدمة تقصد عشان أساعدك بشكل أدق؟'
-      : language.startsWith('fa') ? 'کدوم خدمت رو می‌خواید تا دقیق راهنمایی کنم؟'
+    const text = replyLanguage.startsWith('ar') ? 'حياك، أي خدمة تقصد عشان أساعدك بشكل أدق؟'
+      : replyLanguage.startsWith('fa') ? 'کدوم خدمت رو می‌خواید تا دقیق راهنمایی کنم؟'
         : 'Which service are you looking for?';
-    return { draft: { text, language, generatedBy: 'secretary' }, persianTranslation: 'برای انتخاب خدمت، سؤال کوتاه بپرس.' };
+    return { draft: { text, language: replyLanguage, generatedBy: 'secretary' }, persianTranslation: 'برای انتخاب خدمت، سؤال کوتاه بپرس.' };
   }
   const labels: Record<AutomotiveService, { ar: string; en: string; fa: string }> = {
     FLOOR_MATS: { ar: 'فرش الأرضيات', en: 'floor mats', fa: 'کفپوش' },
@@ -70,15 +82,15 @@ export function safeOmaniConversationClarification(context: AgentContext): {
     CAR_AUDIO: { ar: 'سماعات السيارة', en: 'car audio', fa: 'سیستم صوتی خودرو' },
   };
   const label = labels[service];
-  const clarification = vehicleDetailClarification(context, language, false);
-  const text = language.startsWith('ar')
+  const clarification = vehicleDetailClarification(context, replyLanguage, false);
+  const text = replyLanguage.startsWith('ar')
     ? 'بالنسبة لـ' + label.ar + '، ' + clarification.text
-    : language.startsWith('fa')
+    : replyLanguage.startsWith('fa')
       ? 'درباره ' + label.fa + '، ' + clarification.text
       : 'For ' + label.en + ', ' + clarification.text;
   const translation = label.fa + ': ' + clarification.translation;
   return {
-    draft: { text, language, generatedBy: 'secretary' },
+    draft: { text, language: replyLanguage, generatedBy: 'secretary' },
     persianTranslation: translation,
   };
 }
