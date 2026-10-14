@@ -9,7 +9,9 @@ import {
 } from '@/lib/chatwoot/public-conversation-projection';
 import { mirrorCanonicalWhatsAppOutboundToChatwoot } from '@/lib/chatwoot/conversation-actions';
 import { downloadMetaWhatsAppMediaForChatwoot } from '@/lib/whatsapp/media';
-import { resolveMetaWhatsAppProvider, type MetaWhatsAppRoute } from '@/lib/whatsapp/tenant-routing';
+import { resolveMetaWhatsAppDestination, resolveMetaWhatsAppProvider, type MetaWhatsAppRoute } from '@/lib/whatsapp/tenant-routing';
+import { applyWhatsAppInboundLifecycle } from '@/lib/whatsapp/lifecycle';
+import { SAHRA_FAST_SCOPE, SAHRA_FRESH_INBOUND_MS } from '@/lib/whatsapp/sahra-fast-inbound-core';
 import type { NormalizedWhatsAppInbound } from '@/lib/whatsapp/webhook';
 
 type LinkedWhatsAppInbound = {
@@ -358,6 +360,62 @@ function inboundFromPayload(value: unknown): NormalizedWhatsAppInbound | null {
   };
 }
 
+/** Re-link only an authenticated Meta journal message already saved for the
+ * exact Sahra binding. This restores canonical CRM/Inbox history after a
+ * transient webhook lead-insert failure, but NEVER invokes the AI or provider
+ * send path. Old messages remain older than the fresh reply window. */
+export async function recoverSahraUnlinkedInbound(input: {
+  service: SupabaseClient;
+  row: {
+    organization_id: string;
+    provider_message_id: string;
+    created_at: string;
+    lead_id: string | null;
+    conversation_id: string | null;
+  };
+  event: NormalizedWhatsAppInbound;
+  routing: Record<string, unknown>;
+  now?: number;
+}) {
+  const now = input.now ?? Date.now();
+  const receivedAt = Date.parse(input.row.created_at);
+  if (input.row.organization_id !== SAHRA_FAST_SCOPE.organizationId
+    || input.row.lead_id != null || input.row.conversation_id != null
+    || input.routing.tenantBusinessId !== SAHRA_FAST_SCOPE.tenantBusinessId
+    || input.routing.bindingId !== SAHRA_FAST_SCOPE.bindingId
+    || input.event.providerMessageId !== input.row.provider_message_id
+    || typeof input.event.destination.phoneNumberId !== 'string'
+    || !input.event.destination.phoneNumberId
+    || !['text','audio','image','video','document'].includes(input.event.type)
+    || !Number.isFinite(receivedAt) || receivedAt > now
+    || now - receivedAt > 24 * 60 * 60_000
+    // This recovery is for already missed opportunities, not an alternate
+    // live sending/claim mechanism. A genuinely fresh inbound is handled
+    // solely by the normal signed webhook admission route.
+    || now - receivedAt < SAHRA_FRESH_INBOUND_MS) return null;
+
+  // Never trust mutable JSON route labels alone: re-resolve the signed
+  // destination through the canonical, active, tenant-scoped provider binding.
+  const route = await resolveMetaWhatsAppDestination({
+    service: input.service, destination: input.event.destination,
+  });
+  if (route.organizationId !== SAHRA_FAST_SCOPE.organizationId
+    || route.tenantBusinessId !== SAHRA_FAST_SCOPE.tenantBusinessId
+    || route.bindingId !== SAHRA_FAST_SCOPE.bindingId
+    || input.routing.phoneNumberId !== route.phoneNumberId
+    || input.routing.integrationConnectionId !== route.integrationConnectionId
+    || (input.routing.branchId ?? null) !== route.branchId) return null;
+  const linked = await applyWhatsAppInboundLifecycle(input.row.organization_id, input.event, {
+    tenantBusinessId: route.tenantBusinessId,
+    branchId: route.branchId,
+    bindingId: route.bindingId,
+    integrationConnectionId: route.integrationConnectionId,
+    phoneNumberId: route.phoneNumberId,
+    wabaId: route.wabaId,
+  });
+  return linked.linked ? linked : null;
+}
+
 export async function processPendingWhatsAppChatwootSync(input: {
   service: SupabaseClient;
   organizationId?: string;
@@ -374,7 +432,7 @@ export async function processPendingWhatsAppChatwootSync(input: {
   const limit = Math.min(25, Math.max(1, Math.trunc(input.limit ?? 10)));
   let query = input.service
     .from('whatsapp_events')
-    .select('organization_id,provider_message_id,payload,lead_id,conversation_id')
+    .select('organization_id,provider_message_id,payload,lead_id,conversation_id,created_at')
     .eq('direction', 'INBOUND')
     .eq('chatwoot_sync_status', 'PENDING');
 
@@ -404,7 +462,11 @@ export async function processPendingWhatsAppChatwootSync(input: {
     nativeReconciliationRequired: 0,
   };
 
-  for (const row of pending.data ?? []) {
+  // Retain newest-N discovery, then replay their historical arrival order
+  // to preserve first-contact conversation continuity without paid replays.
+  const ordered = [...(pending.data ?? [])].sort((a,b) =>
+    Date.parse(a.created_at ?? '') - Date.parse(b.created_at ?? ''));
+  for (const row of ordered) {
     const organizationId = String(row.organization_id ?? '');
     const payload = row.payload && typeof row.payload === 'object' && !Array.isArray(row.payload)
       ? row.payload as Record<string, unknown>
@@ -417,16 +479,44 @@ export async function processPendingWhatsAppChatwootSync(input: {
       ? payload.canonical as Record<string, unknown>
       : null;
 
-    if (
-      !organizationId
-      || !event
+    if (!organizationId || !event
       || typeof routing?.tenantBusinessId !== 'string'
       || typeof routing?.bindingId !== 'string'
-      || (input.bindingId && routing.bindingId !== input.bindingId)
-      || typeof row.lead_id !== 'string'
+      || (input.bindingId && routing.bindingId !== input.bindingId)) {
+      summary.reconciliationRequired += 1;
+      continue;
+    }
+
+    let linked: LinkedWhatsAppInbound | null = null;
+    if (!row.lead_id && !row.conversation_id && !canonical) {
+      try {
+        const restored = await recoverSahraUnlinkedInbound({
+          service: input.service,
+          row: {
+            organization_id: organizationId,
+            provider_message_id: row.provider_message_id,
+            created_at: row.created_at,
+            lead_id: row.lead_id,
+            conversation_id: row.conversation_id,
+          },
+          event, routing,
+        });
+        if (restored?.linked) linked = {
+          linked: true,
+          leadId: restored.leadId,
+          businessId: restored.businessId,
+          identityId: restored.identityId,
+          conversationId: restored.conversationId,
+          messageId: restored.messageId,
+        };
+      } catch {
+        // The signed journal is retained as PENDING. An ambiguous canonical
+        // mutation is never used as authority to send or bill an AI run.
+      }
+    }
+    if (!linked && (typeof row.lead_id !== 'string'
       || typeof row.conversation_id !== 'string'
-      || typeof canonical?.businessId !== 'string'
-    ) {
+      || typeof canonical?.businessId !== 'string')) {
       summary.reconciliationRequired += 1;
       continue;
     }
@@ -451,13 +541,13 @@ export async function processPendingWhatsAppChatwootSync(input: {
         organizationId,
         route,
         event,
-        linked: {
+        linked: linked ?? {
           linked: true,
-          leadId: row.lead_id,
-          businessId: canonical.businessId,
-          identityId: typeof canonical.identityId === 'string' ? canonical.identityId : null,
-          conversationId: row.conversation_id,
-          messageId: typeof canonical.messageId === 'string' ? canonical.messageId : '',
+          leadId: row.lead_id!,
+          businessId: String(canonical!.businessId),
+          identityId: typeof canonical?.identityId === 'string' ? canonical.identityId : null,
+          conversationId: row.conversation_id!,
+          messageId: typeof canonical?.messageId === 'string' ? canonical.messageId : '',
         },
         fetchImpl: input.fetchImpl,
       });
