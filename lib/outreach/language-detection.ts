@@ -21,6 +21,7 @@ const arabicSignals = new Set([
   'مرحبا', 'مرحباً', 'اهلا', 'أهلا', 'ممكن', 'اريد', 'أريد', 'احتاج', 'أحتاج',
   'كيف', 'خدماتكم', 'خدمات', 'سعر', 'السعر', 'كم', 'موقع', 'الموقع', 'عندي', 'عندنا',
   'مطعم', 'عيادة', 'شركة', 'تسويق', 'انستغرام', 'إنستغرام', 'واتساب', 'شكرا', 'شكراً',
+  'السلام', 'عليكم', 'وعليكم', 'عندكم', 'اهلين', 'أهلين', 'هلا', 'حياك', 'فرشات', 'كامري',
 ]);
 
 const hindiSignals = new Set([
@@ -78,6 +79,9 @@ export function detectLanguageZeroCost(text: string): { language: DetectedLangua
     if (persianSpecific.test(value)) signals.push('PERSIAN_SPECIFIC_CHARS');
     if (urduSpecific.test(value)) return { language: 'ur', confidence: 0.93, signals };
     if (persianSpecific.test(value)) return { language: 'fa', confidence: 0.88, signals };
+    if (/^(?:الس[ّ]?لام\s+عل[يى]كم|وعل[يى]كم\s+الس[ّ]?لام|يا\s+هلا|هلا\s+والله)/u.test(value)) {
+      return { language: 'ar', confidence: 0.98, signals: [...signals, 'ARABIC_GREETING'] };
+    }
     if (signalHits(value, arabicSignals) >= 1) return { language: 'ar', confidence: 0.9, signals: [...signals, 'ARABIC_LEXICAL_SIGNAL'] };
     return { language: 'unknown', confidence: 0.6, signals: [...signals, 'ARABIC_SCRIPT_LANGUAGE_UNRESOLVED'] };
   }
