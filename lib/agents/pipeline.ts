@@ -307,7 +307,7 @@ export async function processInboundMessage(
     && !decision.useDiscount
     && !bookingToolResult
     && toolProposals.length === 0
-    && qualitySafety.checks.every((item) => item.disposition !== 'BLOCK' || item.key === 'EVIDENCE')
+    && qualitySafety.checks.every((item) => item.disposition !== 'BLOCK' || ['EVIDENCE', 'MONETARY_EVIDENCE'].includes(item.key))
   ) {
     const quoteRecovery = safeVehicleQuoteClarification(context);
     const recovery = quoteRecovery ?? safeOmaniConversationClarification(context);

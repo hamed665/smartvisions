@@ -11,6 +11,26 @@ export function vehicleDetailClarification(context: AgentContext, language: stri
     vehicle = updateAutomotiveSalesMemory({ previous: vehicle, body: item.body, item, evidence: {}, revisions: [] });
   }
   const missing = !vehicle.model && !vehicle.year ? 'both' : !vehicle.model ? 'model' : !vehicle.year ? 'year' : 'none';
+  // A verified vehicle plus a window-tint quote needs a relevant question, not
+  // a redundant model/year request or a photo of the car's windows.
+  const customerWindowContext = turns.some((turn) =>
+    /(?:window|windscreen|tint|زجاج|زجاجي|تظليل|عازل|شیشه|شيشه)/i.test(turn.body)
+  );
+  if (quote && missing === 'none' && customerWindowContext) {
+    const car = [vehicle.make, vehicle.model, vehicle.year].filter((part) => part != null).join(' ');
+    if (language.startsWith('ar')) return {
+      text: `بالنسبة لسيارتك ${car}، سعر تظليل كل الزجاج، وخصوصاً الزجاج الأمامي، يحتاج تأكيد من الفريق. تفضّل العازل الحراري أو تظليل للخصوصية؟`,
+      translation: 'برای خودرو ' + car + '، قیمت دودی تمام شیشه‌ها، به‌خصوص جلو، باید تأیید شود. عایق حرارتی را ترجیح می‌دهید یا دودی برای حریم خصوصی؟',
+    };
+    if (language.startsWith('fa')) return {
+      text: `برای ${car} قیمت دودی تمام شیشه‌ها، مخصوصاً شیشه جلو، باید تأیید بشه. بیشتر عایق حرارتی می‌خواید یا دودی برای حفظ حریم خصوصی؟`,
+      translation: 'برای ' + car + '، قیمت کامل دودی باید تأیید شود؛ گزینه حرارتی یا حریم خصوصی؟',
+    };
+    return {
+      text: `For your ${car}, the full-window tint price, especially for the windscreen, needs confirmation. Are you mainly after heat protection or privacy tint?`,
+      translation: 'برای خودروی ' + car + '، قیمت دودی تمام شیشه‌ها به‌خصوص جلو نیاز به تأیید دارد. عایق حرارتی می‌خواهید یا دودی برای حریم خصوصی؟',
+    };
+  }
   if (language.startsWith('ar')) {
     if (missing === 'both') return { text: 'أبشر، عشان نحدد المناسب لسيارتك، ممكن الموديل وسنة الصنع؟', translation: 'حتماً، برای بررسی گزینه مناسب، مدل و سال ساخت خودرو را می‌فرمایید؟' };
     if (missing === 'model') return { text: 'سنة الصنع واضحة، ممكن تذكر موديل السيارة؟', translation: 'سال ساخت مشخص است، مدل خودرو را می‌فرمایید؟' };
@@ -30,7 +50,7 @@ export function vehicleDetailClarification(context: AgentContext, language: stri
   const text = missing === 'both' ? "What's your car's model and year?"
     : missing === 'model' ? "I have the year. What's the car model?"
     : missing === 'year' ? "I have the model. What year is your car?"
-    : 'I have your vehicle details. '+(quote ? 'Final pricing and availability' : 'Compatibility')+' need staff confirmation. Could you send a photo of the area you want fitted?';
+    : 'I have your vehicle details. '+(quote ? 'The final price and availability' : 'Compatibility')+' need staff confirmation. Could you send a photo of the area you want fitted?';
   return { text, translation: missing === 'both' ? 'مدل و سال ساخت خودرو چیست؟' : missing === 'model' ? 'مدل خودرو چیست؟' : missing === 'year' ? 'سال ساخت خودرو چیست؟' : 'مشخصات خودرو مشخص است؛ تأیید مسئول لازم است. از بخش موردنظر عکس می‌فرستید؟' };
 }
 
@@ -62,12 +82,20 @@ export function safeVehicleQuoteClarification(
   if (!/(?:سعر|السعر|بكم|بكام|بقديش|جم\s*تسوون|كم\s*يطلع|تكلفة|قیمت|هزینه|price|cost|quote|how much)/i.test(recentCustomerMessages)) return null;
   if (!/(?:سيار|سيارة|السيارة|مقاعد|المقاعد|تلبيس|تلبيسات|تنجيد|عازل|تظليل|دواسات|فرش|كفبوش|كفپوش|تویوتا|تويوتا|نيسان|نیسان|لكزس|لکسوس|لاندكروزر|كامري|كورولا|خودرو|ماشین|روکش|مقعد|ppf|ceramic|vehicle|car|floor mats?|toyota|nissan|camry|corolla|seat|upholster)/i.test(recentCustomerMessages)) return null;
 
-  const language = resolveReplyLanguage({
+  const detectedLanguage = resolveReplyLanguage({
     message: context.message,
     primaryLocale: context.marketLocaleStyle?.primaryLocale ?? 'ar-OM',
     preferredLanguage: context.language,
     conversationHistory: context.conversationHistory,
   });
+  // Automotive model names dilute lexical confidence in short English price
+  // questions (e.g. "Toyota Land Cruiser 2022 all How much"). Recover only
+  // an explicit English price phrase in a Latin-only message, never from market
+  // language alone or from an ambiguous/mixed-script customer message.
+  const language = detectedLanguage === 'und'
+    && /^[A-Za-z0-9\s.,!?'"()\/-]+$/.test(currentMessage)
+    && /\b(?:how\s+much|price|cost|quote)\b/i.test(currentMessage)
+    ? 'en' : detectedLanguage;
   if (language === 'und') return null;
 
   if (!['ar', 'fa', 'en'].some((prefix) => language.startsWith(prefix))) return null;
