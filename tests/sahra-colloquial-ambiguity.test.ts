@@ -19,7 +19,8 @@ describe('Omani brief conversation follow-ups', () => {
   it('asks for fitment details without claiming stock for the customer’s car', () => {
     const result = safeOmaniConversationClarification(context);
     expect(result?.draft.text).toContain('فرش الأرضيات');
-    expect(result?.draft.text).toContain('الموديل');
+    expect(result?.draft.text).toContain('من أي سنة');
+    expect(result?.draft.text).not.toContain('ممكن الموديل');
     expect(result?.draft.text).not.toMatch(/متوفر|موجود|أكيد يركب|ريال/);
   });
 
