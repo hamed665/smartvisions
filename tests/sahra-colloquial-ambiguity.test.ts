@@ -32,6 +32,17 @@ describe('Omani brief conversation follow-ups', () => {
     expect(result?.draft.text).toContain('العازل الحراري');
   });
 
+  it('understands short Omani comparisons without forgetting the earlier tint topic', () => {
+    const result = safeOmaniConversationClarification({
+      ...context,
+      message: 'وش الفرق؟',
+      conversationHistory: [{ direction: 'INBOUND', body: 'بغيت دودي للجامات' }],
+    });
+    expect(result?.draft.language).toBe('ar-OM');
+    expect(result?.draft.text).toContain('العازل الحراري');
+    expect(result?.draft.text).not.toMatch(/متوفر|ريال|أكيد يركب/);
+  });
+
   it('prefers the customer’s newly named service over older conversation topics', () => {
     const result = safeOmaniConversationClarification({
       ...context,

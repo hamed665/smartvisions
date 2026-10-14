@@ -15,8 +15,10 @@ function normalizedAction(value: unknown): CommercialDecision['action'] | undefi
   return VALID_ACTIONS.has(action) ? action : undefined;
 }
 
-function directPriceQuestion(message: string) {
-  return /\b(?:price|cost|how much|pricing|what does .* cost)\b|(?:كم\s*(?:السعر|يكلف|تكلف|يطلع|تطلع|تسوى|يسوى)|بكم|بكام|بقديش|(?:جم|كم)\s*(?:تسوون|السعر|يكلف)|وش\s*(?:سعره|السعر)|شو\s*(?:سعره|السعر)|قديش|السعر|سعر|تكلفة|قيمة\s*(?:ال|هال)?)|(?:قیمت|هزینه|چقدر\s*(?:قیمت|هزینه|می[‌\s-]?شه|میشه|درمیاد|است|هست))/i.test(message);
+/** Recognize a price question even when written as informal Omani/Gulf chat.
+ * This is intent detection, never authority to quote an unverified amount. */
+export function directPriceQuestion(message: string) {
+  return /\b(?:price|cost|how much|pricing|what does .* cost)\b|(?:كم\s*(?:السعر|يكلف|تكلف|يطلع|تطلع|بيطلع|بيكلف|تسوى|يسوى|حسابه|حسابها)|بكم|بكام|بقديش|بجم|(?:جم|كم)\s*(?:تسوون|السعر|يكلف|يطلع|تطلع|بيطلع|بيكلف|حسابه|حسابها|كله|كلها|يكون)|وش\s*(?:سعره|السعر|يطلع)|شو\s*(?:سعره|السعر|يطلع)|قديش|شحال|السعر|سعر|تكلفة|قيمة\s*(?:ال|هال)?)|(?:قیمت|هزینه|چقدر\s*(?:قیمت|هزینه|می[‌\s-]?شه|میشه|درمیاد|است|هست)|چنده|چن\s*درمیاد)/i.test(message);
 }
 
 function canonicalQuote(context: AgentContext, decision: CommercialDecision) {

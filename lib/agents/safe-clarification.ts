@@ -1,6 +1,7 @@
 import type { AgentContext, ReplyDraft } from './contracts';
 import { resolveReplyLanguage } from '@/lib/outreach/locale';
 import { updateAutomotiveSalesMemory } from '@/lib/conversations/automotive-sales-memory';
+import { directPriceQuestion } from './executor-core';
 
 /** Resolve only customer-provided facts using the canonical automotive parser. */
 export function vehicleDetailClarification(context: AgentContext, language: string, quote = true) {
@@ -14,7 +15,7 @@ export function vehicleDetailClarification(context: AgentContext, language: stri
   // A verified vehicle plus a window-tint quote needs a relevant question, not
   // a redundant model/year request or a photo of the car's windows.
   const customerWindowContext = turns.some((turn) =>
-    /(?:window|windscreen|tint|زجاج|زجاجي|تظليل|عازل|شیشه|شيشه)/i.test(turn.body)
+    /(?:window|windscreen|glass|tint|زجاج|زجاجي|قزاز|جامات|الشبابيك|الشباك|تظليل|عازل|دودي|دودی|شیشه|شيشه)/i.test(turn.body)
   );
   if (quote && missing === 'none' && customerWindowContext) {
     const car = [vehicle.make, vehicle.model, vehicle.year].filter((part) => part != null).join(' ');
@@ -70,17 +71,18 @@ export function safeVehicleQuoteClarification(
     ...(context.conversationHistory ?? []).filter((message) => message.direction === 'INBOUND').slice(-6).map((message) => message.body),
     currentMessage,
   ].join(' ');
-  const isPriceRequest = /(?:سعر|السعر|بكم|بكام|بقديش|جم\s*(?:تسوون|يطلع|السعر)|كم\s*(?:يطلع|تطلع|يكلف|السعر)|وش\s*(?:سعره|السعر)|شو\s*(?:سعره|السعر)|تكلفة|قيمة|قیمت|هزینه|چقدر|price|cost|quote|how much)/i.test(currentMessage);
+  const isPriceRequest = directPriceQuestion(currentMessage) || /\bquote\b/i.test(currentMessage);
   // Single-make follow-ups require a real prior price/service request; never
   // revive old price context in response to a new location or complaint query.
   const isMakeFollowUp = /^(?:تویوتا|تويوتا|نیسان|نيسان|لكزس|لکسوس|لکسز|جيب|جیپ|فورد|هوندا|هيونداي|هیوندای|كيا|کیا|لاندكروزر|لاند کروزر|كورولا|كامري|يارس|برادو|باترول|صني|ألتيما|التيما|سنترا|راف4)(?:\s+[0-9۰-۹٠-٩]{2,4})?$/iu.test(currentMessage);
   const previousPriceRequest = (context.conversationHistory ?? []).some((turn) =>
     turn.direction === 'INBOUND'
-    && /(?:سعر|بكم|جم\s*تسوون|كم\s*يطلع|تكلفة|قیمت|هزینه|price|how much)/i.test(turn.body)
+    && (directPriceQuestion(turn.body) || /\bquote\b/i.test(turn.body))
   );
   if (!isPriceRequest && !(isMakeFollowUp && previousPriceRequest)) return null;
-  if (!/(?:سعر|السعر|بكم|بكام|بقديش|جم\s*تسوون|كم\s*يطلع|تكلفة|قیمت|هزینه|price|cost|quote|how much)/i.test(recentCustomerMessages)) return null;
-  if (!/(?:سيار|سيارة|السيارة|مقاعد|المقاعد|تلبيس|تلبيسات|تنجيد|عازل|تظليل|دواسات|فرش|كفبوش|كفپوش|تویوتا|تويوتا|نيسان|نیسان|لكزس|لکسوس|لاندكروزر|كامري|كورولا|خودرو|ماشین|روکش|مقعد|ppf|ceramic|vehicle|car|floor mats?|toyota|nissan|camry|corolla|seat|upholster)/i.test(recentCustomerMessages)) return null;
+  if (!directPriceQuestion(recentCustomerMessages) && !/\bquote\b/i.test(recentCustomerMessages)) return null;
+  if (!/(?:سيار|سيارة|السيارة|مقاعد|المقاعد|تلبيس|تلبيسات|تنجيد|عازل|تظليل|تضليل|دودي|دودی|قزاز|جامات|زجاج|شبابيك|دواسات|فرش|کفپوش|كفبوش|كفپوش|تویوتا|تويوتا|نيسان|نیسان|لكزس|لکسوس|لاندكروزر|كامري|كورولا|خودرو|ماشین|روکش|مقعد|ppf|ceramic|vehicle|car|glass|windows?|tint|floor mats?|toyota|nissan|camry|corolla|seat|upholster)/i.test(recentCustomerMessages)
+    && !context.salesState?.automotive?.service) return null;
 
   const detectedLanguage = resolveReplyLanguage({
     message: context.message,
@@ -92,7 +94,12 @@ export function safeVehicleQuoteClarification(
   // questions (e.g. "Toyota Land Cruiser 2022 all How much"). Recover only
   // an explicit English price phrase in a Latin-only message, never from market
   // language alone or from an ambiguous/mixed-script customer message.
-  const language = detectedLanguage === 'und'
+  const shortGulfPrice = detectedLanguage === 'und'
+    && currentMessage.length <= 85
+    && /[\u0600-\u06ff]/.test(currentMessage)
+    && !/[پچژگک‌ی]/.test(currentMessage)
+    && /(?:بجم|بكم|جم\s*(?:يطلع|تطلع|تسوون|حسابه|كله|كلها)|كم\s*(?:يطلع|تطلع|بيطلع|بيكلف|حسابه|كله)|وش\s*يطلع|شحال)/i.test(currentMessage);
+  const language = shortGulfPrice ? 'ar-OM' : detectedLanguage === 'und'
     && /^[A-Za-z0-9\s.,!?'"()\/-]+$/.test(currentMessage)
     && /\b(?:how\s+much|price|cost|quote)\b/i.test(currentMessage)
     ? 'en' : detectedLanguage;

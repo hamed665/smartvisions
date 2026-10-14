@@ -32,6 +32,12 @@ const cases: Array<[string, string, string | number]> = [
   ['صني', 'model', 'Sunny'],
   ['التيما', 'model', 'Altima'],
   ['RAV4', 'model', 'RAV4'],
+  ['دودي للجامات', 'service', 'THERMAL_TINT'],
+  ['privacy tint', 'service', 'THERMAL_TINT'],
+  ['تغميق القزاز', 'service', 'THERMAL_TINT'],
+  ['فرشات الأرض', 'service', 'FLOOR_MATS'],
+  ['ماتات السيارة', 'service', 'FLOOR_MATS'],
+  ['كفرات الكراسي', 'service', 'SEAT_UPHOLSTERY'],
   ['عازل حراري', 'service', 'THERMAL_TINT'],
   ['تظليل', 'service', 'THERMAL_TINT'],
   ['فرش أرضيات 5D', 'service', 'FLOOR_MATS'],
@@ -163,6 +169,19 @@ describe('Sahra automotive verified customer memory scenarios', () => {
     expect(inferAutomotiveFacts('عندكم فرش لتويوتا ولنيسان؟', at).make).toBeUndefined();
     expect(inferAutomotiveFacts('كامري وكورولا، شو الأفضل؟', at).model).toBeUndefined();
     expect(inferAutomotiveFacts('أبغي عازل وتلبيسات', at).service).toBeUndefined();
+  });
+
+  it('uses an explicit colloquial correction rather than guessing from both named services', () => {
+    expect(inferAutomotiveFacts('لا قصدي عازل مو فرش', at).service).toBe('THERMAL_TINT');
+    expect(inferAutomotiveFacts('لا قصدي فرشات الأرض مو دودي', at).service).toBe('FLOOR_MATS');
+    expect(inferAutomotiveFacts('I mean tint not seat covers', at).service).toBe('THERMAL_TINT');
+    expect(inferAutomotiveFacts('أبغي عازل وتلبيسات', at).service).toBeUndefined();
+    expect(inferAutomotiveFacts('جامات', at).service).toBeUndefined();
+    const history = [turn('أبغي فرش للاندكروزر ٢٠٢٢', 1),turn('لا قصدي عازل مو فرش', 2)];
+    const state = deriveSalesState({ history, automotiveBusiness: true, language: 'ar-OM' });
+    expect(state.automotive).toMatchObject({
+      make: 'Toyota', model: 'Land Cruiser', year: 2022, service: 'THERMAL_TINT',
+    });
   });
 
   it('accepts only a successfully transcribed voice for persistent customer vehicle facts', () => {
