@@ -6,6 +6,7 @@ import {
   operationalAlertCodeForBudgetMode,
   operationalAutomationAllowed,
   operationalChannelAllowed,
+  prioritizeFreshInbound,
   stableAgentRequestKey,
   type AutomationRuleSnapshot,
 } from '@/lib/operations/executor-core';
@@ -21,6 +22,14 @@ const baseSafety = {
 };
 
 describe('operational executor', () => {
+  it('admits a new customer reply before a full historical scan, without duplicate logical work', () => {
+    const history = Array.from({ length: 30 }, (_, i) => ({ id: `retained-${i}` }));
+    const candidates = prioritizeFreshInbound([{ id: 'new-customer' }, history[0]], history);
+    expect(candidates.slice(0, 5).map(row => row.id)).toContain('new-customer');
+    expect(candidates.filter(row => row.id === 'retained-0')).toHaveLength(1);
+    expect(candidates).toHaveLength(31);
+    expect(prioritizeFreshInbound([], history)).toEqual(history);
+  });
   it('uses provider ids for stable channel-scoped agent idempotency', () => {
     expect(stableAgentRequestKey('WHATSAPP', 'wamid.123')).toBe('agent:whatsapp:wamid.123');
     expect(stableAgentRequestKey('email', 'mail_123')).toBe('agent:email:mail_123');

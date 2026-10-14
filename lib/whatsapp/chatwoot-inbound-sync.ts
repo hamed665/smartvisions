@@ -382,7 +382,9 @@ export async function processPendingWhatsAppChatwootSync(input: {
   }
 
   const pending = await query
-    .order('created_at', { ascending: true })
+    // Historical unbound events can stay PENDING. Reconcile current inbound first
+    // so an eligible tenant message is not hidden behind the retained backlog.
+    .order('created_at', { ascending: false })
     .order('id', { ascending: true })
     .limit(limit);
   if (pending.error) throw new Error(`Pending WhatsApp Chatwoot sync lookup failed: ${pending.error.message}`);

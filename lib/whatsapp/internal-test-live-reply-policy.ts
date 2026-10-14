@@ -57,7 +57,8 @@ export function evaluateInternalTestLiveReplyPolicy(
   }
 
   const businessCategory = String(input.businessCategory ?? '').toUpperCase();
-  if (businessCategory === 'INTERNAL_TEST') {
+  const scopedOmanTest = config.allowVerifiedOmanInbound === true;
+  if (businessCategory === 'INTERNAL_TEST' && !scopedOmanTest) {
     if (configuredRecipient.length < 8) return { allowed: false, reason: 'RECIPIENT_UNAVAILABLE' };
     if (configuredRecipient !== businessRecipient || inboundFrom !== businessRecipient) {
       return { allowed: false, reason: 'RECIPIENT_NOT_EXACT_INTERNAL_TEST_BUSINESS' };
@@ -100,7 +101,7 @@ export function evaluateInternalTestLiveReplyPolicy(
   if (nowMs < startMs) return { allowed: false, reason: 'LIVE_TEST_NOT_STARTED' };
   if (nowMs >= endMs) return { allowed: false, reason: 'LIVE_TEST_EXPIRED' };
 
-  if (businessCategory !== 'INTERNAL_TEST') {
+  if (scopedOmanTest || businessCategory !== 'INTERNAL_TEST') {
     const inboundMs = Date.parse(input.inboundReceivedAt ?? '');
     if (!Number.isFinite(inboundMs) || inboundMs < startMs || inboundMs > nowMs
       || nowMs - inboundMs > 5 * 60_000) {

@@ -30,6 +30,17 @@ function base() {
 }
 
 describe('internal test live WhatsApp reply policy', () => {
+  it('uses the scoped consent path for a legacy INTERNAL_TEST contact without a legacy single recipient', () => {
+    const input = { ...base(), businessWhatsapp: '96890000001', inboundFrom: '96890000001',
+      tenantBusinessId: 'tenant-fixture', bindingId: 'binding-fixture', inboundReceivedAt: '2026-09-05T13:59:00Z',
+      ruleConfig: { internalTestLiveReply: { enabled: true, allowVerifiedOmanInbound: true, inboundOnly: true,
+        recipients: ['96890000001'], tenantBusinessId: 'tenant-fixture', bindingId: 'binding-fixture',
+        startsAt: '2026-09-05T13:30:00Z', endsAt: '2026-09-05T14:30:00Z', maxRepliesTotal: 20 } } };
+    expect(evaluateInternalTestLiveReplyPolicy(input).allowed).toBe(true);
+    expect(evaluateInternalTestLiveReplyPolicy({ ...input, tenantBusinessId: 'other' })).toEqual({ allowed: false, reason: 'LIVE_TEST_TENANT_BINDING_MISMATCH' });
+    expect(evaluateInternalTestLiveReplyPolicy({ ...input, inboundReceivedAt: '2026-09-05T13:54:00Z' })).toEqual({ allowed: false, reason: 'FRESH_WINDOW_INBOUND_REQUIRED' });
+    expect(evaluateInternalTestLiveReplyPolicy({ ...input, inboundFrom: '96890000002', businessWhatsapp: '96890000002' })).toEqual({ allowed: false, reason: 'RECIPIENT_NOT_CONSENTED' });
+  });
   it('allows only the exact INTERNAL_TEST recipient inside the short window while global approval and Shadow remain on', () => {
     expect(evaluateInternalTestLiveReplyPolicy(base())).toEqual({
       allowed: true,
