@@ -2,6 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { shouldBypassSession } from '@/lib/supabase/proxy';
 
 describe('session proxy bypass paths', () => {
+  it('lets exact mapping-scoped Chatwoot callbacks reach signature verification', () => {
+    expect(shouldBypassSession('/api/chatwoot/webhook/00000000-0000-4000-8000-000000001101')).toBe(true);
+    for (const path of [
+      '/api/chatwoot/webhook',
+      '/api/chatwoot/webhook/not-a-uuid',
+      '/api/chatwoot/webhook/00000000-0000-4000-8000-000000001101/extra',
+      '/api/chatwoot/sso/00000000-0000-4000-8000-000000001101',
+      '/api/chatwoot/tenant-bridge',
+    ]) expect(shouldBypassSession(path)).toBe(false);
+  });
+
   it('bypasses session auth for signed/public webhooks', () => {
     expect(shouldBypassSession('/api/email/webhook')).toBe(true);
     expect(shouldBypassSession('/api/whatsapp/webhook')).toBe(true);
@@ -21,6 +32,7 @@ describe('session proxy bypass paths', () => {
     expect(shouldBypassSession('/api/outreach/approved-send')).toBe(true);
     expect(shouldBypassSession('/api/operations/analytics-warehouse')).toBe(true);
     expect(shouldBypassSession('/api/operations/channel-guard')).toBe(true);
+    expect(shouldBypassSession('/api/operations/chatwoot-inbox-reconcile')).toBe(true);
     expect(shouldBypassSession('/api/operations/email-shadow')).toBe(true);
     expect(shouldBypassSession('/api/operations/heartbeat')).toBe(true);
     expect(shouldBypassSession('/api/operations/report')).toBe(true);
@@ -35,6 +47,7 @@ describe('session proxy bypass paths', () => {
     expect(shouldBypassSession('/api/ai/process-inbound/extra')).toBe(false);
     expect(shouldBypassSession('/api/operations/analytics-warehouse/extra')).toBe(false);
     expect(shouldBypassSession('/api/operations/tick/extra')).toBe(false);
+    expect(shouldBypassSession('/api/operations/chatwoot-inbox-reconcile/extra')).toBe(false);
     expect(shouldBypassSession('/api/operations/report/extra')).toBe(false);
     expect(shouldBypassSession('/api/operations/telegram-daily-digest/extra')).toBe(false);
     expect(shouldBypassSession('/api/telegram/webhook/extra')).toBe(false);
