@@ -1,3 +1,13 @@
+## Sahra owner-requested 200 daily replies — release preparation (2026-10-14)
+
+Owner explicitly requested 200 replies per Muscat day. Fresh Production read before this change shows enabled=true and dailyCap=60, with original USER/OWNER consent audit 5e603839-9388-4932-90c2-d05a8179f52f. Merely editing config to 200 would fail closed: TypeScript and PostgreSQL previously reject caps above 100 and SQL requires immutable owner consent matching the configured cap.
+
+This bounded change raises only the permanent inbound ceiling to 200, preserves the 20-reply / 90-minute pilot unchanged, renders the actual persisted cap in /system, and makes the authenticated OWNER enable action authorize 200/day with a fresh USER audit. Pause preserves the existing cap and consent. Shadow/general approval, emergency stops, canonical sender, customer-only scope, human takeover, DNC/suppression, idempotency, receipt verification, and existing USD 25 monthly / USD 3 WhatsApp Cost Guard remain enforced. No other tenant config or budget is changed.
+
+CI includes PostgreSQL acceptance for mismatched old consent, slot 200, receipt verification, duplicate claims, rejection of slot 201, over-ceiling config and unchanged RPC ACL. Migration 20261014122850_sahra_permanent_inbound_200_daily_cap.sql was generated with Supabase CLI 2.120.0; it replaces only the installed canonical verifier's permanent cap bound.
+
+Release gates remain exact-head CI, migration verification, exact-main/deploy, authenticated owner activation and Production cap/audit readback. As of preparation, the persisted cap is still 60. No 200/day activation or new customer-send evidence is claimed yet. PR #519 faster-trigger execution is still unverified; this volume change does not establish latency or voice/photo acceptance.
+
 ## Sahra faster inbound execution — implementation checkpoint (2026-10-14)
 
 User explicitly requested shorter WhatsApp response latency. Existing main `6616d553e607a16ff4ae47f62cb0ad7f179b6921` / PR #518 passed exact-head CI `38555302498`, exact-main CI `38555895643` (284 files / 2004 tests), and Production Deploy `38556391437` with routed smoke at 11:26:27Z. A new real inbound `6eb5056c-98a3-48b5-bb86-1a7b09f7c9b3` at 11:30:28Z produced corrected outbound `c0573586-ccbf-4c12-859d-7f93e3b120fb` with DELIVERED evidence, but retained the two-minute queue wait.
