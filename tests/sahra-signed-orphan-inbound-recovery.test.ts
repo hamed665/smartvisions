@@ -27,7 +27,7 @@ const route = {
   integrationConnectionId: '1812c00a-9ec0-4c81-97c3-2a529f55f691',
   phoneNumberId: event.destination.phoneNumberId, wabaId: event.destination.wabaId,
 };
-const input = {
+const input: Parameters<typeof recoverSahraUnlinkedInbound>[0] = {
   service: {} as SupabaseClient,
   row: {
     organization_id: SAHRA_FAST_SCOPE.organizationId,
@@ -83,7 +83,7 @@ describe('Sahra signed journal recovery after CRM lead provenance regression', (
     [{ row: { ...input.row, created_at: '2026-10-13T01:00:00Z' } }, 'older than one day'],
     [{ row: { ...input.row, created_at: '2026-10-14T15:24:50Z' } }, 'fresh inbound must use live webhook path'],
     [{ event: { ...event, type: 'unsupported' } }, 'unrecognized message type'],
-  ])('rejects %s: %s', async (override) => {
+  ] as Array<[Partial<Parameters<typeof recoverSahraUnlinkedInbound>[0]>, string]>)('rejects %s: %s', async (override) => {
     expect(await recoverSahraUnlinkedInbound({ ...input, ...override })).toBeNull();
     expect(mocks.resolve).not.toHaveBeenCalled();
     expect(mocks.lifecycle).not.toHaveBeenCalled();
