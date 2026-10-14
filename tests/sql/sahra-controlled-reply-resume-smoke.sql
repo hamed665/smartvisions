@@ -1,6 +1,9 @@
 \set ON_ERROR_STOP on
 begin;
 -- Only the existing disposable controlled-inbound CI fixture is touched.
+-- Production already grants this access behind the existing OWNER RLS policy;
+-- the legacy CI bootstrap omits the table grant. This grant rolls back below.
+grant select,update on public.sales_conversations to authenticated;
 update public.leads set status='HUMAN',agent_mode='HUMAN'
 where id=(select lead_id from public.outreach_messages where idempotency_key='ci:controlled-inbound:1');
 set local role authenticated;
