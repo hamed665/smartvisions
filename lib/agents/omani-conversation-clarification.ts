@@ -1,5 +1,6 @@
 import type { AgentContext, ReplyDraft } from './contracts';
 import { resolveReplyLanguage } from '@/lib/outreach/locale';
+import { vehicleDetailClarification } from './safe-clarification';
 
 function isOmaniAutomotive(context: AgentContext) {
   if (String(context.servingBusiness?.countryCode ?? context.countryCode ?? '').toUpperCase() !== 'OM') return false;
@@ -51,15 +52,10 @@ export function safeOmaniConversationClarification(context: AgentContext): {
   const led = ledPattern.test(topic);
   let text: string;
   let translation: string;
-  if (floorMats) {
-    text = 'إذا تقصد فرش الأرضيات، لازم نتأكد من المقاس المناسب لسيارتك. ممكن الموديل وسنة الصنع؟';
-    translation = 'اگر منظورت کفپوش خودروست، باید اندازه مناسب بررسی شود. مدل و سال ساخت را می‌فرمایید؟';
-  } else if (tint) {
-    text = 'إذا تقصد العازل الحراري، الاختيار يعتمد على السيارة والزجاج المطلوب. أي موديل وسنة الصنع عندك؟';
-    translation = 'اگر منظورت عازل حرارتی است، انتخاب به خودرو و شیشه‌های موردنظر بستگی دارد. مدل و سال ساخت چیست؟';
-  } else if (screen || led) {
-    text = 'بالنسبة للتوافق والتركيب، لازم نتأكد من تفاصيل السيارة أول. ممكن الموديل وسنة الصنع؟';
-    translation = 'برای سازگاری و نصب باید اول مشخصات خودرو بررسی شود. مدل و سال ساخت را می‌فرمایید؟';
+  if (floorMats || tint || screen || led) {
+    const clarification = vehicleDetailClarification(context, 'ar-OM', false);
+    text = clarification.text;
+    translation = clarification.translation;
   } else {
     text = 'حياك، ممكن توضّح أي خدمة تقصد عشان أعطيك جواب مضبوط؟';
     translation = 'خوش آمدید، می‌شود بگویید کدام خدمت را می‌خواهید تا پاسخ دقیقی بدهم؟';
