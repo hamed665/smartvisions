@@ -22,6 +22,7 @@ export default async function SystemPage(){
     role==='OWNER'?loadChatwootReadiness({supabase,organizationId}):Promise.resolve(null),
   ]);
   const rules=ruleData??[];const editable=role==='OWNER';
+  const sahraPolicy = ((rules.find(r=>r.action_key==='WHATSAPP_OUTBOUND')?.config as Record<string,unknown>|null)?.permanentInboundReply as Record<string,unknown>|undefined);
   const monthSpend=(usage??[]).reduce((sum,row)=>sum+Number(row.cost_usd??0),0);
   const enabledMarkets=(outreach??[]).filter(row=>row.enabled).length;
   const manualMarkets=(outreach??[]).filter(row=>row.enabled&&row.manual_review_required).length;
@@ -43,9 +44,9 @@ export default async function SystemPage(){
     {role==='OWNER'&&organizationId==='4824ef22-a53e-480f-b40e-be901e891a03'&&<section className="panel">
       <h2>Sahra WhatsApp customer-initiated auto-replies</h2>
       <p className="muted">Owner-only, ongoing inbound service replies for the verified Sahra Meta number. Shadow and global approval remain on. Only fresh, verified customer-initiated messages, never first-touch advertising. Human takeover, suppression and Cost Guard stay enforced.</p>
-      <p>Current status: <strong>{((rules.find(r=>r.action_key==='WHATSAPP_OUTBOUND')?.config as Record<string,unknown>|null)?.permanentInboundReply as Record<string,unknown>|undefined)?.enabled===true?'ENABLED':'DISABLED'}</strong> · Daily safety cap 60 replies · No lifetime expiry</p>
+      <p>Current status: <strong>{sahraPolicy?.enabled===true?'ENABLED':'DISABLED'}</strong> · Daily safety cap {typeof sahraPolicy?.dailyCap==='number'?sahraPolicy.dailyCap:'Not configured'} replies · No lifetime expiry</p>
       <div className="settingsRow">
-        <form action={configureSahraInboundService}><input type="hidden" name="enable" value="true"/><button disabled={!editable}>Enable Sahra inbound replies</button></form>
+        <form action={configureSahraInboundService}><input type="hidden" name="enable" value="true"/><button disabled={!editable}>Enable Sahra inbound replies (200/day)</button></form>
         <form action={configureSahraInboundService}><input type="hidden" name="enable" value="false"/><button disabled={!editable}>Pause Sahra inbound replies</button></form>
       </div>
     </section>}
