@@ -28,6 +28,8 @@ export function safeOmaniConversationClarification(context: AgentContext): {
     .map(turn => automotiveServiceCandidates(turn.body))
     .find(items => items.length === 1)?.[0] ?? context.salesState?.automotive?.service;
   const hasShortService = currentServices.length > 0;
+  // Silence is better than inventing an offer after a bare acknowledgement.
+  if (/^(?:ok(?:ay)?|yes|no|hi|hello|تمام|اوكي|أوكي|نعم|لا|شكرا|thanks)[؟?!. ]*$/iu.test(message)) return null;
   const contextualFollowUp = /^(?:كم|جم|بكم|بجم|شحال|موجود|متوفر|يركب|تنفع|شو الفرق|وش الفرق|شو تنصح|وش تنصح|تنصحني|شو رايك|وش رايك|how much|price|available|which one|what about)(?:\s+[^؟?!.]{0,32})?[؟?!. ]*$/iu.test(message);
   const explicitEnquiry = /(?:عندكم|عندكو|عندك|تركبون|تركبونه|يركب|ينفع|يناسب|تضبط|تضبطون|شو تنصح|وش تنصح|تنصحني|شو رايك|وش رايك|شو الفرق|وش الفرق|أبغي|ابغي|اريد|أريد|ابي|بغيت|هل يصلح|نفس هذا|هذا يضبط|حق ال|للاند|للتويوتا|للجيب|need|want|looking for|have|price|how much)/i.test(message);
   if (!hasShortService && !explicitEnquiry && !(priorService && contextualFollowUp)) return null;
