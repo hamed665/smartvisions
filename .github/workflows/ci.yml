@@ -446,6 +446,14 @@ jobs:
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f /work/tests/sql/sahra-controlled-reply-resume-smoke.sql
 
+      - name: Verify Business-scoped Unified Inbox projection and replay
+        env:
+          PGPASSWORD: postgres
+        run: |
+          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
+            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f /work/tests/sql/comm-unified-inbox-business-scope-smoke.sql
+
       - name: Verify receipt-backed Chatwoot Account recovery and concurrency
         env:
           PGPASSWORD: postgres

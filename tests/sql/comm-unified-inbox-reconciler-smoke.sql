@@ -259,5 +259,3 @@ end;
 $acl$;
 
 rollback;
-
-\ir comm-unified-inbox-business-scope-smoke.sql
