@@ -39,7 +39,7 @@ const models: Array<[string, string, RegExp]> = [
 ];
 const services: Array<[AutomotiveService, RegExp]> = [
   ['THERMAL_TINT', /(?:عازل\s*حراري|عازل\s*حرارتی|عازل|تظليل|تضليل|تنت|تنتينج|دودي|دودی|تغميق\s*(?:ال)?(?:جام|قزاز|زجاج|شبابيك)|(?:tint|tinted|tinting)(?:\s*(?:the|all|my|car|windows?|glass))?|window\s*(?:film|tint)|heat rejection|privacy\s*(?:film|tint))/i],
-  ['FLOOR_MATS', /(?:أرضيات|ارضيات|فرش\s*(?:أرضيات|ارضيات|ارض)|فرشات\s*(?:الأرض|الارض|السيارة)|دواسات|ماتات\s*(?:السيارة|لل سيارة)?|كفپوش|کفپوش|(?:^|[^\p{L}\d])(?:5d|3d)(?![\p{L}\d])|5d\s*(?:mat|فرش)|3d\s*(?:mat|فرش)|floor mats?)/i],
+  ['FLOOR_MATS', /(?:أرضيات|ارضيات|فرش\s*(?:أرضيات|ارضيات|ارض)|فرشات\s*(?:الأرض|الارض|السيارة)|دواسات|ماتات\s*(?:السيارة|لل سيارة)?|كفپوش|کفپوش|(?:^|[^\w\u0600-\u06FF])(?:5d|3d)(?![\w\u0600-\u06FF])|5d\s*(?:mat|فرش)|3d\s*(?:mat|فرش)|floor mats?)/i],
   ['SEAT_UPHOLSTERY', /(?:تلبيس|تلبيسات|تنجيد|تودوزی|روکش|كفرات\s*(?:الكراسي|المقاعد)|جلد\s*(?:الكراسي|المقاعد)|كرسي\s*سيارة|seat covers?|upholster)/i],
   ['PPF', /(?:\bppf\b|paint protection film|حماية\s*(?:البوية|البودي|الطلاء)|افلام\s*حماية)/i],
   ['CERAMIC_COATING', /(?:سيراميك|سرامیک|ceramic\s*(?:coating|paint)|نانو\s*سيراميك)/i],
