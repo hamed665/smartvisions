@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AgentResult } from '@/lib/agents/contracts';
 import type { AgentRuntime } from '@/lib/agents/runtime';
 import { processInboundMessage } from '@/lib/agents/pipeline';
+import { safeOmaniConversationClarification } from '@/lib/agents/omani-conversation-clarification';
 import { safeVehicleQuoteClarification } from '@/lib/agents/safe-clarification';
 
 const conversationHistory = [{ direction: 'INBOUND' as const, body: 'كم سعر تلبيسات المقاعد للسيارة؟' }];
@@ -78,5 +79,74 @@ describe('Sahra conversation resilience', () => {
       servingBusiness: { name: 'Example', countryCode: 'AE' },
       countryCode: 'AE',
     })).toBeNull();
+  });
+});
+
+describe('known customer vehicle regression', () => {
+  it.each(['٢٠٢٢', '۲۰۲۲', '2022'])('does not ask again for Camry model/year %s', (year) => {
+    const recovered = safeVehicleQuoteClarification({
+      ...context, message: 'السلام عليكم، عندكم فرش أرضيات لتويوتا كامري '+year+'؟ وكم السعر؟',
+    });
+    expect(recovered?.draft.text).toContain('بيانات سيارتك واضحة');
+    expect(recovered?.draft.text).not.toMatch(/الموديل|سنة الصنع|٣٧|37|ضمان/);
+    expect(recovered?.draft.text).toContain('تأكيد المسؤول');
+  });
+
+  it('asks only for the year when the model is already known', () => {
+    const recovered = safeVehicleQuoteClarification({ ...context, message: 'كم سعر فرش تويوتا كامري؟' });
+    expect(recovered?.draft.text).toContain('من أي سنة');
+    expect(recovered?.draft.text).not.toContain('ممكن الموديل');
+  });
+
+  it('asks only for the model when the year is already known', () => {
+    const recovered = safeVehicleQuoteClarification({ ...context, message: 'كم سعر فرش تويوتا ٢٠٢٢؟' });
+    expect(recovered?.draft.text).toContain('ممكن تذكر موديل');
+    expect(recovered?.draft.text).not.toContain('سنة الصنع؟');
+  });
+
+  it('preserves customer facts across turns without treating outgoing claims as facts', () => {
+    const recovered = safeVehicleQuoteClarification({
+      ...context, message: 'بكم؟',
+      conversationHistory: [
+        { direction: 'INBOUND', body: 'فرش أرضيات لكامري ٢٠٢٢' },
+        { direction: 'OUTBOUND', body: 'هل سيارتك نيسان باترول ٢٠٢٠؟' },
+      ],
+    });
+    expect(recovered?.draft.text).toContain('بيانات سيارتك واضحة');
+  });
+
+  it('clears the old model after a customer changes the make', () => {
+    const recovered = safeVehicleQuoteClarification({
+      ...context, message: 'كم سعر الفرش للنيسان؟',
+      conversationHistory: [{ direction: 'INBOUND', body: 'كامري ٢٠٢٢' }],
+    });
+    expect(recovered?.draft.text).toContain('ممكن تذكر موديل');
+  });
+
+  it('uses the same known-fact boundary for colloquial compatibility enquiries', () => {
+    const recovered = safeOmaniConversationClarification({
+      ...context, message: 'عندكم فرش أرضيات لكامري ٢٠٢٢؟',
+    });
+    expect(recovered?.draft.text).toContain('بيانات سيارتك واضحة');
+    expect(recovered?.draft.text).not.toMatch(/الموديل|سنة الصنع/);
+  });
+
+  it('keeps known facts in the evidence-only pipeline recovery and retains shadow review', async () => {
+    const result = await processInboundMessage({
+      ...context, message: 'السلام عليكم، عندكم فرش أرضيات لتويوتا كامري ٢٠٢٢؟ وكم السعر؟',
+    }, { agentsPaused: false }, modelWithBlockers());
+    expect(result.trace.guardrails).toContain('SAFE_VEHICLE_QUOTE_CLARIFICATION_RECOVERY');
+    expect(result.trace.delivery).toBe('REVIEW');
+    expect(result.draft.text).not.toMatch(/الموديل|سنة الصنع/);
+    expect(result.draft.text).toContain('تأكيد المسؤول');
+  });
+
+  it.each([
+    ['fa', 'قیمت کفپوش تویوتا کمری ۲۰۲۲ چقدر است؟'],
+    ['en', 'How much for floor mats for a Toyota Camry 2022?'],
+  ])('preserves supplied model/year in %s', (language, message) => {
+    const recovered = safeVehicleQuoteClarification({ ...context, language, message, conversationHistory: [] });
+    expect(recovered).not.toBeNull();
+    expect(recovered?.draft.text).not.toMatch(/مدل و سال|model and year/);
   });
 });
