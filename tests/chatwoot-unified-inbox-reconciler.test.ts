@@ -41,6 +41,7 @@ function serviceFor(events: unknown[]) {
   const builder = {
     select: vi.fn(() => builder),
     eq: vi.fn(() => builder),
+    gte: vi.fn(() => builder),
     order: vi.fn(() => builder),
     limit: vi.fn(async () => ({ data: events, error: null })),
   };
@@ -62,7 +63,7 @@ function serviceFor(events: unknown[]) {
     from: vi.fn(() => builder),
     rpc,
   };
-  return { service, rpc };
+  return { service, rpc, builder };
 }
 
 afterEach(() => {
@@ -94,6 +95,18 @@ describe('Unified Inbox webhook journal processor', () => {
     );
   });
 
+  it('bounds fast preparation to the exact tenant, mapping and recent signed journal', async () => {
+    const {service, builder} = serviceFor([boundEvent()]);
+    serviceFactory.mockReturnValue(service);
+    const scope = {organizationId:'sahra-org', tenantBusinessId:'sahra-business',
+      inboxMappingId:'sahra-inbox', receivedAfter:'2026-10-14T12:00:00Z'};
+    await processPendingChatwootInboxEvents({scope, limit:2});
+    expect(builder.eq).toHaveBeenCalledWith('organization_id', scope.organizationId);
+    expect(builder.eq).toHaveBeenCalledWith('tenant_business_id', scope.tenantBusinessId);
+    expect(builder.eq).toHaveBeenCalledWith('chatwoot_inbox_mapping_id', scope.inboxMappingId);
+    expect(builder.gte).toHaveBeenCalledWith('received_at', scope.receivedAfter);
+    expect(builder.limit).toHaveBeenCalledWith(2);
+  });
   it('terminally ignores an unbound Chatwoot conversation instead of guessing linkage', async () => {
     const event = boundEvent();
     (event.payload.additional_attributes as Record<string, unknown>) = {};

@@ -362,6 +362,8 @@ export async function processPendingWhatsAppChatwootSync(input: {
   service: SupabaseClient;
   organizationId?: string;
   bindingId?: string;
+  receivedAfter?: string;
+  inboundOnly?: boolean;
   limit?: number;
   fetchImpl?: typeof fetch;
 }) {
@@ -380,6 +382,8 @@ export async function processPendingWhatsAppChatwootSync(input: {
   if (input.bindingId) {
     query = query.contains('payload', { routing: { bindingId: input.bindingId } });
   }
+
+  if (input.receivedAfter) query = query.gte('created_at', input.receivedAfter);
 
   const pending = await query
     // Historical unbound events can stay PENDING. Reconcile current inbound first
@@ -466,6 +470,9 @@ export async function processPendingWhatsAppChatwootSync(input: {
     }
   }
 
+
+  // Fast customer-inbound preparation never replays native outbound echoes.
+  if (input.inboundOnly) return summary;
 
   let nativeQuery = input.service
     .from('whatsapp_events')

@@ -1,3 +1,4 @@
+export const SAHRA_FRESH_INBOUND_MS = 5 * 60_000;
 export const SAHRA_FAST_CRON = '* * * * *';
 export const SAHRA_FAST_SCOPE = {
   organizationId: '4824ef22-a53e-480f-b40e-be901e891a03',
@@ -20,7 +21,7 @@ export type FastWindowDependencies = {
   run: (candidate: FastInboundCandidate) => Promise<FastInboundResult>;
 };
 export type FastWindowMetrics = {
-  scans: number; attempted: number; sent: number; blocked: number; failed: number; disabled: boolean;
+  scans: number; attempted: number; sent: number; blocked: number; failed: number; disabled: boolean; deferred: number; reasons: Record<string, number>;
 };
 
 export function selectFreshSahraInbound(rows: FastInboundCandidate[], now: number) {
@@ -33,7 +34,7 @@ export function selectFreshSahraInbound(rows: FastInboundCandidate[], now: numbe
       || row.metadata.communication_channel_binding_id !== SAHRA_FAST_SCOPE.bindingId
       || typeof conversationId !== 'string' || !conversationId
       || !row.id || !row.provider_message_id
-      || !Number.isFinite(at) || at > now || now - at > 120_000
+      || !Number.isFinite(at) || at > now || now - at > SAHRA_FRESH_INBOUND_MS
       || !['text', 'audio', 'voice'].includes(String(row.metadata.type ?? '').toLowerCase())) continue;
     const previous = latest.get(conversationId);
     if (!previous || Date.parse(previous.received_at) < at) latest.set(conversationId, row);
@@ -48,7 +49,7 @@ export async function runSahraFastWindow(
   scheduledTime: number | undefined,
   dependencies: FastWindowDependencies,
 ): Promise<FastWindowMetrics> {
-  const metrics: FastWindowMetrics = { scans: 0, attempted: 0, sent: 0, blocked: 0, failed: 0, disabled: false };
+  const metrics: FastWindowMetrics = { scans: 0, attempted: 0, sent: 0, blocked: 0, failed: 0, disabled: false, deferred: 0, reasons: {} };
   if (deploymentEnv?.trim().toLowerCase() !== 'production'
     || scheduledTime == null || !Number.isFinite(scheduledTime)
     || scheduledTime > dependencies.now() || dependencies.now() - scheduledTime >= 60_000) return metrics;
@@ -67,6 +68,9 @@ export async function runSahraFastWindow(
         // Each invocation still goes through the atomic persisted inbound claim
         // and exact canonical approval/send gate. Full tick races cannot send twice.
         const result = await dependencies.run(row);
+        const reason = /^[A-Z0-9_]{1,100}$/.test(result.reason) ? result.reason : 'OTHER';
+        metrics.reasons[reason] = (metrics.reasons[reason] ?? 0) + 1;
+        if (!result.attempted && !result.sent) metrics.deferred++;
         if (result.attempted) metrics.attempted++;
         if (result.sent) metrics.sent++;
         else if (result.attempted) metrics.blocked++;

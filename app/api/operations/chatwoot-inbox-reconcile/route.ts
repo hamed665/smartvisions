@@ -16,11 +16,11 @@ export async function POST(request: Request) {
 
   try {
     const service = createSupabaseServiceClient();
-    const summary = await processPendingChatwootInboxEvents({ limit, supabase: service });
     const whatsappInbound = await processPendingWhatsAppChatwootSync({
       service,
       limit,
     });
+    const summary = await processPendingChatwootInboxEvents({ limit, supabase: service });
     return NextResponse.json({
       ...summary,
       whatsappInbound,
