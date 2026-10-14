@@ -238,6 +238,7 @@ export async function processInboundMessage(
     replyLanguage: draft.language,
     replyText: draft.text,
     conversationHistory: context.conversationHistory,
+    primaryLocale: context.marketLocaleStyle?.primaryLocale,
   });
   const salesBehavior = evaluateSalesReplyPolicy({ context, draft, decision });
   const deterministicRelevance = checkRelevance(context, draft)

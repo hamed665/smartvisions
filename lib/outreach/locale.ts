@@ -69,6 +69,61 @@ export function detectHighConfidenceMessageLanguage(message: string): Exclude<De
   return detected.language;
 }
 
+/**
+ * Bounded customer-language continuity for Sahra's Omani car-care vocabulary.
+ * A technical product name is not proof of an English language switch.
+ * Do not let this specialization affect other markets or general conversations.
+ */
+export function resolveOmaniAutomotiveShortLanguage(input: {
+  message: string;
+  primaryLocale?: string;
+  preferredLanguage?: string;
+  conversationHistory?: ConversationLanguageTurn[];
+}): string | null {
+  if (input.primaryLocale?.toLowerCase() !== 'ar-om') return null;
+  const text = input.message.trim().normalize('NFKC');
+  if (!text || text.length > 100) return null;
+  const prev = [...(input.conversationHistory ?? [])].reverse()
+    .filter(turn => turn.direction === 'INBOUND').slice(0, 8)
+    .map(turn => detectHighConfidenceMessageLanguage(turn.body))
+    .find(lang => lang === 'ar' || lang === 'en' || lang === 'fa');
+  const previous = prev === 'ar' ? 'ar-OM' : prev ?? (
+    /^(?:ar|en|fa)(?:-|$)/i.test(input.preferredLanguage ?? '')
+      ? input.preferredLanguage! : null
+  );
+  const romanService = /\b(?:ppf|5d|3d|led|carplay|android|screen|screens|tint|tinting|ceramic|floor\s*mats?|seat\s*covers?|head\s*unit)\b/i;
+  const arabicService = /(?:عازل|تظليل|تضليل|دودي|شاشات|شاشة|شاشه|اندرويد|أندرويد|كاربلاي|كار\s*بلاي|ارضيات|أرضيات|فرشات|دواسات|تنجيد|تلبيسات|حماية|سيراميك|مقاعد|كراسي)/i;
+  // Full Persian, Urdu and other-language questions must not be force-labeled
+  // Arabic just because the product name is a familiar Latin abbreviation.
+  if (/[پچژگک‌یٹڈڑںھہۓے]/.test(text)
+    && !/^(?:تويوتا|تویوتا|نيسان|نیسان|هيونداي|هیوندای)\s*$/iu.test(text)) return null;
+
+  const neutralShort = /^(?:(?:ppf|5d|3d|led|carplay|android|screen|screens|tint|ceramic|floor\s*mats?|head\s*unit|price|cost|available)|(?:عازل|تظليل|دودي|شاشات|شاشة|ارضيات|أرضيات|فرشات|سيراميك|تنجيد|تلبيسات|تمام|زين|اوكي|أوكي|اي|إي|ايوه|أيوا|نعم|لا|موجود|متوفر|ينفع|تنفع|يركب|ok|okay|yep|yup|yes|no|sure))[؟?!.,،\s]*$/iu.test(text);
+  if (neutralShort) {
+    if (/^(?:ok|okay|yep|yup|yes|no|sure|تمام|زين|اوكي|أوكي|اي|إي|ايوه|أيوا|نعم|لا)[؟?!.,،\s]*$/iu.test(text)) {
+      return previous ?? (/[\u0600-\u06FF]/.test(text) ? 'ar-OM' : 'en');
+    }
+    return previous ?? (/[A-Za-z]/.test(text) && !/^(?:ppf|5d|3d|led|carplay|android)$/i.test(text)
+      ? 'en' : 'ar-OM');
+  }
+
+  // A complete English sentence with an Arabic product name remains English.
+  if (/^(?:i\s+)?(?:need|want|looking\s+for|do\s+you\s+have|can\s+you|how\s+much|price\s+for)\b/i.test(text)
+    && arabicService.test(text)) return 'en';
+  // Omani syntax plus a Latin technical word remains Omani Arabic.
+  const omaniSyntax = /(?:^|\s)(?:في\s+)?(?:عندكم|عندك|عندكو|ابي|أبي|ابغي|أبغي|بغيت|ممكن|كم|جم|بجم|بكم|وش|شو|للسيارة|حق|تركيب|تركبون|يصلح|السعر|سعر|موجود|متوفر)(?:\s|$|[؟?،])/iu;
+  if (romanService.test(text) && /[\u0600-\u06FF]/.test(text)
+    && (omaniSyntax.test(text) || arabicService.test(text))) return 'ar-OM';
+  // A short Arabic-only service question can be unrecognized by the generic
+  // marketing lexicon, but still be obvious in the automotive domain.
+  if (!/[A-Za-z]/.test(text) && previous?.startsWith('ar')
+    && /(?:عندكم|عندكو|عندك|شو|وش|تنصح|بغيت|ابغي|أبغي|حلو|زين|حق|يناسب|بكم|بجم)/iu.test(text))
+    return 'ar-OM';
+  if (!/[A-Za-z]/.test(text) && arabicService.test(text)
+    && !/[پچژگک‌ی]/.test(text)) return 'ar-OM';
+  return null;
+}
+
 export function resolveReplyLanguage(input: {
   message: string;
   primaryLocale: string;
@@ -77,6 +132,8 @@ export function resolveReplyLanguage(input: {
   marketCode?: MarketCode;
   conversationHistory?: ConversationLanguageTurn[];
 }) {
+  const omaniShort = resolveOmaniAutomotiveShortLanguage(input);
+  if (omaniShort) return omaniShort;
   if (isAutomotiveBrandOnly(input.message) && hasRecentArabicCustomerTurn(input.conversationHistory)) {
     return normalizeDetectedLanguage('ar', input.marketCode, input.primaryLocale);
   }
@@ -111,9 +168,17 @@ export function replyMatchesHighConfidenceMessageLanguage(input: {
   replyLanguage?: string;
   replyText: string;
   conversationHistory?: ConversationLanguageTurn[];
+  primaryLocale?: string;
 }) {
   const detected = detectLanguageZeroCost(input.message);
   const replyLanguage = String(input.replyLanguage ?? '').toLowerCase();
+  const scopedLanguage = resolveOmaniAutomotiveShortLanguage(input);
+  if (scopedLanguage) {
+    if (!replyLanguage.startsWith(scopedLanguage.toLowerCase().split('-')[0])) return false;
+    const script = dominantScript(input.replyText);
+    return script === (scopedLanguage.startsWith('en') ? 'LATIN' : 'ARABIC')
+      || script === 'OTHER';
+  }
   const automotiveArabicContinuity = isAutomotiveBrandOnly(input.message)
     && hasRecentArabicCustomerTurn(input.conversationHistory) && replyLanguage.startsWith('ar');
 

@@ -162,7 +162,7 @@ describe('known customer vehicle regression', () => {
       ...context, message: 'كم سعر الفرش للنيسان؟',
       conversationHistory: [{ direction: 'INBOUND', body: 'كامري ٢٠٢٢' }],
     });
-    expect(recovered?.draft.text).toContain('ممكن تذكر موديل');
+    expect(recovered?.draft.text).toContain('الموديل وسنة الصنع');
   });
 
   it('uses the same known-fact boundary for colloquial compatibility enquiries', () => {

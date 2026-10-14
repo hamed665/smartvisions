@@ -1,6 +1,7 @@
 import type { AgentContext, ReplyDraft } from './contracts';
 import { resolveReplyLanguage } from '@/lib/outreach/locale';
 import { vehicleDetailClarification } from './safe-clarification';
+import { automotiveServiceCandidates, type AutomotiveService } from '@/lib/conversations/automotive-sales-memory';
 
 function isOmaniAutomotive(context: AgentContext) {
   if (String(context.servingBusiness?.countryCode ?? context.countryCode ?? '').toUpperCase() !== 'OM') return false;
@@ -20,58 +21,64 @@ export function safeOmaniConversationClarification(context: AgentContext): {
   if (!isOmaniAutomotive(context)) return null;
   const message = context.message.trim().normalize('NFKC');
   if (!message || message.length > 85 || NON_SALES_REQUEST.test(message)) return null;
-  if (!/(?:عندكم|عندكو|عندك|تركبون|تركبونه|يركب|ينفع|يناسب|تضبط|تضبطون|شو تنصح|وش تنصح|تنصحني|شو رايك|وش رايك|شو الفرق|وش الفرق|شو احسن|وش احسن|شو الأفضل|وش الأفضل|أبغي|ابغي|اريد|أريد|ابي|بغيت|هل يصلح|نفس هذا|هذا يضبط|حق ال|للاند|للتويوتا|للجيب)/i.test(message)) return null;
+  const currentServices = automotiveServiceCandidates(message);
+  const history = (context.conversationHistory ?? [])
+    .filter(turn => turn.direction === 'INBOUND').slice(-6);
+  const priorService = [...history].reverse()
+    .map(turn => automotiveServiceCandidates(turn.body))
+    .find(items => items.length === 1)?.[0] ?? context.salesState?.automotive?.service;
+  const hasShortService = currentServices.length > 0;
+  const contextualFollowUp = /^(?:كم|جم|بكم|بجم|شحال|موجود|متوفر|يركب|تنفع|شو الفرق|وش الفرق|شو تنصح|وش تنصح|تنصحني|شو رايك|وش رايك|how much|price|available|which one|what about)(?:\s+[^؟?!.]{0,32})?[؟?!. ]*$/iu.test(message);
+  const explicitEnquiry = /(?:عندكم|عندكو|عندك|تركبون|تركبونه|يركب|ينفع|يناسب|تضبط|تضبطون|شو تنصح|وش تنصح|تنصحني|شو رايك|وش رايك|شو الفرق|وش الفرق|أبغي|ابغي|اريد|أريد|ابي|بغيت|هل يصلح|نفس هذا|هذا يضبط|حق ال|للاند|للتويوتا|للجيب|need|want|looking for|have|price|how much)/i.test(message);
+  if (!hasShortService && !explicitEnquiry && !(priorService && contextualFollowUp)) return null;
   const language = resolveReplyLanguage({
     message,
     primaryLocale: context.marketLocaleStyle?.primaryLocale ?? 'ar-OM',
     preferredLanguage: context.language,
     conversationHistory: context.conversationHistory,
   });
-  // A short, specifically Omani/Gulf advice idiom can have low language
-  // confidence. Preserve established Arabic; never do this for a long message
-  // or one containing a clear Persian price/service question.
-  const establishedArabicShortAdvice = language === 'und'
-    && String(context.language ?? '').startsWith('ar')
-    && !/[پچژگک‌ی]/.test(message)
-    && /^(?:(?:شو|وش)\s+(?:تنصح|رايك|رأيك|الفرق|احسن|أحسن|الأفضل|افضل)|تنصحني)(?:\s+[^؟?!.]{1,50})?[؟?!. ]*$/u.test(message);
-  // "في عندكم ارضيات 5d؟" is a short, unmistakably Omani service
-  // availability question. Mixed Latin 5D can lower lexical language
-  // confidence; never silently discard an otherwise safely answerable turn.
-  // Do not infer Arabic for Persian or unrelated one-word messages.
-  const establishedArabicServiceQuestion = language === 'und'
-    && !/[پچژگک‌ی]/.test(message)
-    && /^(?:في\s+)?(?:عندكم|عندكو|عندك|تركبون)\s+[^؟?!.]{2,55}[؟?!. ]*$/u.test(message)
-    && /(?:ارضيات|أرضيات|فرشات|دواسات|ماتات|5d|3d|عازل|تظليل|شاشات|اندرويد|أندرويد|شاشة|ليد|led)/i.test(message);
-  if (!language.startsWith('ar') && !establishedArabicShortAdvice && !establishedArabicServiceQuestion) return null;
-  const floorMatPattern = /(?:فرش ارض|فرش أرض|فرشات\s*(?:الارض|الأرض|السيارة)|دواسات|كفبوش|كفپوش|ماتات|floor mat|5d|3d)/i;
-  const tintPattern = /(?:عازل|تظليل|تضليل|جامات|قزاز|زجاج|الشبابيك|دودي|دودی|تنت|window film|tint|ضد الحر)/i;
-  const screenPattern = /(?:شاشه|شاشة|شاشات|كار بلاي|كاربلاي|carplay|اندرويد|أندرويد|winca)/i;
-  const ledPattern = /(?:ليد|led|لمبات|إضاءة|اضاءة)/i;
-  // New service mentions supersede older history. Only look backwards if this
-  // short turn truly omits the category, e.g. "شو تنصح؟".
-  const prior = (context.conversationHistory ?? [])
-    .filter((item) => item.direction === 'INBOUND')
-    .slice(-5).map((item) => item.body).reverse()
-    .find((body) => [floorMatPattern, tintPattern, screenPattern, ledPattern].some((pattern) => pattern.test(body))) ?? '';
-  const topic = [floorMatPattern, tintPattern, screenPattern, ledPattern].some((pattern) => pattern.test(message))
-    ? message : prior;
-  const floorMats = floorMatPattern.test(topic);
-  const tint = tintPattern.test(topic);
-  const screen = screenPattern.test(topic);
-  const led = ledPattern.test(topic);
-  let text: string;
-  let translation: string;
-  if (floorMats || tint || screen || led) {
-    const clarification = vehicleDetailClarification(context, 'ar-OM', false);
-    const topicLabel = floorMats ? 'فرش الأرضيات' : tint ? 'العازل الحراري' : screen ? 'الشاشة' : 'الإضاءة';
-    text = 'بالنسبة لـ' + topicLabel + '، ' + clarification.text;
-    translation = clarification.translation;
-  } else {
-    text = 'حياك، ممكن توضّح أي خدمة تقصد عشان أعطيك جواب مضبوط؟';
-    translation = 'خوش آمدید، می‌شود بگویید کدام خدمت را می‌خواهید تا پاسخ دقیقی بدهم؟';
+  if (!['ar-OM', 'ar', 'en', 'fa'].includes(language)) return null;
+  // Two new services in one sentence cannot be silently collapsed to one.
+  // A correction such as "لا قصدي PPF مو 5D" must be resolved by the canonical
+  // customer-memory parser, not by reading older outbound bot claims.
+  const corrected = /(?:قصدي|أقصد|اقصد|أعني|اعني|i\s+mean)\s+(.+?)(?=\s+(?:مو|مش|not|instead\s+of|rather\s+than)|$)/i.exec(message);
+  const correctedServices = corrected ? automotiveServiceCandidates(corrected[1]) : [];
+  const service: AutomotiveService | undefined = correctedServices.length === 1 ? correctedServices[0]
+    : currentServices.length === 1 ? currentServices[0]
+      : currentServices.length > 1 ? undefined : priorService;
+  const ambiguousServices = currentServices.length > 1 && correctedServices.length !== 1;
+  if (ambiguousServices) {
+    const text = language.startsWith('ar') ? 'تقصد أي خدمة بالضبط من اللي ذكرتها؟'
+      : language.startsWith('fa') ? 'منظورتون دقیقاً کدوم یکی از این خدماته؟'
+        : 'Which of those services do you mean?';
+    return { draft: { text, language, generatedBy: 'secretary' }, persianTranslation: 'مشتری چند خدمت گفت؛ باید منظورش مشخص شود.' };
   }
+  if (!service) {
+    const text = language.startsWith('ar') ? 'حياك، أي خدمة تقصد عشان أساعدك بشكل أدق؟'
+      : language.startsWith('fa') ? 'کدوم خدمت رو می‌خواید تا دقیق راهنمایی کنم؟'
+        : 'Which service are you looking for?';
+    return { draft: { text, language, generatedBy: 'secretary' }, persianTranslation: 'برای انتخاب خدمت، سؤال کوتاه بپرس.' };
+  }
+  const labels: Record<AutomotiveService, { ar: string; en: string; fa: string }> = {
+    FLOOR_MATS: { ar: 'فرش الأرضيات', en: 'floor mats', fa: 'کفپوش' },
+    SEAT_UPHOLSTERY: { ar: 'تنجيد الكراسي', en: 'seat upholstery', fa: 'تودوزی صندلی' },
+    THERMAL_TINT: { ar: 'العازل الحراري', en: 'window tint', fa: 'عایق شیشه' },
+    PPF: { ar: 'حماية البوية PPF', en: 'PPF paint protection', fa: 'کاور محافظ رنگ PPF' },
+    CERAMIC_COATING: { ar: 'السيراميك', en: 'ceramic coating', fa: 'سرامیک بدنه' },
+    CAR_SCREEN: { ar: 'شاشات السيارة', en: 'car screens', fa: 'مانیتور خودرو' },
+    LED_LIGHTING: { ar: 'إضاءة LED', en: 'LED lighting', fa: 'چراغ LED' },
+    CAR_AUDIO: { ar: 'سماعات السيارة', en: 'car audio', fa: 'سیستم صوتی خودرو' },
+  };
+  const label = labels[service];
+  const clarification = vehicleDetailClarification(context, language, false);
+  const text = language.startsWith('ar')
+    ? 'بالنسبة لـ' + label.ar + '، ' + clarification.text
+    : language.startsWith('fa')
+      ? 'درباره ' + label.fa + '، ' + clarification.text
+      : 'For ' + label.en + ', ' + clarification.text;
+  const translation = label.fa + ': ' + clarification.translation;
   return {
-    draft: { text, language: 'ar-OM', generatedBy: 'secretary' },
+    draft: { text, language, generatedBy: 'secretary' },
     persianTranslation: translation,
   };
 }

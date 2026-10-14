@@ -39,11 +39,11 @@ const models: Array<[string, string, RegExp]> = [
 ];
 const services: Array<[AutomotiveService, RegExp]> = [
   ['THERMAL_TINT', /(?:عازل\s*حراري|عازل\s*حرارتی|عازل|تظليل|تضليل|تنت|تنتينج|دودي|دودی|تغميق\s*(?:ال)?(?:جام|قزاز|زجاج|شبابيك)|(?:tint|tinted|tinting)(?:\s*(?:the|all|my|car|windows?|glass))?|window\s*(?:film|tint)|heat rejection|privacy\s*(?:film|tint))/i],
-  ['FLOOR_MATS', /(?:فرش\s*(?:أرضيات|ارضيات|ارض)|فرشات\s*(?:الأرض|الارض|السيارة)|دواسات|ماتات\s*(?:السيارة|لل سيارة)?|كفپوش|کفپوش|5d\s*(?:mat|فرش)|3d\s*(?:mat|فرش)|floor mats?)/i],
+  ['FLOOR_MATS', /(?:أرضيات|ارضيات|فرش\s*(?:أرضيات|ارضيات|ارض)|فرشات\s*(?:الأرض|الارض|السيارة)|دواسات|ماتات\s*(?:السيارة|لل سيارة)?|كفپوش|کفپوش|(?:^|[^\w\u0621-\u064A])(?:5d|3d)(?![\w\u0621-\u064A])|5d\s*(?:mat|فرش)|3d\s*(?:mat|فرش)|floor mats?)/i],
   ['SEAT_UPHOLSTERY', /(?:تلبيس|تلبيسات|تنجيد|تودوزی|روکش|كفرات\s*(?:الكراسي|المقاعد)|جلد\s*(?:الكراسي|المقاعد)|كرسي\s*سيارة|seat covers?|upholster)/i],
   ['PPF', /(?:\bppf\b|paint protection film|حماية\s*(?:البوية|البودي|الطلاء)|افلام\s*حماية)/i],
   ['CERAMIC_COATING', /(?:سيراميك|سرامیک|ceramic\s*(?:coating|paint)|نانو\s*سيراميك)/i],
-  ['CAR_SCREEN', /(?:شاشة|شاشه|شاشات|مانیتور|مانيتور|carplay|كار\s*بلاي|اندرويد\s*للسيارة|head\s*unit)/i],
+  ['CAR_SCREEN', /(?:شاشة|شاشه|شاشات|مانیتور|مانيتور|carplay|كار\s*بلاي|كاربلاي|اندرويد|أندرويد|android|screens?|head\s*unit)/i],
   ['LED_LIGHTING', /(?:\bled\b|ليد|لمبات|إضاءة\s*السيارة|اضاءة\s*السيارة)/i],
   ['CAR_AUDIO', /(?:سماعات|مكبرات|مكبر\s*صوت|car audio|car speaker|ساب\s*ووفر)/i],
 ];
@@ -60,6 +60,19 @@ const normalizedDigits = (value: string) => value.replace(/[۰-۹٠-٩]/g, (digi
   return String(farsi >= 0 ? farsi : '٠١٢٣٤٥٦٧٨٩'.indexOf(digit));
 });
 function snippet(value: string) { return value.trim().replace(/\s+/g, ' ').slice(0, 200); }
+
+/** Canonical candidate discovery; used by both CRM memory and safe short-turn
+ * clarification. Multiple unrelated services are ambiguous, never a sale. */
+export function automotiveServiceCandidates(message: string): AutomotiveService[] {
+  const text = normalizedDigits(message).normalize('NFKC');
+  const result = services.filter(([, pattern]) => pattern.test(text)).map(([key]) => key);
+  // "ceramic tint" names a window film, not paint ceramic coating.
+  if (/ceramic\s*(?:window\s*)?tint|(?:سيراميك|سرامیک)\s*(?:عازل|تظليل|جامات)/i.test(text)
+      && result.includes('THERMAL_TINT') && result.includes('CERAMIC_COATING')) {
+    return result.filter(service => service !== 'CERAMIC_COATING');
+  }
+  return result;
+}
 
 export function inferAutomotiveFacts(message: string, referenceDate = new Date()): AutomotiveSalesMemory {
   const normalized = normalizedDigits(message).normalize('NFKC');
@@ -83,8 +96,8 @@ export function inferAutomotiveFacts(message: string, referenceDate = new Date()
   // different services stay ambiguous and must never become an inferred order.
   const correction = normalized.match(/(?:^|\s)(?:لا\s+)?(?:قصدي|أقصد|اقصد|أعني|اعني|i\s+mean)\s+(.+?)(?=\s+(?:مو|مش|not|instead\s+of|rather\s+than)\s+|$)/i);
   const serviceText = correction?.[1] || normalized;
-  const matchedServices = services.filter(([, pattern]) => pattern.test(serviceText));
-  const service = matchedServices.length === 1 ? matchedServices[0][0] : undefined;
+  const matchedServices = automotiveServiceCandidates(serviceText);
+  const service = matchedServices.length === 1 ? matchedServices[0] : undefined;
   const preferredColor = /(?:أبغي|ابغي|أريد|اريد|ابي|بغيت|prefer|want|اختار|أختار|بـ|باللون|رنگ)/i.test(normalized)
     ? colors.find(([, pattern]) => pattern.test(normalized))?.[0] : undefined;
   return { make, model, year, seats, service, preferredColor };
@@ -99,6 +112,22 @@ export function updateAutomotiveSalesMemory(input: {
 }): AutomotiveSalesMemory {
   const extracted = inferAutomotiveFacts(input.body);
   const next = { ...(input.previous ?? {}) };
+  const carChanged = Boolean(
+    (extracted.make && next.make && extracted.make !== next.make)
+    || (extracted.model && next.model && extracted.model !== next.model)
+  );
+  if (carChanged) {
+    // An explicitly different car cannot inherit the old car's year or
+    // seating count. Only new customer evidence may reestablish these facts.
+    for (const key of ['year', 'seats'] as const) {
+      if (next[key] != null && extracted[key] == null) {
+        input.revisions.push({ field: 'automotive.' + key, from: next[key],
+          to: null, sourceId: input.item.sourceId, at: input.item.at });
+        next[key] = undefined;
+        delete input.evidence['automotive.' + key];
+      }
+    }
+  }
   for (const key of ['make', 'model', 'year', 'seats', 'service', 'preferredColor'] as const) {
     const incoming = extracted[key];
     if (incoming == null) continue;
