@@ -55,6 +55,45 @@ describe('Sahra conversation resilience', () => {
     });
   });
 
+  it('recovers an unverified all-window quote without leaking unsupported prices', async () => {
+    const english = {
+      ...context,
+      message: 'Toyota Land Cruiser 2022 all How much',
+      conversationHistory: [
+        { direction: 'INBOUND' as const, body: 'I want to change my cars cover 5 seats' },
+        { direction: 'INBOUND' as const, body: 'The window' },
+      ],
+    };
+    const runtime: AgentRuntime = {
+      async run(agent): Promise<AgentResult> {
+        return {
+          agent,
+          confidence: 0.96,
+          summary: 'controlled incomplete-price fixture',
+          evidence: [],
+          data: agent === 'secretary'
+            ? {
+                customer_reply: 'The all-windows tint price is OMR 24 for sides and OMR 10 for rear, but the windscreen price is missing.',
+                customer_reply_language: 'en',
+              }
+            : {},
+          blockers: agent === 'evidence_checker'
+            ? ['Unverified full-car bundle and front-windscreen price']
+            : [],
+        };
+      },
+    };
+    const result = await processInboundMessage(english, { agentsPaused: false }, runtime);
+    expect(result.trace.guardrails).toContain('SAFE_VEHICLE_QUOTE_CLARIFICATION_RECOVERY');
+    expect(result.trace.delivery).toBe('REVIEW');
+    expect(result.trace.qualitySafety?.disposition).toBe('PASS');
+    expect(result.draft.text).not.toMatch(/OMR|24|10|\\$|ريال/);
+    expect(result.draft.text).toMatch(/price|pricing/i);
+    expect(result.trace.agentResults.find((agent) => agent.agent === 'secretary')?.data).toMatchObject({
+      customer_reply: result.draft.text,
+    });
+  });
+
   it('never recovers confidential leakage even if evidence is also incomplete', async () => {
     const confidential = 'Private margin secret-for-test-7890';
     const result = await processInboundMessage({
