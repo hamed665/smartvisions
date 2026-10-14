@@ -247,7 +247,7 @@ jobs:
             META_WHATSAPP_COEXISTENCE_ENABLED:process.env.META_WHATSAPP_COEXISTENCE_ENABLED==='true'?'true':'false',
             CHATWOOT_PROVISIONING_ENABLED:'true'
           };
-          c.triggers={crons:['*/2 * * * *']};
+          c.triggers={crons:['*/2 * * * *','* * * * *']};
           if(c.limits?.cpu_ms!==100)throw new Error('CPU guard drifted before promotion');
           if(c.routes||c.route)throw new Error('Production deploy must not mutate Worker Routes');
           if(c.workers_dev!==false)throw new Error('Production workers.dev must be disabled');
@@ -256,7 +256,7 @@ jobs:
           if(c.vars?.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN!==process.env.CHATWOOT_WEBHOOK_PUBLIC_ORIGIN)throw new Error('Production Chatwoot webhook origin invariant failed');
           if(c.vars?.CHATWOOT_PROVISIONING_ENABLED!=='true')throw new Error('Approved Production Chatwoot provisioning flag invariant failed');
           if(Object.prototype.hasOwnProperty.call(c.vars||{},'CHATWOOT_PLATFORM_TOKEN'))throw new Error('Chatwoot Platform token must never be stored in plaintext Worker vars');
-          if(JSON.stringify(c.triggers?.crons)!==JSON.stringify(['*/2 * * * *']))throw new Error('Production cron invariant failed');
+          if(JSON.stringify(c.triggers?.crons)!==JSON.stringify(['*/2 * * * *','* * * * *']))throw new Error('Production cron invariant failed');
           fs.writeFileSync(file,JSON.stringify(c,null,2)+'\n');
           NODE
           if [ -n "${META_APP_ID:-}" ]; then
@@ -355,7 +355,8 @@ jobs:
           echo "Candidate Worker: smartvisions-growth-os-release-candidate"
           echo "Candidate scheduled triggers: none"
           echo "Production Worker: smartvisions-growth-os-production"
-          echo "Production scheduled trigger: */2 * * * *"
+          echo "Production full-operations trigger: */2 * * * *"
+          echo "Production Sahra-only fast trigger: * * * * * (two bounded sweeps per minute)"
           echo "Production hostname: app.smartvisionsai.com"
           echo "Production workers.dev exposure: disabled"
           echo "CPU guard: 100ms"
