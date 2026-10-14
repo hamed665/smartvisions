@@ -81,6 +81,41 @@ describe('customer reply language policy', () => {
     expect(result.data).toMatchObject({ locale: 'ar-OM', dialect: 'omani' });
   });
 
+  it('keeps the Omani Arabic conversation when a customer replies with the isolated car brand تویوتا', async () => {
+    const conversationHistory = [{ direction: 'INBOUND' as const, body: 'كم سعر تلبيس المقاعد؟' }];
+    expect(resolveReplyLanguage({
+      message: 'تویوتا',
+      primaryLocale: 'ar-OM',
+      preferredLanguage: 'fa',
+      conversationHistory,
+    })).toBe('ar-OM');
+    expect(replyMatchesHighConfidenceMessageLanguage({
+      message: 'تویوتا',
+      replyLanguage: 'ar-OM',
+      replyText: 'تمام، تويوتا. ممكن الموديل وسنة الصنع؟',
+      conversationHistory,
+    })).toBe(true);
+    expect(replyMatchesHighConfidenceMessageLanguage({
+      message: 'قیمت تویوتا چنده؟',
+      replyLanguage: 'ar-OM',
+      replyText: 'ممكن الموديل؟',
+      conversationHistory,
+    })).toBe(false);
+    expect(replyMatchesHighConfidenceMessageLanguage({
+      message: 'تویوتا',
+      replyLanguage: 'ar-OM',
+      replyText: 'ممكن الموديل؟',
+    })).toBe(false);
+
+    const locale = await executeAgent('culture_locale', {
+      message: 'تویوتا',
+      conversationHistory,
+      language: 'fa',
+      marketLocaleStyle: { countryCode: 'OM', primaryLocale: 'ar-OM', dialect: 'omani', toneProfile: 'warm_short_business' },
+    });
+    expect(locale.data).toMatchObject({ locale: 'ar-OM', dialect: 'omani' });
+  });
+
   it('blocks obvious or unresolved reply-language mismatches before delivery', () => {
     expect(replyMatchesHighConfidenceMessageLanguage({
       message: 'Hi',
