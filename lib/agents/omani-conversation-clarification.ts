@@ -54,7 +54,8 @@ export function safeOmaniConversationClarification(context: AgentContext): {
   let translation: string;
   if (floorMats || tint || screen || led) {
     const clarification = vehicleDetailClarification(context, 'ar-OM', false);
-    text = clarification.text;
+    const topicLabel = floorMats ? 'فرش الأرضيات' : tint ? 'العازل الحراري' : screen ? 'الشاشة' : 'الإضاءة';
+    text = 'بالنسبة لـ' + topicLabel + '، ' + clarification.text;
     translation = clarification.translation;
   } else {
     text = 'حياك، ممكن توضّح أي خدمة تقصد عشان أعطيك جواب مضبوط؟';
