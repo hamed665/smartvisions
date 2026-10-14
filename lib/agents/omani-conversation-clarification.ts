@@ -60,7 +60,7 @@ export function safeOmaniConversationClarification(context: AgentContext): {
     return { draft: { text, language, generatedBy: 'secretary' }, persianTranslation: 'برای انتخاب خدمت، سؤال کوتاه بپرس.' };
   }
   const labels: Record<AutomotiveService, { ar: string; en: string; fa: string }> = {
-    FLOOR_MATS: { ar: 'الأرضيات', en: 'floor mats', fa: 'کفپوش' },
+    FLOOR_MATS: { ar: 'فرش الأرضيات', en: 'floor mats', fa: 'کفپوش' },
     SEAT_UPHOLSTERY: { ar: 'تنجيد الكراسي', en: 'seat upholstery', fa: 'تودوزی صندلی' },
     THERMAL_TINT: { ar: 'العازل الحراري', en: 'window tint', fa: 'عایق شیشه' },
     PPF: { ar: 'حماية البوية PPF', en: 'PPF paint protection', fa: 'کاور محافظ رنگ PPF' },
