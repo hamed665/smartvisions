@@ -20,6 +20,7 @@ import { evaluateSalesReplyPolicy, inferSalesHandoffSignals } from '@/lib/conver
 import { resolveSmartVisionsCatalogRecommendation } from '@/lib/whatsapp/catalog';
 import { replyMatchesHighConfidenceMessageLanguage } from '@/lib/outreach/locale';
 import { safeVehicleQuoteClarification } from './safe-clarification';
+import { safeOmaniConversationClarification } from './omani-conversation-clarification';
 function applyConfidenceThreshold(context: AgentContext, result: AgentResult) {
   const threshold = context.agentSettings?.[result.agent]?.confidenceThreshold;
   if (threshold == null || result.confidence >= threshold || result.blockers.includes('BELOW_CONFIGURED_CONFIDENCE')) {
@@ -308,7 +309,8 @@ export async function processInboundMessage(
     && toolProposals.length === 0
     && qualitySafety.checks.every((item) => item.disposition !== 'BLOCK' || item.key === 'EVIDENCE')
   ) {
-    const recovery = safeVehicleQuoteClarification(context);
+    const quoteRecovery = safeVehicleQuoteClarification(context);
+    const recovery = quoteRecovery ?? safeOmaniConversationClarification(context);
     if (recovery) {
       const recoverySafety = evaluateAgentQualitySafety({
         context,
@@ -332,7 +334,7 @@ export async function processInboundMessage(
         draft = recovery.draft;
         qualitySafety = recoverySafety;
         relevancePassed = true;
-        guardrails.push('SAFE_VEHICLE_QUOTE_CLARIFICATION_RECOVERY');
+        guardrails.push(quoteRecovery ? 'SAFE_VEHICLE_QUOTE_CLARIFICATION_RECOVERY' : 'SAFE_OMANI_CUSTOMER_CLARIFICATION_RECOVERY');
         const secretary = agentResults.find((item) => item.agent === 'secretary');
         if (secretary) {
           secretary.data = {
