@@ -63,6 +63,36 @@ describe('Omani brief conversation follow-ups', () => {
     expect(safeOmaniConversationClarification({ ...context, countryCode: 'AE', servingBusiness: { countryCode: 'AE', name: 'Example' }, industry: 'consulting' })).toBeNull();
   });
 
+  it('does not abandon a customer asking in colloquial Arabic for 5D mats', async () => {
+    const actualMessage = 'في عندكم ارضيات 5d';
+    const recovery = safeOmaniConversationClarification({
+      ...context, message: actualMessage,
+      conversationHistory: [{ direction: 'INBOUND', body: 'مرحبا' }],
+    });
+    expect(recovery?.draft.language).toBe('ar-OM');
+    expect(recovery?.draft.text).toContain('فرش الأرضيات');
+    expect(recovery?.draft.text).not.toMatch(/37|٣٧|ريال|ضمان|المخزون متوفر/);
+    const runtime: AgentRuntime = { async run(agent) {
+      return {
+        agent, confidence: 0.98, summary: 'production regression', evidence: [],
+        data: agent === 'secretary' ? {
+          customer_reply: 'أكيد، نوفر أرضيات 5D بسعر إرشادي ٣٧ ريال عماني، ومعها ضمان سنة حسب المنتج. ممكن نوع السيارة وسنة الصنع عشان نأكد لك المقاس والتوافق؟',
+          customer_reply_language: 'ar-OM',
+        } : {},
+        blockers: agent === 'relevance_checker'
+          ? ['المخزون الفوري لموديل محدد والتوافق النهائي يحتاجان تأكيد المسؤول.'] : [],
+      };
+    }};
+    const result = await processInboundMessage({
+      ...context, message: actualMessage,
+      conversationHistory: [{ direction: 'INBOUND', body: 'مرحبا' }],
+    }, undefined, runtime);
+    expect(result.trace.guardrails).toContain('SAFE_OMANI_CUSTOMER_CLARIFICATION_RECOVERY');
+    expect(result.trace.delivery).toBe('REVIEW');
+    expect(result.draft.text).not.toMatch(/37|٣٧|ريال|ضمان/);
+    expect(result.trace.qualitySafety?.disposition).toBe('PASS');
+  });
+
   it('can recover an evidence-only agent failure without overriding Shadow Mode', async () => {
     const runtime: AgentRuntime = { async run(agent) {
       return {
