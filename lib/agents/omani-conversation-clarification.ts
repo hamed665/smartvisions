@@ -34,7 +34,15 @@ export function safeOmaniConversationClarification(context: AgentContext): {
     && String(context.language ?? '').startsWith('ar')
     && !/[پچژگک‌ی]/.test(message)
     && /^(?:(?:شو|وش)\s+(?:تنصح|رايك|رأيك|الفرق|احسن|أحسن|الأفضل|افضل)|تنصحني)(?:\s+[^؟?!.]{1,50})?[؟?!. ]*$/u.test(message);
-  if (!language.startsWith('ar') && !establishedArabicShortAdvice) return null;
+  // "في عندكم ارضيات 5d؟" is a short, unmistakably Omani service
+  // availability question. Mixed Latin 5D can lower lexical language
+  // confidence; never silently discard an otherwise safely answerable turn.
+  // Do not infer Arabic for Persian or unrelated one-word messages.
+  const establishedArabicServiceQuestion = language === 'und'
+    && !/[پچژگک‌ی]/.test(message)
+    && /^(?:في\s+)?(?:عندكم|عندكو|عندك|تركبون)\s+[^؟?!.]{2,55}[؟?!. ]*$/u.test(message)
+    && /(?:ارضيات|أرضيات|فرشات|دواسات|ماتات|5d|3d|عازل|تظليل|شاشات|اندرويد|أندرويد|شاشة|ليد|led)/i.test(message);
+  if (!language.startsWith('ar') && !establishedArabicShortAdvice && !establishedArabicServiceQuestion) return null;
   const floorMatPattern = /(?:فرش ارض|فرش أرض|فرشات\s*(?:الارض|الأرض|السيارة)|دواسات|كفبوش|كفپوش|ماتات|floor mat|5d|3d)/i;
   const tintPattern = /(?:عازل|تظليل|تضليل|جامات|قزاز|زجاج|الشبابيك|دودي|دودی|تنت|window film|tint|ضد الحر)/i;
   const screenPattern = /(?:شاشه|شاشة|شاشات|كار بلاي|كاربلاي|carplay|اندرويد|أندرويد|winca)/i;
