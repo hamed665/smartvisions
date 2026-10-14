@@ -24,6 +24,7 @@ export type InternalTestLiveReplyPolicy =
       endsAt: string;
       maxReplies: number;
       deliveryMode: 'TEXT' | 'VOICE_REPLY';
+      permanentInbound?: boolean;
     }
   | { allowed: false; reason: string };
 
@@ -45,6 +46,39 @@ export function evaluateInternalTestLiveReplyPolicy(
   if (input.globalKillSwitch) return { allowed: false, reason: 'GLOBAL_KILL_SWITCH' };
   if (input.agentsPaused) return { allowed: false, reason: 'AGENTS_PAUSED' };
   if (input.whatsappPaused) return { allowed: false, reason: 'WHATSAPP_PAUSED' };
+
+  // The permanent service-reply policy is independent of the 90-minute pilot.
+  // Only real customer-initiated inbound for one exact bound tenant qualifies.
+  // Its owner's immutable authorization is also verified again in PostgreSQL.
+  const production = record(record(input.ruleConfig).permanentInboundReply);
+  if (production.enabled === true) {
+    const recipient = normalizeInternalTestPhone(input.inboundFrom);
+    const businessRecipient = normalizeInternalTestPhone(input.businessWhatsapp || input.businessPhone);
+    const cap = Number(production.dailyCap);
+    const received = Date.parse(input.inboundReceivedAt ?? '');
+    const now = (input.now ?? new Date()).getTime();
+    if (production.inboundOnly !== true || production.allowAllCustomerInitiated !== true
+      || production.noUnsolicited !== true || production.deliveryMode !== 'TEXT'
+      || !production.consentAuditId || !production.senderPhoneNumberId || !production.senderWabaId) {
+      return { allowed: false, reason: 'PRODUCTION_INBOUND_CONSENT_CONFIG_REQUIRED' };
+    }
+    if (!input.tenantBusinessId || !input.bindingId
+      || input.tenantBusinessId !== production.tenantBusinessId
+      || input.bindingId !== production.bindingId) {
+      return { allowed: false, reason: 'PRODUCTION_INBOUND_TENANT_BINDING_MISMATCH' };
+    }
+    if (businessRecipient !== recipient || !/^[0-9]{8,15}$/.test(recipient)) {
+      return { allowed: false, reason: 'PRODUCTION_INBOUND_RECIPIENT_MISMATCH' };
+    }
+    if (!Number.isFinite(received) || received > now || now-received > 5*60_000) {
+      return { allowed: false, reason: 'PRODUCTION_FRESH_INBOUND_REQUIRED' };
+    }
+    if (!Number.isInteger(cap) || cap < 1 || cap > 100) {
+      return { allowed: false, reason: 'PRODUCTION_DAILY_CAP_INVALID' };
+    }
+    return { allowed: true, recipient, startsAt: '', endsAt: '', maxReplies: cap,
+      deliveryMode: 'TEXT', permanentInbound: true };
+  }
 
   const config = record(record(input.ruleConfig).internalTestLiveReply);
   if (config.enabled !== true) return { allowed: false, reason: 'LIVE_TEST_DISABLED' };

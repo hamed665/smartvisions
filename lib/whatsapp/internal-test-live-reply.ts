@@ -380,6 +380,7 @@ export async function runInternalTestLiveReply(input: {
         messageId: approved.id,
         runId: payload.runId ?? null,
         controlledShadowPilot: true,
+        permanentInbound: policy.permanentInbound === true,
         shadowModeRemainsOn: true,
         automaticRetry: false,
         honestVoiceClarification: Boolean(honestVoiceClarification),

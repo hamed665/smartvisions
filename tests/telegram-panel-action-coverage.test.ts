@@ -162,6 +162,9 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
   'app/preview-actions.ts': {
     generateControlledPreviewPilot:'preview.generate_pilot', approvePreview:'preview.approve', markPreviewSent:'preview.mark_sent', markControlledPreviewShared:'preview.mark_internal_shared',
   },
+  'app/sahra-inbound-service-actions.ts': {
+    configureSahraInboundService:'SPECIALIZED:SAHRA_OWNER_AUTHENTICATED_INBOUND_ACTIVATION',
+  },
   'app/whatsapp-pilot-actions.ts': {
     processLatestWhatsAppInboundPilot:'whatsapp.process_pilot',
     sendApprovedWhatsAppCatalogPilot:'whatsapp.send_approved_pilot',
