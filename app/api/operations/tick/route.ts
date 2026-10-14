@@ -18,6 +18,7 @@ import {
   type AutomationRuleSnapshot,
 } from '@/lib/operations/executor-core';
 import { notifyOperationalAlert } from '@/lib/operations/alerts';
+import { alertOnUnansweredWhatsApp } from '@/lib/operations/unanswered-whatsapp';
 
 const MAX_INBOUND_SCAN = 30;
 const MAX_AGENT_TASKS = 5;
@@ -513,7 +514,17 @@ export async function POST(request: Request) {
     }
   }
 
+  // This is an owner-only alert, not another outbound WhatsApp route.
+  // Never block the scheduled executor on Telegram availability.
+  let unansweredWhatsApp = { examined: 0, alerted: 0, failed: 0 };
+  try {
+    unansweredWhatsApp = await alertOnUnansweredWhatsApp(supabase, now);
+  } catch {
+    unansweredWhatsApp = { examined: 0, alerted: 0, failed: 1 };
+  }
+
   return NextResponse.json({
+    unansweredWhatsApp,
     generatedAt: now.toISOString(),
     webChatExpired,
     agentTasks,
