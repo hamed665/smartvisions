@@ -73,7 +73,7 @@ export function evaluateInternalTestLiveReplyPolicy(
     if (!Number.isFinite(received) || received > now || now-received > 5*60_000) {
       return { allowed: false, reason: 'PRODUCTION_FRESH_INBOUND_REQUIRED' };
     }
-    if (!Number.isInteger(cap) || cap < 1 || cap > 100) {
+    if (!Number.isInteger(cap) || cap < 1 || cap > 200) {
       return { allowed: false, reason: 'PRODUCTION_DAILY_CAP_INVALID' };
     }
     return { allowed: true, recipient, startsAt: '', endsAt: '', maxReplies: cap,
