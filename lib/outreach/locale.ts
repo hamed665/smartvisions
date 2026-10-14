@@ -101,7 +101,7 @@ export function resolveOmaniAutomotiveShortLanguage(input: {
   const neutralShort = /^(?:(?:ppf|5d|3d|led|carplay|android|screen|screens|tint|ceramic|floor\s*mats?|head\s*unit)|(?:عازل|تظليل|دودي|شاشات|شاشة|ارضيات|أرضيات|فرشات|سيراميك|تنجيد|تلبيسات|تمام|زين|اوكي|أوكي|اي|إي|ايوه|أيوا|نعم|لا|ok|okay|yep|yup|yes|no|sure))[؟?!.,،\s]*$/iu.test(text);
   if (neutralShort) {
     if (/^(?:ok|okay|yep|yup|yes|no|sure|تمام|زين|اوكي|أوكي|اي|إي|ايوه|أيوا|نعم|لا)[؟?!.,،\s]*$/iu.test(text)) {
-      return previous;
+      return previous ?? (/[\u0600-\u06FF]/.test(text) ? 'ar-OM' : 'en');
     }
     return previous ?? (/[A-Za-z]/.test(text) && !/^(?:ppf|5d|3d|led|carplay|android)$/i.test(text)
       ? 'en' : 'ar-OM');
