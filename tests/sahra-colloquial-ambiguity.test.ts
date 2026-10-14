@@ -61,6 +61,19 @@ describe('Omani brief conversation follow-ups', () => {
     }
   });
 
+  it('uses the customer topic for very short followups but not generic acknowledgements', () => {
+    for (const message of ['بكم؟', 'price', 'all', 'fits?', 'stock']) {
+      const result = safeOmaniConversationClarification({
+        ...context, message,
+        conversationHistory: [{ direction: 'INBOUND', body: 'أبغي شاشات اندرويد' }],
+      });
+      expect(result?.draft.text).toContain('شاشات السيارة');
+    }
+    for (const message of ['ok', 'yes', 'no', 'تمام', 'شكرا']) {
+      expect(safeOmaniConversationClarification({ ...context, message })).toBeNull();
+    }
+  });
+
   it('does not fake a location or bypass a request for a person, complaint or discount', () => {
     for (const message of ['وين موقعكم؟', 'أريد خصم', 'أريد موظف', 'شكوى عندي', 'أبغي حجز', 'تمام']) {
       expect(safeOmaniConversationClarification({ ...context, message })).toBeNull();
