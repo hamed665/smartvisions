@@ -172,6 +172,10 @@ export function replyMatchesHighConfidenceMessageLanguage(input: {
 }) {
   const detected = detectLanguageZeroCost(input.message);
   const replyLanguage = String(input.replyLanguage ?? '').toLowerCase();
+  // A Persian-script reply must not pass as Arabic merely because both use
+  // the Arabic Unicode block (e.g. 'سلام، خوش آمدید' after 'السلام عليكم').
+  const replyDetection = detectLanguageZeroCost(input.replyText);
+  if (replyDetection.language === 'fa' && !replyLanguage.startsWith('fa')) return false;
   const scopedLanguage = resolveOmaniAutomotiveShortLanguage(input);
   if (scopedLanguage) {
     if (!replyLanguage.startsWith(scopedLanguage.toLowerCase().split('-')[0])) return false;
