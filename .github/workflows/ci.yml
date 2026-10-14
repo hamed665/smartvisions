@@ -446,6 +446,16 @@ jobs:
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f /work/tests/sql/sahra-controlled-reply-resume-smoke.sql
 
+      - name: Verify permanent Sahra 200 daily cap and immutable owner consent
+        env:
+          PGPASSWORD: postgres
+        run: |
+          docker run --rm --network host -e PGPASSWORD="$PGPASSWORD" -v "$PWD:/work" postgres:17 \
+            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f /work/supabase/migrations/20261014120000_sahra_permanent_inbound_owner_governed.sql \
+            -f /work/supabase/migrations/20261014122850_sahra_permanent_inbound_200_daily_cap.sql \
+            -f /work/tests/sql/sahra-200-daily-cap-smoke.sql
+
       - name: Verify Business-scoped Unified Inbox projection and replay
         env:
           PGPASSWORD: postgres
