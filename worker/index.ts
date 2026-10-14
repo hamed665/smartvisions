@@ -5,7 +5,8 @@ import { POST as controlledAutoDispatchPost } from '../app/api/operations/contro
 import { POST as pilotAcquisitionPost } from '../app/api/operations/pilot-acquisition/route';
 import { POST as chatwootInboxReconcilePost } from '../app/api/operations/chatwoot-inbox-reconcile/route';
 import { shouldRunScheduledOperations } from './schedule-policy';
-import { SAHRA_FAST_CRON } from '../lib/whatsapp/sahra-fast-inbound-core';
+import { POST as sahraInboundPost } from '../app/api/operations/sahra-inbound/route';
+import { SAHRA_FAST_CRON, SAHRA_FAST_SCOPE } from '../lib/whatsapp/sahra-fast-inbound-core';
 
 type WorkerVersionMetadata = { id?: string; tag?: string; timestamp?: string };
 type WorkerEnv = { INTERNAL_API_KEY?: string; DEPLOYMENT_ENV?: string; CF_VERSION_METADATA?: WorkerVersionMetadata };
@@ -143,6 +144,22 @@ async function reportFailure(env: WorkerEnv, task: AgentTask, detail: string) {
   } catch {
     // Reporting is never allowed to cause a paid AI retry.
   }
+}
+
+export async function runScheduledSahraInbound(env: WorkerEnv, controller: ScheduledController) {
+  // Framework initialization follows the same authenticated read boundary as
+  // full operations. The canonical handler is imported into the scheduled bundle.
+  const guard = await internalPost(env, '/api/operations/channel-guard', {
+    organizationId: SAHRA_FAST_SCOPE.organizationId, channel: 'WHATSAPP',
+  });
+  if (!guard.ok) {
+    console.error('SAHRA_FAST_INBOUND_GUARD_BLOCKED', guard.status);
+    return;
+  }
+  const response = await sahraInboundPost(internalJsonRequest(env, '/api/operations/sahra-inbound', {
+    scheduledTime: controller.scheduledTime,
+  }));
+  if (!response.ok) console.error('SAHRA_FAST_INBOUND_HTTP_FAILED', response.status);
 }
 
 export async function runScheduledOperations(env: WorkerEnv, controller?: ScheduledController) {
@@ -476,13 +493,7 @@ const worker = {
   scheduled(controller: ScheduledController, env: WorkerEnv, ctx: ExecutionContextLike) {
     if (!shouldRunScheduledOperations(env)) return;
     if (controller.cron === SAHRA_FAST_CRON) {
-      // Use the same framework request boundary as the working full tick so
-      // runtime bindings are initialized before server-only services execute.
-      ctx.waitUntil(internalPost(env, '/api/operations/sahra-inbound', {
-        scheduledTime: controller.scheduledTime,
-      }).then((response) => {
-        if (!response.ok) console.error('SAHRA_FAST_INBOUND_HTTP_FAILED', response.status);
-      }));
+      ctx.waitUntil(runScheduledSahraInbound(env, controller));
       return;
     }
     ctx.waitUntil(runScheduledOperations(env, controller));
