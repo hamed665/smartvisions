@@ -136,7 +136,7 @@ Current durable Production state is maintained in `docs/CURRENT_STATE.md`. As of
 - Crawl4AI: NOT_CONFIGURED and optional.
 - Instagram: NOT_CONFIGURED and intentionally deferred.
 - Redis: NOT_CONFIGURED and unnecessary at current scale.
-- Cloudflare Production scheduler: exactly `*/2 * * * *` on Production only; Release Candidate has no Cron.
+- Full Cloudflare Production operations remain exactly `*/2 * * * *`. The Sahra-only fast inbound trigger is `* * * * *`, performing two bounded read sweeps near second 0/30 through the same canonical inbound claim/Agent/approval/send path. Candidate has neither scheduled trigger. The fast path cannot invoke acquisition, follow-ups or other tenant operations.
 
 `CONNECTED` means durable evidence, not merely a configured secret.
 
