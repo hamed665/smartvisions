@@ -1,3 +1,9 @@
+## Sahra handset retry failed; signed-callback repair pending — 2026-10-14 (Muscat)
+
+- Fresh handset text after #509 was received canonically, but no Agent run or controlled outbound claim occurred. Lead REPLIED/AUTO and fresh Conversations AUTO/no human lock did not establish communication readiness. Read-only gate returned `LIVE_TEST_COMMUNICATION_NOT_READY`; signed webhook journal and unified projections were both zero. Native Account2 Conversation1 existed with webhook delivery failure.
+- Controlled seven-party test was maintenance-disabled and verified `enabled=false`; no proactive send, historical replay or claim reset. Prior account/Inbox ACTIVE and #509 deployment must not be treated as handset acceptance.
+- PR #510 fixes omitted session-proxy bypass for exact mapping-UUID signed callbacks and exact internal-key reconciliation, actual upstream custom_attributes markers (legacy-compatible, conflicting markers fail closed), and exact receipt-backed conversation reuse despite the native public API omitting attributes. Established exact-scope CRM projections take precedence over newer unprojected attempts. HMAC, scope, Human/DNC, Shadow, consent, freshness, approval and caps remain authoritative. Focused 34 regressions pass; full CI/deployment and actual receipt-backed recovery pending. Demo remains NOT CONTROLLED_TEST_VERIFIED / NOT PRODUCTION_VERIFIED.
+
 ## Sahra controlled reply repair deployed — 2026-10-14 (Muscat)
 
 - #509 exact head `d796386a58ac85dd1a025d84d5f0903ca1b6c39d` passed full CI `38496804726`, including real OWNER Resume/idempotence/DNC/no-message regression and concurrent controlled inbound cap. Expected-head merge `117b9c6252bc0134b5b83eb453b0f47885f99c9c`; exact-main CI `38497211567` and standard Production Deploy `38497456215` succeeded.
