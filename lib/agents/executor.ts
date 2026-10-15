@@ -1,6 +1,7 @@
 import type { AgentContext, AgentName, AgentResult, CommercialDecision, ReplyDraft } from './contracts';
 import * as core from './executor-core';
 import { standaloneGreetingReply } from './standalone-greeting';
+import { isSahraCustomerContext, sahraCustomerReplyLanguage } from './sahra-customer-language';
 import { resolveReplyLanguage } from '@/lib/outreach/locale';
 import { applyPercentageDiscount, resolveSeptember2026Offer } from '@/lib/conversations/september-offer';
 import { salesServiceKeyForCanonicalId } from '@/lib/conversations/service-key';
@@ -53,7 +54,8 @@ function septemberOfferLine(context: AgentContext, decision: CommercialDecision,
   if (!offer?.reveal) return null;
 
   const arabic = /[\u0600-\u06FF]/.test(context.message) && !/[پچژگک]/.test(context.message);
-  const persian = /^(?:fa|fa-|persian)/i.test(draftLanguage) || /[پچژگک]/.test(context.message);
+  const persian = !isSahraCustomerContext(context)
+    && (/^(?:fa|fa-|persian)/i.test(draftLanguage) || /[پچژگک]/.test(context.message));
 
   if (offer.noDiscount) {
     if (!discountSpecificQuestion(context.message)) return null;
@@ -78,13 +80,14 @@ function septemberOfferLine(context: AgentContext, decision: CommercialDecision,
 export async function executeAgent(agent: AgentName, context: AgentContext): Promise<AgentResult> {
   const style = context.marketLocaleStyle;
   if (agent === 'culture_locale' && style) {
-    const locale = resolveReplyLanguage({
+    const detectedLocale = resolveReplyLanguage({
       message: context.message,
       primaryLocale: style.primaryLocale,
       fallbackLocale: style.fallbackLocale,
       preferredLanguage: context.language,
       conversationHistory: context.conversationHistory,
     });
+    const locale = isSahraCustomerContext(context) ? sahraCustomerReplyLanguage(context) : detectedLocale;
     return {
       agent,
       confidence: 0.97,
