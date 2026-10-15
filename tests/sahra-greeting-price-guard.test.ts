@@ -58,12 +58,13 @@ describe('Sahra greeting should not become a sales claim', () => {
     expect(processed.trace.delivery).toBe('REVIEW'); // Shadow Mode preserved.
   });
 
-  it('honors recent Persian customer context on ambiguous standalone سلام', () => {
+  it('answers ambiguous Persian سلام in Arabic for Sahra despite Persian history', () => {
     const reply = standaloneGreetingReply({
       ...base, message: 'سلام', language: 'fa', conversationHistory: [{ direction: 'INBOUND', body: 'قیمت کفپوش چنده؟' }],
     });
-    expect(reply?.language).toBe('fa');
-    expect(reply?.text).toContain('سلام');
+    expect(reply?.language).toBe('ar-OM');
+    expect(reply?.text).toContain('حياك الله');
+    expect(reply?.text).not.toMatch(/خوش|اومدید|قیمت/);
     expect(reply?.text).not.toMatch(/ريال|37/);
   });
 
