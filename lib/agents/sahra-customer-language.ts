@@ -12,7 +12,7 @@ export function isSahraCustomerContext(context: AgentContext): boolean {
 }
 
 function englishNeutralShort(text: string) {
-  return /^(?:ok|okay|yes|no|sure|thanks|thank you|thx|great|fine|ppf|led|5d|3d|carplay|android|tint|ceramic|screen|screens)[?!. ]*$/i.test(text);
+  return /^(?:ok|okay|yes|no|sure|thanks|thank you|thx|great|fine|ppf|led|5d|3d|carplay|android|tint|ceramic|screen|screens|price|cost|quote|stock|available)[?!. ]*$/i.test(text);
 }
 
 function explicitEnglish(text: string) {
