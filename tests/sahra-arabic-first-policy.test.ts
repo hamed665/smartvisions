@@ -53,6 +53,13 @@ describe('Sahra Arabic-first, English-second, never Persian', () => {
     }
   });
 
+  it('keeps isolated English price/availability tokens in the Arabic customer conversation', () => {
+    const history = [{ direction: 'INBOUND' as const, body: 'مرحبا، عندكم تظليل؟' }];
+    for (const message of ['price', 'cost', 'available', 'stock']) {
+      expect(sahraCustomerReplyLanguage(context(message, { language: 'fa', conversationHistory: history }))).toBe('ar-OM');
+    }
+  });
+
   it('does not inherit old Persian or English when a new Persian/Arabic enquiry arrives', () => {
     const history = [{ direction: 'INBOUND' as const, body: 'How much is window tint?' }];
     expect(sahraCustomerReplyLanguage(context('قیمت کفپوش چنده؟', { language: 'en', conversationHistory: history }))).toBe('ar-OM');
