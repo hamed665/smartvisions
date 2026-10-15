@@ -2,6 +2,7 @@ import type { AgentContext, ReplyDraft } from './contracts';
 import { resolveReplyLanguage } from '@/lib/outreach/locale';
 import { updateAutomotiveSalesMemory } from '@/lib/conversations/automotive-sales-memory';
 import { directPriceQuestion } from './executor-core';
+import { isSahraCustomerContext, sahraCustomerReplyLanguage } from './sahra-customer-language';
 
 /** Resolve only customer-provided facts using the canonical automotive parser. */
 export function vehicleDetailClarification(context: AgentContext, language: string, quote = true) {
@@ -99,10 +100,12 @@ export function safeVehicleQuoteClarification(
     && /[\u0600-\u06ff]/.test(currentMessage)
     && !/[پچژگک‌ی]/.test(currentMessage)
     && /(?:بجم|بكم|جم\s*(?:يطلع|تطلع|تسوون|حسابه|كله|كلها)|كم\s*(?:يطلع|تطلع|بيطلع|بيكلف|حسابه|كله)|وش\s*يطلع|شحال)/i.test(currentMessage);
-  const language = shortGulfPrice ? 'ar-OM' : detectedLanguage === 'und'
+  const candidateLanguage = shortGulfPrice ? 'ar-OM' : detectedLanguage === 'und'
     && /^[A-Za-z0-9\s.,!?'"()\/-]+$/.test(currentMessage)
     && /\b(?:how\s+much|price|cost|quote)\b/i.test(currentMessage)
     ? 'en' : detectedLanguage;
+  const language = isSahraCustomerContext(context)
+    ? sahraCustomerReplyLanguage(context) : candidateLanguage;
   if (language === 'und') return null;
 
   if (!['ar', 'fa', 'en'].some((prefix) => language.startsWith(prefix))) return null;
