@@ -9,6 +9,8 @@ import { controlledInboundEvidence } from '@/lib/whatsapp/controlled-inbound-evi
 import { prepareLatestInboundMediaForAi } from '@/lib/media/preprocess';
 import { evaluateInternalTestLiveReplyPolicy } from '@/lib/whatsapp/internal-test-live-reply-policy';
 import { eligibleUntranscribedVoiceError, untranscribedVoiceClarification } from './voice-understanding-recovery';
+import { SAHRA_FAST_SCOPE } from './sahra-fast-inbound-core';
+import { sahraCustomerDraftAllowed } from '@/lib/agents/sahra-customer-language';
 
 export type InternalTestLiveReplyResult = {
   attempted: boolean;
@@ -218,7 +220,12 @@ export async function runInternalTestLiveReply(input: {
       if (!eligibleUntranscribedVoiceError(error)) {
         return { attempted: true, sent: false, reason: 'VOICE_NOT_READY_NO_AUTOMATIC_RETRY' };
       }
-      honestVoiceClarification = untranscribedVoiceClarification(stringValue(conversation.detected_language));
+      const isSahra = stringValue(inboundMetadata.tenant_business_id) === SAHRA_FAST_SCOPE.tenantBusinessId
+        && stringValue(inboundMetadata.communication_channel_binding_id) === SAHRA_FAST_SCOPE.bindingId;
+      const reportedLanguage = stringValue(conversation.detected_language);
+      honestVoiceClarification = untranscribedVoiceClarification(isSahra
+        ? (/^en(?:-|$)/i.test(reportedLanguage ?? '') ? 'en' : 'ar-OM')
+        : reportedLanguage);
     }
   }
   const evidence = await controlledInboundEvidence({
@@ -266,6 +273,18 @@ export async function runInternalTestLiveReply(input: {
   const replyLanguage = stringValue(draft.language);
   if (!draftText || !replyLanguage) {
     return { attempted: true, sent: false, reason: 'AGENT_DRAFT_INVALID', runId: stringValue(payload.runId) };
+  }
+
+  // Defense in depth at the real Sahra inbound send boundary: a stale/replayed
+  // agent draft, or a voice-fallback draft, cannot bypass customer language policy.
+  const isSahraInbound = stringValue(inboundMetadata.tenant_business_id) === SAHRA_FAST_SCOPE.tenantBusinessId
+    && stringValue(inboundMetadata.communication_channel_binding_id) === SAHRA_FAST_SCOPE.bindingId;
+  if (isSahraInbound && !sahraCustomerDraftAllowed({
+    message: inboundText,
+    language: stringValue(conversation.detected_language),
+    servingBusiness: { name: 'Sahra', countryCode: 'OM' },
+  }, { text: draftText, language: replyLanguage, generatedBy: 'secretary' })) {
+    return { attempted: true, sent: false, reason: 'SAHRA_CUSTOMER_LANGUAGE_POLICY_BLOCKED', runId: stringValue(payload.runId) };
   }
 
   const secretary = agentData(trace, 'secretary');
