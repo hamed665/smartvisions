@@ -21,6 +21,7 @@ import { resolveSmartVisionsCatalogRecommendation } from '@/lib/whatsapp/catalog
 import { replyMatchesHighConfidenceMessageLanguage } from '@/lib/outreach/locale';
 import { safeVehicleQuoteClarification } from './safe-clarification';
 import { safeOmaniConversationClarification } from './omani-conversation-clarification';
+import { isSahraCustomerContext, sahraCustomerDraftAllowed } from './sahra-customer-language';
 function applyConfidenceThreshold(context: AgentContext, result: AgentResult) {
   const threshold = context.agentSettings?.[result.agent]?.confidenceThreshold;
   if (threshold == null || result.confidence >= threshold || result.blockers.includes('BELOW_CONFIGURED_CONFIDENCE')) {
@@ -233,7 +234,9 @@ export async function processInboundMessage(
     customerMessage: context.message,
     draft: draft.text,
   });
-  const languagePolicyPassed = replyMatchesHighConfidenceMessageLanguage({
+  const languagePolicyPassed = isSahraCustomerContext(context)
+    ? sahraCustomerDraftAllowed(context, draft)
+    : replyMatchesHighConfidenceMessageLanguage({
     message: context.message,
     replyLanguage: draft.language,
     replyText: draft.text,
@@ -282,7 +285,8 @@ export async function processInboundMessage(
 
   const guardrails: string[] = [];
   if (!previewPolicyPassed) guardrails.push('UNREQUESTED_CUSTOM_PREVIEW');
-  if (!languagePolicyPassed) guardrails.push('REPLY_LANGUAGE_MISMATCH');
+  if (!languagePolicyPassed) guardrails.push(isSahraCustomerContext(context)
+    ? 'SAHRA_CUSTOMER_ARABIC_ENGLISH_ONLY' : 'REPLY_LANGUAGE_MISMATCH');
   if (!salesBehavior.passed) guardrails.push(...salesBehavior.reasons);
   if (!relevancePassed) guardrails.push('RELEVANCE_GATE_FAILED');
   if (!humanStyle.passed) guardrails.push('HUMAN_STYLE_GATE_FAILED', ...humanStyle.reasons);
@@ -320,7 +324,9 @@ export async function processInboundMessage(
         toolProposals,
         salesPolicyReasons: evaluateSalesReplyPolicy({ context, draft: recovery.draft, decision }).reasons,
       });
-      const recoveryLanguageValid = replyMatchesHighConfidenceMessageLanguage({
+      const recoveryLanguageValid = isSahraCustomerContext(context)
+        ? sahraCustomerDraftAllowed(context, recovery.draft)
+        : replyMatchesHighConfidenceMessageLanguage({
         message: context.message,
         replyLanguage: recovery.draft.language,
         replyText: recovery.draft.text,

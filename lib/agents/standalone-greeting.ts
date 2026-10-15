@@ -1,5 +1,6 @@
 import type { AgentContext, ReplyDraft } from './contracts';
 import { detectHighConfidenceMessageLanguage } from '@/lib/outreach/locale';
+import { isSahraCustomerContext, sahraCustomerReplyLanguage } from './sahra-customer-language';
 
 type GreetingKind = 'ar' | 'fa' | 'en' | 'shared';
 
@@ -29,7 +30,7 @@ export function standaloneGreetingReply(context: AgentContext): ReplyDraft | nul
     .map(item => detectHighConfidenceMessageLanguage(item.body))
     .find(lang => lang === 'fa' || lang === 'ar' || lang === 'en');
   const remembered = previousCustomerLanguage ?? context.language;
-  const language = kind === 'shared'
+  const language = isSahraCustomerContext(context) ? sahraCustomerReplyLanguage(context) : kind === 'shared'
     ? (String(remembered ?? context.marketLocaleStyle?.primaryLocale ?? 'ar-OM').toLowerCase().startsWith('fa') ? 'fa' : 'ar-OM')
     : kind === 'ar' ? (context.marketLocaleStyle?.primaryLocale?.toLowerCase() === 'ar-om' ? 'ar-OM' : 'ar')
       : kind;

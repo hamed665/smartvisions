@@ -2,6 +2,7 @@ import type { AgentContext, ReplyDraft } from './contracts';
 import { resolveReplyLanguage } from '@/lib/outreach/locale';
 import { vehicleDetailClarification } from './safe-clarification';
 import { automotiveServiceCandidates, type AutomotiveService } from '@/lib/conversations/automotive-sales-memory';
+import { isSahraCustomerContext, sahraCustomerReplyLanguage } from './sahra-customer-language';
 
 function isOmaniAutomotive(context: AgentContext) {
   if (String(context.servingBusiness?.countryCode ?? context.countryCode ?? '').toUpperCase() !== 'OM') return false;
@@ -45,10 +46,12 @@ export function safeOmaniConversationClarification(context: AgentContext): {
     && !/[پچژگک‌ی]/u.test(message)
     && /(?:عندكم|عندك|عندكو|في|أبغي|ابغي|ابي|بغيت|كم|جم|بكم|بجم|شحال|يركب|موجود|متوفر|تنفع|شو|وش)/iu.test(message);
   const englishQuestion = /(?:^|\s)(?:how\s*much|price|cost|available|stock|need|want|have|fit|fits|which\s*one)(?:\s|$|[?!.])/iu.test(message);
-  const replyLanguage = arabicQuestion ? 'ar-OM'
+  const candidateReplyLanguage = arabicQuestion ? 'ar-OM'
     : language === 'und' && englishQuestion ? 'en'
     : language === 'und' && priorService && contextualFollowUp
       ? context.language ?? 'und' : language;
+  const replyLanguage = isSahraCustomerContext(context)
+    ? sahraCustomerReplyLanguage(context) : candidateReplyLanguage;
   if (!['ar-OM', 'ar', 'en', 'fa'].includes(replyLanguage)) return null;
   // Two new services in one sentence cannot be silently collapsed to one.
   // A correction such as "لا قصدي PPF مو 5D" must be resolved by the canonical
