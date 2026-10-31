@@ -1,3 +1,9 @@
+## Sender identity Workers compatibility correction — 2026-10-31
+
+The resumed OWNER no-send read at 11:42:50Z returned PROVIDER_TRANSPORT_OR_RUNTIME_ERROR with durationMs=0. The adapter used redirect:error, which Cloudflare Workers rejects synchronously before network I/O. This was a defect introduced in the new diagnostic adapter, not provider disconnection evidence; the earlier UNVERIFIED check cannot establish any Meta identity or token condition.
+
+The bounded repair uses redirect:manual. Existing non-2xx handling rejects every redirect without following Location or forwarding credentials to another origin. The local workerd runtime (latest supported local date 2026-08-08) directly reproduced the constructor rejection and accepted manual/no-store/timeout without network I/O. Full suite: 300 files / 2221 tests; lint/typecheck pass. Two regressions fail on the previous code: Workers-compatible Request construction and single-attempt redirect rejection. The change preserves no-store, the timeout, no-send behavior, expected-number comparison, sanitized diagnostics, OWNER authorization and tenant routing. Official runtime contract: https://developers.cloudflare.com/workers/runtime-apis/request/. Production credential/connection state is not changed. Re-run the explicit no-send identity read only after exact-head CI/deploy succeeds.
+
 ## Hunter live acceptance: scheduler repaired; duplicate introduction blocked — 2026-10-31 07:56 UTC
 
 The natural post-promotion sample at 07:51:25Z records Worker `a223be38-3d1b-4b51-9e71-5acb57e3c9a7` (deployed 07:41:10Z), `automationRuntimeStatus=200`, `failed=0`, tick/evidence/acquisition/dispatch status 200. This supersedes the pre-promotion 07:40 sample's old Worker/307/four-failure evidence. No campaign was activated and historical failures were retained.

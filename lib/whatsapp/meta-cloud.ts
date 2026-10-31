@@ -94,7 +94,9 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
       headers: { Authorization: `Bearer ${this.token}` },
       cache: 'no-store',
       signal: AbortSignal.timeout(8_000),
-      redirect: 'error',
+      // Workers rejects redirect:error before network I/O. Manual mode keeps
+      // credentials on this origin; the non-2xx check below rejects redirects.
+      redirect: 'manual',
     });
     if (!response.ok) {
       // Meta's numerical error codes distinguish auth/permission/asset problems.

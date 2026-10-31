@@ -2,6 +2,23 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MetaCloudWhatsAppProvider, metaSenderIdentityErrorCode } from '@/lib/whatsapp/meta-cloud';
 
 describe('read-only WhatsApp sender identity', () => {
+  it('works when the Workers fetch implementation rejects redirect:error before network I/O', async () => {
+    const fetcher = vi.fn((_url: string, init: RequestInit) => {
+      if (init.redirect === 'error') throw new TypeError('Invalid redirect value, must be one of "follow" or "manual"');
+      return Promise.resolve(new Response(JSON.stringify({ id: '12345', display_phone_number: '+96877402910' })));
+    });
+    vi.stubGlobal('fetch', fetcher);
+    await expect(new MetaCloudWhatsAppProvider({ token: 'test', phoneNumberId: '12345' }).inspectSender('96877402910'))
+      .resolves.toMatchObject({ matchesExpected: true });
+  });
+  it('rejects a redirect without following it or forwarding credentials', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(null, { status: 302, headers: { location: 'https://untrusted.invalid' } }));
+    vi.stubGlobal('fetch', fetcher);
+    await expect(new MetaCloudWhatsAppProvider({ token: 'test-secret', phoneNumberId: '12345' }).inspectSender('96877402910'))
+      .rejects.toThrow('Meta sender identity check failed (302)');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls[0][1].redirect).toBe('manual');
+  });
   it('preserves numeric Meta diagnostics while discarding credential-bearing error text', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: {
       code: 190, error_subcode: 463, message: 'private-token-secret',
