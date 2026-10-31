@@ -10,6 +10,11 @@ const SESSION_BYPASS_PATHS = new Set([
   '/api/ai/process-inbound',
   '/api/outreach/approved-send',
   '/api/operations/analytics-warehouse',
+  // Scheduled calls authenticate inside each handler using INTERNAL_API_KEY.
+  '/api/operations/automation-runtime',
+  '/api/operations/automation-notifications',
+  '/api/operations/data-reporting-schedules',
+  '/api/operations/booking-holds',
   '/api/operations/channel-guard',
   '/api/operations/chatwoot-inbox-reconcile',
   '/api/operations/email-shadow',

@@ -2,6 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { buildGccHumanOpener } from '@/lib/outreach/gcc-human-script';
 
 describe('GCC human acquisition opener', () => {
+  it('uses persisted observations in the human queue instead of changing only the business name', () => {
+    const opener = buildGccHumanOpener({ marketCode: 'OM', businessName: 'Example Salon', primaryServiceId: 'business_website', industry: 'salon',
+      evidence: ['No standalone website is currently known.'] });
+    expect(opener?.evidenceBased).toBe(true);
+    expect(opener?.english).toContain('existing booking or contact options');
+    expect(opener?.arabic).toContain('خدماتكم');
+  });
+  it('does not pretend to have observed a problem without supported evidence', () => {
+    const opener = buildGccHumanOpener({ marketCode: 'OM', businessName: 'Example Clinic', primaryServiceId: 'seo_growth', evidence: ['Unverified lost sales claim'] });
+    expect(opener?.evidenceBased).toBe(false);
+    expect(opener?.english).not.toMatch(/noticed|lost sales|weak SEO/i);
+  });
   it.each(['OM', 'AE', 'SA', 'QA'])('builds a deterministic bilingual human-only opener for %s', (marketCode) => {
     const opener = buildGccHumanOpener({ marketCode, businessName: 'Example Clinic', primaryServiceId: 'seo_growth' });
     expect(opener).toMatchObject({

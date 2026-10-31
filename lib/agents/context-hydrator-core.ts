@@ -215,7 +215,7 @@ export async function hydrateAgentContext(input: {
         .eq('organization_id', organizationId)
         .eq('lead_id', authoritativeLeadId)
         .eq('channel', conversationChannel)
-        .in('status', ['RECEIVED','SENT'])
+        .in('status', ['RECEIVED','SENT','DELIVERED','READ'])
         .contains('metadata', { conversation_id: conversationId })
         .order('created_at', { ascending: false })
         .limit(40)
@@ -227,7 +227,7 @@ export async function hydrateAgentContext(input: {
         .eq('organization_id', organizationId)
         .eq('conversation_id', conversationId)
         .eq('channel', conversationChannel)
-        .in('status', ['RECEIVED','SENT'])
+        .in('status', ['RECEIVED','SENT','DELIVERED','READ'])
         .order('created_at', { ascending: false })
         .limit(40)
       : Promise.resolve({ data: [], error: null }),

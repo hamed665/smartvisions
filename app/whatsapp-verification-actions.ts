@@ -42,6 +42,45 @@ function recordValue(value: unknown) {
   return value && typeof value === 'object' ? value as Record<string, unknown> : {};
 }
 
+export async function inspectWhatsAppSender(formData: FormData) {
+  const ctx = await getCurrentOrganization(true);
+  const db = serviceClient();
+  const expected = String(formData.get('expected_sender_phone') ?? '').replace(/\D/g, '');
+  if (!/^\d{8,15}$/.test(expected)) throw new Error('Expected sender must include its country code');
+  const { data: integration, error: readError } = await db.from('integration_connections')
+    .select('id,config').eq('organization_id', ctx.organizationId).eq('provider', 'META').eq('channel', 'WHATSAPP').maybeSingle();
+  if (readError || !integration) throw new Error('WhatsApp integration was not found');
+  let detail = 'Sender identity could not be verified; no message was sent.';
+  let identity: Awaited<ReturnType<MetaCloudWhatsAppProvider['inspectSender']>> | null = null;
+  try {
+    identity = await new MetaCloudWhatsAppProvider().inspectSender(expected);
+  } catch {
+    // Provider bodies and transport errors must never enter an owner-visible URL.
+  }
+  const checkedAt = new Date().toISOString();
+  const evidence = {
+    status: identity ? (identity.matchesExpected ? 'MATCHED' : 'MISMATCH') : 'UNVERIFIED',
+    expectedPhone: expected,
+    ...(identity ?? {}),
+    checkedAt,
+    scope: 'ORGANIZATION_LEGACY_ENV',
+    providerSendTriggered: false,
+  };
+  const { error: auditError } = await db.from('audit_logs').insert({
+    organization_id: ctx.organizationId, actor_type: 'USER', actor_id: ctx.userId,
+    action: 'META_WHATSAPP_SENDER_IDENTITY_CHECKED', entity_type: 'integration', entity_id: integration.id,
+    after_data: evidence,
+  });
+  if (auditError) throw new Error('Sender identity audit could not be saved');
+  const { error: updateError } = await db.from('integration_connections').update({
+    config: { ...recordValue(integration.config), sender_identity: evidence }, updated_at: checkedAt,
+  }).eq('organization_id', ctx.organizationId).eq('id', integration.id);
+  if (updateError) throw new Error('Sender identity evidence could not be saved');
+  if (identity) detail = `${identity.matchesExpected ? 'Sender matched' : 'Sender mismatch'}: ${identity.displayPhoneNumber}. No message was sent.`;
+  revalidatePath('/integrations');
+  redirect(`/integrations?detail=${encodeURIComponent(detail)}`);
+}
+
 export async function verifyWhatsAppIntegration(formData: FormData) {
   const ctx = await getCurrentOrganization(true);
   const db = serviceClient();

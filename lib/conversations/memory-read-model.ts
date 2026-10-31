@@ -59,7 +59,7 @@ function senderTypeForConversationRow(row: ConversationMemoryRow): ConversationM
 function validConversationStatus(row: ConversationMemoryRow) {
   const direction = String(row.direction ?? '').toUpperCase();
   const status = String(row.status ?? '').toUpperCase();
-  if (direction === 'OUTBOUND') return status === 'SENT';
+  if (direction === 'OUTBOUND') return ['SENT', 'DELIVERED', 'READ'].includes(status);
   if (direction === 'INBOUND') return status === 'RECEIVED' || status === 'SENT';
   return false;
 }
@@ -68,7 +68,7 @@ function validOutreachStatus(row: OutreachMemoryRow) {
   const direction = String(row.direction ?? '').toUpperCase();
   const status = String(row.status ?? '').toUpperCase();
   if (direction === 'INBOUND') return status === 'RECEIVED';
-  if (direction === 'OUTBOUND') return status === 'SENT';
+  if (direction === 'OUTBOUND') return ['SENT', 'DELIVERED', 'READ'].includes(status);
   return false;
 }
 

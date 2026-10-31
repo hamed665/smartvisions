@@ -55,6 +55,33 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
     }
   }
 
+  /** Reads provider identity only; never sends a test message or changes routing. */
+  async inspectSender(expectedPhone: string) {
+    this.assertConfigured();
+    const expected = expectedPhone.replace(/\D/g, '');
+    if (!/^\d{8,15}$/.test(expected)) throw new Error('Expected sender must include its country code');
+    const response = await fetch(`https://graph.facebook.com/${this.graphVersion}/${this.phoneNumberId}?fields=id,display_phone_number,verified_name`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${this.token}` },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8_000),
+      redirect: 'error',
+    });
+    if (!response.ok) throw new Error(`Meta sender identity check failed (${response.status})`);
+    const body = await response.json() as { id?: unknown; display_phone_number?: unknown; verified_name?: unknown };
+    const displayPhoneNumber = typeof body.display_phone_number === 'string' ? body.display_phone_number.trim().slice(0, 60) : '';
+    const digits = displayPhoneNumber.replace(/\D/g, '');
+    if (body.id !== this.phoneNumberId || !/^\d{8,15}$/.test(digits)) {
+      throw new Error('Meta sender identity evidence is incomplete or conflicting');
+    }
+    return {
+      phoneNumberId: this.phoneNumberId!,
+      displayPhoneNumber,
+      verifiedName: typeof body.verified_name === 'string' ? body.verified_name.slice(0, 160) : null,
+      matchesExpected: digits === expected,
+    };
+  }
+
   private async sendPayload(payload: Record<string, unknown>): Promise<WhatsAppSendResult> {
     this.assertConfigured();
     const response = await fetch(`https://graph.facebook.com/${this.graphVersion}/${this.phoneNumberId}/messages`, {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildOwnerSocialAssessment, buildServiceFitQualification } from '../lib/hunters/business/service-fit';
+import { buildOwnerSocialAssessment, buildServiceFitQualification, isQualifiedWebsiteBuild } from '../lib/hunters/business/service-fit';
 
 const base = {
   sourceType: 'google_places' as const,
@@ -17,6 +17,16 @@ const base = {
 const catalog = new Set(['business_website','premium_bilingual_website','custom_website','ai_reels_4','whatsapp_ai_setup']);
 
 describe('high-precision service-fit qualification', () => {
+  it('does not label a raw no-site or social-check candidate as qualified website sales', () => {
+    const business = { businessStatus: 'OPERATIONAL', websiteUri: 'https://fresha.com/example' };
+    const qualified = { priorityQualified: true, shouldContact: true, catalogReady: true, primaryOfferFamily: 'WEBSITE_BUILD' };
+    expect(isQualifiedWebsiteBuild({ ...business, qualification: qualified })).toBe(true);
+    for (const qualification of [{}, { ...qualified, primaryOfferFamily: 'AI_REELS' }, { ...qualified, shouldContact: false }, { ...qualified, catalogReady: false }]) {
+      expect(isQualifiedWebsiteBuild({ ...business, qualification })).toBe(false);
+    }
+    expect(isQualifiedWebsiteBuild({ ...business, websiteUri: 'https://salon.om', qualification: qualified })).toBe(false);
+    expect(isQualifiedWebsiteBuild({ ...business, businessStatus: 'CLOSED_PERMANENTLY', qualification: qualified })).toBe(false);
+  });
   it('requires a specific note before owner social evidence can become VERIFIED', () => {
     expect(() => buildOwnerSocialAssessment({ quality: 'WEAK', note: '' })).toThrow(/evidence note/i);
     expect(() => buildOwnerSocialAssessment({ quality: 'INACTIVE', note: 'short' })).toThrow(/evidence note/i);

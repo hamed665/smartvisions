@@ -30,6 +30,10 @@ describe('session proxy bypass paths', () => {
   it('bypasses session auth only for exact internal-key-protected server endpoints', () => {
     expect(shouldBypassSession('/api/ai/process-inbound')).toBe(true);
     expect(shouldBypassSession('/api/outreach/approved-send')).toBe(true);
+    for (const name of ['automation-runtime','automation-notifications','data-reporting-schedules','booking-holds']) {
+      expect(shouldBypassSession('/api/operations/' + name)).toBe(true);
+      expect(shouldBypassSession('/api/operations/' + name + '/extra')).toBe(false);
+    }
     expect(shouldBypassSession('/api/operations/analytics-warehouse')).toBe(true);
     expect(shouldBypassSession('/api/operations/channel-guard')).toBe(true);
     expect(shouldBypassSession('/api/operations/chatwoot-inbox-reconcile')).toBe(true);

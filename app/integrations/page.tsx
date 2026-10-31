@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { verifyCrawl4AiIntegration, verifyEmailIntegration } from '@/app/integration-health-actions';
-import { transcribeLatestWhatsAppVoicePilot, verifyWhatsAppIntegration } from '@/app/whatsapp-verification-actions';
+import { inspectWhatsAppSender, transcribeLatestWhatsAppVoicePilot, verifyWhatsAppIntegration } from '@/app/whatsapp-verification-actions';
 import { updateIntegration } from '@/app/management-actions';
 import { connectTelegramCustomerChannel } from '@/app/telegram-customer-actions';
 import { getCurrentOrganization } from '@/lib/supabase/org';
@@ -288,6 +288,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
         });
         const latency = latencyByProvider.get(provider);
         const isWhatsApp = provider === 'META' && channel === 'WHATSAPP';
+        const senderIdentity = recordValue(recordValue(r.config).sender_identity);
         const isBuiltInWebChat = provider === 'SMART_VISIONS' && channel === 'WEB_CHAT';
         const isTelegramCustomer = provider === 'TELEGRAM' && channel === 'TELEGRAM';
         const displayedStatus = isBuiltInWebChat ? 'BUILT_IN' : isTelegramCustomer ? String(r.status) : status;
@@ -334,6 +335,10 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
               {feedback.email && (feedback.detail || feedback.message) ? <p role="status" className="muted smallText">{(feedback.detail ?? feedback.message ?? '').slice(0, 500)}</p> : null}
             </> : null}
             {isWhatsApp ? <>
+              <label>Expected organization sender (country code included)<input name="expected_sender_phone" inputMode="tel" defaultValue={String(senderIdentity.expectedPhone ?? '')} placeholder="968XXXXXXXX" disabled={!editable} /></label>
+              <button type="submit" formAction={inspectWhatsAppSender} disabled={!editable || !credential}>Check sender identity (no message)</button>
+              <p className="muted smallText">Organization sender: {String(senderIdentity.status ?? 'NOT_CHECKED')}{senderIdentity.displayPhoneNumber ? ` · ${String(senderIdentity.displayPhoneNumber)}` : ''}{senderIdentity.checkedAt ? ` · ${String(senderIdentity.checkedAt)}` : ''}. This check reads Meta identity only and does not change customer channel routing.</p>
+              {feedback.detail ? <p role="status" className="muted smallText">{feedback.detail.slice(0, 500)}</p> : null}
               <input name="test_whatsapp" inputMode="tel" autoComplete="tel" placeholder="e.g. 9689XXXXXXX" disabled={!editable} />
               <button type="submit" formAction={verifyWhatsAppIntegration} disabled={!editable || !credential}>Verify WhatsApp once</button>
               <button type="submit" formAction={transcribeLatestWhatsAppVoicePilot} disabled={!voicePilotReady}>Transcribe latest test voice</button>

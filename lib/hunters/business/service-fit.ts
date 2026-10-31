@@ -1,7 +1,19 @@
 import type { DiscoveredBusiness } from './types';
 import type { IndustrySegment, PersonalizationRegion, WebsitePresenceClass } from './personalization';
 import { inferIndustrySegment } from './personalization';
-import { deriveWhatsappCandidate } from './selective-enrichment';
+import { classifyWebsiteUri, deriveWhatsappCandidate } from './selective-enrichment';
+
+export function isQualifiedWebsiteBuild(input: {
+  businessStatus?: string | null;
+  websiteUri?: string | null;
+  qualification: Record<string, unknown>;
+}) {
+  const q = input.qualification;
+  return String(input.businessStatus ?? '').toUpperCase() === 'OPERATIONAL'
+    && classifyWebsiteUri(input.websiteUri) !== 'STANDALONE'
+    && q.priorityQualified === true && q.shouldContact === true && q.catalogReady === true
+    && q.primaryOfferFamily === 'WEBSITE_BUILD';
+}
 
 export type ProspectTier = 'A' | 'B' | 'C' | 'SKIP';
 export type OfferFamily =
