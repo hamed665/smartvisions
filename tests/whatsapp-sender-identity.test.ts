@@ -2,6 +2,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MetaCloudWhatsAppProvider, metaSenderIdentityErrorCode } from '@/lib/whatsapp/meta-cloud';
 
 describe('read-only WhatsApp sender identity', () => {
+  it('preserves numeric Meta diagnostics while discarding credential-bearing error text', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: {
+      code: 190, error_subcode: 463, message: 'private-token-secret',
+    } }), { status: 400 })));
+    let caught: unknown;
+    try { await new MetaCloudWhatsAppProvider({ token: 'test', phoneNumberId: '12345' }).inspectSender('96877402910'); }
+    catch (error) { caught = error; }
+    expect(metaSenderIdentityErrorCode(caught)).toBe('META_HTTP_400_CODE_190_SUBCODE_463');
+    expect(JSON.stringify(caught)).not.toContain('private-token-secret');
+  });
   it.each([
     [new Error('Meta sender identity check failed (401)'), 'META_HTTP_401'],
     [new Error('WhatsApp access token and phone-number ID are required'), 'MISSING_PROVIDER_CONFIG'],
