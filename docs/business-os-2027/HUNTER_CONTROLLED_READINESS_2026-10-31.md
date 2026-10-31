@@ -43,3 +43,7 @@ A passing build does not authorize bulk outreach, disabling Shadow, reviving exp
 ## Rollback
 
 Revert this bounded code package through normal exact-head CI/deploy. No schema/data migration rollback is needed. Existing Memory review items remain governed; reject or expire them through Memory V2 rather than deleting evidence. Keep the new campaign DRAFT and preserve old audited campaign history. Sender read evidence may be stale after a credential change; recheck identity explicitly. Never roll back by disabling approval, internal authentication, Cost Guard or DNC/human gates.
+
+## First release Production checkpoint (07:45 UTC)
+
+PR #535 / main 5f4030b81426622cd401a01c1390daf0896f8c1f passed PR CI 41180906277, main CI 41181219926 and Production Deploy 41181487010. The new control is visible in routed Production. Actual public unauthenticated POSTs to the four repaired endpoints returned 401, without redirect. The first expected-sender check recorded UNVERIFIED at 07:41:58Z, no actual identity and no send. It is not disconnection evidence. The subsequent small diagnostics change adds an allowlisted failure reason and duration so operator reconciliation can distinguish HTTP/provider, config, timeout, malformed-response and transport failures without leaking provider text or secrets. Suite: 2199 tests. No automatic retry, credential/routing mutation or live-send activation is introduced. The ten-minute post-promotion runtime sample and sender outcome remain separate live acceptance evidence.

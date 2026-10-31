@@ -29,6 +29,20 @@ function resolveMetaGraphVersion() {
   return process.env.META_GRAPH_VERSION?.trim() || 'v23.0';
 }
 
+/** Stable diagnostics only: never retain a provider body, URL, token or arbitrary error text. */
+export function metaSenderIdentityErrorCode(error: unknown) {
+  if (!(error instanceof Error)) return 'UNKNOWN_ERROR';
+  const http = error.message.match(/^Meta sender identity check failed \((\d{3})\)$/);
+  if (http) return `META_HTTP_${http[1]}`;
+  if (error.message === 'WhatsApp access token and phone-number ID are required') return 'MISSING_PROVIDER_CONFIG';
+  if (error.message === 'Meta sender identity evidence is incomplete or conflicting') return 'INCOMPLETE_PROVIDER_IDENTITY';
+  if (error.name === 'TimeoutError') return 'PROVIDER_READ_TIMEOUT';
+  if (error.name === 'AbortError') return 'PROVIDER_READ_ABORTED';
+  if (error.name === 'SyntaxError') return 'INVALID_PROVIDER_RESPONSE';
+  if (error.name === 'TypeError') return 'PROVIDER_TRANSPORT_OR_RUNTIME_ERROR';
+  return 'UNKNOWN_ERROR';
+}
+
 export type MetaCloudWhatsAppProviderConfig = {
   token?: string;
   phoneNumberId?: string;
