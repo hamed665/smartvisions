@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
-import { MetaCloudWhatsAppProvider } from '@/lib/whatsapp/meta-cloud';
+import { MetaCloudWhatsAppProvider, metaSenderIdentityErrorCode } from '@/lib/whatsapp/meta-cloud';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { assertPaidOperationAllowed, getCostGuardState, recordUsage } from '@/lib/reliability/cost-guard';
 import { verifyControlledWhatsAppVoicePilot } from '@/lib/voice/controlled-pilot';
@@ -52,10 +52,13 @@ export async function inspectWhatsAppSender(formData: FormData) {
   if (readError || !integration) throw new Error('WhatsApp integration was not found');
   let detail = 'Sender identity could not be verified; no message was sent.';
   let identity: Awaited<ReturnType<MetaCloudWhatsAppProvider['inspectSender']>> | null = null;
+  let errorCode: string | null = null;
+  const startedAt = Date.now();
   try {
     identity = await new MetaCloudWhatsAppProvider().inspectSender(expected);
-  } catch {
+  } catch (error) {
     // Provider bodies and transport errors must never enter an owner-visible URL.
+    errorCode = metaSenderIdentityErrorCode(error);
   }
   const checkedAt = new Date().toISOString();
   const evidence = {
@@ -64,6 +67,8 @@ export async function inspectWhatsAppSender(formData: FormData) {
     ...(identity ?? {}),
     checkedAt,
     scope: 'ORGANIZATION_LEGACY_ENV',
+    errorCode,
+    durationMs: Math.max(0, Date.now() - startedAt),
     providerSendTriggered: false,
   };
   const { error: auditError } = await db.from('audit_logs').insert({
@@ -77,6 +82,7 @@ export async function inspectWhatsAppSender(formData: FormData) {
   }).eq('organization_id', ctx.organizationId).eq('id', integration.id);
   if (updateError) throw new Error('Sender identity evidence could not be saved');
   if (identity) detail = `${identity.matchesExpected ? 'Sender matched' : 'Sender mismatch'}: ${identity.displayPhoneNumber}. No message was sent.`;
+  else detail = `Sender identity unverified (${errorCode}). This does not establish that the number is disconnected. No message was sent.`;
   revalidatePath('/integrations');
   redirect(`/integrations?detail=${encodeURIComponent(detail)}`);
 }

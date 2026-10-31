@@ -1,7 +1,29 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MetaCloudWhatsAppProvider } from '@/lib/whatsapp/meta-cloud';
+import { MetaCloudWhatsAppProvider, metaSenderIdentityErrorCode } from '@/lib/whatsapp/meta-cloud';
 
 describe('read-only WhatsApp sender identity', () => {
+  it('preserves numeric Meta diagnostics while discarding credential-bearing error text', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: {
+      code: 190, error_subcode: 463, message: 'private-token-secret',
+    } }), { status: 400 })));
+    let caught: unknown;
+    try { await new MetaCloudWhatsAppProvider({ token: 'test', phoneNumberId: '12345' }).inspectSender('96877402910'); }
+    catch (error) { caught = error; }
+    expect(metaSenderIdentityErrorCode(caught)).toBe('META_HTTP_400_CODE_190_SUBCODE_463');
+    expect(JSON.stringify(caught)).not.toContain('private-token-secret');
+  });
+  it.each([
+    [new Error('Meta sender identity check failed (401)'), 'META_HTTP_401'],
+    [new Error('WhatsApp access token and phone-number ID are required'), 'MISSING_PROVIDER_CONFIG'],
+    [new Error('Meta sender identity evidence is incomplete or conflicting'), 'INCOMPLETE_PROVIDER_IDENTITY'],
+    [new DOMException('private timeout details', 'TimeoutError'), 'PROVIDER_READ_TIMEOUT'],
+    [new DOMException('private abort details', 'AbortError'), 'PROVIDER_READ_ABORTED'],
+    [new SyntaxError('private response body'), 'INVALID_PROVIDER_RESPONSE'],
+    [new TypeError('private transport URL'), 'PROVIDER_TRANSPORT_OR_RUNTIME_ERROR'],
+    [new Error('private-provider-secret'), 'UNKNOWN_ERROR'],
+  ])('retains only a safe reason code for failed identity reads', (error, code) => {
+    expect(metaSenderIdentityErrorCode(error)).toBe(code);
+  });
   afterEach(() => vi.unstubAllGlobals());
   it('checks the actual configured sender without invoking messages', async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({

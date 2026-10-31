@@ -1,3 +1,21 @@
+## Hunter live acceptance: scheduler repaired; duplicate introduction blocked — 2026-10-31 07:56 UTC
+
+The natural post-promotion sample at 07:51:25Z records Worker `a223be38-3d1b-4b51-9e71-5acb57e3c9a7` (deployed 07:41:10Z), `automationRuntimeStatus=200`, `failed=0`, tick/evidence/acquisition/dispatch status 200. This supersedes the pre-promotion 07:40 sample's old Worker/307/four-failure evidence. No campaign was activated and historical failures were retained.
+
+Live OWNER review also found that Human Acquisition Queue offered Community Dental Center a fresh introduction despite its canonical EMAIL DELIVERED record from 2026-09-10T08:58:47Z. The bounded follow-up uses existing organization-scoped Leads, outreach_messages, conversation_messages and sales_conversations to suppress first-touch copy/contact buttons for prior contact, existing outbound work, existing conversation, DNC/terminal state and HUMAN/PAUSED context. It links to existing CRM context, fails closed on lookup failure or bounded-read saturation, creates no contact ledger/queue and sends nothing. Recorded CONTACTED/REPLIED/INTERESTED/HOT state also blocks a repeated introduction when a provider mirror is absent. A prepared/failed/ambiguous outbound requires review, not a competing cold introduction. This is a display/workflow guard, not a replacement for canonical send permission.
+
+Follow-up validation: 300 files / 2219 tests. Exact-head CI and production readback remain release gates for these additional diagnostics/history changes. Sender identity remains UNVERIFIED until the newly diagnostic no-send read is performed; no cause or disconnection is inferred from the initial inconclusive check.
+
+## Hunter Production verification and sender diagnostics — 2026-10-31 07:45 UTC
+
+PR #535 merged as `5f4030b81426622cd401a01c1390daf0896f8c1f`. Exact PR CI 41180906277, exact-main CI 41181220026 and Cloudflare Production Deploy 41181487010 succeeded. The new OWNER sender control renders in routed Production. Unauthenticated POSTs to all four repaired scheduled endpoints return HTTP 401 instead of 307, preserving internal-key authority. The local checkout was byte-compared against all 29 changed merged files and matched.
+
+The explicit no-send OWNER identity read for expected `96877402910` persisted UNVERIFIED at 2026-10-31T07:41:58.666Z. It did not return an actual phone identity and does not establish disconnection. Provider config/connection/enabled state and the Sahra binding were preserved. This is an unresolved live acceptance item, not MATCHED or a successful connection claim. The bounded diagnostics follow-up records only allowlisted error classes/HTTP status, bounded numeric Meta error codes and duration; it never stores arbitrary provider bodies, URLs, transport text or tokens, sends a message or retries automatically. Its deterministic suite is 298 files / 2200 tests, with exact-head release gates required separately.
+
+The latest ten-minute sampled heartbeat at the time of this checkpoint still belongs to the old Oct-15 Worker because the 07:40 sample began before promotion. It cannot prove the new scheduled runtime; observe a naturally scheduled post-promotion sample, preserving historical failures. Both September campaigns are now PAUSED; zero campaigns are RUNNING. The new three-business campaign remains DRAFT; Shadow remains ON; six historical follow-ups remain owner-review work. Three real salon qualifications cost $0.06, and no prospect outbound was recorded during preparation.
+
+No claim is made that the number is disconnected, that all sales flows are live, that reviewed Memory already contains approved facts, or that the three salon research candidates are qualified website buyers. Approved portfolio is still absent. Read the latest PR/deployment/audit evidence before activation.
+
 ## Hunter controlled-readiness repair — 2026-10-31
 
 Owner requested preparation of the existing Smart Visions Hunter for selling websites in Muscat. Baseline main is `e7d65c9ac1a4a908bedcb61566adcdb5a4e6b24e`. This package extends `SECTION SEGMENT_SALES_MARKETING / HUNTER-CUSTOMER-MODULE` and `SECTION BUSINESS_INTELLIGENCE_AI / MEMORY-V2, AI-AGENT-RUNTIME`; it does not replace the full-product roadmap or its continuation cursor.

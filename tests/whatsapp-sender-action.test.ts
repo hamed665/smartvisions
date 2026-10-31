@@ -3,7 +3,7 @@ const mocks = vi.hoisted(() => ({ owner: vi.fn(), inspect: vi.fn(), insert: vi.f
 vi.mock('next/navigation', () => ({ redirect: vi.fn(() => { throw new Error('REDIRECT'); }) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/supabase/org', () => ({ getCurrentOrganization: mocks.owner }));
-vi.mock('@/lib/whatsapp/meta-cloud', () => ({ MetaCloudWhatsAppProvider: class { inspectSender = mocks.inspect; } }));
+vi.mock('@/lib/whatsapp/meta-cloud', () => ({ MetaCloudWhatsAppProvider: class { inspectSender = mocks.inspect; }, metaSenderIdentityErrorCode: () => 'UNKNOWN_ERROR' }));
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({ from: () => {
   const chain = { select: () => chain, eq: () => chain, maybeSingle: async () => ({ data: { id: 'integration-1', config: { existing: 'preserved' } }, error: null }),
     insert: mocks.insert, update: (value: unknown) => { mocks.update(value); return chain; },
@@ -39,5 +39,6 @@ describe('owner-only sender identity action', () => {
     await expect(inspectWhatsAppSender(form())).rejects.toThrow('REDIRECT');
     expect(JSON.stringify(mocks.update.mock.calls)).not.toContain('private-provider-secret');
     expect(mocks.update.mock.calls[0][0].config.sender_identity.status).toBe('UNVERIFIED');
+    expect(mocks.update.mock.calls[0][0].config.sender_identity.errorCode).toBe('UNKNOWN_ERROR');
   });
 });

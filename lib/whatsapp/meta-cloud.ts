@@ -29,6 +29,35 @@ function resolveMetaGraphVersion() {
   return process.env.META_GRAPH_VERSION?.trim() || 'v23.0';
 }
 
+function safeProviderErrorNumber(value: unknown) {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 1_000_000_000 ? value : undefined;
+}
+
+export class MetaSenderIdentityReadError extends Error {
+  constructor(readonly status: number, readonly providerCode?: number, readonly providerSubcode?: number) {
+    super(`Meta sender identity check failed (${status})`);
+  }
+}
+
+/** Stable diagnostics only: never retain a provider body, URL, token or arbitrary error text. */
+export function metaSenderIdentityErrorCode(error: unknown) {
+  if (!(error instanceof Error)) return 'UNKNOWN_ERROR';
+  if (error instanceof MetaSenderIdentityReadError) {
+    const code = safeProviderErrorNumber(error.providerCode);
+    const subcode = safeProviderErrorNumber(error.providerSubcode);
+    return `META_HTTP_${error.status}${code !== undefined ? `_CODE_${code}` : ''}${subcode !== undefined ? `_SUBCODE_${subcode}` : ''}`;
+  }
+  const http = error.message.match(/^Meta sender identity check failed \((\d{3})\)$/);
+  if (http) return `META_HTTP_${http[1]}`;
+  if (error.message === 'WhatsApp access token and phone-number ID are required') return 'MISSING_PROVIDER_CONFIG';
+  if (error.message === 'Meta sender identity evidence is incomplete or conflicting') return 'INCOMPLETE_PROVIDER_IDENTITY';
+  if (error.name === 'TimeoutError') return 'PROVIDER_READ_TIMEOUT';
+  if (error.name === 'AbortError') return 'PROVIDER_READ_ABORTED';
+  if (error.name === 'SyntaxError') return 'INVALID_PROVIDER_RESPONSE';
+  if (error.name === 'TypeError') return 'PROVIDER_TRANSPORT_OR_RUNTIME_ERROR';
+  return 'UNKNOWN_ERROR';
+}
+
 export type MetaCloudWhatsAppProviderConfig = {
   token?: string;
   phoneNumberId?: string;
@@ -67,7 +96,13 @@ export class MetaCloudWhatsAppProvider implements WhatsAppProvider {
       signal: AbortSignal.timeout(8_000),
       redirect: 'error',
     });
-    if (!response.ok) throw new Error(`Meta sender identity check failed (${response.status})`);
+    if (!response.ok) {
+      // Meta's numerical error codes distinguish auth/permission/asset problems.
+      // Never keep its error message, which may contain credential-bearing text.
+      const failure = await response.json().catch(() => null) as { error?: { code?: unknown; error_subcode?: unknown } } | null;
+      throw new MetaSenderIdentityReadError(response.status,
+        safeProviderErrorNumber(failure?.error?.code), safeProviderErrorNumber(failure?.error?.error_subcode));
+    }
     const body = await response.json() as { id?: unknown; display_phone_number?: unknown; verified_name?: unknown };
     const displayPhoneNumber = typeof body.display_phone_number === 'string' ? body.display_phone_number.trim().slice(0, 60) : '';
     const digits = displayPhoneNumber.replace(/\D/g, '');

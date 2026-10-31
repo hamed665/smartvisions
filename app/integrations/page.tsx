@@ -337,7 +337,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
             {isWhatsApp ? <>
               <label>Expected organization sender (country code included)<input name="expected_sender_phone" inputMode="tel" defaultValue={String(senderIdentity.expectedPhone ?? '')} placeholder="968XXXXXXXX" disabled={!editable} /></label>
               <button type="submit" formAction={inspectWhatsAppSender} disabled={!editable || !credential}>Check sender identity (no message)</button>
-              <p className="muted smallText">Organization sender: {String(senderIdentity.status ?? 'NOT_CHECKED')}{senderIdentity.displayPhoneNumber ? ` · ${String(senderIdentity.displayPhoneNumber)}` : ''}{senderIdentity.checkedAt ? ` · ${String(senderIdentity.checkedAt)}` : ''}. This check reads Meta identity only and does not change customer channel routing.</p>
+              <p className="muted smallText">Organization sender: {String(senderIdentity.status ?? 'NOT_CHECKED')}{senderIdentity.displayPhoneNumber ? ` · ${String(senderIdentity.displayPhoneNumber)}` : ''}{senderIdentity.checkedAt ? ` · ${String(senderIdentity.checkedAt)}` : ''}{senderIdentity.errorCode ? ` · ${String(senderIdentity.errorCode)}` : ''}. This check reads Meta identity only and does not change customer channel routing.</p>
               {feedback.detail ? <p role="status" className="muted smallText">{feedback.detail.slice(0, 500)}</p> : null}
               <input name="test_whatsapp" inputMode="tel" autoComplete="tel" placeholder="e.g. 9689XXXXXXX" disabled={!editable} />
               <button type="submit" formAction={verifyWhatsAppIntegration} disabled={!editable || !credential}>Verify WhatsApp once</button>
