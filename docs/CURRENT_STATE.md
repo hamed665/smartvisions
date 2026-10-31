@@ -1,3 +1,11 @@
+## Hunter live acceptance: scheduler repaired; duplicate introduction blocked — 2026-10-31 07:56 UTC
+
+The natural post-promotion sample at 07:51:25Z records Worker `a223be38-3d1b-4b51-9e71-5acb57e3c9a7` (deployed 07:41:10Z), `automationRuntimeStatus=200`, `failed=0`, tick/evidence/acquisition/dispatch status 200. This supersedes the pre-promotion 07:40 sample's old Worker/307/four-failure evidence. No campaign was activated and historical failures were retained.
+
+Live OWNER review also found that Human Acquisition Queue offered Community Dental Center a fresh introduction despite its canonical EMAIL DELIVERED record from 2026-09-10T08:58:47Z. The bounded follow-up uses existing organization-scoped Leads, outreach_messages, conversation_messages and sales_conversations to suppress first-touch copy/contact buttons for prior contact, existing outbound work, existing conversation, DNC/terminal state and HUMAN/PAUSED context. It links to existing CRM context, fails closed on lookup failure or bounded-read saturation, creates no contact ledger/queue and sends nothing. Recorded CONTACTED/REPLIED/INTERESTED/HOT state also blocks a repeated introduction when a provider mirror is absent. A prepared/failed/ambiguous outbound requires review, not a competing cold introduction. This is a display/workflow guard, not a replacement for canonical send permission.
+
+Follow-up validation: 300 files / 2219 tests. Exact-head CI and production readback remain release gates for these additional diagnostics/history changes. Sender identity remains UNVERIFIED until the newly diagnostic no-send read is performed; no cause or disconnection is inferred from the initial inconclusive check.
+
 ## Hunter Production verification and sender diagnostics — 2026-10-31 07:45 UTC
 
 PR #535 merged as `5f4030b81426622cd401a01c1390daf0896f8c1f`. Exact PR CI 41180906277, exact-main CI 41181220026 and Cloudflare Production Deploy 41181487010 succeeded. The new OWNER sender control renders in routed Production. Unauthenticated POSTs to all four repaired scheduled endpoints return HTTP 401 instead of 307, preserving internal-key authority. The local checkout was byte-compared against all 29 changed merged files and matched.

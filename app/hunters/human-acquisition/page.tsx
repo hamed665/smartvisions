@@ -1,8 +1,10 @@
+import Link from 'next/link';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import {
   humanAcquisitionBusiness,
   humanAcquisitionReason,
   humanAcquisitionTier,
+  loadHumanFirstTouchContexts,
   isGccHumanAcquisitionCandidate,
   type HumanAcquisitionOpportunity,
 } from '@/lib/hunters/business/human-acquisition';
@@ -25,6 +27,7 @@ type QueueBusiness = {
 
 type QueueRow = HumanAcquisitionOpportunity & {
   id: string;
+  business_id: string;
   acquisition_routing_reason?: string | null;
   message_hooks?: unknown;
   businesses?: QueueBusiness | QueueBusiness[] | null;
@@ -51,6 +54,7 @@ export default async function HumanAcquisitionPage() {
   if (error) throw new Error(`Human acquisition queue unavailable: ${error.message}`);
 
   const rows = ((data ?? []) as unknown as QueueRow[]).filter(isGccHumanAcquisitionCandidate);
+  const firstTouches = await loadHumanFirstTouchContexts({ supabase, organizationId, businessIds: rows.map(row => row.business_id) });
 
   return <main className="pageStack">
     <section className="panel">
@@ -76,7 +80,9 @@ export default async function HumanAcquisitionPage() {
           const business = humanAcquisitionBusiness(row) as QueueBusiness | null;
           const instagram = safeInstagram(business?.instagram);
           const phone = phoneDigits(business?.whatsapp || business?.international_phone || business?.phone);
-          const opener = buildGccHumanOpener({
+          const touchContext = firstTouches.get(row.business_id);
+          const blockedReason = touchContext ? touchContext.blockedReason : 'HISTORY_UNAVAILABLE';
+          const opener = blockedReason ? null : buildGccHumanOpener({
             marketCode: business?.country_code,
             businessName: business?.name,
             primaryServiceId: row.primary_service_id,
@@ -93,14 +99,16 @@ export default async function HumanAcquisitionPage() {
             </div>
             <p><strong>Primary offer:</strong> {row.primary_service_id || 'Owner review required'}</p>
             <p className="muted">{row.acquisition_routing_reason || humanAcquisitionReason(row)}</p>
+            {blockedReason ? <p role="status">{blockedReason} · Review the existing CRM context before continuing. A new introduction is not suggested.</p> : null}
             {opener ? <div className="card">
               <p className="muted">{opener.evidenceBased ? 'Evidence-based opener' : 'Introduction only · review business evidence before an offer'} · human send only</p>
               <p dir="rtl">{opener.arabic}</p>
               <p>{opener.english}</p>
             </div> : null}
             <div className="buttonRow">
-              {instagram ? <a className="secondaryButton" href={instagram} target="_blank" rel="noreferrer">Open Instagram</a> : null}
-              {phone.length >= 8 ? <a className="secondaryButton" href={`https://wa.me/${phone}`} target="_blank" rel="noreferrer">Open WhatsApp manually</a> : null}
+              {touchContext?.leadId ? <Link className="secondaryButton" href={`/leads/${touchContext.leadId}`}>Review CRM context</Link> : null}
+              {!blockedReason && instagram ? <a className="secondaryButton" href={instagram} target="_blank" rel="noreferrer">Open Instagram</a> : null}
+              {!blockedReason && phone.length >= 8 ? <a className="secondaryButton" href={`https://wa.me/${phone}`} target="_blank" rel="noreferrer">Open WhatsApp manually</a> : null}
               {business?.google_maps_uri ? <a className="secondaryButton" href={business.google_maps_uri} target="_blank" rel="noreferrer">Open Maps</a> : null}
             </div>
           </article>;
