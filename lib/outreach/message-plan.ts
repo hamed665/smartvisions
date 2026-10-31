@@ -184,8 +184,20 @@ export function buildCanonicalFirstTouchDraft(input: MessagePlanInput) {
     .find((item): item is CanonicalFirstTouchObservation => item !== null);
   if (!observation) throw new Error('No supported verified first-touch observation is available');
 
-  const offer = CANONICAL_OFFER_COPY[input.recommendedOffer];
+  let offer = CANONICAL_OFFER_COPY[input.recommendedOffer];
   if (!offer) throw new Error('Recommended offer has no canonical first-touch copy');
+  // Describe a possible use, never infer a missing booking system or lost sales.
+  if (input.recommendedOffer === 'business_website' && /salon|beauty|spa|صالون|تجميل/i.test(input.industry ?? '')) {
+    offer = {
+      english: 'a standalone page to explain your services and link to your existing booking or contact options',
+      omaniArabic: 'صفحة مستقلة توضّح خدماتكم وتربط بخيارات الحجز أو التواصل الموجودة عندكم',
+    };
+  } else if (input.recommendedOffer === 'business_website' && /dental|clinic|عيادة|أسنان/i.test(input.industry ?? '')) {
+    offer = {
+      english: 'a clear website explaining your services and how patients can contact your team',
+      omaniArabic: 'موقع واضح يشرح خدماتكم وطريقة تواصل المرضى مع فريقكم',
+    };
+  }
   const businessName = input.businessName.trim();
   if (!businessName) throw new Error('businessName is required');
 

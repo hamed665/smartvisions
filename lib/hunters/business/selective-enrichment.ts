@@ -8,6 +8,7 @@ const CONTACT_ONLY_HOSTS = new Set([
   'linktr.ee','www.linktr.ee','bio.site','taplink.cc',
   'whatclinic.com','www.whatclinic.com','fresha.com','www.fresha.com','booksy.com','www.booksy.com',
   'linkin.bio','www.linkin.bio','beacons.ai','www.beacons.ai',
+  'noona.app','alteg.io','salonist.io',
 ]);
 
 export function assertValidGooglePlaceId(placeId: string) {
@@ -20,7 +21,9 @@ export function classifyWebsiteUri(value: string | null | undefined): 'NONE' | '
   if (!raw) return 'NONE';
   try {
     const url = new URL(raw.startsWith('http://') || raw.startsWith('https://') ? raw : `https://${raw}`);
-    return CONTACT_ONLY_HOSTS.has(url.hostname.toLowerCase()) ? 'CONTACT_ONLY' : 'STANDALONE';
+    const host = url.hostname.toLowerCase();
+    const hostedBooking = ['noona.app','alteg.io','salonist.io'].some(domain => host.endsWith(`.${domain}`));
+    return CONTACT_ONLY_HOSTS.has(host) || hostedBooking ? 'CONTACT_ONLY' : 'STANDALONE';
   } catch {
     return 'STANDALONE';
   }

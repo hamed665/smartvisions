@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { processInboundMessage } from '@/lib/agents/pipeline';
+import { stageCompletedRunMemory } from '@/lib/agents/memory-staging';
 import type { AgentContext } from '@/lib/agents/contracts';
 import { hydrateAgentContext, type HydratedRuntimeEvidence } from '@/lib/agents/context-hydrator';
 import { deterministicAgentRuntime } from '@/lib/agents/runtime';
@@ -509,6 +510,13 @@ export async function POST(request: Request) {
       }, { status: 202 });
     }
 
+    const memoryStage = await stageCompletedRunMemory({ supabase, organizationId, runId: claimed.id, context: effectiveContext });
+    if (memoryStage.status === 'RECONCILIATION_REQUIRED') {
+      await supabase.from('audit_logs').insert({ organization_id: organizationId, actor_type: 'SYSTEM',
+        action: 'AGENT_MEMORY_STAGING_RECONCILIATION_REQUIRED', entity_type: 'agent_run', entity_id: claimed.id,
+        after_data: { paidRunCompleted: true, automaticPaidRetryAllowed: false } }).then(() => undefined, () => undefined);
+    }
+
     const handoffState = await reconcileHandoff(payload, {
       leadId: effectiveContext.leadId,
       conversationId: effectiveContext.conversationId,
@@ -534,6 +542,7 @@ export async function POST(request: Request) {
     const approvalQueue = await reconcileApproval(payload);
     const responsePayload = {
       ...payload,
+      memoryStage,
       ...(handoffState ? { handoffState } : {}),
       ...(approvalQueue ? { approvalQueue } : {}),
       replayed: false,

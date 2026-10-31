@@ -20,11 +20,13 @@ type QueueBusiness = {
   international_phone?: string | null;
   email?: string | null;
   google_maps_uri?: string | null;
+  category?: string | null;
 };
 
 type QueueRow = HumanAcquisitionOpportunity & {
   id: string;
   acquisition_routing_reason?: string | null;
+  message_hooks?: unknown;
   businesses?: QueueBusiness | QueueBusiness[] | null;
 };
 
@@ -41,7 +43,7 @@ export default async function HumanAcquisitionPage() {
   const { supabase, organizationId } = await getCurrentOrganization();
   const { data, error } = await supabase
     .from('growth_opportunities')
-    .select('id,business_id,priority_score,prospect_tier,should_contact,recommended_acquisition_route,acquisition_routing_reason,primary_service_id,company_size,revenue_potential_band,businesses(name,country_code,city,instagram,whatsapp,phone,international_phone,email,google_maps_uri)')
+    .select('id,business_id,priority_score,prospect_tier,should_contact,recommended_acquisition_route,acquisition_routing_reason,primary_service_id,company_size,revenue_potential_band,message_hooks,businesses(name,country_code,city,instagram,whatsapp,phone,international_phone,email,google_maps_uri,category)')
     .eq('organization_id', organizationId)
     .in('recommended_acquisition_route', ['GCC_HUMAN_IG_WA', 'HYBRID_EMAIL_HUMAN_GCC'])
     .order('priority_score', { ascending: false, nullsFirst: false })
@@ -78,6 +80,8 @@ export default async function HumanAcquisitionPage() {
             marketCode: business?.country_code,
             businessName: business?.name,
             primaryServiceId: row.primary_service_id,
+            industry: business?.category,
+            evidence: Array.isArray(row.message_hooks) ? row.message_hooks.filter((item): item is string => typeof item === 'string') : [],
           });
           return <article className="conversationCard" key={row.id}>
             <div className="conversationTopline">
@@ -90,7 +94,7 @@ export default async function HumanAcquisitionPage() {
             <p><strong>Primary offer:</strong> {row.primary_service_id || 'Owner review required'}</p>
             <p className="muted">{row.acquisition_routing_reason || humanAcquisitionReason(row)}</p>
             {opener ? <div className="card">
-              <p className="muted">Suggested opener · human send only</p>
+              <p className="muted">{opener.evidenceBased ? 'Evidence-based opener' : 'Introduction only · review business evidence before an offer'} · human send only</p>
               <p dir="rtl">{opener.arabic}</p>
               <p>{opener.english}</p>
             </div> : null}

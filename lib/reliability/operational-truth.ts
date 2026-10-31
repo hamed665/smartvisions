@@ -1,3 +1,5 @@
+import { isSupportedMarketCode, marketDateKey } from '@/lib/outreach/market-profile';
+
 export type HealthFreshness = 'HEALTHY' | 'STALE' | 'NOT_CHECKED' | 'ERROR';
 
 export const DEFAULT_INTEGRATION_STALE_MS = 24 * 60 * 60 * 1000;
@@ -29,7 +31,7 @@ export function integrationFreshness(input: {
   return input.enabled === true && String(input.status ?? '') === 'CONNECTED' ? 'HEALTHY' : 'NOT_CHECKED';
 }
 
-export function effectiveCampaignStatus(input: { status?: unknown; config?: unknown }) {
+export function effectiveCampaignStatus(input: { status?: unknown; config?: unknown; country_code?: unknown; now?: Date }) {
   const status = String(input.status ?? '').toUpperCase();
   const config = record(input.config);
   const pausedReason = String(config.pausedReason ?? '').trim();
@@ -37,6 +39,12 @@ export function effectiveCampaignStatus(input: { status?: unknown; config?: unkn
   const terminalPilot = pilotPhase.includes('CAP_REACHED') || pilotPhase.includes('COMPLETE');
   if (status === 'RUNNING' && (pausedReason || terminalPilot)) {
     return { status: 'PAUSED', reason: pausedReason || pilotPhase } as const;
+  }
+  const market = String(config.marketCode ?? input.country_code ?? '').toUpperCase();
+  const targetDate = String(config.targetDate ?? '');
+  if (status === 'RUNNING' && /^\d{4}-\d{2}-\d{2}$/.test(targetDate)
+    && isSupportedMarketCode(market) && targetDate < marketDateKey(market, input.now)) {
+    return { status: 'PAUSED', reason: 'TARGET_DATE_EXPIRED' } as const;
   }
   return { status, reason: null } as const;
 }

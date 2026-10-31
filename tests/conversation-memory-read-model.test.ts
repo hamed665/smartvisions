@@ -196,3 +196,11 @@ describe('conversation memory read model', () => {
     });
   });
 });
+
+
+describe('provider delivery memory regression', () => {
+  it.each(['SENT','DELIVERED','READ'])('retains %s provider-confirmed outbound without a mirror', (status) => {
+    const rows = [{ id: 'sent-email', channel: 'EMAIL', direction: 'OUTBOUND', status, body: 'Previously offered scope', sent_at: '2026-10-31T06:00:00Z', metadata: { conversation_id: conversationId } }];
+    expect(buildConversationMemory({ conversationId, channel: 'EMAIL', outreachRows: rows })).toHaveLength(1);
+  });
+});

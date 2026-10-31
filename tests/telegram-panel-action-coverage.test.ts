@@ -175,6 +175,7 @@ const CLASSIFICATION: Record<string, Record<string, string>> = {
     sendApprovedWhatsAppOptInFirstTouch:'SPECIALIZED:OWNER_APPROVED_OPT_IN_SEND',
   },
   'app/whatsapp-verification-actions.ts': {
+    inspectWhatsAppSender:'SPECIALIZED:READ_ONLY_WHATSAPP_SENDER_IDENTITY',
     verifyWhatsAppIntegration:'whatsapp.verify', transcribeLatestWhatsAppVoicePilot:'whatsapp.voice_transcribe',
   },
 };
