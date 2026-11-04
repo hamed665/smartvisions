@@ -2,6 +2,51 @@
 
 AI-assisted sales and growth operating system for business discovery, intent-led acquisition, localized outreach, multi-agent sales intelligence, human handoff, reporting, cost-controlled automation, and premium business preview generation.
 
+## Platform overview
+
+**Maintainer:** [Hamed Minaei](https://github.com/hamed665)
+
+Growth OS brings CRM, business discovery, controlled AI workflows and communication operations into a shared application. Its engineering design keeps model suggestions separate from authorization, spending and provider-side effects.
+
+| Area | Source entry point |
+| --- | --- |
+| Operator application and HTTP routes | [app/](app/) |
+| Agent context, orchestration and runtime | [lib/agents/](lib/agents/) |
+| CRM and customer records | [lib/crm/](lib/crm/) |
+| Database evolution and access policy | [supabase/migrations/](supabase/migrations/) |
+| Chatwoot integration and operations | [lib/chatwoot/](lib/chatwoot/) · [Operations guide](ops/chatwoot/README.md) |
+| Verification and release checks | [Package scripts](package.json) · [CI](.github/workflows/ci.yml) |
+
+## Local development
+
+Use a Node.js version compatible with [package.json](package.json) and a separate local/disposable configuration described in [.env.example](.env.example). Review the mandatory continuation documents before connecting any service.
+
+```bash
+git clone https://github.com/hamed665/smartvisions.git
+cd smartvisions
+npm ci
+npm run dev
+```
+
+`npm run dev` starts the Next.js development server. Application features depend on their configured services; this repository is not a credential-free demo. Do not point a local review environment at production data or live messaging channels.
+
+The repository exposes these verification commands:
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
+
+Cloudflare runtime work also has Vinext and scheduled-bundle checks; the [execution playbook](docs/EXECUTION_PLAYBOOK.md) defines when they apply. These commands are instructions, not a claim that checks were rerun for this documentation update.
+
+## Architecture and operations
+
+Provider-bound actions use deterministic safety gates and durable state. Cost controls, idempotency, suppression and human takeover belong at the execution boundary. The current status, exact deployment evidence and activation requirements remain in [docs/CURRENT_STATE.md](docs/CURRENT_STATE.md).
+
+The corporate website is developed separately in `hamed665/smartvisions-website`. This repository's historical `website/` directory is frozen; it is not the current website development entry point.
+
 ## Mandatory continuation docs
 
 Before changing the project, read these in order:
