@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { trustedMetaMediaUrl } from './media-url';
 import { readBoundedAudio } from '@/lib/voice/bounded-audio';
 import type { ChatwootPublicIncomingAttachment } from '@/lib/chatwoot/public-conversation-projection';
 
@@ -7,23 +8,6 @@ const MAX_CHATWOOT_MEDIA_BYTES = 10 * 1024 * 1024;
 
 function graphVersion() {
   return process.env.META_GRAPH_VERSION?.trim() || 'v23.0';
-}
-
-function safeMetaMediaUrl(value: unknown) {
-  if (typeof value !== 'string' || !value.trim()) return null;
-  try {
-    const url = new URL(value.trim());
-    if (url.protocol !== 'https:') return null;
-    const host = url.hostname.toLowerCase();
-    if (
-      host !== 'lookaside.fbsbx.com'
-      && !host.endsWith('.fbcdn.net')
-      && !host.endsWith('.facebook.com')
-    ) return null;
-    return url;
-  } catch {
-    return null;
-  }
 }
 
 function safeFilename(input: string | null | undefined, mimeType: string) {
@@ -72,7 +56,7 @@ export async function downloadMetaWhatsAppMediaForChatwoot(input: {
   };
   if (metadata.id !== mediaId) throw new Error('Meta WhatsApp media identity mismatch');
 
-  const url = safeMetaMediaUrl(metadata.url);
+  const url = trustedMetaMediaUrl(metadata.url);
   const mimeType = typeof metadata.mime_type === 'string' && metadata.mime_type.trim()
     ? metadata.mime_type.trim().slice(0, 120)
     : input.expectedMimeType?.trim().slice(0, 120) || 'application/octet-stream';

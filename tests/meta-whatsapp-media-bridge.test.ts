@@ -2,12 +2,22 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+import { trustedMetaMediaUrl } from '@/lib/whatsapp/media-url';
 import { MetaCloudWhatsAppProvider } from '@/lib/whatsapp/meta-cloud';
 import { downloadMetaWhatsAppMediaForChatwoot } from '@/lib/whatsapp/media';
 
 describe('WhatsApp media bridge', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('accepts trusted HTTPS media hosts only, without alternate ports or URL credentials', () => {
+    expect(trustedMetaMediaUrl('https://lookaside.fbsbx.com/media')?.hostname).toBe('lookaside.fbsbx.com');
+    expect(trustedMetaMediaUrl('https://cdn.example.fbcdn.net/media')?.hostname).toBe('cdn.example.fbcdn.net');
+    for (const url of ['https://lookaside.fbsbx.com.evil.test/media', 'https://lookaside.fbsbx.com:444/media',
+      'https://user:pass@lookaside.fbsbx.com/media', 'http://lookaside.fbsbx.com/media']) {
+      expect(trustedMetaMediaUrl(url)).toBeNull();
+    }
   });
 
   it('downloads only trusted Meta media with matching signed MIME evidence', async () => {
