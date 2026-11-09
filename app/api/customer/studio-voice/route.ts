@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { customerStudioScope } from '@/lib/access/customer-studio';
+import { customerStudioScope, isStudioRequestOrigin } from '@/lib/access/customer-studio';
 import { normalizeCustomerBusinessId } from '@/lib/access/customer-business-scope';
 import { assertPaidOperationAllowed, finalizeCostGuardUsage, getCostGuardState, reserveCostGuardUsage } from '@/lib/reliability/cost-guard';
 import { assertRuntimeOperationAllowed } from '@/lib/reliability/runtime-safety';
@@ -37,7 +37,7 @@ async function readAudio(request: Request) {
 export async function POST(request: Request) {
   const url = new URL(request.url);
   const businessId = normalizeCustomerBusinessId(url.searchParams.get('businessId'));
-  if (request.headers.get('origin') !== url.origin || !businessId) {
+  if (!isStudioRequestOrigin(request) || !businessId) {
     return NextResponse.json({ error: 'This recording request is invalid.' }, { status: 403 });
   }
   const { business } = await customerStudioScope(businessId);

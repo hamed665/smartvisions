@@ -137,6 +137,18 @@ export async function loadStudioThreads(scope: Scope, options: Pick<StudioQuery,
   return { items: (data ?? []).slice(0, PAGE_SIZE).map(projectThread), page, hasMore: (data?.length ?? 0) > PAGE_SIZE && page < 1000 };
 }
 
+export function isStudioRequestOrigin(request: Request) {
+  const origin = request.headers.get('origin');
+  if (!origin) return false;
+  try {
+    const parsed = new URL(origin);
+    const host = request.headers.get('host') ?? new URL(request.url).host;
+    return ['http:', 'https:'].includes(parsed.protocol) && parsed.origin === origin && parsed.host === host.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
 export async function studioOwnerThread(businessId: unknown, threadId: string) {
   const normalized = normalizeCustomerBusinessId(businessId);
   if (!normalized || !normalizeCustomerBusinessId(threadId)) return null;

@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { studioOwnerThread } from '@/lib/access/customer-studio';
+import { isStudioRequestOrigin, studioOwnerThread } from '@/lib/access/customer-studio';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { mirrorCanonicalWhatsAppOutboundToChatwoot } from '@/lib/chatwoot/conversation-actions';
 import {
@@ -46,7 +46,7 @@ export async function POST(
   try {
     const { id: conversationId } = await params;
     const body = await request.json() as { text?: unknown; requestId?: unknown; businessId?: string };
-    if (body.businessId !== undefined && request.headers.get('origin') !== new URL(request.url).origin) {
+    if (body.businessId !== undefined && !isStudioRequestOrigin(request)) {
       return NextResponse.json({ error: 'Invalid workspace request origin' }, { status: 403 });
     }
     const owner = body.businessId === undefined ? await getCurrentOrganization(true) : await studioOwnerThread(body.businessId, conversationId);

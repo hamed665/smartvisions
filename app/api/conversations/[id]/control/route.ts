@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { studioOwnerThread } from '@/lib/access/customer-studio';
+import { isStudioRequestOrigin, studioOwnerThread } from '@/lib/access/customer-studio';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 
 export async function POST(
@@ -9,7 +9,7 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json() as { action?: string; businessId?: unknown };
-    if (body.businessId !== undefined && request.headers.get('origin') !== new URL(request.url).origin) {
+    if (body.businessId !== undefined && !isStudioRequestOrigin(request)) {
       return NextResponse.json({ error: 'Invalid workspace request origin' }, { status: 403 });
     }
     const action = String(body.action ?? '').toUpperCase();
