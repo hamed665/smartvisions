@@ -56,7 +56,7 @@ export async function executeAgent(agent: AgentName, context: AgentContext): Pro
       return { agent, confidence: 0.92, summary: 'Detected explicit commercial intent signals.', data: { askedPrice, askedMeeting, askedPayment, askedPreview: previewSignals.customPreviewRequested, askedPortfolio: previewSignals.portfolioRequested }, evidence: [], blockers: [] };
     }
     case 'conversation_psychology': {
-      const priceObjection = /(expensive|too much|discount|better price|cheaper|غالي|مرتف|خصم|تخفيض|سعر أفضل|أرخص)/i.test(text);
+      const priceObjection = /(expensive|too much|discount|better price|cheaper|غالي|مرتف|خصم|تخفيض|سعر أفضل|أرخص|تخفیف|گرون|گران|ارزون|ارزان)/i.test(text);
       const hesitation = /(not sure|think about|hesitant|مو متأكد|بفكر|متردد)/i.test(text);
       return { agent, confidence: 0.82, summary: 'Conversation state assessed without sensitive-trait inference.', data: { priceObjection, hesitation, urgency: /(today|urgent|asap|اليوم|عاجل)/i.test(text) }, evidence: [], blockers: [] };
     }

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isStudioRequestOrigin, studioOwnerThread } from '@/lib/access/customer-studio';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 
 export async function POST(
@@ -7,14 +8,21 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const { supabase, organizationId } = await getCurrentOrganization(true);
-    const body = await request.json() as { action?: string };
+    const body = await request.json() as { action?: string; businessId?: unknown };
+    if (body.businessId !== undefined && !isStudioRequestOrigin(request)) {
+      return NextResponse.json({ error: 'Invalid workspace request origin' }, { status: 403 });
+    }
     const action = String(body.action ?? '').toUpperCase();
 
     if (action !== 'TAKEOVER' && action !== 'RESUME') {
       return NextResponse.json({ error: 'action must be TAKEOVER or RESUME' }, { status: 400 });
     }
 
+    const owner = body.businessId === undefined ? await getCurrentOrganization(true) : await studioOwnerThread(body.businessId, id);
+    if (!owner || (body.businessId !== undefined && action !== 'TAKEOVER')) {
+      return NextResponse.json({ error: 'Conversation control is unavailable in this workspace' }, { status: 403 });
+    }
+    const { supabase, organizationId } = owner;
     const rpc = action === 'TAKEOVER' ? 'claim_human_takeover' : 'release_human_takeover';
     const { data, error } = await supabase.rpc(rpc, {
       p_organization_id: organizationId,

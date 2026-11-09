@@ -65,7 +65,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, [mobileMenuOpen]);
 
-  if (isPublicShellPath(pathname)) return <>{children}</>;
+  if (customerPortal || isPublicShellPath(pathname)) return <>{children}</>;
 
   return (
     <div className="shell">

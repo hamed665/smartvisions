@@ -37,11 +37,11 @@ export function buildSelectiveRoutePlan(context: AgentContext): SelectiveRoutePl
     };
   }
 
-  const asksPrice = has(/(price|cost|how much|quote|budget|best price|discount|السعر|كم|تكلفة|عرض سعر|خصم|تخفيض|آخر سعر|سعر أفضل)/i, lower);
+  const asksPrice = has(/(price|cost|how much|quote|budget|best price|discount|السعر|كم|تكلفة|عرض سعر|خصم|تخفيض|آخر سعر|سعر أفضل|قیمت|هزینه|چنده|چقدر\s*(?:می[‌\s-]?شه|درمیاد|است|هست)|تخفیف|بودجه)/i, lower);
   const asksMeeting = has(/(meeting|call|zoom|meet|consultation|consult|مكالمة|اجتماع|استشارة|نتكلم)/i, lower);
   const asksPayment = has(/(payment|pay|invoice|deposit|contract|دفع|فاتورة|عربون|عقد)/i, lower);
   const asksPreview = has(/(preview|mockup|sample|example|show.*design|معاينة|نموذج|مثال|تصميم)/i, lower);
-  const objection = has(/(expensive|too much|not sure|hesitant|think about|discount|better price|cheaper|غالي|مرتف|مو متأكد|بفكر|خصم|تخفيض|سعر أفضل|آخر سعر|أرخص)/i, lower);
+  const objection = has(/(expensive|too much|not sure|hesitant|think about|discount|better price|cheaper|غالي|مرتف|مو متأكد|بفكر|خصم|تخفيض|سعر أفضل|آخر سعر|أرخص|تخفیف|گرون|گران|ارزون|ارزان)/i, lower);
   const technical = has(/(integration|api|booking|payment gateway|wordpress|next\.js|تكامل|دفع|حجز)/i, lower);
   const hasVerifiedQuote = context.quotedPrice != null && !!context.quotedCurrency;
   const highIntent = (context.intentScore ?? 0) >= 70;

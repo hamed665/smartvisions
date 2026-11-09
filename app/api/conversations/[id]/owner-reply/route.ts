@@ -1,5 +1,8 @@
+import { readBoundedAudio } from '@/lib/voice/bounded-audio';
+import { STUDIO_REPLY_AUDIO_LIMIT, studioReplyAudio } from '@/lib/voice/studio-reply-audio';
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { isStudioRequestOrigin, studioOwnerThread } from '@/lib/access/customer-studio';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { mirrorCanonicalWhatsAppOutboundToChatwoot } from '@/lib/chatwoot/conversation-actions';
 import {
@@ -40,16 +43,25 @@ export async function POST(
   let userId: string | null = null;
   let messageId: string | null = null;
   let providerAccepted = false;
+  let dispatchStarted = false;
   let providerMessageId: string | null = null;
 
   try {
     const { id: conversationId } = await params;
-    const owner = await getCurrentOrganization(true);
+    const contentType = request.headers.get('content-type');
+    const isAudio = contentType?.toLowerCase().startsWith('audio/') === true;
+    const query = new URL(request.url).searchParams;
+    const body = isAudio
+      ? { businessId: query.get('businessId') ?? '', requestId: query.get('requestId'), text: undefined }
+      : await request.json() as { text?: unknown; requestId?: unknown; businessId?: string };
+    if (body.businessId !== undefined && !isStudioRequestOrigin(request)) {
+      return NextResponse.json({ error: 'Invalid workspace request origin' }, { status: 403 });
+    }
+    const owner = body.businessId === undefined ? await getCurrentOrganization(true) : await studioOwnerThread(body.businessId, conversationId);
+    if (!owner) return NextResponse.json({ error: 'Conversation is unavailable in this workspace' }, { status: 403 });
     organizationId = owner.organizationId;
     userId = owner.userId;
 
-    const body = await request.json() as { text?: unknown; requestId?: unknown };
-    const text = normalizeOwnerReplyText(body.text);
     const requestId = validRequestId(body.requestId);
     if (!requestId) {
       return NextResponse.json({ error: 'A valid requestId is required' }, { status: 400 });
@@ -76,6 +88,13 @@ export async function POST(
         error: sent ? undefined : existing.approval_reason ?? 'This request was already claimed and will not be retried automatically',
       }, { status: sent ? 200 : 409 });
     }
+
+    const bytes = isAudio ? await readBoundedAudio(request, STUDIO_REPLY_AUDIO_LIMIT) : null;
+    const audio = bytes && studioReplyAudio(bytes, contentType);
+    if (isAudio && !audio) {
+      return NextResponse.json({ error: 'Use a supported MP3, M4A, or Opus OGG recording under 6 MB.' }, { status: 422 });
+    }
+    const text = audio ? '[WhatsApp audio message]' : normalizeOwnerReplyText(body.text);
 
     const { data: conversation, error: conversationError } = await supabase
       .from('sales_conversations')
@@ -169,7 +188,7 @@ export async function POST(
         lead_id: lead.id,
         channel: 'WHATSAPP',
         direction: 'OUTBOUND',
-        media_type: 'TEXT',
+        media_type: audio ? 'AUDIO' : 'TEXT',
         original_text: text,
         reply_language: conversation.detected_language ?? null,
         reply_dialect: conversation.detected_dialect ?? null,
@@ -224,29 +243,33 @@ export async function POST(
     messageId = canonicalMessageId;
 
     // Re-check every canonical safety condition immediately before crossing the provider boundary.
-    const finalGate = await assertCanonicalSendAllowed({
-      supabase,
-      organizationId,
-      leadId: lead.id,
-      conversationId,
-      channel: 'WHATSAPP',
-      recipient,
-      ownerManualSendVerified: true,
-    });
-    if (!finalGate.whatsappPolicy?.allowed || finalGate.whatsappPolicy.mode !== 'FREEFORM') {
-      throw new Error('WhatsApp canonical 24-hour policy blocks this owner manual reply');
-    }
-    const finalCostState = await getCostGuardState(organizationId);
-    assertPaidOperationAllowed(finalCostState, 'NORMAL');
+    const verifyFinalGate = async () => {
+      const gate = await assertCanonicalSendAllowed({
+        supabase,
+        organizationId: owner.organizationId,
+        leadId: lead.id,
+        conversationId,
+        channel: 'WHATSAPP',
+        recipient,
+        ownerManualSendVerified: true,
+      });
+      if (!gate.whatsappPolicy?.allowed || gate.whatsappPolicy.mode !== 'FREEFORM') {
+        throw new Error('WhatsApp canonical 24-hour policy blocks this owner manual reply');
+      }
+      const finalCostState = await getCostGuardState(owner.organizationId);
+      assertPaidOperationAllowed(finalCostState, 'NORMAL');
+      return gate;
+    };
+    let finalGate = await verifyFinalGate();
 
-    const { data: projection, error: projectionError } = await supabase
-      .from('unified_inbox_conversation_projections')
+    const findProjection = () => supabase.from('unified_inbox_conversation_projections')
       .select('tenant_business_id,branch_id,communication_channel_binding_id,lifecycle_status')
       .eq('organization_id', organizationId)
       .eq('conversation_id', conversationId)
       .in('lifecycle_status', ['ACTIVE', 'DEGRADED'])
       .maybeSingle();
-    if (projectionError || !projection) {
+    const { data: projection, error: projectionError } = await findProjection();
+    if (projectionError || !projection || (body.businessId && projection.tenant_business_id !== body.businessId)) {
       throw new Error(projectionError?.message ?? 'Owner reply has no canonical tenant communication projection');
     }
 
@@ -260,7 +283,35 @@ export async function POST(
       throw new Error('Owner reply tenant credential does not match the conversation channel binding');
     }
 
-    const result = await tenantProvider.provider.sendText({ to: recipient, text });
+    let mediaId: string | null = null;
+    if (audio) {
+      const upload = await tenantProvider.provider.uploadAudio(audio);
+      mediaId = upload.mediaId;
+      const metadata = await supabase.from('conversation_messages').update({
+        metadata: {
+          source: 'OWNER_MANUAL_REPLY', owner_request_id: requestId, owner_user_id: userId, idempotency_key: idempotencyKey,
+          tenant_business_id: projection.tenant_business_id, communication_channel_binding_id: tenantProvider.bindingId,
+          media_id: mediaId, mime_type: audio.mimeType,
+          send_context: { to: recipient, market_code: preflight.marketCode, last_customer_message_at: preflight.lastInboundAt },
+        },
+      }).eq('id', messageId).eq('organization_id', organizationId).eq('status', 'PROCESSING').select('id').single();
+      if (metadata.error || !metadata.data) throw new Error('Uploaded audio could not be recorded safely');
+      const current = await findProjection();
+      if (current.error || current.data?.communication_channel_binding_id !== projection.communication_channel_binding_id
+        || current.data?.tenant_business_id !== projection.tenant_business_id || current.data?.branch_id !== projection.branch_id) {
+        throw new Error('Conversation routing changed while uploading audio');
+      }
+      const refreshed = await resolveMetaWhatsAppProvider({
+        service: supabase, organizationId, tenantBusinessId: projection.tenant_business_id, branchId: projection.branch_id,
+      });
+      if (refreshed.bindingId !== tenantProvider.bindingId || refreshed.phoneNumberId !== tenantProvider.phoneNumberId
+        || refreshed.accessToken !== tenantProvider.accessToken) throw new Error('WhatsApp binding changed while uploading audio');
+      finalGate = await verifyFinalGate();
+    }
+    dispatchStarted = true;
+    const result = mediaId
+      ? await tenantProvider.provider.sendAudio({ to: recipient, mediaId })
+      : await tenantProvider.provider.sendText({ to: recipient, text });
     providerAccepted = true;
     providerMessageId = result.providerMessageId;
 
@@ -276,14 +327,15 @@ export async function POST(
       })
       .eq('organization_id', organizationId)
       .eq('id', messageId)
-      .eq('status', 'PROCESSING');
-    if (accepted.error) {
+      .eq('status', 'PROCESSING')
+      .select('id').single();
+    if (accepted.error || !accepted.data) {
       return NextResponse.json({
         sent: true,
         providerAccepted: true,
         providerMessageId,
         messageId,
-        warning: `Provider accepted the message but local reconciliation needs attention: ${accepted.error.message}`,
+        warning: `Provider accepted the message but local reconciliation needs attention: ${accepted.error?.message ?? 'missing claim'}`,
         retryPolicy: 'RECONCILIATION_ONLY',
       }, { status: 202 });
     }
@@ -294,7 +346,7 @@ export async function POST(
       conversation_id: conversationId,
       provider_message_id: providerMessageId,
       direction: 'OUTBOUND',
-      event_type: 'TEXT_SENT',
+      event_type: audio ? 'AUDIO_SENT' : 'TEXT_SENT',
       payload: { source: 'OWNER_MANUAL_REPLY', owner_request_id: requestId },
     }, { onConflict: 'organization_id,provider_message_id,direction,event_type', ignoreDuplicates: true });
 
@@ -323,7 +375,7 @@ export async function POST(
         lead_id: lead.id,
         channel: 'WHATSAPP',
         provider_message_id: providerMessageId,
-        character_count: text.length,
+        ...(audio ? { media_type: audio.mimeType, media_bytes: audio.bytes.byteLength } : { character_count: text.length }),
         owner_request_id: requestId,
         tenant_business_id: projection.tenant_business_id,
         branch_id: projection.branch_id,
@@ -336,7 +388,7 @@ export async function POST(
       await recordUsage({
         organizationId,
         provider: 'WHATSAPP',
-        operation: 'SEND_TEXT',
+        operation: audio ? 'SEND_AUDIO' : 'SEND_TEXT',
         costUsd: 0,
         units: 1,
         leadId: lead.id,
@@ -402,7 +454,7 @@ export async function POST(
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Owner manual reply failed';
 
-    if (organizationId && messageId && !providerAccepted) {
+    if (organizationId && messageId && !providerAccepted && !dispatchStarted) {
       const supabase = serviceClient();
       await supabase
         .from('conversation_messages')
@@ -417,11 +469,11 @@ export async function POST(
     }
 
     return NextResponse.json({
-      error: message,
+      error: dispatchStarted && !providerAccepted ? 'WhatsApp delivery needs reconciliation' : message,
       providerAccepted,
       providerMessageId,
       messageId,
-      retryPolicy: providerAccepted ? 'RECONCILIATION_ONLY' : 'NO_AUTOMATIC_RETRY',
+      retryPolicy: dispatchStarted ? 'RECONCILIATION_ONLY' : 'NO_AUTOMATIC_RETRY',
     }, { status: providerAccepted ? 202 : 409 });
   }
 }

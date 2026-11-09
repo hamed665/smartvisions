@@ -1,4 +1,6 @@
-import type { ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
+import './studio.css';
+import { StudioNav } from './studio-nav';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
@@ -47,5 +49,11 @@ export default async function CustomerLayout({ children }: { children: ReactNode
     );
   }
 
-  return <>{children}</>;
+  return (
+    <div className="studio">
+      <a className="studio-skip" href="#studio-main">Skip to workspace</a>
+      <Suspense><StudioNav businesses={context.businesses.map(({ id, name }) => ({ id, name }))} /></Suspense>
+      <main className="studio-main" id="studio-main">{children}</main>
+    </div>
+  );
 }

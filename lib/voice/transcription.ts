@@ -1,3 +1,5 @@
+import { trustedMetaMediaUrl } from '@/lib/whatsapp/media-url';
+import { readBoundedAudio } from '@/lib/voice/bounded-audio';
 import { createClient } from '@supabase/supabase-js';
 import { evaluateBudgetMode, getCostGuardState, recordUsage, shouldAllowPaidOperation } from '@/lib/reliability/cost-guard';
 
@@ -165,28 +167,27 @@ async function downloadMetaVoice(mediaId: string, fallbackMimeType?: string, acc
   const token = accessToken?.trim() || globalToken;
   if (!token) throw new Error('Meta WhatsApp media credentials are not configured');
 
-  const metadataResponse = await fetch(`https://graph.facebook.com/${graphVersion}/${encodeURIComponent(mediaId)}`, {
+  const options = {
     headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!metadataResponse.ok) {
-    const detail = await metadataResponse.text();
-    throw new Error(`Meta media lookup failed (${metadataResponse.status}): ${detail.slice(0, 300)}`);
-  }
-  const metadata = await metadataResponse.json() as { url?: string; mime_type?: string; file_size?: number };
-  if (!metadata.url) throw new Error('Meta media lookup did not return a download URL');
-  if (metadata.file_size && metadata.file_size > MAX_MEDIA_BYTES) throw new Error('Voice media exceeds the 25 MB transcription limit');
+    redirect: 'manual' as const,
+    cache: 'no-store' as const,
+  };
+  const metadataResponse = await fetch(`https://graph.facebook.com/${graphVersion}/${encodeURIComponent(mediaId)}`, options);
+  if (!metadataResponse.ok) throw new Error(`Meta media lookup failed (${metadataResponse.status})`);
+  const metadata = await metadataResponse.json() as { id?: string; url?: string; mime_type?: string; file_size?: number };
+  const url = trustedMetaMediaUrl(metadata.url);
+  if (metadata.id !== mediaId || !url) throw new Error('Meta voice media identity or download host could not be verified');
+  if (Number(metadata.file_size) > MAX_MEDIA_BYTES) throw new Error('Voice media exceeds the 25 MB transcription limit');
 
-  const mediaResponse = await fetch(metadata.url, { headers: { Authorization: `Bearer ${token}` } });
+  const mediaResponse = await fetch(url, options);
   if (!mediaResponse.ok) throw new Error(`Meta media download failed (${mediaResponse.status})`);
-  const contentLength = Number(mediaResponse.headers.get('content-length') || 0);
-  if (contentLength > MAX_MEDIA_BYTES) throw new Error('Voice media exceeds the 25 MB transcription limit');
-  const bytes = await mediaResponse.arrayBuffer();
-  if (bytes.byteLength > MAX_MEDIA_BYTES) throw new Error('Voice media exceeds the 25 MB transcription limit');
+  const bytes = await readBoundedAudio(mediaResponse, MAX_MEDIA_BYTES);
+  if (!bytes?.byteLength) throw new Error('Voice media size is outside the allowed transcription limit');
 
   return { bytes, mimeType: metadata.mime_type || fallbackMimeType || 'application/octet-stream' };
 }
 
-async function transcribeWithOpenAI(bytes: ArrayBuffer, mimeType: string) {
+export async function transcribeWithOpenAI(bytes: ArrayBuffer, mimeType: string, signal?: AbortSignal) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
 
@@ -199,6 +200,7 @@ async function transcribeWithOpenAI(bytes: ArrayBuffer, mimeType: string) {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}` },
     body: form,
+    signal,
   });
   if (!response.ok) {
     const detail = await response.text();
