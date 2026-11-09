@@ -180,8 +180,9 @@ export default async function SettingsPage() {
           </span>
         </div>
 
-        {bootstrapNeeded ? (
-          <>
+        {bootstrapNeeded || editable ? (
+          <details open={bootstrapNeeded}>
+            <summary>{bootstrapNeeded ? 'Set up your business' : 'Add another business'}</summary>
             <p className="muted smallText">
               Defaults come from the existing organization identity and enabled Oman market.
               Review them before creating Production canonical scope. Legal name is intentionally
@@ -219,7 +220,7 @@ export default async function SettingsPage() {
                 Business slug
                 <input
                   name="business_slug"
-                  defaultValue="oman"
+                  defaultValue={bootstrapNeeded ? 'oman' : slugify(brandName) || 'smart-visions'}
                   required
                   disabled={!editable}
                 />
@@ -253,8 +254,10 @@ export default async function SettingsPage() {
               </label>
               <button disabled={!editable}>Create canonical Brand &amp; Business</button>
             </form>
-          </>
-        ) : (
+          </details>
+        ) : null}
+
+        {!bootstrapNeeded ? (
           <div className="settingsList">
             {canonicalBrands.map((brand) => (
               <div className="settingsRow" key={brand.id}>
@@ -272,7 +275,7 @@ export default async function SettingsPage() {
               </div>
             ))}
           </div>
-        )}
+        ) : null}
       </section>
 
       <section className="panel">
