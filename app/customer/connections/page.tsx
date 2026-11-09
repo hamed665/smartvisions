@@ -1,5 +1,3 @@
-import Link from 'next/link';
-
 import { MetaWhatsAppEmbeddedSignup } from '@/app/integrations/meta-whatsapp-embedded-signup';
 import { MetaWhatsAppLifecycle } from '@/app/integrations/meta-whatsapp-lifecycle';
 import {
@@ -8,6 +6,8 @@ import {
 } from '@/lib/access/customer-connections';
 import { metaGraphVersion } from '@/lib/whatsapp/meta-onboarding';
 import { getCurrentOrganization } from '@/lib/supabase/org';
+import { StudioHeading } from '../studio-ui';
+import { customerStudioScope } from '@/lib/access/customer-studio';
 import { RegisteredWhatsAppImport } from './registered-whatsapp-import';
 
 export const dynamic = 'force-dynamic';
@@ -22,11 +22,8 @@ export default async function CustomerConnectionsPage({
   searchParams: Promise<{ businessId?: string }>;
 }) {
   const params = await searchParams;
-  const context = await loadCustomerConnections({
-    requestedBusinessId: params.businessId,
-  });
-  const business = context.selectedBusiness;
-  if (!business) return null;
+  const { business } = await customerStudioScope(params.businessId);
+  const context = await loadCustomerConnections({ requestedBusinessId: business.id });
 
   const whatsapp = context.whatsapp;
   const canManageWhatsApp = business.organizationRole === 'OWNER';
@@ -52,33 +49,7 @@ export default async function CustomerConnectionsPage({
 
   return (
     <div>
-      <div className="headerRow">
-        <div>
-          <p className="eyebrow">BUSINESS CONNECTIONS</p>
-          <h1>Connections</h1>
-          <p className="muted">{business.name} · only this Business scope is shown.</p>
-        </div>
-        <Link className="textLink" href={`/customer?businessId=${encodeURIComponent(business.id)}`}>
-          Back to Home
-        </Link>
-      </div>
-
-      {context.businesses.length > 1 ? (
-        <section className="panel" style={{ marginBottom: 18 }}>
-          <strong>Switch Business</strong>
-          <div className="quickActions" style={{ marginTop: 10 }}>
-            {context.businesses.map((row) => (
-              <Link
-                href={`/customer/connections?businessId=${encodeURIComponent(row.id)}`}
-                key={row.id}
-              >
-                {row.name}
-              </Link>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
+      <StudioHeading section="CHANNEL SETUP" title="Connect WhatsApp" description="Authorize your business number with Meta and check connection health." />
       <section className="panel settingsCreate" id="whatsapp">
         <div className="headerRow">
           <div>

@@ -186,7 +186,7 @@ async function downloadMetaVoice(mediaId: string, fallbackMimeType?: string, acc
   return { bytes, mimeType: metadata.mime_type || fallbackMimeType || 'application/octet-stream' };
 }
 
-async function transcribeWithOpenAI(bytes: ArrayBuffer, mimeType: string) {
+export async function transcribeWithOpenAI(bytes: ArrayBuffer, mimeType: string, signal?: AbortSignal) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
 
@@ -199,6 +199,7 @@ async function transcribeWithOpenAI(bytes: ArrayBuffer, mimeType: string) {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}` },
     body: form,
+    signal,
   });
   if (!response.ok) {
     const detail = await response.text();

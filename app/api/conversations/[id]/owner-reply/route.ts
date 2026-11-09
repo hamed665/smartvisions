@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { studioOwnerThread } from '@/lib/access/customer-studio';
 import { getCurrentOrganization } from '@/lib/supabase/org';
 import { mirrorCanonicalWhatsAppOutboundToChatwoot } from '@/lib/chatwoot/conversation-actions';
 import {
@@ -44,11 +45,15 @@ export async function POST(
 
   try {
     const { id: conversationId } = await params;
-    const owner = await getCurrentOrganization(true);
+    const body = await request.json() as { text?: unknown; requestId?: unknown; businessId?: string };
+    if (body.businessId !== undefined && request.headers.get('origin') !== new URL(request.url).origin) {
+      return NextResponse.json({ error: 'Invalid workspace request origin' }, { status: 403 });
+    }
+    const owner = body.businessId === undefined ? await getCurrentOrganization(true) : await studioOwnerThread(body.businessId, conversationId);
+    if (!owner) return NextResponse.json({ error: 'Conversation is unavailable in this workspace' }, { status: 403 });
     organizationId = owner.organizationId;
     userId = owner.userId;
 
-    const body = await request.json() as { text?: unknown; requestId?: unknown };
     const text = normalizeOwnerReplyText(body.text);
     const requestId = validRequestId(body.requestId);
     if (!requestId) {
@@ -246,7 +251,7 @@ export async function POST(
       .eq('conversation_id', conversationId)
       .in('lifecycle_status', ['ACTIVE', 'DEGRADED'])
       .maybeSingle();
-    if (projectionError || !projection) {
+    if (projectionError || !projection || (body.businessId && projection.tenant_business_id !== body.businessId)) {
       throw new Error(projectionError?.message ?? 'Owner reply has no canonical tenant communication projection');
     }
 
