@@ -151,3 +151,9 @@
 }
 .studio-form .studio-source-note { font-size: 12px; line-height: 1.45; }
 .studio-messages:focus-visible { outline: 2px solid #52844d; outline-offset: -3px; }
+.studio-voice-player { display: block; width: min(100%, 280px); margin-block: 8px; }
+.studio-connection-guidance { padding: 13px; margin-block-start: 12px; background: #eef4e5; border-radius: 8px; }
+.studio-connection-guidance p { font-size: 13px; line-height: 1.5; margin: 6px 0 0; }
+.studio-revision { margin-block: 12px; }
+.studio-revision > summary { cursor: pointer; color: var(--studio-accent); font-weight: 700; }
+.studio-revision .studio-form { padding-inline: 0; }

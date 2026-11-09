@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from 'react';
 import { StudioRecording } from './recording';
-import { publishStudioKnowledge, stageStudioKnowledge } from './actions';
+import { publishStudioKnowledge, reviseStudioKnowledge, stageStudioKnowledge } from './actions';
 
 const initial = { status: 'idle', message: '' } as const;
 
@@ -65,4 +65,24 @@ export function StudioPublishButton({ businessId, versionId }: { businessId: str
     <button className="studio-button studio-secondary" disabled={pending}>{pending ? 'Publishing…' : 'Publish reviewed version'}</button>
     {state.message && <p role={state.status === 'error' ? 'alert' : 'status'}>{state.message}</p>}
   </form>;
+}
+
+export function StudioRevisionForm({ businessId, versionId, original }: { businessId: string; versionId: string; original: string }) {
+  const [text, setText] = useState(original);
+  const [state, action, pending] = useActionState(async (_previous: Awaited<ReturnType<typeof reviseStudioKnowledge>>, form: FormData) => {
+    return reviseStudioKnowledge(businessId, versionId, form);
+  }, initial);
+  return <details className="studio-revision">
+    <summary>Revise this draft</summary>
+    <form className="studio-form" action={action}>
+      <label>Profile text
+        <textarea name="revision" value={text} onChange={event => setText(event.currentTarget.value)}
+          dir="auto" minLength={10} maxLength={9000} required />
+      </label>
+      <button type="submit" className="studio-button studio-secondary" disabled={pending || text.trim() === original.trim()}>
+        {pending ? 'Saving revision…' : 'Save revised draft'}
+      </button>
+      {state.message && <p role={state.status === 'error' ? 'alert' : 'status'}>{state.message}</p>}
+    </form>
+  </details>;
 }

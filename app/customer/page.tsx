@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { loadCustomerConnections } from '@/lib/access/customer-connections';
-import { customerStudioScope, loadStudioToday, loadStudioThreads, studioTimeZone, type StudioQuery } from '@/lib/access/customer-studio';
+import { customerStudioScope, loadStudioKnowledge, loadStudioToday, loadStudioThreads, studioTimeZone, type StudioQuery } from '@/lib/access/customer-studio';
 import { StudioBadge, StudioEmpty, StudioHeading, studioDate, studioHref, studioLabel } from './studio-ui';
 
 export const dynamic = 'force-dynamic';
@@ -9,16 +9,24 @@ export default async function CustomerHomePage({ searchParams }: { searchParams:
   const { businessId } = await searchParams;
   const scope = await customerStudioScope(businessId);
   const { business, supabase } = scope;
-  const [connection, today, threads] = await Promise.all([
+  const [connection, today, threads, knowledge] = await Promise.all([
     loadCustomerConnections({ requestedBusinessId: business.id, supabase }),
     loadStudioToday(scope),
     loadStudioThreads(scope),
+    loadStudioKnowledge(scope),
   ]);
   const zone = studioTimeZone(business.timezone);
   const day = new Intl.DateTimeFormat('en', { weekday: 'long', month: 'long', day: 'numeric', timeZone: zone }).format(new Date());
   const connected = connection.whatsapp.status === 'Connected';
   const inbox = studioHref('/customer/inbox', business.id);
   const connectionUrl = studioHref('/customer/connections', business.id);
+  const assistantUrl = studioHref('/customer/ai', business.id);
+  const profilePublished = knowledge.some(version => version.active && version.approval_status === 'APPROVED');
+  const steps = [
+    { title: 'Connect WhatsApp', detail: 'Use Meta authorization for your business number.', href: connectionUrl, done: connected },
+    { title: 'Prepare your assistant', detail: 'Add your services and rules, then review and publish the profile.', href: assistantUrl, done: profilePublished },
+    { title: 'Open your first conversation', detail: 'Check an incoming message and review who can respond.', href: inbox, done: threads.items.length > 0 },
+  ];
 
   return <>
     <StudioHeading section={day} title="Today" description={'WhatsApp activity for '+business.name+'.'}
@@ -37,6 +45,14 @@ export default async function CustomerHomePage({ searchParams }: { searchParams:
           </Link>)}
       </div>
     </section>
+    {steps.some(step => !step.done) && <section className="studio-panel studio-recent" aria-label="Getting started">
+      <div className="studio-panel-heading"><div><span className="studio-kicker">SETUP</span><h2>Getting started</h2></div>
+        <span>{steps.filter(step => step.done).length} of {steps.length} complete</span></div>
+      <ol className="studio-list">{steps.map((step, index) => <li key={step.title}><Link href={step.href}>
+        <span><strong>{index + 1}. {step.title}</strong><small>{step.detail}</small></span>
+        <StudioBadge tone={step.done ? 'positive' : 'neutral'}>{step.done ? 'Complete' : 'Open step'}</StudioBadge>
+      </Link></li>)}</ol>
+    </section>}
     <section className="studio-panel studio-recent">
       <div className="studio-panel-heading"><div><span className="studio-kicker">YOUR INBOX</span><h2>Recent conversations</h2></div><Link href={inbox}>View all →</Link></div>
       {!threads.items.length ? <StudioEmpty title="No conversations yet" description="Messages linked to this business will appear here." />

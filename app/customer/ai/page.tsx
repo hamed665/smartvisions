@@ -1,6 +1,7 @@
 import { customerStudioScope, loadStudioKnowledge, type StudioQuery } from '@/lib/access/customer-studio';
 import { StudioBadge, StudioEmpty, StudioHeading, studioLabel } from '../studio-ui';
-import { StudioKnowledgeForm, StudioPublishButton } from './knowledge-form';
+import { StudioRehearsal } from './rehearsal';
+import { StudioKnowledgeForm, StudioPublishButton, StudioRevisionForm } from './knowledge-form';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,11 +27,19 @@ export default async function CustomerAiPage({ searchParams }: { searchParams: P
             <details><summary><strong>{studioLabel(version.knowledge_key.replaceAll('-', ' '))} · v{version.version}</strong> <StudioBadge tone={version.active ? 'positive' : 'attention'}>{studioLabel(version.approval_status)}</StudioBadge></summary>
               {text && <p dir="auto">{text}</p>}
               {manage && version.knowledge_key === 'studio-business-profile' && version.approval_status === 'PENDING_REVIEW' &&
-                <StudioPublishButton businessId={business.id} versionId={version.id} />}
+                <>
+                  {text && <StudioRevisionForm businessId={business.id} versionId={version.id} original={text} />}
+                  <StudioPublishButton businessId={business.id} versionId={version.id} />
+                </>}
             </details>
           </article>;
         })}
       </section>
     </div>
+    {manage && versions.some(version => version.active && version.approval_status === 'APPROVED') &&
+      <section className="studio-panel studio-recent">
+        <div className="studio-panel-heading"><h2>Rehearse a conversation</h2><StudioBadge>Private test</StudioBadge></div>
+        <StudioRehearsal businessId={business.id} />
+      </section>}
   </>;
 }

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { readBoundedAudio } from '@/lib/voice/bounded-audio';
 import type { ChatwootPublicIncomingAttachment } from '@/lib/chatwoot/public-conversation-projection';
 
 const MAX_CHATWOOT_MEDIA_BYTES = 10 * 1024 * 1024;
@@ -58,7 +59,7 @@ export async function downloadMetaWhatsAppMediaForChatwoot(input: {
     {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
       cache: 'no-store',
-      redirect: 'error',
+      redirect: 'manual',
     },
   );
   if (!metadataResponse.ok) throw new Error('Meta WhatsApp media metadata read failed');
@@ -88,7 +89,7 @@ export async function downloadMetaWhatsAppMediaForChatwoot(input: {
   const mediaResponse = await fetchImpl(url, {
     headers: { Authorization: `Bearer ${token}` },
     cache: 'no-store',
-    redirect: 'error',
+    redirect: 'manual',
   });
   if (!mediaResponse.ok) throw new Error('Meta WhatsApp media download failed');
 
@@ -101,14 +102,15 @@ export async function downloadMetaWhatsAppMediaForChatwoot(input: {
     throw new Error('WhatsApp media exceeds the bounded Chatwoot projection limit');
   }
 
-  const bytes = await mediaResponse.arrayBuffer();
-  if (bytes.byteLength < 1 || bytes.byteLength > MAX_CHATWOOT_MEDIA_BYTES) {
+  const bytes = await readBoundedAudio(mediaResponse, MAX_CHATWOOT_MEDIA_BYTES);
+  if (!bytes?.byteLength) {
     throw new Error('WhatsApp media size is outside the bounded Chatwoot projection limit');
   }
 
   const responseMime = mediaResponse.headers.get('content-type')?.split(';', 1)[0]?.trim();
   const contentType = responseMime || mimeType;
-  if (input.expectedMimeType?.trim() && contentType !== input.expectedMimeType.trim()) {
+  const expectedMime = input.expectedMimeType?.split(';', 1)[0]?.trim().toLowerCase();
+  if (expectedMime && contentType.toLowerCase() !== expectedMime) {
     throw new Error('WhatsApp media MIME type does not match the signed webhook evidence');
   }
 

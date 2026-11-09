@@ -109,3 +109,33 @@ export async function publishStudioKnowledge(businessId: string, versionId: stri
   revalidatePath('/customer/ai');
   return { status: 'success', message: 'Knowledge version published.' };
 }
+
+export async function reviseStudioKnowledge(businessId: string, versionId: string, form: FormData): Promise<ActionState> {
+  const { business, userId, supabase } = await customerStudioScope(businessId);
+  if (!normalizeCustomerBusinessId(versionId) || !['OWNER', 'ADMIN'].includes(business.organizationRole)
+    || !['OWNER', 'ADMIN'].includes(business.businessRole)) return { status: 'error', message: 'You cannot revise this draft.' };
+  const text = String(form.get('revision') ?? '').trim();
+  if (text.length < 10 || text.length > 9000) return { status: 'error', message: 'Enter 10–9,000 characters for the profile.' };
+
+  const draft = await supabase.from('knowledge_versions').select('source_id')
+    .eq('organization_id', business.organizationId).eq('tenant_business_id', business.id)
+    .eq('scope_type', 'BUSINESS').eq('id', versionId).eq('knowledge_key', PROFILE_KEY)
+    .eq('approval_status', 'PENDING_REVIEW').maybeSingle();
+  if (draft.error || !draft.data?.source_id) return { status: 'error', message: 'This draft is no longer available to revise.' };
+  const service = createSupabaseServiceClient();
+  const source = await service.from('knowledge_sources').select('version')
+    .eq('id', draft.data.source_id).eq('organization_id', business.organizationId).eq('tenant_business_id', business.id)
+    .eq('scope_type', 'BUSINESS').eq('status', 'ACTIVE').maybeSingle();
+  if (source.error || !source.data) return { status: 'error', message: 'The source is no longer active.' };
+
+  const staged = await service.rpc('stage_knowledge_version_v2', {
+    p_organization_id: business.organizationId, p_actor_user_id: userId, p_source_id: draft.data.source_id,
+    p_knowledge_key: PROFILE_KEY, p_payload: { text },
+    p_provenance: { surface: 'CUSTOMER_STUDIO', ingestion: 'OWNER_REVISION', previous_version_id: versionId },
+    p_expected_source_version: source.data.version, p_etag: null, p_last_modified: null,
+    p_request_key: 'studio-revision:'+crypto.randomUUID(),
+  });
+  if (staged.error) return { status: 'error', message: 'The source changed or the revision could not be saved. Refresh to review its status.' };
+  revalidatePath('/customer/ai');
+  return { status: 'success', message: 'Revision saved. Review the resulting version before publishing.' };
+}

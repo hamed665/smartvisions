@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { STUDIO_REPLY_AUDIO_LIMIT, STUDIO_REPLY_RECORDING_FORMATS, STUDIO_REPLY_RECORDING_SECONDS, studioReplyAudioMime } from '@/lib/voice/studio-reply-audio';
 import { STUDIO_VOICE_MAX_SECONDS, studioWave } from '@/lib/voice/studio-wave';
 
 const SAMPLE_RATE = 16_000;
@@ -17,7 +18,13 @@ async function toWave(blob: Blob) {
   return studioWave(mix);
 }
 
-export function StudioRecording({ businessId, onTranscript }: { businessId: string; onTranscript: (text: string) => void }) {
+export function StudioRecording({ businessId, threadId, onTranscript, onSendAudio, disabled }: {
+  businessId: string;
+  threadId?: string;
+  onTranscript: (text: string) => void;
+  onSendAudio?: (audio: Blob) => Promise<boolean>;
+  disabled?: boolean;
+}) {
   const [phase, setPhase] = useState<'idle' | 'starting' | 'recording' | 'transcribing'>('idle');
   const [clip, setClip] = useState<{ blob: Blob; url: string }>();
   const [notice, setNotice] = useState('');
@@ -40,7 +47,7 @@ export function StudioRecording({ businessId, onTranscript }: { businessId: stri
   useEffect(() => () => { if (clip) URL.revokeObjectURL(clip.url); }, [clip]);
 
   async function start() {
-    if (phase !== 'idle') return;
+    if (phase !== 'idle' || disabled) return;
     setPhase('starting');
     setNotice('');
     try {
@@ -51,7 +58,8 @@ export function StudioRecording({ businessId, onTranscript }: { businessId: stri
         return;
       }
       stream.current = input;
-      const media = new MediaRecorder(input, { audioBitsPerSecond: 32000 });
+      const mimeType = onSendAudio ? STUDIO_REPLY_RECORDING_FORMATS.find(type => MediaRecorder.isTypeSupported(type)) : undefined;
+      const media = new MediaRecorder(input, { audioBitsPerSecond: 32000, ...(mimeType ? { mimeType } : {}) });
       const chunks: Blob[] = [];
       recorder.current = media;
       media.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
@@ -68,7 +76,7 @@ export function StudioRecording({ businessId, onTranscript }: { businessId: stri
         setPhase('idle');
       };
       media.start();
-      timer.current = setTimeout(() => { if (media.state === 'recording') media.stop(); }, STUDIO_VOICE_MAX_SECONDS * 1000);
+      timer.current = setTimeout(() => { if (media.state === 'recording') media.stop(); }, (onSendAudio ? STUDIO_REPLY_RECORDING_SECONDS : STUDIO_VOICE_MAX_SECONDS) * 1000);
       setPhase('recording');
     } catch {
       stream.current?.getTracks().forEach(track => track.stop());
@@ -79,14 +87,16 @@ export function StudioRecording({ businessId, onTranscript }: { businessId: stri
   }
 
   async function transcribe() {
-    if (!clip || phase !== 'idle') return;
+    if (!clip || phase !== 'idle' || disabled) return;
     setPhase('transcribing');
     setNotice('');
     const controller = new AbortController();
     request.current = controller;
     try {
       const audio = await toWave(clip.blob);
-      const response = await fetch('/api/customer/studio-voice?businessId='+encodeURIComponent(businessId), {
+      const params = new URLSearchParams({ businessId });
+      if (threadId) params.set('thread', threadId);
+      const response = await fetch('/api/customer/studio-voice?'+params, {
         method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: audio, signal: controller.signal,
       });
       const data = await response.json();
@@ -99,19 +109,44 @@ export function StudioRecording({ businessId, onTranscript }: { businessId: stri
     }
   }
 
+  const sendMime = studioReplyAudioMime(clip?.blob.type);
+  const canSend = Boolean(clip && sendMime && clip.blob.size <= STUDIO_REPLY_AUDIO_LIMIT);
   return <div className="studio-recording">
-    <p>Describe your services and rules. Choose Transcribe to send this recording to the transcription provider for text conversion.</p>
+    <p>{onSendAudio ? 'Preview your recording, send the original audio, or convert it to editable text.'
+      : 'Describe your services and rules. Choose Transcribe to send this recording to the transcription provider for text conversion.'}</p>
     <div className="studio-filters">
-      <button type="button" disabled={phase !== 'idle'} onClick={start}>{phase === 'starting' ? 'Requesting microphone…' : clip ? 'Record again' : 'Start recording'}</button>
+      <button type="button" disabled={disabled || phase !== 'idle'} onClick={start}>{phase === 'starting' ? 'Requesting microphone…' : clip ? 'Record again' : 'Start recording'}</button>
       {phase === 'recording' && <button type="button" onClick={() => {
         if (recorder.current?.state === 'recording') recorder.current.stop();
       }}>Stop recording</button>}
     </div>
     {phase === 'recording' && <p role="status">Recording in progress</p>}
-    {clip && phase !== 'recording' && <audio aria-label="Play training recording" controls src={clip.url} />}
-    {clip && <button className="studio-button" type="button" disabled={phase !== 'idle'} onClick={transcribe}>
+    {clip && phase !== 'recording' && <audio aria-label="Play recording" controls src={clip.url} />}
+    {clip && <button className="studio-button" type="button" disabled={disabled || phase !== 'idle'} onClick={transcribe}>
       {phase === 'transcribing' ? 'Transcribing…' : 'Transcribe recording'}
     </button>}
+    {onSendAudio && phase === 'idle' && <label>Use an existing audio file
+      <input type="file" accept=".m4a,.mp3,.ogg,.opus,audio/mp4,audio/mpeg,audio/ogg" disabled={disabled} onChange={event => {
+        const file = event.currentTarget.files?.[0];
+        if (!file) return;
+        const byExtension = /\.(ogg|opus)$/i.test(file.name) ? 'audio/ogg' : /\.m4a$/i.test(file.name) ? 'audio/mp4'
+          : /\.mp3$/i.test(file.name) ? 'audio/mpeg' : null;
+        const type = studioReplyAudioMime(file.type) ?? byExtension;
+        if (!type || !file.size || file.size > STUDIO_REPLY_AUDIO_LIMIT) {
+          setNotice('Choose a non-empty MP3, M4A, or Opus OGG file up to 6 MB.');
+          return;
+        }
+        setNotice('');
+        setClip({ blob: file.slice(0, file.size, type), url: URL.createObjectURL(file) });
+      }} />
+    </label>}
+    {onSendAudio && clip && <>
+      <button type="button" className="studio-button" disabled={disabled || phase !== 'idle' || !canSend}
+        onClick={async () => {
+          if (canSend && sendMime && await onSendAudio(clip.blob.slice(0, clip.blob.size, sendMime)) && mounted.current) setClip(undefined);
+        }}>Send original audio</button>
+      {!canSend && <p>This recording format cannot be sent directly. Convert it to text or choose an MP3, M4A, or Opus OGG file.</p>}
+    </>}
     {notice && <p role="alert">{notice}</p>}
   </div>;
 }

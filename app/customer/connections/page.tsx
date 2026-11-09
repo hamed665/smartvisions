@@ -6,7 +6,7 @@ import {
 } from '@/lib/access/customer-connections';
 import { metaGraphVersion } from '@/lib/whatsapp/meta-onboarding';
 import { getCurrentOrganization } from '@/lib/supabase/org';
-import { StudioHeading } from '../studio-ui';
+import { StudioBadge, StudioHeading } from '../studio-ui';
 import { customerStudioScope } from '@/lib/access/customer-studio';
 import { RegisteredWhatsAppImport } from './registered-whatsapp-import';
 
@@ -70,6 +70,14 @@ export default async function CustomerConnectionsPage({
         </div>
 
         <p className="muted">{whatsapp.reason}</p>
+        <div className="studio-connection-guidance">
+          <StudioBadge tone={coexistenceEnabled && appId && configurationId ? 'neutral' : 'attention'}>
+            {coexistenceEnabled && appId && configurationId ? 'Eligibility checked by Meta' : 'Same-number setup unavailable'}
+          </StudioBadge>
+          <p>Keep WhatsApp Business on your phone. Meta confirms whether the existing number can be used in both places.
+            If Meta declines same-number setup, use a separate number for the API.</p>
+          <p>Inbox history includes only messages linked to this workspace. Older messages may be missing.</p>
+        </div>
 
         {context.whatsappBindings.length > 1 ? (
           <div className="settingsList">

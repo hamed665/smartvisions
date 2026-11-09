@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { studioAudioEvidence } from '@/lib/voice/studio-media';
 import { DateTime } from 'luxon';
 import { notFound } from 'next/navigation';
 import {
@@ -42,6 +43,7 @@ type Lead = {
 
 type Projection = {
   conversation_id: string;
+  communication_channel_binding_id: string;
   last_activity_at: string | null;
   sales_conversations: {
     stage: string;
@@ -56,7 +58,7 @@ type Projection = {
   };
 };
 
-const threadColumns = 'conversation_id,last_activity_at,sales_conversations!conversation_id!inner(stage,requires_human,agent_mode,awaiting_party,last_inbound_at,last_message_at,detected_language,intent_label,leads!lead_id(id,opportunity_score,scoring_source,score_reasons,manual_score_override,manual_score_override_expires_at,businesses!business_id(name)))';
+const threadColumns = 'conversation_id,communication_channel_binding_id,last_activity_at,sales_conversations!conversation_id!inner(stage,requires_human,agent_mode,awaiting_party,last_inbound_at,last_message_at,detected_language,intent_label,leads!lead_id(id,opportunity_score,scoring_source,score_reasons,manual_score_override,manual_score_override_expires_at,businesses!business_id(name)))';
 
 function businessThreads(scope: Scope, columns: string, countOnly = false) {
   const { supabase, business } = scope;
@@ -177,7 +179,7 @@ export async function loadStudioHistory(scope: Scope, threadId: string, before?:
 
   // The independently authorized projection is required before any message read.
   let query = scope.supabase.from('conversation_messages')
-    .select('id,created_at,direction,media_type,original_text,transcript,status')
+    .select('id,created_at,direction,media_type,original_text,transcript,status,provider_delivery_status,metadata,provider_message_id,source_plane')
     .eq('organization_id', scope.business.organizationId)
     .eq('conversation_id', threadId)
     .eq('channel', 'WHATSAPP');
@@ -194,7 +196,13 @@ export async function loadStudioHistory(scope: Scope, threadId: string, before?:
   const last = messages.at(-1);
   return {
     thread: projectThread(data),
-    messages: messages.reverse(),
+    messages: messages.reverse().map(message => {
+      const { metadata, provider_message_id: providerMessageId, source_plane: sourcePlane, ...fields } = message;
+      const playable = Boolean(studioAudioEvidence({
+        metadata, providerMessageId, sourcePlane, direction: fields.direction, mediaType: fields.media_type,
+      }, scope.business.id, data.communication_channel_binding_id));
+      return { ...fields, playable };
+    }),
     older: result.data && result.data.length > 50 && last ? last.created_at+'|'+last.id : null,
   };
 }

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { customerStudioScope, loadStudioHistory, loadStudioThreads, studioTimeZone, type StudioQuery } from '@/lib/access/customer-studio';
+import { StudioAudioPlayer } from './audio-player';
 import { StudioMessageStream } from './message-stream';
 import { StudioReply } from './reply';
 import { StudioBadge, StudioEmpty, StudioHeading, studioDate, studioHref, studioLabel } from '../studio-ui';
@@ -52,9 +53,10 @@ export default async function CustomerInboxPage({ searchParams }: { searchParams
             {history.messages.map(message => <li key={message.id} data-direction={message.direction}>
               <span className="studio-message-meta">{message.direction === 'INBOUND' ? 'Customer' : 'Business'} · {studioDate(message.created_at, zone)}</span>
               <p dir="auto">{message.original_text || message.transcript || studioLabel(message.media_type)+' message'}</p>
+              {message.playable && <StudioAudioPlayer src={studioHref('/api/customer/studio-media/'+message.id, business.id, { thread: history.thread.id })} />}
               {message.original_text && message.transcript && message.original_text !== message.transcript &&
                 <details><summary>Transcript</summary><p dir="auto">{message.transcript}</p></details>}
-              <small>{studioLabel(message.status)}</small>
+              <small>{studioLabel(message.provider_delivery_status ?? message.status)}</small>
             </li>)}
           </StudioMessageStream> : <StudioEmpty title="No message history available" description="The thread is linked, but its messages are not available here yet." />}
           {!params.before && business.organizationRole === 'OWNER'

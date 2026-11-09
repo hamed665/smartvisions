@@ -82,6 +82,17 @@ describe('WhatsApp media bridge', () => {
     })).rejects.toThrow('MIME type does not match');
   });
 
+  it('does not follow a provider redirect or pass the token to its destination', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(null, {
+      status: 302, headers: { location: 'https://untrusted.example/media' },
+    }));
+    await expect(downloadMetaWhatsAppMediaForChatwoot({
+      mediaId: 'media-1', accessToken: 'fixture-token', fetchImpl,
+    })).rejects.toThrow('metadata read failed');
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(fetchImpl.mock.calls[0][1].redirect).toBe('manual');
+  });
+
   it('uploads and sends one bounded image through the existing Meta provider', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'uploaded-media-1' }), {
